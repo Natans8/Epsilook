@@ -131,7 +131,7 @@ describe("the boundaries, as refusals", () => {
     it("B3 notation-upheld: the written tier survives simplification on every untouched value", () => {
         const result = simplify(parsed("model:fire model:fire scale:x1.5"));
         assert.deepEqual(result.applied, ["R1"]);
-        assert.equal(formatQuery(result.parsed, "written"), "model:fire scale=x1.5");
+        assert.equal(formatQuery(result.parsed, "written"), "model:fire scale:x1.5");
     });
 
     it("the registry states every boundary of the law", () => {

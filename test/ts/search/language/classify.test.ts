@@ -68,6 +68,12 @@ test("scopes, groups and alternation are delimiters; comparisons and the wildcar
     assert.deepEqual(spelled("scale:>=50"), [
         ["scale:", "head"], [">=", "op"], ["50", "number"],
     ]);
+    // The or-word standing alone IS the alternation, at either level; embedded in a word it is data.
+    assert.deepEqual(spelled("model:{a or b}"), [
+        ["model:", "head"], ["{", "delim"], ["a", "word"], [" ", "space"], ["or", "delim"],
+        [" ", "space"], ["b", "word"], ["}", "delim"],
+    ]);
+    assert.deepEqual(spelled("orb"), [["orb", "word"]]);
 });
 
 test("typographic quotes fold to the parser's before classing, and spans still index the typed text", () => {

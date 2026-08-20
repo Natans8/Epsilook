@@ -12,18 +12,40 @@ import {
     segmentsOf, selectionOver, selectionStep, slotStart, termStarts, toggleSort,
 } from "../../../../src/ui/bar/plan";
 
-test("the sort arrow turns the whole directive round, respelled through the formatter", () => {
-    assert.deepEqual(toggleSort("model:fire sort:cast", 12),
+test("a door's arrow turns that door alone, respelled through the formatter", () => {
+    assert.deepEqual(toggleSort("model:fire sort:cast", 12, 0),
         {text: "model:fire sort:-cast", caret: 21, removed: false});
-    assert.deepEqual(toggleSort("model:fire sort:-cast", 12),
+    assert.deepEqual(toggleSort("model:fire sort:-cast", 12, 0),
         {text: "model:fire sort:cast", caret: 20, removed: false});
-    // A scoped sequence flips whole, each door's own direction inverted.
-    assert.equal(toggleSort("sort:{name -cast} fire", 3)?.text, "sort:{-name cast} fire");
+    // In a sequence each door has its own arrow; the others stand as they are.
+    assert.equal(toggleSort("sort:{name -cast} fire", 3, 0)?.text, "sort:{-name -cast} fire");
+    assert.equal(toggleSort("sort:{name -cast} fire", 3, 1)?.text, "sort:{name cast} fire");
     // The exclusion spelling collapses into the door's minus on the way through.
-    assert.equal(toggleSort("-sort:cast", 0)?.text, "sort:cast");
-    // A segment that is no sort — plain text, a chip, the limit — offers no turn.
-    assert.equal(toggleSort("model:fire sort:cast", 3), null);
-    assert.equal(toggleSort("first:5", 3), null);
+    assert.equal(toggleSort("-sort:cast", 0, 0)?.text, "sort:cast");
+    // A segment that is no sort — plain text, a chip, the limit — offers no turn, and neither does a door
+    // the directive does not have.
+    assert.equal(toggleSort("model:fire sort:cast", 3, 0), null);
+    assert.equal(toggleSort("first:5", 3, 0), null);
+    assert.equal(toggleSort("sort:{name -cast}", 3, 2), null);
+});
+
+test("the directive words open like heads, so the control chips edit like every other chip", () => {
+    // The sort's bind spawns its scope, composing a sequence with spaces INSIDE the chip; the commit sheds
+    // the braces of a single door and keeps a sequence's.
+    assert.deepEqual(openHead("sort:{name -cast}"),
+        {word: "sort", negated: false, consumed: 6, bound: true, scoped: true});
+    assert.deepEqual(openHead("first:5"),
+        {word: "first", negated: false, consumed: 6, bound: true, scoped: false});
+    const spawned = scopeGesture(planAt("", 0), {text: "sort:", caret: 5});
+    assert.equal(spawned.text, "sort:{}");
+    // The limit takes one count, never a scope.
+    const flat = scopeGesture(planAt("", 0), {text: "first:", caret: 6});
+    assert.equal(flat.text, "first:");
+    // A single door sheds the editing braces on commit; a sequence keeps them.
+    assert.equal(commitSegment("sort:{name}", 3).text, "sort:name");
+    assert.equal(commitSegment("sort:{name -cast}", 3).text, "sort:{name -cast}");
+    // Reopening the plain spelling grows them back, so editing always composes inside the chip.
+    assert.equal(scopedForm("sort:name", 3)?.text, "sort:{name}");
 });
 
 test("terms start at zero and after each balanced space; a trailing space opens an empty tail", () => {
@@ -285,18 +307,35 @@ test("firstDiff finds where an undo landed; equal texts answer their length", ()
     assert.equal(firstDiff("same", "same"), 4);
 });
 
+test("a commit converges the chip-invisible rewrites: the settled text says what the chip draws", () => {
+    // The chip already draws the inner bind through its own door, so the text follows on commit.
+    assert.equal(commitSegment("spell:{desc:hello}", 0).text, "desc:hello");
+    assert.equal(commitSegment("missile:*", 0).text, "model:missile");
+    // The operator-glued count spelling IS the canonical one; the commit must never grow it a colon,
+    // whichever editing form it was composed in.
+    assert.equal(commitSegment("model>=5", 0).text, "model>=5");
+    assert.equal(commitSegment("model:{>=5}", 0).text, "model>=5");
+    assert.equal(commitSegment("model:>=5", 0).text, "model>=5");
+    assert.equal(commitSegment("model:{count>5}", 0).text, "model>5");
+    // A kind's subject binds through the KIND's word: never the schema's own property name, which once
+    // settled this as the `name:horse` nobody typed.
+    assert.equal(commitSegment("model:{mount:horse}", 0).text, "model:{mount:horse}");
+});
+
 test("the brace shed is the engine's call: a spelling that would change the ask keeps its braces", () => {
     // The colon-glued spelling reads as content, so shedding would silently change the question.
     assert.equal(commitSegment("model:{attach:chest}", 0).text, "model:{attach:chest}");
-    // The operator-glued spelling reads back as the same one-term scope, so it sheds.
-    assert.equal(commitSegment("model:{count>=4}", 0).text, "model:count>=4");
+    // The operator-glued spelling reads back as the same one-term scope, so it sheds — and the commit then
+    // converges on the canonical count spelling, which the chip draws identically.
+    assert.equal(commitSegment("model:{count>=4}", 0).text, "model>=4");
     assert.equal(commitSegment("model:{fire}", 0).text, "model:fire");
 });
 
 test("a commit takes a dangling alternation separator back out of a bound segment", () => {
     assert.equal(commitSegment("model:fire|", 0).text, "model:fire");
+    // The bare quantity bind converges on its exact-operator spelling — the same parse, the same chip.
     assert.equal(commitSegment("cast:2s| next", 0).text, "cast:2s next");
-    // A separator that means something stays.
+    // A separator that means something stays, converged on the canonical group spelling.
     assert.equal(commitSegment("model:fire|frost", 0).text, "model:fire|frost");
 });
 
@@ -360,8 +399,10 @@ test("a shed that would change the ask is refused even when the interior is brok
 
 test("the brace shed asks the FORMATTER's rule, not two spellings: an alternation value sheds", () => {
     // `model:{fire|frost}` and `model:fire|frost` ask one question and canonicalise to two different strings,
-    // so a textual comparison refuses a shed the language allows.
+    // so a textual comparison refuses a shed the language allows; the shed then settles on the group spelling.
     assert.equal(commitSegment("model:{fire|frost}", 0).text, "model:fire|frost");
+    // The comma list converges on the formatter's group spelling; whether the comma list should BE the
+    // canonical identity-list spelling is an open formatter question, not this rule's.
     assert.equal(commitSegment("id:{133,134}", 0).text, "id:133,134");
     // And the reverse still holds: alike spellings that ask differently keep their braces.
     assert.equal(commitSegment("model:{attach:chest}", 0).text, "model:{attach:chest}");
@@ -392,9 +433,10 @@ test("a head opens on a comparison ALIAS exactly as on its symbol — the glyph 
 
 test("a commit prefers the spelling that parses: the editing braces never break a signed value", () => {
     // `-50%` is a negation at a term's start and a signed value after a bind, so the editing form's own
-    // braces are what break `scale:-50%` — the commit gives back exactly what was typed.
+    // braces are what break `scale:-50%` — the commit gives it back, settled on the exact-operator spelling.
     assert.equal(commitSegment("scale:{-50%}", 0).text, "scale:-50%");
-    assert.equal(commitSegment("scale:{-50}", 0).text, "scale:-50");
+    // The bare number settles wearing the unit it was read in, as the written tier's law says it must.
+    assert.equal(commitSegment("scale:{-50}", 0).text, "scale:-50%");
     // A braced form that asks something real still keeps its braces where shedding would change the ask.
     assert.equal(commitSegment("model:{attach:chest}", 0).text, "model:{attach:chest}");
 });

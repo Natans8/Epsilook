@@ -123,14 +123,15 @@ export type ClauseView =
 }
     /**
      * A DIRECTIVE: it shapes the list rather than the set, so it draws apart from the ask chips — no column
-     * tone, its own neutral cell. A descending sort's value keeps the minus it is spelled with, and a scoped
-     * sort — several doors on one span — is ONE view, since the bar draws each span once.
+     * tone, its own neutral capsule. A sort carries its DOORS, each with its own direction, and a scoped
+     * sort — several doors on one span — is ONE view, since the bar draws each span once. The minus never
+     * renders: the direction is the door's arrow. The limit carries its value instead.
      */
     | {
     readonly form: "directive"; readonly span: Span; readonly notes: readonly string[];
     readonly word: string; readonly value: string;
-    /** A sort's direction — the first door's, where a scope mixes them; absent on the limit. */
-    readonly descending?: boolean;
+    /** A sort's doors in written order, each with its direction; absent on the limit. */
+    readonly doors?: readonly { readonly word: string; readonly descending: boolean }[];
 };
 
 /** The word-vocabulary types: values from a closed set, marked apart from corpus text. */
@@ -435,12 +436,17 @@ function askView(ask: Ask, not: boolean): AskView | null {
     if (items.length === 1) {
         const word = promoted === null ? head : wordOf(promoted);
         const only = items[0];
-        // A bind keeps its property as a cell rather than flattening to a loud word beside the value.
+        // A bind keeps its property as a cell rather than flattening to a loud word beside the value — EXCEPT
+        // where the value opens with an operator: `count ≥ 4` reads as one phrase, and dividing it into cells
+        // made the property and its comparison look like two unrelated conditions.
         const bound = only.is === "bind" && promoted === null ? only : null;
-        const body = bound === null ? compactBody(only) : [...bound.body];
+        const joined = bound !== null && bound.body[0]?.is === "op";
+        const body = bound === null ? compactBody(only)
+            : joined ? [{is: "word" as const, text: bound.head}, ...bound.body]
+                : [...bound.body];
         // The key is OMITTED where there is no bound property rather than set to nothing: a view is compared
         // whole, and an absent property is not the same shape as one present and empty.
-        const sub = bound === null ? {} : {sub: bound.head};
+        const sub = bound === null || joined ? {} : {sub: bound.head};
         return {as: "chip", chip: {head: word, tone: column.key, not, ...sub, body, grow: "term"}};
     }
     return {as: "lane", lane: {head, tone: column.key, not, items}};
@@ -454,17 +460,17 @@ function askView(ask: Ask, not: boolean): AskView | null {
  */
 export function describe(parsed: Parsed): ClauseView[] {
     // A scoped sort parses to several directives sharing ONE span; the bar draws each span once, so they
-    // group back into one view whose value is the door sequence.
+    // group back into one view carrying the door sequence.
     const sortViews: Extract<ClauseView, { form: "directive" }>[] = [];
     for (const sort of parsed.sorts) {
-        const door = `${sort.descending ? GRAMMAR.negate : ""}${headWord(sort.head)}`;
+        const door = {word: headWord(sort.head), descending: sort.descending};
         const last = sortViews.at(-1);
         if (last !== undefined && last.span.start === sort.span.start && last.span.end === sort.span.end) {
-            sortViews[sortViews.length - 1] = {...last, value: `${last.value} ${door}`};
+            sortViews[sortViews.length - 1] = {...last, doors: [...(last.doors ?? []), door]};
         } else {
             sortViews.push({
                 form: "directive", span: sort.span, notes: [],
-                word: GRAMMAR.sortWord, value: door, descending: sort.descending,
+                word: GRAMMAR.sortWord, value: "", doors: [door],
             });
         }
     }

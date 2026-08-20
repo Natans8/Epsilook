@@ -55,8 +55,8 @@ export interface SegmentActions {
     readonly negateOpen: () => void;
     /** Flips one of a lane's terms, by its index among the items. */
     readonly negateTerm: (index: number) => void;
-    /** Turns a sort directive's order round, every door of a scoped sequence together. */
-    readonly toggleSort: () => void;
+    /** Turns one door of a sort directive round, by its position among the directive's sorts. */
+    readonly toggleSort: (door: number) => void;
 }
 
 /** The column tones, by key; a column without a declared tone renders neutral. */
@@ -525,19 +525,38 @@ export function SettledSegment({text, at, act, selected}: {
             parts.push(<LaneEl key={i} lane={view.lane} warned={view.warned} notes={view.notes}
                                text={text} act={act}/>);
         } else if (view.form === "directive") {
-            // A directive shapes the list, not the set: its capsule stands apart from every ask chip — no
-            // column tone — while the text inside stays the reader's own characters, hit-testable as ever.
-            // A sort carries its direction arrow: the arrow inverts, the text edits.
+            // A directive shapes the list, not the set: the same chip anatomy as every ask — a head cell and
+            // body cells — in a dashed neutral capsule with no column tone. A sort draws one cell per door,
+            // each wearing its own arrow; the arrow turns that door round, anywhere else on the chip edits.
+            // No brace and no minus renders: the chip draws its parse, and the direction IS the arrow.
+            const shape = view.doors !== undefined && view.doors.length > 1 ? styles.lane : styles.chip;
             parts.push(
-                <span key={i} className={styles.directive}>
-                    {raw(view.span.start, view.span.end, false)}
-                    {view.descending !== undefined && (
-                        <SortArrow
-                            descending={view.descending}
-                            label={t(view.descending ? "bar.sortDesc" : "bar.sortAsc")}
-                            onPress={act.toggleSort}
-                        />
-                    )}
+                <span
+                    key={i}
+                    className={`${shape} ${styles.directive}`}
+                    onClick={press(() => {
+                        act.open("end");
+                    })}
+                >
+                    <span className={styles.chipSect}>{headCase(view.word)}</span>
+                    {view.doors !== undefined
+                        ? view.doors.map((door, d) => (
+                            <Fragment key={d}>
+                                {d > 0 && <Joint/>}
+                                <span className={`${styles.laneTerm} ${styles.directiveDoor}`}>
+                                    {door.word}
+                                    <SortArrow
+                                        descending={door.descending}
+                                        label={t(door.descending ? "bar.sortDesc" : "bar.sortAsc")}
+                                        onPress={() => {
+                                            act.toggleSort(d);
+                                        }}
+                                    />
+                                </span>
+                            </Fragment>
+                        ))
+                        : <span className={styles.chipBody}>{view.value}</span>}
+                    <Affordance label={t("bar.delete")} onPress={act.remove}/>
                 </span>,
             );
         } else {

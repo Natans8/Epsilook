@@ -120,6 +120,22 @@ function liveSorts(sorts: readonly SortDirective[]): SortDirective[] | null {
     return live.length === sorts.length ? null : live;
 }
 
+/**
+ * The chip-invisible convergence: only the rules whose rewrite the chip display cannot show, run to their
+ * fixpoint — the shorter door, the unwrapped one-term scope. What a committing segment applies silently, so the
+ * text under a chip converges on the spelling the chip already draws; everything the display CAN show stays
+ * behind the explicit button.
+ *
+ * @param parsed A parse, from {@link ../language/parse!parse}.
+ * @returns The converged parse — the input itself when nothing converged.
+ */
+export function convergeDisplay(parsed: Parsed): Parsed {
+    const invisible = RULES.filter((rule) => rule.chipInvisible === true);
+    const {tree, applied} = fixpoint(treeOf(parsed), invisible, {note: () => undefined});
+    if (applied.length === 0) return parsed;
+    return {...toParsed(tree), sorts: parsed.sorts, limit: parsed.limit};
+}
+
 export function simplify(parsed: Parsed): Simplified {
     const notes = new Set<string>();
     const {tree, applied} = fixpoint(treeOf(parsed), RULES, {note: (text) => notes.add(text)});

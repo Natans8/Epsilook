@@ -48,6 +48,9 @@ PROBES = [
     "model:missile sort:-name", "fire sort:id", "model:* sort:-model",
     "model:missile sort:name", "xpac:wotlk sort:cast", "model:missile sort:xpac",
     "model:missile sort:{-xpac name}",
+    # The id column's scope alternates its bare values — every kind of the column is single — and a dangling
+    # comma on a number token separates nothing within it.
+    "id:{133 134}", "id:{133, 134}",
 ]
 """Queries across every column and most types, each answered by both engines."""
 

@@ -64,6 +64,10 @@ const HEAD_ENDS = new Set<string>([
 /** A run of numbers separated by the list character: the one shape a comma is structural in. */
 const NUMBER_LIST = new RegExp(String.raw`^\d+(${escapeRegExp(GRAMMAR.numberList)}\d+)+$`);
 
+/** A number list whose last separator dangles — `133,` — which the lenient reading takes as the numbers alone. */
+const NUMBER_LIST_DANGLING =
+    new RegExp(String.raw`^\d+(${escapeRegExp(GRAMMAR.numberList)}\d+)*${escapeRegExp(GRAMMAR.numberList)}$`);
+
 /**
  * What makes a leading minus a SIGN rather than a negation: a digit, or a decimal point before one.
  *
@@ -758,9 +762,18 @@ class Parser {
      * @returns The groups, with a single kind's bare values moved into groups of their own.
      */
     private alternateWhereSingle(head: ScopeHead, runs: ScopeTerm[][]): ScopeTerm[][] {
-        if (head.role !== "kind" || head.kind.single !== true) return runs;
-        const subject = Object.values(head.kind.props)[0];
-        if (subject !== undefined && subject.types.some((type) => type === textType || type === pathType)) return runs;
+        // A kind door reads its own declaration; a COLUMN door alternates exactly when every kind it holds is
+        // single — the id column's are, so `id:{133 134}` is either id — while a column with any repeating
+        // kind keeps the conjunction, and a TEXT subject anywhere keeps it too: two substrings can both
+        // describe one name, whichever door reached it.
+        const kinds = head.role === "kind" ? [head.kind] : kindsOf(head.column);
+        if (kinds.some((kind) => kind.single !== true)) return runs;
+        const textual = kinds.some((kind) => {
+            const subject = Object.values(kind.props)[0];
+            return subject !== undefined
+                && subject.types.some((type) => type === textType || type === pathType);
+        });
+        if (textual) return runs;
         return runs.flatMap((run) => {
             const loose = run.filter(statesBareValue);
             if (loose.length < 2) return [run];
@@ -1112,6 +1125,9 @@ class Parser {
         // The wildcard's word synonym — the spelling chips display for existence. Only where a bound value is
         // being read: a bare top-level word is plain search content, whatever it spells.
         if (ctx.wordStar && fold(t) === GRAMMAR.anyWord) return ctx.star();
+        // A number token ending in a dangling list separator reads as its numbers — `id:{133, 134}` arrives
+        // as the token `133,` beside `134`, and the comma separates nothing within its own token.
+        if (NUMBER_LIST_DANGLING.test(t)) t = t.slice(0, -GRAMMAR.numberList.length);
         if (NUMBER_LIST.test(t)) {
             return combineAlternatives(t.split(GRAMMAR.numberList).map((n) => ctx.bare(n, false)));
         }

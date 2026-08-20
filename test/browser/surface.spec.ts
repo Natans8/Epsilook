@@ -177,13 +177,16 @@ test("inside a column's scope the surface offers its kinds and properties", asyn
     expect(words).toContain("missile");
     expect(words).toContain("count");
 
-    // A kind's word takes a value exactly as a property's does, so it goes in with its bind.
+    // A kind's word completes in INCREMENTS: the bare word first — a complete ask — then its bind.
     await page.keyboard.type("miss", {delay: 5});
+    await page.keyboard.press("Tab");
+    await expectQuery(page, "model:{missile}");
     await page.keyboard.press("Tab");
     await expectQuery(page, "model:{missile:}");
     await page.keyboard.type("fire", {delay: 5});
     await page.keyboard.press("Enter");
-    await expectQuery(page, "model:{missile:fire} ");
+    // The commit converges the chip-invisible spelling: the chip already draws the missile door.
+    await expectQuery(page, "missile:fire ");
 });
 
 test("a property goes in with its bind, and its value is what is offered next", async () => {
@@ -280,8 +283,12 @@ test("every spelling that reaches an expansion narrows to it, and picking one wr
 test("a chip names the expansion, whichever way in the reader wrote", async () => {
     // `6` is a way in, not a spelling to uphold: drawing it back would put a numeral on a worded axis, which the
     // quote law then has to quote — `xpac:"6"`, which reads as nothing a reader meant.
+    // Typed raw rather than seeded: the commit converges a way-in onto the canonical rung word, so the
+    // committed text is not the typed text and seed's own echo assertion cannot hold.
     for (const [typed, drawn] of [["xpac:6", "WoD"], ["xpac:classic", "Vanilla"], ["xpac:2-6", "TBC–WoD"]]) {
-        await seed(page, typed);
+        await clearBar(page);
+        await page.keyboard.type(typed, {delay: 5});
+        await page.keyboard.press("Enter");
         await expect(settledSegments(page).first()).toContainText(drawn);
         await expect(settledSegments(page).first()).not.toContainText("\"");
     }
@@ -302,12 +309,15 @@ test("an offer once taken is spent: the same text typed again is not silently li
     await page.keyboard.type("xpac:6", {delay: 5});
     await expect(barInput(page)).not.toHaveAttribute("aria-activedescendant", /./);
     await page.keyboard.press("Enter");
-    await expectQuery(page, "xpac:6 ");
+    // The way in converges on the canonical rung word at commit — the chip drew WoD all along.
+    await expectQuery(page, "xpac:WoD ");
 });
 
-test("the plaintext view keeps the way in, because it shows what was typed", async () => {
-    await seed(page, "xpac:6");
+test("the plaintext view shows the committed text — the way in converged when the chip settled", async () => {
+    await clearBar(page);
+    await page.keyboard.type("xpac:6", {delay: 5});
+    await page.keyboard.press("Enter");
     await plainSwitch(page).click();
-    await expect(plainField(page)).toHaveValue("xpac:6 ");
+    await expect(plainField(page)).toHaveValue("xpac:WoD ");
     await plainSwitch(page).click();
 });

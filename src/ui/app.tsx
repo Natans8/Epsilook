@@ -10,19 +10,21 @@ import {useEffect, useMemo, useRef, useState} from "react";
 import {useTranslation} from "react-i18next";
 import type {PackInfo, Searcher} from "./searcher";
 import {expansionArt} from "./art";
-import {parse} from "../search/index";
+import {formatQuery, parse, simplify} from "../search/index";
 import type {Diagnostic} from "../search/index";
 import {recentQueries} from "./history";
 import {BASE} from "./pack";
+import type {BarHandle} from "./bar/bar";
 import {Bar} from "./bar/bar";
 import {PlainBar} from "./bar/plain";
+import {settledQuery} from "./bar/plan";
 import styles from "./app.module.css";
 
 /** The query the URL carries, or nothing. */
 const urlQuery = (): string => new URLSearchParams(location.search).get("q") ?? "";
 
-/** Whether the URL asks for the plaintext view — a view choice worth surviving a reload. */
-const urlPlain = (): boolean => new URLSearchParams(location.search).get("plain") === "1";
+/** Whether the URL asks for the plaintext view — a view choice worth surviving a reload. A bare flag. */
+const urlPlain = (): boolean => new URLSearchParams(location.search).has("plain");
 
 /** Rewrites one URL parameter and reloads — the knob transitions that need a refetch. */
 function reloadWith(param: string, value: string): void {
@@ -35,6 +37,60 @@ function reloadWith(param: string, value: string): void {
 const APP_LANGUAGES = ["en", "ru"];
 
 /**
+ * The simplify button, to the bar's right, with its preview.
+ *
+ * Simplification is explicit-only, so the button is the one door — but a rewrite the reader cannot see before
+ * taking it is a gamble, so hovering or focusing the button previews the simpler spelling (the WRITTEN tier,
+ * as the law requires of every surface handing a simplified query back) and the press applies exactly what the
+ * preview showed. A query already in its simplest form says so and the press does nothing.
+ */
+function Simplify({text, plain, apply}: {
+    readonly text: string;
+    /** Whether the plain view stands — there no commit converges anything, so any respell is an offer. */
+    readonly plain: boolean;
+    /** Applies the rewrite — through the bar's own undo machinery, so Ctrl+Z takes it back. */
+    readonly apply: (next: string) => void;
+}): ReactElement {
+    const {t} = useTranslation();
+    // The button ALWAYS stands, so the bar never resizes as typing moves it in and out of having something
+    // to offer — only its enabled state and its preview change.
+    const after = useMemo(() => {
+        const none = {spelled: "", changed: false, notes: [] as readonly string[]};
+        if (text.trim() === "") return none;
+        const parsed = parse(text, {mode: "final"});
+        // A broken query has nothing to respell — the bar is already saying what is wrong.
+        if (parsed.diagnostics.some((d) => d.severity === "error")) return none;
+        const result = simplify(parsed);
+        const spelled = formatQuery(result.parsed, "written");
+        // In chip mode the offer compares against the SETTLED query, so an open chip's editing braces — which
+        // the commit converges on its own — never light the button, while a real difference lights it wherever
+        // the caret is. The plain view converges nothing itself, so there the typed text is the baseline.
+        const baseline = plain ? text.trim() : settledQuery(text).trim();
+        return {spelled, changed: spelled !== baseline, notes: result.notes};
+    }, [text, plain]);
+    return (
+        <span className={styles.simplify}>
+            <button
+                type="button"
+                className={styles.simplifyButton}
+                disabled={!after.changed}
+                onClick={() => {
+                    if (after.changed) apply(after.spelled);
+                }}
+            >
+                {t("bar.simplify")}
+            </button>
+            <span className={styles.simplifyPreview} role="tooltip">
+                {after.changed
+                    ? t("tray.simplified", {query: after.spelled})
+                    : t("tray.simplifyNone")}
+                {after.notes.map((note) => <span key={note} className={styles.simplifyNote}>{note}</span>)}
+            </span>
+        </span>
+    );
+}
+
+/**
  * The page.
  */
 export function App({info, searcher}: {
@@ -45,6 +101,8 @@ export function App({info, searcher}: {
     const [text, setText] = useState(urlQuery);
     const [plain, setPlain] = useState(urlPlain);
     const [result, setResult] = useState<{ count: number; ms: number; for: string } | null>(null);
+    // The bar's rewrite door, for the panel controls whose rewrites must be undoable inside the bar.
+    const barRef = useRef<BarHandle>(null);
     const asked = useRef("");
 
     // The count runs in the worker; the page debounces the ask and shows the last answer dimmed until the
@@ -68,10 +126,17 @@ export function App({info, searcher}: {
     useEffect(() => {
         const timer = setTimeout(() => {
             const url = new URL(location.href);
-            if (text.trim() === "") url.searchParams.delete("q");
-            else url.searchParams.set("q", text);
-            if (plain) url.searchParams.set("plain", "1");
-            else url.searchParams.delete("plain");
+            // The URL carries the SETTLED query, trimmed: an open chip's editing braces and a commit's
+            // trailing separator are editing state, not query content. The plain view settles nothing, and
+            // its URL keeps exactly what was typed — a reload must not respell the reader's text.
+            const carried = plain ? text.trim() : settledQuery(text).trim();
+            if (carried === "") url.searchParams.delete("q");
+            else url.searchParams.set("q", carried);
+            // A bare flag: the view has no value to carry, so the URL says `plain` and nothing more.
+            url.searchParams.delete("plain");
+            let search = url.searchParams.toString();
+            if (plain) search = search === "" ? "plain" : `${search}&plain`;
+            url.search = search;
             window.history.replaceState(null, "", url);
         }, 400);
         return (): void => {
@@ -86,14 +151,10 @@ export function App({info, searcher}: {
     // counting. Only in final text: while typing, anything a further keystroke could rescue stays quiet.
     const finalParse = useMemo(() => parse(text, {mode: "final"}), [text]);
     const broken = finalParse.diagnostics.filter((d: Diagnostic) => d.severity === "error");
-    // A limit trims what is LISTED, never the count — invisible while the count is the only display, so the
-    // status line says what the directive did.
-    const showing = (count: number): string => {
-        const limit = finalParse.limit;
-        if (limit === null) return "";
-        const shown = Math.min(Math.abs(limit.value), count).toLocaleString();
-        return `, ${limit.value >= 0 ? t("count.showingFirst", {shown}) : t("count.showingLast", {shown})}`;
-    };
+    // Under a limit the status line reports what is LISTED, not the query's full count — the user's call: the
+    // honest number with an explainer read worse than the simple one.
+    const shown = (count: number): number =>
+        (finalParse.limit === null ? count : Math.min(Math.abs(finalParse.limit.value), count));
 
     return (
         <div className={styles.page}>
@@ -146,10 +207,21 @@ export function App({info, searcher}: {
                                         enums: info.enums
                                     }}/>
                         : <Bar text={text} onText={setText} placeholder={t("bar.placeholder")}
+                               handle={barRef}
                                vocab={{
                                    rungs: info.ladder, art: expansionArt(info.ladder, BASE),
                                    enums: info.enums
                                }}/>}
+                    <Simplify
+                        text={text}
+                        plain={plain}
+                        apply={(next) => {
+                            // Through the bar's undo stack where the bar stands; the plain view has only
+                            // the text.
+                            if (barRef.current !== null) barRef.current.rewrite(next);
+                            else setText(next);
+                        }}
+                    />
                 </div>
                 <div className={styles.statusRow}>
                     <div
@@ -158,8 +230,8 @@ export function App({info, searcher}: {
                     >
                         {broken.length > 0 ? broken[0].message
                             : result !== null && (
-                            `${result.count.toLocaleString()} ${t("count.result", {count: result.count})}`
-                            + showing(result.count)
+                            `${shown(result.count).toLocaleString()} `
+                            + t("count.result", {count: shown(result.count)})
                             + `, ${t("count.elapsed", {ms: result.ms})}`
                         )}
                     </div>

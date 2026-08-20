@@ -394,9 +394,9 @@ export function useEditingSession(
             clearSelection();
             restAfter(flipped.text, segmentAt(flipped.text, seg.start).end);
         },
-        toggleSort: (): void => {
+        toggleSort: (door): void => {
             const {step, shifted} = pressCommit(start);
-            const turned = toggleSort(step.text, shifted);
+            const turned = toggleSort(step.text, shifted, door);
             if (turned === null) return;
             pushUndo(step.text);
             clearSelection();

@@ -342,9 +342,13 @@
     text-underline-offset: 3px;
 }
 
-/* a closed-vocabulary word, marked as the chips mark one */
+/* A closed-vocabulary word wears the head run's own gold — the colour `mount:` takes the moment the colon
+ * lands — so a word WITH meaning reads at a glance while it is being typed; the dotted line stays as the
+ * vocabulary mark, in the same hue. The committed chip's vWord says it the same way: one language, two
+ * surfaces. */
 .runVocab {
-    border-bottom: 1px dotted var(--tag-btn);
+    color: var(--gold);
+    border-bottom: 1px dotted var(--gold-dim);
 }
 
 /* what the parse could not read, and what it read with a reservation */
@@ -587,9 +591,11 @@
     user-select: none;
 }
 
-/* the lane: real terms inside the toned enclosure; gaps separate OBJECTS here, never continuous text */
+/* The lane: real terms inside the toned enclosure. The CELLS own the spacing — padding, not a container gap —
+ * so a cell's hover wash tiles exactly to the joints and edges beside it: a highlight that stopped short of
+ * its own segment read as a box floating between the dividers. */
 .lane {
-    gap: 6px;
+    gap: 0;
 }
 
 .lane .chipSect {
@@ -599,6 +605,7 @@
 .laneTerm {
     align-self: center;
     color: var(--text-strong);
+    padding: 0.2rem 0.35rem;
 }
 
 /* An inner bind is a chip of its own, neutral-surfaced so the lane's tone stays the one accent — and
@@ -608,6 +615,7 @@
     display: inline-flex;
     align-items: stretch;
     align-self: center;
+    margin: 0 0.35rem;
     border: 1px solid var(--border-ctrl);
     border-radius: 999px;
     background: rgba(var(--shadow-rgb), 0.12);
@@ -635,8 +643,12 @@
 /* ------------------------------------------------- the three text classes inside a chip
  * Corpus text is plain, a vocabulary word wears the dotted mark, a meta word is bold — all on one line metric. */
 
+/* A word from a closed vocabulary wears the head run's own gold — the colour `mount:` gets the moment it takes
+ * a bind — so a word WITH meaning reads apart from corpus text at a glance; the dotted line survives as the
+ * tooltip's affordance, in the same hue. */
 .vWord {
-    border-bottom: 1px dotted var(--tag-btn);
+    color: var(--gold);
+    border-bottom: 1px dotted var(--gold-dim);
 }
 
 .vMeta {
@@ -653,6 +665,7 @@
     color: var(--text);
     font-size: 0.85em;
     align-self: center;
+    padding: 0 0.35rem;
 }
 
 /* a phrase's quotes display at rest, styled as the delimiters they are, glued to their literal */
@@ -736,6 +749,7 @@
 .selected .negHead,
 .selected .vOr,
 .selected .vNot,
+.selected .vWord,
 .selected .vNot .vWord {
     color: var(--text-strong);
     border-bottom-color: var(--text-strong);
@@ -795,14 +809,33 @@
     margin-right: 0.25em;
 }
 
-/* A DIRECTIVE's capsule — sort, first. It shapes the list rather than the set, so it stands apart from every
-   ask chip: no column tone, a dashed edge saying "a different class of thing", the reader's own characters
-   inside. */
+/* A DIRECTIVE's capsule — sort, first. The same chip anatomy as every ask, in the neutral tone the tone-less
+   chip already wears: what tells it apart is what it holds — arrows, a count — not a decorated edge. */
 .directive {
+    border-style: solid;
+}
+
+/* A door cell of the sort chip: the word and its arrow read as ONE control, so they sit tight, and the
+   arrow's slot is stripped of the tail margin it carries when it is the delete mark at a chip's end. The
+   single-door chip has no gaps, so the cell carries a body cell's own padding; in the lane shape the 6px
+   gaps and the joints are the spacing, exactly as they are for every other lane cell. */
+.directiveDoor {
     display: inline-flex;
     align-items: center;
-    height: var(--band-h);
-    padding: 0 0.4rem;
-    border: 1px dashed color-mix(in srgb, var(--text) 40%, transparent);
-    border-radius: 0.5rem;
+    gap: 3px;
+    padding: 0.2rem 0.3rem 0.2rem 0.55rem;
+}
+
+.lane .directiveDoor {
+    padding: 0.2rem 0.35rem;
+}
+
+/* The door's arrow centres GEOMETRICALLY in the cell: the slot's x-height alignment serves a mark sitting in
+ * an inline run of text, and here the mark is a flex sibling of one word — the line-box strut read as sitting
+ * low. The slot spans the cell and centres its button, so the arrow's centre is the cell's. */
+.directiveDoor .markSlot {
+    margin: 0;
+    display: flex;
+    align-items: center;
+    align-self: stretch;
 }

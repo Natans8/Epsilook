@@ -45,6 +45,8 @@ export interface Offer {
     readonly word: string;
     /** What replaces the stub — a door carries its bind, a word stands alone, a query is the whole text. */
     readonly insert: string;
+    /** How many of the insert's characters sit PAST the caret once taken — a wrapped door's closing brace. */
+    readonly caretBack?: number;
     /** The one line under the word, already in the reader's language. */
     readonly note: string;
     /** The column whose tone the row wears, where the offer belongs to one. */
@@ -186,7 +188,7 @@ export function offerGhost(offers: Offers, offer: Offer | undefined): string {
  */
 export function offerSlot(plan: BarPlan, offers: Offers, offer: Offer): { value: string; caret: number } {
     const value = plan.slot.slice(0, offers.stub.start) + offer.insert + plan.slot.slice(offers.stub.end);
-    return {value, caret: offers.stub.start + offer.insert.length};
+    return {value, caret: offers.stub.start + offer.insert.length - (offer.caretBack ?? 0)};
 }
 
 /**
@@ -297,10 +299,12 @@ function kindOffers(column: Column): Offer[] {
             // A kind with no properties has nothing a bind could name: its word alone is the whole ask, so it
             // is offered as the word it is. Offering `pose:` taught a door the language cannot open.
             const valueless = Object.keys(kind.props).length === 0;
+            // A kind WITH properties still completes in increments: the bare word first — a complete ask in
+            // its own right — and the bind as the next step, once the word already stands typed whole.
             return {
                 shape: valueless ? "word" : "door",
                 word: kind.word,
-                insert: valueless ? kind.word : kind.word + GRAMMAR.bind,
+                insert: kind.word,
                 note: kind.hint,
                 tone: column.key,
             };
@@ -692,6 +696,10 @@ export function offersAt(plan: BarPlan, caret: number, history: readonly string[
         };
     }
 
+    // A caret outside the slot — the plain view's caret past a scope's closer — is handed nothing: an offer
+    // or a ghost drawn there would land characters where the caret is not.
+    if (caret < 0 || caret > slot.length) return NO_OFFERS;
+
     const term = termAt(slot, at);
     const context = contextOf(plan);
     const bind = bindIn(slot.slice(term.start, term.end));
@@ -709,6 +717,25 @@ export function offersAt(plan: BarPlan, caret: number, history: readonly string[
     // reader going back to fix something, not one composing a word — offering completions there is how a list
     // comes to open at every click, and it would be offering to replace the half of the word past the caret.
     if (at < stub.end) return NO_OFFERS;
+
+    // Inside the sort directive's own scope the words are DOORS taken bare — no colon, a minus for the other
+    // direction — so the axis menu answers with the words themselves rather than with openers.
+    if (plan.head !== null && fold(plan.head.word) === GRAMMAR.sortWord) {
+        // The directives themselves are not doors a sort can take.
+        const doors = doorOffers()
+            .filter((offer) => offer.word !== GRAMMAR.sortWord && offer.word !== GRAMMAR.limitWord)
+            .map((offer) => Object.assign({}, offer, {insert: offer.word}));
+        const groups = group("doors", doors, typed);
+        const best = groups[0]?.offers[0];
+        const completes = best !== undefined && typed !== "" && at === slot.length
+            && fold(best.insert).startsWith(fold(typed));
+        return {
+            groups, typed, atEnd: at === slot.length, takes: null, stub,
+            ghost: completes ? best.insert.slice(typed.length) : "",
+            ghostIs: completes ? "offer" : null,
+            negated,
+        };
+    }
 
     // A bind whose word is not a property of what the scope asks about: the parse will say so at commit, and
     // while the reader is still typing this surface is the channel that says it — with the properties that ARE
@@ -751,7 +778,24 @@ export function offersAt(plan: BarPlan, caret: number, history: readonly string[
             ...propOffers(context),
         ];
         const flags = offered.filter((offer) => offer.shape === "word");
-        const doors = offered.filter((offer) => offer.shape === "door");
+        let doors = offered.filter((offer) => offer.shape === "door");
+        // The staged completion's second increment: a kind's door word already typed WHOLE offers its bind
+        // next — `mou` completes to `mount`, a complete ask, and only then does `mount` offer `mount:`.
+        doors = doors.map((offer) => (
+            !offer.insert.endsWith(GRAMMAR.bind) && fold(offer.word) === fold(typed)
+                ? Object.assign({}, offer, {insert: offer.word + GRAMMAR.bind})
+                : offer));
+        // An UNSCOPED bound head — the plain view's standing state, where no gesture spawns the braces —
+        // takes a BIND-carrying door WITH the scope it needs: gluing `kit:` straight to `sound:` spells a
+        // second colon no value has a meaning for. A bare word needs no scope, so it goes in as it is.
+        if (plan.head !== null && plan.head.bound && !plan.head.scoped) {
+            doors = doors.map((offer) => (offer.insert.endsWith(GRAMMAR.bind)
+                ? Object.assign({}, offer, {
+                    insert: `${GRAMMAR.scope.open}${offer.insert}${GRAMMAR.scope.close}`,
+                    caretBack: 1,
+                })
+                : offer));
+        }
         // The word before the bind is unknown here, so the scope's whole offer stands unnarrowed.
         const narrowed = foreign ? "" : typed;
         return [
@@ -774,9 +818,12 @@ export function offersAt(plan: BarPlan, caret: number, history: readonly string[
             : composing === null ? null : takesOf(composing.prop, composing.name, composing.what);
 
     // The ghost is drawn in the slot's own mirror, so it may only ever be appended: anywhere but the end it would
-    // shift the mirrored text out from under the field's own caret.
+    // shift the mirrored text out from under the field's own caret. It previews the first offer in ANY group
+    // that completes the typed characters — a door two groups down is still the completion the keystroke wants.
     const atEnd = at === slot.length && stub.end === at;
-    const best = groups[0]?.offers[0];
+    const best = groups.flatMap((held) => held.offers)
+        .find((offer) => offer.shape !== "query" && fold(offer.insert).startsWith(fold(typed)))
+        ?? groups[0]?.offers[0];
     // Folded, because what the reader typed is a way IN and the offer's own spelling is the answer: `shado`
     // completes to Shadowlands and `wo` to WotLK. Taking it replaces the stub, so the case corrects itself on
     // accept -- the ghost can only ever append, and a remainder is all it has room to say.

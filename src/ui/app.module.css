@@ -13,7 +13,7 @@
     align-items: baseline;
     gap: 14px;
     flex-wrap: wrap;
-    margin-bottom: 4px;
+    margin-bottom: 16px;
 }
 
 .title {
@@ -56,9 +56,8 @@
     opacity: 0.6;
 }
 
-/* --- the bar, at 1.0's metrics --- */
+/* --- the search panel: the bar and its caption line are ONE component; the page around it is a container --- */
 .searchbox {
-    padding: 0.8rem 0 0.4rem;
     position: relative;
 }
 
@@ -68,11 +67,21 @@
     align-items: center;
 }
 
+/* The bar's focus scope: what "editing" means to the panel's settled-query controls. Layout-neutral. */
+.barHost {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+}
+
 .statusRow {
     display: flex;
     align-items: baseline;
     gap: 1rem;
-    margin-top: 0.4rem;
+    margin-top: 0.5rem;
+    /* The caption sits on the bar's own text inset — the count reads as the panel's voice, not the page's —
+     * and the view pill's half-rem of padding closes the right side to the same line. */
+    padding: 0 0.5rem 0 1rem;
 }
 
 .status {
@@ -84,6 +93,72 @@
 
 .statusStale {
     opacity: 0.55;
+}
+
+/* --- the simplify button, at the bar's right shoulder, with its hover preview --- */
+.simplify {
+    position: relative;
+    flex: none;
+    display: inline-flex;
+    align-self: stretch;
+}
+
+.simplifyButton {
+    font: inherit;
+    font-size: 0.85rem;
+    height: 100%;
+    padding: 0 0.8rem;
+    color: var(--text);
+    background: var(--bg-panel);
+    border: 1px solid var(--border-ctrl);
+    border-radius: 10px;
+    cursor: pointer;
+}
+
+.simplifyButton:hover:enabled {
+    border-color: var(--gold-dim);
+    color: var(--text-strong);
+}
+
+.simplifyButton:focus-visible {
+    outline: none;
+    border-color: var(--gold-dim);
+    box-shadow: 0 0 0 3px rgba(var(--gold-rgb), 0.12);
+}
+
+.simplifyButton:disabled {
+    color: var(--text-dim);
+    cursor: default;
+}
+
+/* The preview: what the press will write, shown before it is taken — or the word that nothing will change.
+ * Anchored under the button's right edge so it never covers the bar. */
+.simplifyPreview {
+    display: none;
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    z-index: 30;
+    max-width: 32rem;
+    width: max-content;
+    padding: 0.45rem 0.7rem;
+    font-size: 0.85rem;
+    color: var(--text);
+    background: var(--bg-panel);
+    border: 1px solid var(--border-ctrl);
+    border-radius: 8px;
+    box-shadow: 0 6px 18px rgba(var(--shadow-rgb), 0.35);
+}
+
+.simplify:hover .simplifyPreview,
+.simplify:focus-within .simplifyPreview {
+    display: block;
+}
+
+.simplifyNote {
+    display: block;
+    margin-top: 0.3rem;
+    color: var(--text-dim);
 }
 
 .footer {

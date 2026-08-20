@@ -193,6 +193,14 @@ export function classify(text: string): Run[] {
         const word = WORD.exec(folded.slice(at));
         if (word !== null) {
             const end = at + word[0].length;
+            // The or-word standing alone IS the alternation, at either level, so it wears the symbol's own
+            // class rather than reading as data.
+            if (fold(word[0]) === GRAMMAR.orWord && !OPS.has(folded[end] ?? "")) {
+                push(at, end, "delim");
+                at = end;
+                opening = true;
+                continue;
+            }
             // The bind is one of the operators, so a glue of any kind is one test.
             const known = HEADS.has(fold(word[0])) && OPS.has(folded[end] ?? "");
             // A head opens its clause at the top level, whichever glue it takes: `model:fire` and `model>=4`

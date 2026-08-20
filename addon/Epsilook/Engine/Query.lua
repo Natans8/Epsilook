@@ -619,6 +619,17 @@ local function alternative(text, ctx, alone)
 	if ctx.wordStar and Text.fold(text) == grammar.anyWord then
 		return ctx.star()
 	end
+	-- A number token ending in a dangling list separator reads as its numbers:
+	-- `id:{133, 134}` arrives as the token `133,` beside `134`, and the comma
+	-- separates nothing within its own token.
+	if
+		sub(text, -1) == grammar.numberList
+		and text:match("^[%d" .. grammar.numberList:gsub("%p", "%%%0") .. "]+$")
+		and not text:find(grammar.numberList .. grammar.numberList, 1, true)
+		and text:match("^%d")
+	then
+		text = sub(text, 1, -1 - #grammar.numberList)
+	end
 	if isNumberList(text) then
 		local parts = {}
 		for number in text:gmatch("%d+") do
@@ -1216,19 +1227,28 @@ end
 
 --- On a kind a spell has at most one row of, several bare values in one run
 -- each become their own alternative, since one row cannot be two things;
--- whatever else the run stated keeps every alternative company.
--- A text subject is the exception the rationale draws itself: bare values
--- there are substring claims, and two substrings can both describe one row,
--- so they stay the conjunction the reader wrote.
+-- whatever else the run stated keeps every alternative company. A COLUMN
+-- door alternates exactly when every kind it holds is single, the id
+-- column's way. A text subject anywhere is the exception the rationale draws
+-- itself: bare values there are substring claims, and two substrings can
+-- both describe one row, so they stay the conjunction the reader wrote.
 local function alternateWhereSingle(head, runs)
-	if head.role ~= "kind" or head.kind.single ~= true then
-		return runs
+	local kinds
+	if head.role == "kind" then
+		kinds = { head.kind }
+	else
+		kinds = Schema.KindsOf(head.column)
 	end
-	local subject = head.kind.props and head.kind.props[1]
-	if subject then
-		for _, held in ipairs(subject.types) do
-			if held == "text" or held == "path" then
-				return runs
+	for _, kind in ipairs(kinds) do
+		if kind.single ~= true then
+			return runs
+		end
+		local subject = kind.props and kind.props[1]
+		if subject then
+			for _, held in ipairs(subject.types) do
+				if held == "text" or held == "path" then
+					return runs
+				end
 			end
 		end
 	end

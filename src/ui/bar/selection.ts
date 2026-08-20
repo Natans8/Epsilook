@@ -190,7 +190,12 @@ export function useBarSelection(
         if (e.target instanceof Element && e.target.closest("[data-open],[data-surface],button") !== null) return;
         const {at: aim, exact} = aimOf(e);
         const seg = segmentAt(text, aim);
-        if (aim >= text.length) session.openEnd(text);
+        // Past everything, the ground means "after the query": a fresh tail. Only plain text keeps the caret
+        // at its own end — landing INSIDE the last chip from the empty ground was the annoying answer.
+        if (aim >= text.length) {
+            if (seg.plain) session.openEnd(text);
+            else session.openTail(text);
+        }
         // Past a segment's own end sits the separator: the caret rests in the gap before what follows it.
         else if (aim >= seg.end) session.openGap(text, aim + 1);
             // Anything drawing its own characters — text, an erred clause, the glue between two of them — takes

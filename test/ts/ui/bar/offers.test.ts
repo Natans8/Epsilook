@@ -63,6 +63,34 @@ test("a top-level bind whose word opens no door says so, with the real doors unn
     assert.equal(at(String.raw`\attach:chest`, 13).takes, null);
 });
 
+test("inside the sort scope the doors offer bare — no colon — and the directives stay out", () => {
+    const offers = at("sort:{na}", 8);
+    const doors = words(offers, "doors");
+    assert.ok(doors.includes("name"), doors.join(" "));
+    for (const group of offers.groups) {
+        for (const offer of group.offers) assert.ok(!offer.insert.includes(":"), offer.insert);
+    }
+    const all = words(at("sort:{}", 6), "doors");
+    assert.ok(!all.includes("sort") && !all.includes("first"));
+});
+
+test("an unscoped bound head takes its doors WITH the scope, the caret landing before the closer", () => {
+    // The plain view's standing state: no gesture spawns the braces, so gluing `kit:` to `sound:` would spell
+    // a second colon nothing reads. The offer writes the legal spelling itself.
+    const offers = at("sound:k", 7);
+    const kit = offers.groups.flatMap((group) => group.offers).find((offer) => offer.word === "kit");
+    assert.ok(kit !== undefined);
+    assert.equal(kit.insert, "{kit:}");
+    const applied = offerSlot(planAt("sound:k", 7), offers, kit);
+    assert.equal(applied.value, "{kit:}");
+    assert.equal(applied.caret, 5);
+});
+
+test("a caret outside the slot — past a scope's closer in the plain view — is handed nothing", () => {
+    const plan = planAt("scale:{50|60}", 13);
+    assert.deepEqual(offersAt(plan, 13 - slotStart(plan), []), NO_OFFERS);
+});
+
 test("a door reads by every spelling it has, and writes only its own", () => {
     // `animation` and `animations` both reach the anim door; the offer still spells it `anim`.
     const offers = at("animat", 6);
@@ -92,9 +120,14 @@ test("inside a column's scope, every door stands in one section: its kinds and i
     assert.ok(words(offers, "doors").includes("target"));
     assert.ok(!words(offers, "doors").includes("motion"));
     assert.ok(words(at("missile:{}", 9), "doors").includes("motion"));
-    // A kind's word takes a value exactly as a property's does, so both are offered with their bind.
+    // A kind's word completes in INCREMENTS: the bare word first — a complete ask — and its bind only once
+    // the word already stands typed whole. A property's door always carries the bind: it needs the value.
     const missile = offers.groups[0].offers.find((offer) => offer.word === "missile");
-    assert.equal(missile?.insert, "missile:");
+    assert.equal(missile?.insert, "missile");
+    const whole = at("model:{missile}", 14).groups[0].offers.find((offer) => offer.word === "missile");
+    assert.equal(whole?.insert, "missile:");
+    const target = offers.groups[0].offers.find((offer) => offer.word === "target");
+    assert.equal(target?.insert, "target:");
 });
 
 test("inside a kind's scope: what its own word asks for, then that kind's properties", () => {

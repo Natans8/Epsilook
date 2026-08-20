@@ -84,7 +84,8 @@ export function useBarAssist(
     const [visit, setVisit] = useState({arrangement: "", count: 0});
     if (visit.arrangement !== arrangement) setVisit({arrangement, count: visit.count + 1});
     const stamp = `${arrangement}#${String(visit.count)}`;
-    const shown = (offers.groups.length > 0 || offers.takes !== null) && dismissed !== stamp;
+    // Counted by ROWS, not groups: a group narrowed down to nothing must not hold an empty panel open.
+    const shown = (flat.length > 0 || offers.takes !== null) && dismissed !== stamp;
     const lit = shown && litAt.stamp === stamp ? litAt.index : -1;
 
     /**

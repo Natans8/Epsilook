@@ -12,8 +12,8 @@
  */
 import type {Span} from "../../search/index";
 import {
-    classify, describe, directiveTexts, equivalent, escapedAt, fold, GRAMMAR, HEADS, parse, PREFIX_OPERATORS,
-    spellingsOf,
+    classify, convergeDisplay, describe, directiveTexts, equivalent, escapedAt, fold, formatQuery, GRAMMAR, HEADS,
+    parse, PREFIX_OPERATORS, spellingsOf,
 } from "../../search/index";
 
 /** The transformed head of the open segment, when it has one. */
@@ -84,6 +84,9 @@ export function termStarts(text: string): number[] {
 
 /** The words that open a DIRECTIVE, which draws as its own capsule rather than as text. */
 const DIRECTIVE_WORDS = new Set<string>([GRAMMAR.sortWord, GRAMMAR.limitWord, ...GRAMMAR.limitReads]);
+
+/** The limit directive's spellings: a count slot, so its editing form never grows a scope. */
+const LIMIT_WORDS = new Set<string>([GRAMMAR.limitWord, ...GRAMMAR.limitReads]);
 
 /** Whether a term is a directive: its first word, negation aside, is one of the directive words. */
 function directiveTerm(term: string): boolean {
@@ -203,7 +206,10 @@ const OPENER = new RegExp(
 export function openHead(open: string): OpenHead | null {
     const match = OPENER.exec(open);
     if (match === null) return null;
-    if (!HEADS.has(fold(match[2]))) return null;
+    // A directive word opens exactly as a schema head does — the control chips edit like every other chip —
+    // but only on the bind: a comparison glued to one is not a spelling the language gives a meaning.
+    const directive = DIRECTIVE_WORDS.has(fold(match[2])) && match[3] === GRAMMAR.bind;
+    if (!HEADS.has(fold(match[2])) && !directive) return null;
     const bound = match[3] === GRAMMAR.bind;
     let consumed = match[1].length + match[2].length + (bound ? 1 : 0);
     const scoped = bound && open[consumed] === GRAMMAR.scope.open;
@@ -567,6 +573,8 @@ export function scopeGesture(was: BarPlan, step: Keystroke): Keystroke {
     const already = was.head !== null && was.head.bound;
     if (!landed || already) return step;
     if (next.head !== null && HEADS.get(fold(next.head.word))?.role === "prop") return step;
+    // The limit takes one count, never a scope; the sort takes a sequence, so its braces spawn like a kind's.
+    if (next.head !== null && LIMIT_WORDS.has(fold(next.head.word))) return step;
     const open = GRAMMAR.scope.open + GRAMMAR.scope.close;
     return {
         text: step.text.slice(0, step.caret) + open + step.text.slice(step.caret),
@@ -625,6 +633,30 @@ function sameAsk(a: string, b: string): boolean {
 }
 
 /**
+ * The committed spelling of one settled segment: its own written-tier respell, taken only when it provably
+ * asks the same question.
+ *
+ * A chip draws its PARSE, so two spellings one chip cannot tell apart — `model:fire|frost` against the
+ * parenthesised alternation, an operator's colon, a directive synonym — converge the moment the segment
+ * settles, and the plain view and the URL stop disagreeing with what the chip shows. Broken text keeps its
+ * characters: the formatter writes only the evaluable query, and a respell that dropped a reader's typing
+ * would be loss, not normalisation.
+ */
+function settledSpelling(open: string): string {
+    if (open.trim() === "") return open;
+    const parsed = parse(open, {mode: "final"});
+    // An error or a warning leaves the characters alone — an error because the formatter writes only the
+    // evaluable query, a warning because rewriting warned text would silently apply the fix the warning is
+    // offering. A NOTE is information and blocks nothing: the counts-rows note rides every count spelling.
+    if (parsed.diagnostics.some((d) => d.severity !== "note")) return open;
+    // The chip-invisible rewrites converge too: the chip already draws `spell:{desc:hello}` as the desc door,
+    // so the settled text says what the chip shows.
+    const respelled = formatQuery(convergeDisplay(parsed), "written");
+    if (respelled === "" || respelled === open) return open;
+    return sameAsk(open, respelled) ? respelled : open;
+}
+
+/**
  * Removes the character range `[from, to)` and one adjacent separator, so no double gap remains.
  *
  * @returns The new text with the caret where the removal stood, flagged as a removal.
@@ -658,18 +690,20 @@ export function commitSegment(text: string, at: number): Commit {
     // commits as one — the missing brace is what the commit supplies.
     const early = plan.head?.scoped === true && plan.suffix === "" && closerAt(plan.slot) >= 0;
     if (plan.head === null || !plan.head.scoped || early) {
+        // A plain segment is TEXT and settles verbatim; a headed one converges on its committed spelling.
+        if (plan.head === null) return {text, caret: plan.before.length + plan.open.length, removed: false};
         const end = plan.open.length > 0 ? plan.open[plan.open.length - 1] : "";
-        if (plan.head !== null && (end === GRAMMAR.or || end === GRAMMAR.numberList)) {
+        let open = plan.open;
+        if (end === GRAMMAR.or || end === GRAMMAR.numberList) {
             const trimmed = plan.open.slice(0, -1);
-            if (sameAsk(trimmed, plan.open)) {
-                return {
-                    text: plan.before + trimmed + plan.after,
-                    caret: plan.before.length + trimmed.length,
-                    removed: false,
-                };
-            }
+            if (sameAsk(trimmed, plan.open)) open = trimmed;
         }
-        return {text, caret: plan.before.length + plan.open.length, removed: false};
+        open = settledSpelling(open);
+        return {
+            text: plan.before + open + plan.after,
+            caret: plan.before.length + open.length,
+            removed: false,
+        };
     }
     let interior = closePhrase(plan.slot.trim());
     // The simplification runs to its FIXPOINT: an interior that is itself one whole scope sheds that scope
@@ -690,12 +724,30 @@ export function commitSegment(text: string, at: number): Commit {
     // agreeing, which returns a broken segment to the raw text it was typed as instead of stranding it in an
     // editing form it can never leave.
     const single = termStarts(interior).length === 1 && sameAsk(shed, kept);
-    const open = single ? shed : kept;
+    const open = settledSpelling(single ? shed : kept);
     return {
         text: plan.before + open + plan.after,
         caret: plan.before.length + open.length,
         removed: false,
     };
+}
+
+/**
+ * The query with every segment committed — the text as it would stand once nothing is being edited.
+ *
+ * What the panel's settled-query controls compare against: an OPEN chip's editing braces are not a difference
+ * worth offering to fix, since the commit converges them on its own. Right to left, so a commit that changes a
+ * segment's length never moves the offsets of the segments still to come.
+ *
+ * @param text The query text, editing structure and all.
+ * @returns The text with every segment settled.
+ */
+export function settledQuery(text: string): string {
+    let out = text;
+    for (const seg of segmentsOf(text).toReversed()) {
+        out = commitSegment(out, seg.start).text;
+    }
+    return out;
 }
 
 /**
@@ -815,21 +867,24 @@ export function toggleNegation(text: string, at: number): Keystroke {
 }
 
 /**
- * The arrow affordance on a sort chip: the directive's segment with every door turned the other way round,
- * respelled through the parser and the formatter rather than by touching characters. A scoped sequence flips
- * whole, exactly as the exclusion before the sort word turns it whole.
+ * The arrow affordance on a sort chip: ONE door of the directive turned the other way round, respelled through
+ * the parser and the formatter rather than by touching characters. Every door carries its own arrow, so the
+ * flip is per door whether the directive is a single sort or a scoped sequence.
  *
  * @param text The query text.
  * @param at Any offset inside the sort directive's segment.
- * @returns The new text with the caret after the respelled directive, or null where the segment is no sort.
+ * @param door Which door to turn, by its position among the directive's sorts.
+ * @returns The new text with the caret after the respelled directive, or null where the segment is no sort or
+ *   names no such door.
  */
-export function toggleSort(text: string, at: number): Commit | null {
+export function toggleSort(text: string, at: number, door: number): Commit | null {
     const seg = segmentAt(text, at);
     const parsed = parse(text.slice(seg.start, seg.end), {mode: "final"});
-    if (parsed.sorts.length === 0 || parsed.limit !== null) return null;
+    if (door < 0 || door >= parsed.sorts.length || parsed.limit !== null) return null;
     const flipped = directiveTexts({
         ...parsed,
-        sorts: parsed.sorts.map((sort) => ({head: sort.head, descending: !sort.descending, span: sort.span})),
+        sorts: parsed.sorts.map((sort, i) =>
+            ({head: sort.head, descending: i === door ? !sort.descending : sort.descending, span: sort.span})),
     }).join(" ");
     const next = text.slice(0, seg.start) + flipped + text.slice(seg.end);
     return {text: next, caret: seg.start + flipped.length, removed: false};

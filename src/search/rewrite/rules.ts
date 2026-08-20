@@ -58,6 +58,14 @@ export interface Rule {
     readonly examples: readonly RuleExample[];
 
     readonly apply?: (tree: Tree, ctx: Ctx) => Tree | null;
+
+    /**
+     * Marks a rewrite the CHIP display cannot show: the display model draws the meaning, so a respell through
+     * a shorter door or an unwrapped one-term scope draws the very same chips. These converge silently when a
+     * segment commits; every other rule stays behind the explicit button, where removing or reordering what a
+     * chip draws belongs.
+     */
+    readonly chipInvisible?: true;
 }
 
 /** One boundary: a rewrite deliberately not performed, and why. */
@@ -656,19 +664,19 @@ export const RULES: readonly Rule[] = Object.freeze([
         apply: mergeBounds,
     },
     {
-        id: "R16", name: "kind-through-column", tier: "simplify",
+        id: "R16", name: "kind-through-column", tier: "simplify", chipInvisible: true,
         law: i18n.t("rules:law.R16"),
         examples: [{from: "model:{missile}", to: "model:missile"}, {from: "missile:*", to: "model:missile"}],
         apply: kindThroughColumn,
     },
     {
-        id: "R12", name: "unwrap-scope", tier: "simplify",
+        id: "R12", name: "unwrap-scope", tier: "simplify", chipInvisible: true,
         law: i18n.t("rules:law.R12"),
         examples: [{from: "model:{fire}", to: "model:fire"}],
         apply: unwrapScope,
     },
     {
-        id: "R13", name: "shortest-door", tier: "simplify",
+        id: "R13", name: "shortest-door", tier: "simplify", chipInvisible: true,
         law: i18n.t("rules:law.R13"),
         examples: [{from: "fx:{scale:+50%}", to: "scale=+50%"}, {from: "spell:{cast:2s}", to: "cast=2s"}],
         apply: shortestDoor,

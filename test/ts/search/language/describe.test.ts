@@ -96,10 +96,11 @@ test("existence displays the any-word, from the star and from the word alike", (
 
 test("the chip displays the meaning, not the minimal spelling: an elided count surfaces as its word", () => {
     const c = chip("model>=4");
-    // The bound property is a CELL of its own — `model | count | ≥ 4` — rather than a loud word leading the
-    // body, which read as two things standing side by side rather than one saying what the other is.
-    assert.equal(c.sub, "count");
-    assert.deepEqual(c.body, [{is: "op", text: "≥"}, {is: "value", text: "4"}]);
+    // A value opening with an operator JOINS its property in one cell — `count ≥ 4` reads as one phrase, and
+    // the divided cells made the property and its comparison look like two unrelated conditions. The cell
+    // form survives for word values, where `attach | chest` is one saying what the other is.
+    assert.equal(c.sub, undefined);
+    assert.deepEqual(c.body, [{is: "word", text: "count"}, {is: "op", text: "≥"}, {is: "value", text: "4"}]);
     // The desugar's note rides along for the tooltip.
     assert.equal(view("model>=4").notes.length, 1);
 });

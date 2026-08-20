@@ -191,7 +191,13 @@ export function operandQuoted(operand: ParsedOperand, at?: PropRef): boolean {
  * @param tier The output tier, per {@link Spelling}.
  * @returns The canonical text of the value, including any operator symbol.
  */
-function valueText(value: ValueExpr, at?: PropRef, tier: Spelling = "canonical"): string {
+/**
+ * One value's spelling. `bareSafe` marks BIND position — a value glued straight to its own head — where the
+ * written tier may lean on the bare readings: a quantity's missing anchor still reads exact there, and a glued
+ * alternation re-reads whole. Everywhere else — scope terms, inner binds, counts — the explicit spellings are
+ * load-bearing and stay.
+ */
+function valueText(value: ValueExpr, at?: PropRef, tier: Spelling = "canonical", bareSafe = false): string {
     switch (value.op) {
         case "present":
             return GRAMMAR.wildcard;
@@ -210,6 +216,12 @@ function valueText(value: ValueExpr, at?: PropRef, tier: Spelling = "canonical")
             const text = operandText(value.operand, at, tier);
             // A bare sentinel word already means the exact ask, so the anchor adds nothing to it.
             if (at !== undefined && sentinelOf(propOf(at), text) !== null) return text;
+            // In bind position a QUANTITY's bare spelling already reads exact, so the written tier — the one
+            // upholding a reader who never typed the anchor — leaves it off. Everywhere else it is load-bearing:
+            // a scope's bare value joins the alternation rule, and a bare count is content.
+            if (bareSafe && tier === "written" && readingOf(value.operand) === "quantity") {
+                return bareOrPhrase(text, readingOf(value.operand), verbatimOf(value.operand));
+            }
             return `${spelling(exact)}${bareOrPhrase(text, readingOf(value.operand), verbatimOf(value.operand))}`;
         }
         case "lt":
@@ -219,9 +231,22 @@ function valueText(value: ValueExpr, at?: PropRef, tier: Spelling = "canonical")
             return `${spelling(COMPARISONS[value.op])}${operandText(value.operand, at, tier)}`;
         case "range":
             return `${bound(operandText(value.lo, at, tier))}${GRAMMAR.range}${operandText(value.hi, at, tier)}`;
-        case "anyOf":
-            // Grouped: at a bind, a glued phrase alternative would otherwise split at its own quote.
-            return `${GRAMMAR.group.open}${value.alternatives.map((alt) => valueText(alt, at, tier)).join(GRAMMAR.or)}${GRAMMAR.group.close}`;
+        case "anyOf": {
+            const parts = value.alternatives.map((alt) => valueText(alt, at, tier, bareSafe));
+            // Digits alone write the comma list — the id idiom, and the spelling the chip itself displays.
+            if (tier === "written" && bareSafe && parts.every((p) => /^\d+$/.test(p))) {
+                return parts.join(GRAMMAR.numberList);
+            }
+            const glued = parts.join(GRAMMAR.or);
+            // In bind position the glued spelling re-reads as this same alternation, so the written tier
+            // spares the parentheses unless a phrase, a space or an empty spelling would split it. A scope's
+            // inner bind always groups: glued pipes there would split the scope's own runs.
+            if (tier === "written" && bareSafe
+                && parts.every((p) => p !== "" && !p.includes(GRAMMAR.phrase) && !p.includes(" "))) {
+                return glued;
+            }
+            return `${GRAMMAR.group.open}${glued}${GRAMMAR.group.close}`;
+        }
     }
     // The switch is exhaustive, narrowing `value` to never: a new variant fails to compile here until it has a
     // spelling, which is the only thing keeping this module the parser's inverse.
@@ -248,7 +273,35 @@ function termText(term: ScopeTerm, tier: Spelling): string | null {
     if (ask.on === "kindWord") return `${negate}${wordOf(ask.kind)}`;
     if (ask.on === "count") return `${negate}${bindTo(GRAMMAR.countWord, valueText(ask.value, undefined, tier))}`;
     const ref = ask.props[0];
-    return `${negate}${bindTo(ref.prop, valueText(ask.value, ref, tier))}`;
+    const text = valueText(ask.value, ref, tier);
+    if (subjectSpeaksBare(ask.value, ref, tier, text)) return `${negate}${text}`;
+    // A kind's SUBJECT binds through the KIND's word — the door the reader has — never through the schema's
+    // own property name: `mount:horse`, not the `name:horse` that surfaced a field nobody typed.
+    const subject = Object.keys(ref.kind.props)[0] === ref.prop && ref.kind.word !== undefined
+        ? ref.kind.word
+        : ref.prop;
+    return `${negate}${bindTo(subject, text)}`;
+}
+
+/**
+ * Whether a scope term on the kind's SUBJECT writes as the bare comparison the reader types — `scale:{>50%}`,
+ * never an `amount` no surface offers — because the subject property never names itself.
+ *
+ * Only where the bare spelling provably re-reads as the same ask: the value is one operator on a QUANTITY, and
+ * the operand's type is read by exactly ONE of the kind's properties, so the bare term's dispatch lands back on
+ * the subject alone. A text subject stays named — bare text dispatches to every property — and so does a
+ * quantity two properties share, the way the range kind's yards and min do. Written tier only: the canonical
+ * form stays fully spelled.
+ */
+function subjectSpeaksBare(value: ValueExpr, ref: PropRef, tier: Spelling, text: string): boolean {
+    if (tier !== "written") return false;
+    if (Object.keys(ref.kind.props)[0] !== ref.prop || !OPENS_OPERATOR.test(text)) return false;
+    if (!("operand" in value) || "text" in value.operand) return false;
+    const type = value.operand.type;
+    if (TYPES.get(type)?.quantity !== true) return false;
+    return Object.values(ref.kind.props)
+        .filter((prop) => prop.types.some((held) => held.name === type))
+        .length === 1;
 }
 
 /**
@@ -292,10 +345,10 @@ export function unbracedTerm(terms: ReadonlyArray<readonly ScopeTerm[]>): ScopeT
 }
 
 function askText(ask: Ask, tier: Spelling): string | null {
-    if (ask.on === "plain") return valueText(ask.value, undefined, tier);
+    if (ask.on === "plain") return valueText(ask.value, undefined, tier, true);
     if (ask.on === "prop") {
         const door = doorOf(ask.ref.prop, propOf(ask.ref));
-        return ask.value === null ? null : bindTo(door, valueText(ask.value, ask.ref, tier));
+        return ask.value === null ? null : bindTo(door, valueText(ask.value, ask.ref, tier, true));
     }
 
     const head = ask.on === "column" ? ask.column.key : wordOf(ask.kind);
@@ -307,11 +360,11 @@ function askText(ask: Ask, tier: Spelling): string | null {
         ? `${ask.kind.column.key}${GRAMMAR.bind}${ask.kind.word}`
         : `${head}${GRAMMAR.bind}${GRAMMAR.wildcard}`;
     if (test.is === "exists") return exists;
-    if (test.is === "content") return bindTo(head, valueText(test.value, undefined, tier));
+    if (test.is === "content") return bindTo(head, valueText(test.value, undefined, tier, true));
     if (test.is === "props") {
         const ref = test.props[0];
         // The value re-reads through the head's own dispatch, so the property name needs no spelling here.
-        return bindTo(head, valueText(test.value, ref, tier));
+        return bindTo(head, valueText(test.value, ref, tier, true));
     }
 
     const runs = test.terms

@@ -23,9 +23,7 @@
     "result_one": "spell",
     "result_other": "spells",
     "searching": "searching…",
-    "elapsed": "{{ms}} ms",
-    "showingFirst": "showing the first {{shown}}",
-    "showingLast": "showing the last {{shown}}"
+    "elapsed": "{{ms}} ms"
   },
   "bar": {
     "placeholder": "Search spells — a word, or an axis like scale:",

@@ -84,7 +84,7 @@ export type {Boundary, Rule, RuleExample, RuleTier} from "./rewrite/rules";
 export {KEPT, RULES} from "./rewrite/rules";
 
 export type {Simplified, Suggestion} from "./rewrite/simplify";
-export {equivalent, simplify, suggestions} from "./rewrite/simplify";
+export {convergeDisplay, equivalent, simplify, suggestions} from "./rewrite/simplify";
 
 export type {Dataset, Row, RowAsk, RowSource, Stored} from "./evaluate/rows";
 export {contentMatches, matchProp, plainMatches, propRefMatches, rowMatches} from "./evaluate/rows";

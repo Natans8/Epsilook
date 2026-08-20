@@ -12,8 +12,8 @@
  * classed raw text for freeform terms and errors. Their affordances — open, ×, per-term ×, + — come back here
  * as rewrites of the text, each an undoable operation.
  */
-import type {ReactElement} from "react";
-import {Fragment, useLayoutEffect, useMemo, useRef, useState} from "react";
+import type {ReactElement, Ref} from "react";
+import {Fragment, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState} from "react";
 import {paint, runsWithin} from "../../search/index";
 import type {BarSegment} from "./plan";
 import {segmentsOf, slotStart} from "./plan";
@@ -35,12 +35,24 @@ import styles from "./bar.module.css";
 /** One frozen empty map, so a bar with no art does not hand the context a fresh object each render. */
 const EMPTY_ART: Readonly<Record<string, string>> = Object.freeze({});
 
-export function Bar({text, onText, placeholder, vocab = NO_VOCABULARY}: {
+/**
+ * What the panel around the bar may ask of it. A control outside the bar that rewrites the query — the
+ * simplify button — goes through this rather than through the text prop, so the rewrite is one operation on
+ * the bar's OWN undo stack and Ctrl+Z takes it back.
+ */
+export interface BarHandle {
+    /** Applies one whole-query rewrite as an undoable operation, the caret landing on the fresh tail. */
+    rewrite(next: string): void;
+}
+
+export function Bar({text, onText, placeholder, vocab = NO_VOCABULARY, handle}: {
     readonly text: string;
     readonly onText: (text: string) => void;
     readonly placeholder: string;
     /** The closed vocabularies the loaded pack carries — what the surface can offer beyond the language. */
     readonly vocab?: Vocabulary;
+    /** The panel's door for undoable whole-query rewrites. */
+    readonly handle?: Ref<BarHandle>;
 }): ReactElement {
     // The searches this browser remembers. Shared, because the SESSION knows when a query was finished with
     // and the SURFACE knows what to do with one.
@@ -70,8 +82,19 @@ export function Bar({text, onText, placeholder, vocab = NO_VOCABULARY}: {
     } = selection;
     const {
         at, gapAt, caret, session, focused, setFocused, onKeystroke, commitOpen, onArrow, onCommit, onCancel,
-        onEdge, onUndo, onRedo, actionsFor,
+        onEdge, onUndo, onRedo, actionsFor, pushUndo, openTail,
     } = editing;
+
+    // The panel's rewrite door: one undoable operation through the session's own machinery, so Ctrl+Z takes
+    // back an applied simplify exactly as it takes back any other operation.
+    useImperativeHandle(handle, () => ({
+        rewrite: (next: string): void => {
+            if (next === text) return;
+            pushUndo(text);
+            clearing.current();
+            openTail(next);
+        },
+    }));
 
     const segments = useMemo(() => segmentsOf(text), [text]);
     // The slot holds a FRAGMENT, so it cannot paint itself: the whole query is painted once and each surface
