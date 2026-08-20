@@ -13,7 +13,7 @@
  */
 import {parseArgs} from "node:util";
 
-import {parse, run} from "../src/search/index";
+import {order, parse, run} from "../src/search/index";
 import {loadPack, packDataset} from "./dataset";
 
 /* Stdout is the result; everything else is stderr, so `--json | jq` can never
@@ -46,8 +46,13 @@ const dataset = packDataset(loaded);
 const parsed = parse(query, {mode: "final"});
 for (const d of parsed.diagnostics) toStderr("diagnostic:", JSON.stringify(d));
 
-// The kernel answers in spell INDEXES, dense from zero; the ids are the pack's.
-const ids = [...run(parsed, dataset)].map((at) => loaded.spells.ids[at]).toSorted((a, b) => a - b);
+// The kernel answers in spell INDEXES, dense from zero; the ids are the pack's. An unordered answer prints
+// in id order as ever; a sort directive orders it, and the query's own `first` trims BEFORE the CLI's --limit.
+const found = run(parsed, dataset);
+const spells = parsed.sorts.length > 0 ? order(found, parsed.sorts, dataset)
+    : [...found].toSorted((a, b) => loaded.spells.ids[a] - loaded.spells.ids[b]);
+const listed = parsed.limit === null ? spells : spells.slice(0, parsed.limit.value);
+const ids = listed.map((at) => loaded.spells.ids[at]);
 const limit = Math.max(0, Number(values.limit) || 0);
 const nameOf = (id: number): string => {
     const pos = loaded.index.get(id);
@@ -59,11 +64,11 @@ if (values.json) {
         query,
         version: loaded.entry.id,
         locale: loaded.locale,
-        count: ids.length,
+        count: found.size,
         ids: ids.slice(0, limit),
     }));
 } else {
     toStderr(`${loaded.entry.id} (${loaded.locale})`);
-    out(String(ids.length));
+    out(String(found.size));
     for (const id of ids.slice(0, limit)) out(`${id}\t${nameOf(id)}`);
 }

@@ -763,3 +763,15 @@
     vertical-align: middle;
     margin-right: 0.25em;
 }
+
+/* A DIRECTIVE's capsule — sort, first. It shapes the list rather than the set, so it stands apart from every
+   ask chip: no column tone, a dashed edge saying "a different class of thing", the reader's own characters
+   inside. */
+.directive {
+    display: inline-flex;
+    align-items: center;
+    height: var(--band-h);
+    padding: 0 0.4rem;
+    border: 1px dashed color-mix(in srgb, var(--text) 40%, transparent);
+    border-radius: 0.5rem;
+}

@@ -81,6 +81,15 @@ export function termStarts(text: string): number[] {
     return starts;
 }
 
+/** The words that open a DIRECTIVE, which draws as its own capsule rather than as text. */
+const DIRECTIVE_WORDS = new Set<string>([GRAMMAR.sortWord, GRAMMAR.limitWord, ...GRAMMAR.limitReads]);
+
+/** Whether a term is a directive: its first word, negation aside, is one of the directive words. */
+function directiveTerm(term: string): boolean {
+    const match = /^-?([\p{L}\p{N}_]+)/u.exec(term);
+    return match !== null && DIRECTIVE_WORDS.has(fold(match[1]));
+}
+
 /** The characters that make a term structure rather than text — anything a chip could be drawn from. */
 const STRUCTURE = new Set<string>([
     GRAMMAR.scope.open, GRAMMAR.scope.close, GRAMMAR.group.open, GRAMMAR.group.close,
@@ -104,6 +113,7 @@ const DRAWN = new Map<string, boolean>();
  */
 function plainTerm(term: string): boolean {
     if (openHead(term) !== null) return false;
+    if (directiveTerm(term)) return false;
     let structural = false;
     for (const ch of term) {
         if (STRUCTURE.has(ch)) {

@@ -19,6 +19,7 @@ import type {Ask, Clause, Diagnostic, Parsed, ParsedOperand, PropRef, ScopeTerm,
 import {propOf} from "./ast";
 import {GRAMMAR, spelling} from "./grammar";
 import {doorOf, wordOf} from "../schema/kinds";
+import {headWord} from "../schema/schema";
 import type {Kind, Prop} from "../schema/kinds";
 import {operandQuoted, operandText} from "./format";
 import type {Operator} from "../vocabulary/operators";
@@ -119,6 +120,14 @@ export type ClauseView =
     | {
     readonly form: "lane"; readonly span: Span; readonly notes: readonly string[];
     readonly warned: boolean; readonly erred: boolean; readonly lane: LaneView
+}
+    /**
+     * A DIRECTIVE: it shapes the list rather than the set, so it draws apart from the ask chips — no column
+     * tone, its own neutral cell. A descending sort's value keeps the minus it is spelled with.
+     */
+    | {
+    readonly form: "directive"; readonly span: Span; readonly notes: readonly string[];
+    readonly word: string; readonly value: string
 };
 
 /** The word-vocabulary types: values from a closed set, marked apart from corpus text. */
@@ -441,7 +450,18 @@ function askView(ask: Ask, not: boolean): AskView | null {
  * @returns One {@link ClauseView} per entry of `parsed.clauses`.
  */
 export function describe(parsed: Parsed): ClauseView[] {
-    return parsed.clauses.map((clause: Clause, index: number): ClauseView => {
+    const directives: ClauseView[] = [
+        ...parsed.sorts.map((sort): ClauseView => ({
+            form: "directive", span: sort.span, notes: [],
+            word: GRAMMAR.sortWord,
+            value: `${sort.descending ? GRAMMAR.negate : ""}${headWord(sort.head)}`,
+        })),
+        ...(parsed.limit === null ? [] : [{
+            form: "directive" as const, span: parsed.limit.span, notes: [],
+            word: GRAMMAR.limitWord, value: String(parsed.limit.value),
+        }]),
+    ];
+    return withDirectives(parsed.clauses.map((clause: Clause, index: number): ClauseView => {
         const mine = parsed.diagnostics.filter((d: Diagnostic) => d.clause === index);
         const notes = mine.map((d) => d.message);
         const view = clause.state === "ok" && clause.ask !== null ? askView(clause.ask, clause.not) : null;
@@ -458,5 +478,11 @@ export function describe(parsed: Parsed): ClauseView[] {
         return view.as === "lane"
             ? {form: "lane", ...at, lane: view.lane}
             : {form: "chip", ...at, chip: view.chip};
-    });
+    }), directives);
+}
+
+/** The clause views and the directives merged into one span-ascending list, which is the order a bar draws. */
+function withDirectives(views: ClauseView[], directives: ClauseView[]): ClauseView[] {
+    if (directives.length === 0) return views;
+    return [...views, ...directives].toSorted((a, b) => a.span.start - b.span.start);
 }

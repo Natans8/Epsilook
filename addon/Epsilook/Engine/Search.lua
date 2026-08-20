@@ -636,8 +636,10 @@ SPELL_VALUES["spell.spell"] = function(cols, prop, cache)
 	if prop.name == "cast" then
 		local castMs = delivery.castMs
 		return function(spell)
+			-- A spell with no delivery row has no value here: matching reads
+			-- absence as no row, and the sort's law is nothing last.
 			local at = rowOf(Reader.number(blob, ids, spell))
-			return at and Reader.number(deliveryBlob, castMs, at) or 0
+			return at and Reader.number(deliveryBlob, castMs, at) or nil
 		end
 	elseif prop.name == "channel" then
 		local flags, durMs = delivery.flags, delivery.durMs

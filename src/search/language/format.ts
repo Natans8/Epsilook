@@ -13,6 +13,7 @@
  */
 import {GRAMMAR, PREFIX_OPERATORS, spelling, spellingsOf} from "./grammar";
 import {doorOf, formatValue, sentinelOf, wordOf} from "../schema/kinds";
+import {headWord} from "../schema/schema";
 import {COMPARISONS, exact} from "../vocabulary/operators";
 import type {Ask, Clause, Parsed, ParsedOperand, PropRef, ScopeTerm, ValueExpr} from "./ast";
 import {propOf} from "./ast";
@@ -341,7 +342,19 @@ function askText(ask: Ask, tier: Spelling): string | null {
  * @returns The text of its evaluable query — incomplete and invalid clauses are not part of it.
  */
 export function formatQuery(parsed: Parsed, tier: "canonical" | "written" = "canonical"): string {
-    return clauseTexts(parsed, tier).map((group) => group.join(" ")).join(` ${GRAMMAR.or} `);
+    const clauses = clauseTexts(parsed, tier).map((group) => group.join(" ")).join(` ${GRAMMAR.or} `);
+    return [clauses, ...directiveTexts(parsed)].filter((text) => text !== "").join(" ");
+}
+
+/**
+ * The directives' own spellings, after the clauses: a directive selects nothing, but a rewrite that shed one
+ * would change what the reader sees — the order and how much of it — so every formatted query carries them.
+ */
+export function directiveTexts(parsed: Parsed): string[] {
+    const out = parsed.sorts.map((sort) =>
+        `${GRAMMAR.sortWord}${GRAMMAR.bind}${sort.descending ? GRAMMAR.negate : ""}${headWord(sort.head)}`);
+    if (parsed.limit !== null) out.push(`${GRAMMAR.limitWord}${GRAMMAR.bind}${String(parsed.limit.value)}`);
+    return out;
 }
 
 /** Every evaluable clause's canonical text, grouped as the parse groups them; empty groups are dropped. */
@@ -369,7 +382,8 @@ function clauseTexts(parsed: Parsed, tier: Spelling): string[][] {
  * @returns The folded canonical text of its evaluable query, order normalised.
  */
 export function queryKey(parsed: Parsed): string {
-    return clauseTexts(parsed, "folded")
+    const directives = directiveTexts(parsed).join(" ");
+    return (directives === "" ? "" : directives + " ") + clauseTexts(parsed, "folded")
         .map((group) => group.toSorted().join(" "))
         .toSorted()
         .join(` ${GRAMMAR.or} `);

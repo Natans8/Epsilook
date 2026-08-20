@@ -67,6 +67,16 @@ export const GRAMMAR = {
     sortDefault: "id",
 
     /**
+     * The results-limiting directive: `first:20` shows the first twenty of the ordered answer. A directive
+     * like the sort — it selects nothing and the count stays the query's truth; only what is LISTED trims.
+     * Where several stand, the last one written wins.
+     */
+    limitWord: "first",
+
+    /** The typed synonyms that reach the limit directive; every surface still writes `first`. */
+    limitReads: ["limit", "top"],
+
+    /**
      * The word synonym of the wildcard, in every position that reads a bound value — a typed way in, and the word
      * chips display for existence. Plain search keeps it as text: a bare top-level word is content, always.
      */

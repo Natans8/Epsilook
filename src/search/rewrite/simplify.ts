@@ -99,7 +99,9 @@ export function simplify(parsed: Parsed): Simplified {
     const notes = new Set<string>();
     const {tree, applied} = fixpoint(treeOf(parsed), RULES, {note: (text) => notes.add(text)});
     if (applied.length === 0) return {parsed, applied, notes: [...notes]};
-    return {parsed: toParsed(tree), applied, notes: [...notes]};
+    // The rules rewrite CLAUSES; the directives ride through untouched, since a simplification that shed what
+    // orders and trims the display would change what the reader sees.
+    return {parsed: {...toParsed(tree), sorts: parsed.sorts, limit: parsed.limit}, applied, notes: [...notes]};
 }
 
 /** One rule's standalone effect on a query: what the query becomes under that rule alone. */
@@ -135,9 +137,11 @@ export function suggestions(parsed: Parsed): readonly Suggestion[] {
         const notes = new Set<string>();
         const result = fixpoint(tree, [rule], {note: (text) => notes.add(text)});
         if (result.applied.length === 0) continue;
-        const after = toParsed(result.tree);
-        if (queryKey(after) === before) continue;
-        offers.push({rule, parsed: after, notes: [...notes]});
+        const rebuilt = toParsed(result.tree);
+        // Changedness compares the CLAUSES alone; the offered parse then carries the directives through, since
+        // a suggestion that shed what orders and trims the display would change what the reader sees.
+        if (queryKey(rebuilt) === before) continue;
+        offers.push({rule, parsed: {...rebuilt, sorts: parsed.sorts, limit: parsed.limit}, notes: [...notes]});
     }
     return offers;
 }

@@ -814,7 +814,7 @@ describe("totality", () => {
     });
 
     it("an empty query is an empty parse", () => {
-        assert.deepEqual(parse(""), {clauses: [], groups: [], diagnostics: []});
+        assert.deepEqual(parse(""), {clauses: [], groups: [], sorts: [], limit: null, diagnostics: []});
     });
 });
 
@@ -981,6 +981,42 @@ it("reads juxtaposition as alternation on a kind that cannot repeat", () => {
     // nothing); it may not import the exclusivity that is only true of a value read whole.
     assert.equal(runs("name:{fire ball}"), 1, "two substrings of one name conjoin");
     assert.equal(runs("desc:{kneel dance}"), 1);
+});
+
+describe("the directives: sort orders and first trims, and neither selects anything", () => {
+    it("sort takes a door, negation on either side means descending, and bare sort is the default door", () => {
+        const one = parse("fire sort:name");
+        assert.equal(one.clauses.length, 1, "the directive is no clause");
+        assert.equal(one.sorts.length, 1);
+        assert.equal(one.sorts[0].descending, false);
+        for (const spelled of ["sort:-cast", "-sort:cast", "-sort:-cast"]) {
+            assert.equal(parse(spelled).sorts[0]?.descending, true, spelled);
+        }
+        assert.equal(parse("sort").sorts[0]?.head.role, "column");
+        assert.deepEqual(parse("fire sort:name sort:-model").sorts.map((s) => s.descending), [false, true]);
+    });
+
+    it("a sort door nothing resolves is refused in final text, quiet while typing", () => {
+        const bad = parse("sort:zzz");
+        assert.equal(bad.sorts.length, 0);
+        assert.equal(bad.diagnostics.filter((d) => d.severity === "error").length, 1);
+        assert.deepEqual(parse("sort:zzz", {mode: "typing"}).diagnostics, []);
+    });
+
+    it("first takes a whole number, the last one written wins, and the synonyms reach it", () => {
+        assert.equal(parse("fire first:20").limit?.value, 20);
+        assert.equal(parse("fire first:20 first:5").limit?.value, 5);
+        assert.equal(parse("fire limit:3").limit?.value, 3);
+        assert.equal(parse("fire top:7").limit?.value, 7);
+        assert.equal(parse("fire").limit, null);
+        assert.equal(parse("first:x").diagnostics.filter((d) => d.severity === "error").length, 1);
+        assert.equal(parse("-first:2").diagnostics.filter((d) => d.severity === "error").length, 1);
+    });
+
+    it("the formatter carries the directives, and the round trip holds", () => {
+        const text = "fire sort:-name first:20";
+        assert.equal(formatQuery(parse(text)), text);
+    });
 });
 
 describe("the escape works everywhere: a shielded character is data, outside a regex", () => {

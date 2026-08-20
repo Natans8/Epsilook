@@ -62,5 +62,9 @@
   "simplify": {
     "allDead": "every alternative of this query contradicts itself; it is returned as written",
     "matchesEverything": "this query matches every spell — one alternative selects whatever the other excludes — so its simplest form is the empty query"
+  },
+  "sort": {
+    "takesDoor": "{{word}} takes a door word to order by, as in {{word}}{{bind}}name or {{word}}{{bind}}{{negate}}model",
+    "takesCount": "{{word}} takes how many to list, as in {{word}}{{bind}}20"
   }
 }

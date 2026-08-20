@@ -485,6 +485,14 @@ export function SettledSegment({text, at, act, selected}: {
         } else if (view.form === "lane") {
             parts.push(<LaneEl key={i} lane={view.lane} warned={view.warned} notes={view.notes}
                                text={text} act={act}/>);
+        } else if (view.form === "directive") {
+            // A directive shapes the list, not the set: its capsule stands apart from every ask chip — no
+            // column tone — while the text inside stays the reader's own characters, hit-testable as ever.
+            parts.push(
+                <span key={i} className={styles.directive}>
+                    {raw(view.span.start, view.span.end, false)}
+                </span>,
+            );
         } else {
             parts.push(
                 <span key={i} title={view.notes.length > 0 ? view.notes.join("\n") : undefined}>

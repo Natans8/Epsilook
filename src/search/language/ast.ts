@@ -13,6 +13,7 @@
  */
 import type {Column} from "../schema/columns";
 import type {Kind, Prop} from "../schema/kinds";
+import type {Head} from "../schema/schema";
 import type {Value} from "../vocabulary/value-types";
 import {count as countType} from "../vocabulary/value-types";
 
@@ -141,6 +142,18 @@ export interface Clause {
     readonly ask: Ask | null;
 }
 
+/**
+ * One ordering directive: `sort:<door>`, kept apart from the clauses because it selects nothing.
+ *
+ * The head is what the door word resolved to; descending is the exclusion, before the sort word or before the
+ * door — either, and both together, mean the other way round. Several directives apply in the order written.
+ */
+export interface SortDirective {
+    readonly head: Head;
+    readonly descending: boolean;
+    readonly span: Span;
+}
+
 /** The parse: every clause in written order, the evaluable structure over them, and every finding. */
 export interface Parsed {
     readonly clauses: readonly Clause[];
@@ -150,6 +163,13 @@ export interface Parsed {
      * constrains nothing.
      */
     readonly groups: ReadonlyArray<readonly number[]>;
+    /** The ordering directives, in written order; empty for the unordered query. */
+    readonly sorts: readonly SortDirective[];
+    /**
+     * How many results to list, or null for all of them. A display directive: the count stays the query's
+     * truth, and only what is LISTED trims. The last one written wins, and the span is that one's.
+     */
+    readonly limit: { readonly value: number; readonly span: Span } | null;
     readonly diagnostics: readonly Diagnostic[];
 }
 

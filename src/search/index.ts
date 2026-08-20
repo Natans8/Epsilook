@@ -32,6 +32,7 @@ export {COLOUR_NAMES} from "./vocabulary/colour-names";
 export type {Match, Operand} from "./evaluate/value-matching";
 export type {BitTest} from "./evaluate/value-matching";
 export {COLOUR_TOLERANCE, coverage, matcher, ROLE_WORDS, roleNames, ROLES} from "./evaluate/value-matching";
+export {order} from "./evaluate/order";
 
 export type {Column} from "./schema/columns";
 export {
@@ -62,7 +63,7 @@ export {escapedAt, unescaped} from "./language/scan";
 
 export type {
     Ask, Clause, ClauseState, Diagnostic, Fix, Parsed, ParsedOperand, ParseMode, PropRef, RowTest,
-    ScopeAsk, ScopeTerm, Severity, Span, ValueExpr,
+    ScopeAsk, ScopeTerm, Severity, SortDirective, Span, ValueExpr,
 } from "./language/ast";
 export {anyOfExpr, COUNT_PROP, propOf} from "./language/ast";
 

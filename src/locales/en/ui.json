@@ -61,7 +61,9 @@
     "incomplete": "The value is not finished yet.",
     "unit": "Notation",
     "takes": "Takes",
-    "rungNote": "Expansion {{number}}"
+    "rungNote": "Expansion {{number}}",
+    "sortNote": "orders the results by a door — the minus turns it round",
+    "firstNote": "how many results to list"
   },
   "tray": {
     "apply": "Apply",

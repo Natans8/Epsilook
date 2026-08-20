@@ -212,8 +212,10 @@ test("every offer, taken, writes a query the parser reads without an error", () 
             }
             const {value} = offerSlot(plan, offers, offer);
             // A door leaves the value to be typed, which is not yet an ask: the wildcard stands in for the value
-            // the reader will write, so what is under test is the WORD rather than their next keystroke.
-            const written = writeSlot(plan, offer.shape === "door" ? `${value}*` : value);
+            // the reader will write, so what is under test is the WORD rather than their next keystroke. The
+            // directive doors take a door word or a count instead of a value, so their stand-ins differ.
+            const filler = offer.word === "sort" ? "id" : offer.word === "first" ? "5" : "*";
+            const written = writeSlot(plan, offer.shape === "door" ? `${value}${filler}` : value);
             const errors = parse(written).diagnostics.filter((d) => d.severity === "error");
             assert.deepEqual(errors.map((d) => d.message), [], `${offer.word} wrote ${written}`);
         }

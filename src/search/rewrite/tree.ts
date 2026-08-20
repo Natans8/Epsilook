@@ -74,7 +74,9 @@ export function toParsed(tree: Tree): Parsed {
         }
         groups.push(group);
     }
-    return {clauses, groups, diagnostics: []};
+    // A rebuilt tree carries no directives of its own; the simplifier reattaches the original's, since a
+    // rewrite of the CLAUSES may not shed what orders and trims the display.
+    return {clauses, groups, sorts: [], limit: null, diagnostics: []};
 }
 
 /** A scope term with synthetic position, for building rewritten scopes. */

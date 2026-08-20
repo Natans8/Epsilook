@@ -61,7 +61,9 @@
     "incomplete": "",
     "unit": "",
     "takes": "",
-    "rungNote": ""
+    "rungNote": "",
+    "sortNote": "",
+    "firstNote": ""
   },
   "tray": {
     "apply": "",

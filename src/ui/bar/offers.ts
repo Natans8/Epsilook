@@ -210,6 +210,7 @@ const MENU_ORDER: readonly string[] = [
     "desc", "icon", "id", "xpac",
     "cast", "channel", "scale", "speed", "mech", "spell",
     "missile", "chain", "morph", "summon", "vehicle", "location", "triggers", "origin",
+    GRAMMAR.sortWord, GRAMMAR.limitWord,
 ];
 
 /** Where one door sits in the menu — the unlisted ones after every listed one, in their own order. */
@@ -269,6 +270,16 @@ function doorOffers(): Offer[] {
             reads: [spelling],
         });
     }
+    // The DIRECTIVES stand in the menu too: they are words of the language a reader can only learn by being
+    // offered them, and they take a bind exactly as a door does. No tone — they shape the list, not the set.
+    held.set(GRAMMAR.sortWord, {
+        shape: "door", word: GRAMMAR.sortWord, insert: GRAMMAR.sortWord + GRAMMAR.bind,
+        note: i18n.t("ui:surface.sortNote"), reads: [],
+    });
+    held.set(GRAMMAR.limitWord, {
+        shape: "door", word: GRAMMAR.limitWord, insert: GRAMMAR.limitWord + GRAMMAR.bind,
+        note: i18n.t("ui:surface.firstNote"), reads: [...GRAMMAR.limitReads],
+    });
     return [...held.values()].toSorted((a, b) => menuRank(a.word) - menuRank(b.word) || a.word.localeCompare(b.word));
 }
 

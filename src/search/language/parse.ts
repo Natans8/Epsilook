@@ -24,8 +24,8 @@
  */
 import {i18n} from "../../i18n";
 import type {
-    Ask, Clause, ClauseState, Diagnostic, Fix, Parsed, ParseMode, PropRef, RowTest, ScopeAsk, ScopeTerm, Span,
-    ValueExpr,
+    Ask, Clause, ClauseState, Diagnostic, Fix, Parsed, ParseMode, PropRef, RowTest, ScopeAsk, ScopeTerm,
+    SortDirective, Span, ValueExpr,
 } from "./ast";
 import {propOf} from "./ast";
 import {COMPARISON_STARTS, GRAMMAR, PREFIX_OPERATORS, spellingsOf} from "./grammar";
@@ -105,6 +105,8 @@ class Parser {
     private readonly clauses: Clause[] = [];
     private readonly diagnostics: Diagnostic[] = [];
     private readonly runs: number[][] = [];
+    private readonly sorts: SortDirective[] = [];
+    private limit: Parsed["limit"] = null;
     private current: number[] = [];
 
     /** Every read of characters and positions goes through here; the parser itself only reads structure. */
@@ -149,6 +151,8 @@ class Parser {
         return {
             clauses: this.clauses,
             groups: this.runs.filter((run) => run.length > 0),
+            sorts: this.sorts,
+            limit: this.limit,
             diagnostics: this.diagnostics,
         };
     }
@@ -215,13 +219,100 @@ class Parser {
         // across whitespace: at the top level, space separates clauses, and only a scope's body bridges it.
         const j = this.wordEnd(i, limit);
         if (j > i) {
-            const head = HEADS.get(fold(this.text.slice(i, j)));
+            const word = fold(this.text.slice(i, j));
+            if (word === GRAMMAR.sortWord) {
+                const after = j < limit ? this.text[j] : "";
+                if (after === GRAMMAR.bind) return this.sorted(start, not, j + 1, limit);
+                if (after === "" || isWs(after)) return this.sorted(start, not, null, limit);
+            }
+            if ((word === GRAMMAR.limitWord || (GRAMMAR.limitReads as readonly string[]).includes(word))
+                && this.text[j] === GRAMMAR.bind) {
+                return this.limited(start, not, j + 1, limit);
+            }
+            const head = HEADS.get(word);
             if (head !== undefined) {
                 if (this.text[j] === GRAMMAR.bind) return this.bound(start, not, head, j + 1, limit);
                 if (COMPARISON_STARTS.has(this.text[j])) return this.bound(start, not, head, j, limit);
             }
         }
         return this.term(start, not, i, limit);
+    }
+
+    /**
+     * An ordering directive: `sort:` and a door word, which must resolve to a head. The exclusion before the
+     * word or before the sort word means the other way round, and both together mean it still — `sort:-cast`,
+     * `-sort:cast`, `-sort:-cast`. The directive is kept apart from the clauses, since it selects nothing.
+     * A bare `sort` orders by the default door, the spell's id.
+     *
+     * @param start Where the directive's text began, negation included.
+     * @param not Whether the sort word itself was negated.
+     * @param vpos Where the door word starts, or null for a bare sort.
+     * @param limit The end of the text.
+     * @returns The position to continue from.
+     */
+    private sorted(start: number, not: boolean, vpos: number | null, limit: number): number {
+        let text: string = GRAMMAR.sortDefault;
+        let stop = start + GRAMMAR.sortWord.length + (not ? GRAMMAR.negate.length : 0);
+        if (vpos !== null) {
+            const token = this.scan.token(vpos, limit, {inScope: false, groups: false});
+            const [only] = token.segs;
+            text = only !== undefined && only.form === "bare" ? only.text : "";
+            stop = token.end;
+        }
+        let descending = not;
+        if (text.startsWith(GRAMMAR.negate)) {
+            descending = true;
+            text = text.slice(GRAMMAR.negate.length);
+        }
+        const head = text !== "" ? HEADS.get(fold(text)) : undefined;
+        const span: Span = {start, end: stop};
+        if (head === undefined) {
+            const state: ClauseState = this.mode === "final" ? "invalid" : "incomplete";
+            const pend: Pending[] = this.mode === "final"
+                ? [{
+                    severity: "error",
+                    message: i18n.t("diagnostics:sort.takesDoor",
+                        {word: GRAMMAR.sortWord, bind: GRAMMAR.bind, negate: GRAMMAR.negate}),
+                }]
+                : [];
+            this.push(span, not, state, null, pend);
+            return stop;
+        }
+        this.sorts.push({head, descending, span});
+        return stop;
+    }
+
+    /**
+     * The results-limiting directive: `first:` and a whole number. A display directive like the sort — it
+     * selects nothing, the count stays the query's truth, and only what is listed trims. The last one written
+     * wins; a negated or numberless one is refused, since neither has a reading.
+     *
+     * @param start Where the directive's text began, negation included.
+     * @param not Whether the directive was negated, which nothing can mean.
+     * @param vpos Where the number starts.
+     * @param limit The end of the text.
+     * @returns The position to continue from.
+     */
+    private limited(start: number, not: boolean, vpos: number, limit: number): number {
+        const token = this.scan.token(vpos, limit, {inScope: false, groups: false});
+        const [only] = token.segs;
+        const text = only !== undefined && only.form === "bare" ? only.text : "";
+        const count = /^\d+$/.test(text) ? Number(text) : null;
+        const span: Span = {start, end: token.end};
+        if (not || count === null || count < 1) {
+            const state: ClauseState = this.mode === "final" ? "invalid" : "incomplete";
+            const pend: Pending[] = this.mode === "final"
+                ? [{
+                    severity: "error",
+                    message: i18n.t("diagnostics:sort.takesCount",
+                        {word: GRAMMAR.limitWord, bind: GRAMMAR.bind}),
+                }]
+                : [];
+            this.push(span, not, state, null, pend);
+            return token.end;
+        }
+        this.limit = {value: count, span};
+        return token.end;
     }
 
     /**

@@ -35,6 +35,19 @@ local Text = Epsilook.Text
 
 local sub, find = string.sub, string.find
 
+--- The typed synonyms that reach the limit directive, as a set — built on
+-- first use, since the schema's data mounts after this module loads.
+local limitReads
+local function isLimitRead(word)
+	if not limitReads then
+		limitReads = {}
+		for _, read in ipairs(Schema.grammar.limitReads or {}) do
+			limitReads[read] = true
+		end
+	end
+	return limitReads[word] == true
+end
+
 local function isWs(c)
 	return c == " " or c == "\t" or c == "\n" or c == "\r"
 end
@@ -774,6 +787,7 @@ local function newParser(text)
 	self.groups = {}
 	self.current = {}
 	self.sorts = {}
+	self.limit = nil
 	local grammar = Schema.grammar
 	-- Characters that end the word scanned as a possible head.
 	self.headEnds = {
@@ -1461,6 +1475,26 @@ function Parser:sorted(start, negated, vpos, limit)
 	return stop
 end
 
+--- The results-limiting directive: the limit word and a whole number. A
+-- display directive like the sort -- it selects nothing, the count stays the
+-- query's truth, and only what is listed trims. The last one written wins;
+-- a negated or numberless one is refused, since neither has a reading.
+function Parser:limited(start, negated, vpos, limit)
+	local grammar = Schema.grammar
+	local segs, stop = self:token(vpos, limit)
+	local text = segs[1] and segs[1].form == "bare" and segs[1].text or ""
+	local count = text:match("^%d+$") and tonumber(text) or nil
+	local span = { start = start, stop = stop - 1 }
+	if negated or not count or count < 1 then
+		self:push(span, negated, "invalid", nil, {
+			{ message = grammar.limitWord .. " takes how many to list, as in " .. grammar.limitWord .. grammar.bind .. "20" },
+		})
+		return stop
+	end
+	self.limit = count
+	return stop
+end
+
 --- One clause starting at `i`. Returns the position to continue from.
 function Parser:clause(i, limit)
 	local grammar = Schema.grammar
@@ -1491,6 +1525,13 @@ function Parser:clause(i, limit)
 			elseif after == "" or isWs(after) then
 				return self:sorted(start, negated, nil, limit)
 			end
+		end
+		if
+			(word == grammar.limitWord or isLimitRead(word))
+			and j <= limit
+			and self:char(j) == grammar.bind
+		then
+			return self:limited(start, negated, j + 1, limit)
 		end
 		local head = Schema.HeadOf(word)
 		if head then
@@ -1535,6 +1576,7 @@ function Parser:run()
 		clauses = self.clauses,
 		groups = self.groups,
 		sorts = self.sorts,
+		limit = self.limit,
 		problems = self.problems,
 	}
 end
