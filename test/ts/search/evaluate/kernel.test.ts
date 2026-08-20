@@ -59,7 +59,7 @@ describe("the walk", () => {
         for (const query of [
             "model:right:hand", 'model:"right:hand"', "sound:{kit:150}", "model:{fire -missile}",
             "model:(fire|arcane)", "cast:instant", 'name:{"fire" "ball"}',
-            "model:right:hand|fire", "range:{min=5yd}", "sound:{count>2}",
+            "model:right:hand|fire", "range:{min=5yd}", "sound:{count>2}", "model:{missile from:chest}",
         ]) {
             for (const tier of ["canonical", "written"] as const) {
                 assert.deepEqual(ids(formatQuery(parsed(query), tier)), ids(query), `${query} (${tier})`);
@@ -88,6 +88,13 @@ describe("the row scope", () => {
         assert.deepEqual(ids("model:>4"), [3]);
         assert.deepEqual(ids("model:{arcane count:>1}"), [3]);
         assert.deepEqual(ids("model:{arcane count:1}"), [2, 10]);
+    });
+
+    it("reads a comparison on a row-word as that row's count where no property claims it", () => {
+        // The fixture's missile properties claim comparisons, so the desugar stays out of their way here;
+        // the pair's evaluation is the kind-word-plus-count walk the cases above already prove, and the
+        // desugar itself is pinned at the parse.
+        assert.deepEqual(ids("model:{attach>0}"), ids("model:{attach count>0}"));
     });
 
     it("tests a target mask by role, inside the column that names the subject", () => {

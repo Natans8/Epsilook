@@ -25,7 +25,7 @@ import "./catalogue";      // the kinds register themselves as they are declared
 import type {Column} from "./columns";
 import {COLUMNS} from "./columns";
 import type {Kind, Prop} from "./kinds";
-import {doorOf, KINDS, operatorsOf, wordOf} from "./kinds";
+import {doorOf, KINDS, operatorsOf, spokenProp, wordOf} from "./kinds";
 import {fold} from "../text/normalize";
 import {localeColumnWords, localeKindWords, localePropWords} from "../vocabulary/locale-words";
 import {TYPES} from "../vocabulary/value-types";
@@ -151,11 +151,12 @@ export function schemaProblems(): string[] {
         propNamespaces.push(propWords);
         for (const [name, prop] of Object.entries(kind.props)) {
             const where = `${kind.id}.${name}`;
-            claim(propWords, name, `property ${where}`);
+            const spoken = spokenProp(name, prop);
+            claim(propWords, spoken, `property ${where}`);
             const alts = alternates(prop.full, prop.synonyms);
-            for (const spelling of [...alts, ...localeExtras([name, ...alts], localePropWords(where))]) {
-                if (spelling === name) {
-                    problems.push(`property ${where} respells its own name "${spelling}"`);
+            for (const spelling of [...alts, ...localeExtras([spoken, ...alts], localePropWords(where))]) {
+                if (spelling === spoken) {
+                    problems.push(`property ${where} respells its own word "${spelling}"`);
                     continue;
                 }
                 claim(propWords, spelling, `property ${where}`);
@@ -345,7 +346,7 @@ export function kindIn(column: Column, word: string): Kind | undefined {
  */
 export function propIn(kind: Kind, word: string): string | undefined {
     for (const [name, prop] of Object.entries(kind.props)) {
-        if (name === word || prop.full === word || (prop.synonyms?.includes(word) ?? false)
+        if (spokenProp(name, prop) === word || prop.full === word || (prop.synonyms?.includes(word) ?? false)
             || localePropWords(`${kind.id}.${name}`).includes(word)) return name;
     }
     return undefined;

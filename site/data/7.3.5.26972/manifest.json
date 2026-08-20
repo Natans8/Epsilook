@@ -1,11 +1,11 @@
 {
   "pack": "7.3.5.26972",
   "meta": {
-    "format": 58,
+    "format": 59,
     "version": "7.3.5.26972",
     "label": "Legion 7.3.5",
-    "built": "2026-08-20",
-    "listfileTag": "202608181116",
+    "built": "2026-08-21",
+    "listfileTag": "202608202030",
     "tdbTag": "TDB735.00",
     "absentTables": ["BarrageEffect", "SpellName", "SpellOverrideName", "SpellVisualScreenEffect", "UiMap", "UiMapAssignment"],
     "degradedSections": {
@@ -152,7 +152,7 @@
     }
   },
   "modules": {
-    "core": {"file": "data/modules/core-3409f8c82eb4.json.gz", "bytes": 4568003},
+    "core": {"file": "data/modules/core-82e4452f270c.json.gz", "bytes": 4567993},
     "universal": {"file": "data/modules/universal-8786c54c00b0.json.gz", "bytes": 25216}
   },
   "locales": {

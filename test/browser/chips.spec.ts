@@ -74,9 +74,10 @@ test("a term alone in its alternation run takes the stranded or-edge with it", a
 });
 
 test("a commit keeps the braces where shedding them would change the ask", async () => {
-    // The colon-glued spelling reads as content, so the braces may not be shed on the settle.
+    // The colon-glued spelling reads as content, so the braces may not be shed on the settle. The single
+    // pair draws as the lane, whose head cell is the negate toggle — the VALUE is what opens it.
     await openWith("model:{attach:chest}");
-    await page.locator("[class*='settled']").first().click();
+    await page.locator("[class*='settled']").getByText("chest").click();
     await barInput(page).blur();
     await expectQuery(page, "model:{attach:chest}");
 });

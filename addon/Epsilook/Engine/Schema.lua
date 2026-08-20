@@ -127,7 +127,9 @@ function Schema.Load(declared)
 		kind.propByName = {}
 		for _, prop in ipairs(kind.props) do
 			kind.propByName[prop.name] = prop
-			prop.spellings = spellingsOf(prop.name, prop.full, prop.synonyms)
+			-- The name is the property's storage key; where a word is declared apart from it, only the word
+			-- is part of the language, and the key stops resolving.
+			prop.spellings = spellingsOf(prop.word or prop.name, prop.full, prop.synonyms)
 		end
 		local column = Schema.kindsOfColumn[kind.column]
 		column[#column + 1] = kind

@@ -94,16 +94,16 @@
     "barrage": {
       "hint": "a volley of models fired at once",
       "props": {
-        "attach": "the firing point"
+        "where": "the firing point"
       }
     },
     "ground": {
       "hint": "a ground or area model laid on the world"
     },
-    "worn": {
+    "attach": {
       "hint": "a model stuck to the caster or the target",
       "props": {
-        "attach": "the body point it sits on"
+        "where": "the body point it sits on"
       }
     },
     "trail": {
@@ -113,7 +113,7 @@
       "hint": "a creature display drawn on the caster or target",
       "props": {
         "id": "the creature display's id",
-        "attach": "the body point it anchors to"
+        "where": "the body point it anchors to"
       }
     },
     "item": {
@@ -121,14 +121,14 @@
       "props": {
         "id": "the item's id",
         "name": "the item's name",
-        "attach": "the body point it is held at"
+        "where": "the body point it is held at"
       }
     },
     "equipped": {
       "hint": "a weapon the caster already carries",
       "props": {
         "slot": "the weapon slot",
-        "attach": "the body point it is held at"
+        "where": "the body point it is held at"
       }
     },
     "mount": {
@@ -183,13 +183,13 @@
     "dissolve": {
       "hint": "a dissolve or materialise effect",
       "props": {
-        "attach": "the body point it plays at"
+        "where": "the body point it plays at"
       }
     },
     "shadowy": {
       "hint": "a translucent shadow pass over the model",
       "props": {
-        "attach": "the body point it plays at",
+        "where": "the body point it plays at",
         "colour": "the shadow's tint"
       }
     },
@@ -302,7 +302,7 @@
       "hint": "the vehicle the caster becomes, and its seats",
       "props": {
         "seats": "the seat count",
-        "attach": "where a seat sits"
+        "where": "where a seat sits"
       }
     },
     "speed": {

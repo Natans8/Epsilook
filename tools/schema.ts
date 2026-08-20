@@ -77,6 +77,9 @@ function main(): void {
         hint: kind.hint,
         props: Object.entries(kind.props).map(([name, prop]) => trimmed({
             name,
+            // The word a reader binds the property by, where it differs from its name: the name is the
+            // storage key the pack ships, and only the word is part of the language then.
+            word: prop.word,
             types: prop.types.map((type) => type.name),
             plain: (prop.plain ?? []).map((type) => type.name),
             door: prop.prefix === undefined ? undefined : doorOf(name, prop),

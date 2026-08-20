@@ -29,6 +29,7 @@ import type {
 } from "./ast";
 import {propOf} from "./ast";
 import {COMPARISON_STARTS, GRAMMAR, PREFIX_OPERATORS, spellingsOf} from "./grammar";
+import type {Kind as KindDecl} from "../schema/kinds";
 import {isFlag, wordOf} from "../schema/kinds";
 import {path as pathType, text as textType} from "../vocabulary/value-types";
 import type {Interp, Pending, ValueCtx} from "./operand";
@@ -507,8 +508,24 @@ class Parser {
             return end;
         }
         const last = segs[segs.length - 1 - extras.length].end;
-        const term: ScopeTerm = {span: {start: vpos, end: last}, not: false, state: "ok", ask: this.scopeAsk(main)};
-        const test: RowTest = {is: "scope", terms: [[term]]};
+        // The glued spelling takes the row-count desugar too: `model:worn>2` reads as the same
+        // kind-word-plus-count pair the braced form desugars to.
+        const terms: ScopeTerm[] = main.r === "count" && bind.of !== undefined
+            ? [
+                {span: {start: vpos, end: j}, not: false, state: "ok", ask: {on: "kindWord", kind: bind.of}},
+                {span: {start: j, end: last}, not: false, state: "ok", ask: this.scopeAsk(main)},
+            ]
+            : [{span: {start: vpos, end: last}, not: false, state: "ok", ask: this.scopeAsk(main)}];
+        if (terms.length === 2 && bind.of !== undefined) {
+            pend.push({
+                severity: "note",
+                message: i18n.t("diagnostics:bind.countsRows", {
+                    head: fold(this.text.slice(vpos, j)), value: this.text.slice(j, last),
+                    label: wordOf(bind.of),
+                }),
+            });
+        }
+        const test: RowTest = {is: "scope", terms: [terms]};
         const ask: Ask = head.role === "column"
             ? {on: "column", column: head.column, test}
             : {on: "kind", kind: head.kind, test};
@@ -882,8 +899,28 @@ class Parser {
                     return {kind: "done", next: vpos};
                 }
                 const {main, extras} = this.interpretSegs(segs, bind.ctx, pend);
-                this.pushScopeTerm(run, {start: termStart, end: segs[segs.length - 1].end}, termNot,
-                    main, pend, word);
+                const spanEnd = segs[segs.length - 1].end;
+                // A comparison on a ROW-WORD is that row's count: `worn>2` reads as the pair `worn count>2`,
+                // the column desugar one level down. The pair cannot carry the term's own minus — negating a
+                // conjunction is not negating its halves — so a negated one keeps the refusal.
+                if (main.r === "count" && bind.of !== undefined && !termNot) {
+                    run.push({
+                        span: {start: termStart, end: sepAt}, not: false, state: "ok",
+                        ask: {on: "kindWord", kind: bind.of},
+                    });
+                    this.pushScopeTerm(run, {start: vpos, end: spanEnd}, false, main, pend, word);
+                    pend.push({
+                        severity: "note",
+                        message: i18n.t("diagnostics:bind.countsRows",
+                            {head: word, value: this.text.slice(vpos, spanEnd), label: word}),
+                    });
+                    this.scopeExtras(head, extras, run, pend);
+                    return {kind: "done", next: end};
+                }
+                const counted: Interp = main.r === "count" && bind.of !== undefined && termNot
+                    ? {r: "fail", message: i18n.t("diagnostics:bind.negatedRowCount", {word})}
+                    : main;
+                this.pushScopeTerm(run, {start: termStart, end: spanEnd}, termNot, counted, pend, word);
                 this.scopeExtras(head, extras, run, pend);
                 return {kind: "done", next: end};
             }
@@ -948,7 +985,7 @@ class Parser {
      * unknown: only the kind's declared properties are legal, so anything else is a wrong property rather than text.
      */
     private innerBind(head: ScopeHead, word: string, pend: Pending[]):
-        | { kind: "ctx"; ctx: ValueCtx }
+        | { kind: "ctx"; ctx: ValueCtx; of?: KindDecl }
         | { kind: "foreign"; message: string }
         | null {
         if (head.role === "kind") {
@@ -967,7 +1004,10 @@ class Parser {
 
         const kindMatch = kindIn(column, word);
         if (kindMatch !== undefined) {
-            return {kind: "ctx", ctx: kindCtx(kindMatch, false, pend)};
+            // The count fallback rides along: a comparison no property of the kind can answer reads as that
+            // row's COUNT — the column desugar one level down — and the caller expands it into the
+            // kind-word-plus-count pair, which is why the kind itself travels back too.
+            return {kind: "ctx", ctx: kindCtx(kindMatch, true, pend), of: kindMatch};
         }
 
         const refs = kindsOf(column).flatMap((k): PropRef[] => {

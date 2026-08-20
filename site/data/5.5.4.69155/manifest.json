@@ -1,11 +1,11 @@
 {
   "pack": "5.5.4.69155",
   "meta": {
-    "format": 58,
+    "format": 59,
     "version": "5.5.4.69155",
     "label": "MoP Classic 5.5.4",
-    "built": "2026-08-20",
-    "listfileTag": "202608181116",
+    "built": "2026-08-21",
+    "listfileTag": "202608202030",
     "tdbTag": "",
     "absentTables": ["BarrageEffect", "FullScreenEffect", "ShadowyEffect", "SpellOverrideName", "SpellVisualScreenEffect", "WeaponTrail"],
     "degradedSections": {
@@ -155,7 +155,7 @@
     }
   },
   "modules": {
-    "core": {"file": "data/modules/core-d85558312eac.json.gz", "bytes": 2131763},
+    "core": {"file": "data/modules/core-7a6338f4d01f.json.gz", "bytes": 2131753},
     "universal": {"file": "data/modules/universal-8786c54c00b0.json.gz", "bytes": 25216}
   },
   "locales": {

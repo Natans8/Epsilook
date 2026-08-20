@@ -15,7 +15,8 @@
     "noValue": "",
     "noValueIgnored": "",
     "valueNotScope": "",
-    "countsRows": ""
+    "countsRows": "",
+    "negatedRowCount": ""
   },
   "axis": {
     "noOrdering": "",

@@ -73,6 +73,13 @@ describe("formatQuery", () => {
         assert.equal(canonical('name:"1,2"'), 'name:"1,2"');
     });
 
+    it("a word shared across kinds keeps that word: one kind's name would narrow the ask", () => {
+        // `file:` reaches every kind's file, and the paste that settled as `missile:wolf` had been narrowed
+        // to one kind's rows — a different question wearing a confident spelling.
+        assert.equal(canonical("model:{attach file:wolf}"), "model:{attach file:wolf}");
+        assert.equal(canonical("model:{file:wolf}"), "model:{file:wolf}");
+    });
+
     it("never repeats a kind's word inside its own scope: the subject speaks bare there", () => {
         // Inside `name:{...}` the word is already the door overhead; writing it again names a property the
         // kind does not have, and the spelling stopped parsing — the keymash `name:{"\"""\\}}` found it.

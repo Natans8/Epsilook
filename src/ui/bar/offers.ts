@@ -15,7 +15,7 @@ import {termStarts} from "./plan";
 import type {Column, Kind, Prop, Rung} from "../../search/index";
 import {
     bitmask, COUNT_PROP, enumeration, flag, fold, GRAMMAR, HEADS, headWord, hintOf, kindIn, kindsOf, operatorsOf,
-    ordinal, propIn, propNameOf, TARGET_ROLES, wordOf,
+    ordinal, propIn, propNameOf, spokenProp, TARGET_ROLES, wordOf,
 } from "../../search/index";
 import {i18n} from "../../i18n";
 
@@ -315,10 +315,13 @@ function kindOffers(column: Column): Offer[] {
 /** One property, as the offer that opens it: a flag word stands alone, everything else takes a bind. */
 function propOffer(name: string, prop: Prop, tone: string, owner?: string): Offer {
     const valueless = prop.types.includes(flag);
+    // The offer speaks the property's WORD: its name is a storage key, and where the two differ the key is
+    // not part of the language at all.
+    const spoken = spokenProp(name, prop);
     return {
         shape: valueless ? "word" : "door",
-        word: name,
-        insert: valueless ? name : name + GRAMMAR.bind,
+        word: spoken,
+        insert: valueless ? spoken : spoken + GRAMMAR.bind,
         note: hintOf(prop),
         tone,
         owner,
@@ -822,7 +825,7 @@ export function offersAt(plan: BarPlan, caret: number, history: readonly string[
     // that completes the typed characters — a door two groups down is still the completion the keystroke wants.
     const atEnd = at === slot.length && stub.end === at;
     const best = groups.flatMap((held) => held.offers)
-        .find((offer) => offer.shape !== "query" && fold(offer.insert).startsWith(fold(typed)))
+            .find((offer) => offer.shape !== "query" && fold(offer.insert).startsWith(fold(typed)))
         ?? groups[0]?.offers[0];
     // Folded, because what the reader typed is a way IN and the offer's own spelling is the answer: `shado`
     // completes to Shadowlands and `wo` to WotLK. Taking it replaces the stub, so the case corrects itself on

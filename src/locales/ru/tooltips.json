@@ -94,16 +94,16 @@
     "barrage": {
       "hint": "",
       "props": {
-        "attach": ""
+        "where": ""
       }
     },
     "ground": {
       "hint": ""
     },
-    "worn": {
+    "attach": {
       "hint": "",
       "props": {
-        "attach": ""
+        "where": ""
       }
     },
     "trail": {
@@ -113,7 +113,7 @@
       "hint": "",
       "props": {
         "id": "",
-        "attach": ""
+        "where": ""
       }
     },
     "item": {
@@ -121,14 +121,14 @@
       "props": {
         "id": "",
         "name": "",
-        "attach": ""
+        "where": ""
       }
     },
     "equipped": {
       "hint": "",
       "props": {
         "slot": "",
-        "attach": ""
+        "where": ""
       }
     },
     "mount": {
@@ -183,13 +183,13 @@
     "dissolve": {
       "hint": "",
       "props": {
-        "attach": ""
+        "where": ""
       }
     },
     "shadowy": {
       "hint": "",
       "props": {
-        "attach": "",
+        "where": "",
         "colour": ""
       }
     },
@@ -302,7 +302,7 @@
       "hint": "",
       "props": {
         "seats": "",
-        "attach": ""
+        "where": ""
       }
     },
     "speed": {

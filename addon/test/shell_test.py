@@ -229,12 +229,15 @@ def test_a_creatures_tooltip_reads_down_to_what_it_looks_like(engine: LuaRuntime
 
 
 def test_a_vocabulary_word_carries_its_number_in_the_tooltip(engine: LuaRuntime) -> None:
-    """The number is what the game's own tables hold; the line keeps the word alone."""
-    assert "attach Chest - 34" in tooltip_lines(engine, 459, b"model", 1)
+    """The number is what the game's own tables hold; the line keeps the word alone.
+
+    The label is the property's spoken word -- `point`, not the `where` its pack column is keyed by.
+    """
+    assert "point Chest - 34" in tooltip_lines(engine, 459, b"model", 1)
     api = lua_table(engine, b"Epsilook")
     part = method(api, b"GetPartDataByIndex")(api, 459, b"model", 1)
     line = cast(bytes, lua_function(engine, b"Epsilook.Inspect.PartLine")(459, part, 1)).decode()
-    assert " - Chest - " in line and "attach Chest" not in line
+    assert " - Chest - " in line and "point Chest" not in line
 
 
 def test_an_anim_kits_animations_group_under_the_kit(engine: LuaRuntime) -> None:
@@ -415,7 +418,7 @@ def test_a_lone_column_word_prints_its_doors(engine: LuaRuntime) -> None:
     assert lines[0].startswith("|cff3b9eff"), "the column wears its own tone"
     assert "Kinds" in text and "missile" in text
     # Every kind of the column, not only the one promoted to a top-level word.
-    for kind in ("barrage", "ground", "worn", "trail", "display", "item", "equipped", "mount"):
+    for kind in ("barrage", "ground", "attach", "trail", "display", "item", "equipped", "mount"):
         assert kind in text, kind
     assert "motion" in text, "a kind's properties hang under it"
     assert "/elo model:*" in text, "the search it no longer means is offered explicitly"

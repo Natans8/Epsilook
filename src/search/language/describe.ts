@@ -18,7 +18,7 @@
 import type {Ask, Clause, Diagnostic, Parsed, ParsedOperand, PropRef, ScopeTerm, Span, ValueExpr} from "./ast";
 import {propOf} from "./ast";
 import {GRAMMAR, spelling} from "./grammar";
-import {doorOf, wordOf} from "../schema/kinds";
+import {doorOf, spokenProp, wordOf} from "../schema/kinds";
 import {headWord} from "../schema/schema";
 import type {Kind, Prop} from "../schema/kinds";
 import {operandQuoted, operandText} from "./format";
@@ -61,15 +61,6 @@ export interface ChipView {
     readonly tone: string;
     /** Whether the clause is negated; the renderer fuses the minus into the head. */
     readonly not: boolean;
-    /**
-     * The property the value binds, where the chip carries one — drawn as a cell of its own between the head
-     * and the value.
-     *
-     * A lane already gives an inner bind its own pill, so `model:{missile from:chest}` reads as cells. Collapsed
-     * to the compact form the same bind became two words with a space between them, and `attach chest` read as
-     * two separate things rather than one saying what the other is.
-     */
-    readonly sub?: string;
     readonly body: readonly Piece[];
     /** How the chip grows: a further row condition, a further value alternative, or not at all. */
     readonly grow: "term" | "alternative" | null;
@@ -313,7 +304,7 @@ function termItem(term: ScopeTerm, lone: boolean, under: Kind | null): LaneItem 
     // `model:{file:*}` into the different ask `model:any`. Everything else keeps its word, because without it
     // the value would not say which aspect it constrains.
     return under === ref.kind && subjectOf(ref)
-        ? {is: "term", ...at, body} : {is: "bind", ...at, head: ref.prop, body};
+        ? {is: "term", ...at, body} : {is: "bind", ...at, head: spokenProp(ref.prop, propOf(ref)), body};
 }
 
 /**
@@ -455,28 +446,25 @@ function askView(ask: Ask, not: boolean): AskView | null {
     if (items.length === 1) {
         const word = promoted === null ? head : wordOf(promoted);
         const only = items[0];
-        // A bind keeps its property as a cell rather than flattening to a loud word beside the value — EXCEPT
-        // where the value opens with an operator: `count ≥ 4` reads as one phrase, and dividing it into cells
-        // made the property and its comparison look like two unrelated conditions.
         const bound = only.is === "bind" && promoted === null ? only : null;
         // A bind whose value carries an OPERATOR joins with its property into one phrase: `count ≥ 4` and
         // `min = 5yd` each read as one condition, and dividing them into cells made the property and its
         // value look like two unrelated ones. A quantity's implied anchor comes BACK in the joined phrase —
         // alone the bare number already is the exact ask, but beside its property word the glyph is what
-        // relates the two. A worded value stays a cell: `from | chest` reads as the pair it is.
+        // relates the two.
         const anchored = bound !== null && bound.body[0]?.is !== "op" && impliedQuantity(test.terms);
         const joined = bound !== null && (bound.body[0]?.is === "op" || anchored);
+        // A WORDED pair keeps the lane's own rendering even alone: the bind draws as its capsule inside the
+        // enclosure, so `attach: chest` reads as the one unit it is — every collapsed form drew the property
+        // and its value as neighbouring cells with nothing relating them.
+        if (bound !== null && !joined) return {as: "lane", lane: {head, tone: column.key, not, items}};
         const body = bound === null ? compactBody(only)
-            : joined ? [
-                    {is: "word" as const, text: bound.head},
-                    ...(anchored ? [{is: "op" as const, text: glyphOf(exact)}] : []),
-                    ...bound.body,
-                ]
-                : [...bound.body];
-        // The key is OMITTED where there is no bound property rather than set to nothing: a view is compared
-        // whole, and an absent property is not the same shape as one present and empty.
-        const sub = bound === null || joined ? {} : {sub: bound.head};
-        return {as: "chip", chip: {head: word, tone: column.key, not, ...sub, body, grow: "term"}};
+            : [
+                {is: "word" as const, text: bound.head},
+                ...(anchored ? [{is: "op" as const, text: glyphOf(exact)}] : []),
+                ...bound.body,
+            ];
+        return {as: "chip", chip: {head: word, tone: column.key, not, body, grow: "term"}};
     }
     return {as: "lane", lane: {head, tone: column.key, not, items}};
 }

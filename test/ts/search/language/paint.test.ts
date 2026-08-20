@@ -18,7 +18,7 @@ function runFor(text: string, word: string): Run {
 }
 
 test("the runs still cover the text exactly, as the lexical pass does", () => {
-    for (const text of ["model:fire", 'name:"blood pool" -x', "model:{fire attach:chest} 5"]) {
+    for (const text of ["model:fire", 'name:"blood pool" -x', "model:{fire point:chest} 5"]) {
         const runs = paint(text);
         assert.equal(runs.map((run) => text.slice(run.start, run.end)).join(""), text);
         assert.deepEqual(runs.map((run) => [run.start, run.end, run.kind]),
@@ -58,9 +58,9 @@ test("a clause that failed carries its state, and one merely warned carries the 
 
 test("a closed-vocabulary word is marked as one; corpus text is not", () => {
     assert.equal(runFor("model:missile", "missile").vocab, true);
-    assert.equal(runFor("model:{fire attach:chest}", "chest").vocab, true);
+    assert.equal(runFor("model:{fire point:chest}", "chest").vocab, true);
     assert.equal(runFor("model:fire", "fire").vocab, undefined);
-    assert.equal(runFor("model:{fire attach:chest}", "fire").vocab, undefined);
+    assert.equal(runFor("model:{fire point:chest}", "fire").vocab, undefined);
 });
 
 test("a doorless clause paints no doors: a colon inside a value is content, not a property", () => {
@@ -87,18 +87,21 @@ test("a foreign bind marks no door: only what the parse resolved paints as a pro
     assert.equal(sound.kind, "word");
     assert.equal(sound.door, undefined);
     assert.equal(sound.tone, undefined);
-    assert.equal(runFor("model:{draenei attach:chest}", "attach").door, true);
+    assert.equal(runFor("model:{draenei point:chest}", "point").door, true);
+    // A kind word standing beside a bind is the vocabulary it names, marked as one.
+    assert.equal(runFor("model:{attach file:wolf}", "attach").vocab, true);
+    assert.equal(runFor("model:{attach file:wolf}", "file").door, true);
 });
 
 test("a property is marked as the door it is, in its column's tone; a head is not a property", () => {
-    const runs = paint("sound:count>2 model:{attach:chest}");
+    const runs = paint("sound:count>2 model:{point:chest}");
     const at = (word: string): Run | undefined =>
-        runs.find((run) => run.start === "sound:count>2 model:{attach:chest}".indexOf(word));
-    // `count` and `attach` open their own comparison and bind inside a clause, which is what a chip draws
+        runs.find((run) => run.start === "sound:count>2 model:{point:chest}".indexOf(word));
+    // `count` and `point` open their own comparison and bind inside a clause, which is what a chip draws
     // loud; the head that opened the clause is already a head and stays one.
     assert.equal(at("count")?.door, true);
     assert.equal(at("count")?.tone, "sound");
-    assert.equal(at("attach")?.door, true);
-    assert.equal(at("attach")?.tone, "model");
+    assert.equal(at("point")?.door, true);
+    assert.equal(at("point")?.tone, "model");
     assert.equal(at("chest")?.door, undefined);
 });

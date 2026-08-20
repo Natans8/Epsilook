@@ -51,6 +51,9 @@ PROBES = [
     # The id column's scope alternates its bare values — every kind of the column is single — and a dangling
     # comma on a number token separates nothing within it.
     "id:{133 134}", "id:{133, 134}",
+    # A comparison no property of a row-word claims is that row's count — the pair the braces spell — while a
+    # property that claims it keeps its own reading. Both engines must draw the same line, glued and braced.
+    "model:{attach>2}", "model:attach>2", "model:{display>2}", "model:{missile>2}", "model:{attach count>2}",
 ]
 """Queries across every column and most types, each answered by both engines."""
 

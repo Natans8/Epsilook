@@ -97,9 +97,7 @@ test("existence displays the any-word, from the star and from the word alike", (
 test("the chip displays the meaning, not the minimal spelling: an elided count surfaces as its word", () => {
     const c = chip("model>=4");
     // A value opening with an operator JOINS its property in one cell — `count ≥ 4` reads as one phrase, and
-    // the divided cells made the property and its comparison look like two unrelated conditions. The cell
-    // form survives for word values, where `attach | chest` is one saying what the other is.
-    assert.equal(c.sub, undefined);
+    // the divided cells made the property and its comparison look like two unrelated conditions.
     assert.deepEqual(c.body, [{is: "word", text: "count"}, {is: "op", text: "≥"}, {is: "value", text: "4"}]);
     // The desugar's note rides along for the tooltip.
     assert.equal(view("model>=4").notes.length, 1);
@@ -109,10 +107,18 @@ test("an anchored quantity joins its property too, the implied anchor made expli
     // `min = 5yd` is one condition: the bare number alone already is the exact ask, but beside its property
     // word the glyph is what relates the two — without it the cells read as unrelated.
     const c = chip("range:{min=5yd}");
-    assert.equal(c.sub, undefined);
     assert.deepEqual(c.body, [{is: "word", text: "min"}, {is: "op", text: "="}, {is: "value", text: "5yd"}]);
-    // A worded value keeps the cell form: the pair reads as one saying what the other is.
-    assert.equal(chip("model:{attach:chest}").sub, "attach");
+});
+
+test("a lone WORDED pair keeps the lane's rendering: the bind is a capsule inside the enclosure", () => {
+    // `point | chest` as neighbouring flat cells read as two unrelated things; the lane's inner-bind capsule
+    // is the one rendering that says the property and its value are one unit.
+    const l = lane("model:{point:chest}");
+    assert.equal(l.head, "model");
+    assert.deepEqual(l.items, [{
+        is: "bind", not: false, head: "point",
+        body: [{is: "word", text: "chest"}], span: {start: 7, end: 18}, lone: true,
+    }]);
 });
 
 test("a bare number never displays bare: the notation that read it is made explicit, in its own family", () => {
@@ -147,17 +153,12 @@ test("an identity list joins with commas, identical whatever separator was typed
     assert.equal(chip("id:133,11839,25306").grow, "alternative");
 });
 
-test("a logical gate over words keeps its or-connective, each phrase wearing its own quotes", () => {
-    const c = chip("model:{attach:chest|head}");
-    assert.equal(c.sub, "attach");
-    assert.deepEqual(c.body, [{is: "word", text: "chest"}, {is: "or"}, {is: "word", text: "head"}]);
-});
-
-test("a bound property is a cell, and a chip with no bound property carries none", () => {
-    // `model:fire` binds nothing — the value is content over the column — so the key is ABSENT rather than
-    // present and empty, which is what a whole-view comparison reads.
-    assert.equal("sub" in chip("model:fire"), false);
-    assert.equal(chip("model:{attach:chest}").sub, "attach");
+test("a logical gate over words keeps its or-connective, inside the bind's own capsule", () => {
+    const l = lane("model:{point:chest|head}");
+    const [bind] = l.items;
+    assert.equal(bind.is, "bind");
+    assert.deepEqual(bind.is === "bind" ? bind.body : [],
+        [{is: "word", text: "chest"}, {is: "or"}, {is: "word", text: "head"}]);
 });
 
 test("one condition is a compact chip whatever its spelling — the braced form converges", () => {
@@ -180,10 +181,10 @@ test("a lane's runs join on the or item, from the symbol and from the word alike
 });
 
 test("an inner bind is a chip of its own inside the lane; a grown count binds under its word", () => {
-    const l = lane("model:{fire attach:chest}");
+    const l = lane("model:{fire point:chest}");
     assert.deepEqual(l.items[1], {
-        is: "bind", not: false, head: "attach",
-        body: [{is: "word", text: "chest"}], span: {start: 12, end: 24}, lone: false,
+        is: "bind", not: false, head: "point",
+        body: [{is: "word", text: "chest"}], span: {start: 12, end: 23}, lone: false,
     });
     assert.deepEqual(lane("model:{fire count>=4}").items[1], {
         is: "bind", not: false, head: "count",
@@ -201,10 +202,10 @@ test("a colour value displays a swatch beside the written word", () => {
 });
 
 test("a dead term stays a raw fragment inside a healthy scope, the clause warned", () => {
-    const v = view("model:{fire attach:}");
+    const v = view("model:{fire point:}");
     assert.equal(v.form, "lane");
     const l = (v as ClauseView & { form: "lane" }).lane;
-    assert.deepEqual(l.items[1], {is: "dead", span: {start: 12, end: 19}});
+    assert.deepEqual(l.items[1], {is: "dead", span: {start: 12, end: 18}});
     assert.equal((v as ClauseView & { form: "lane" }).warned, true);
 });
 

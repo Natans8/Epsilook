@@ -757,7 +757,9 @@ end
 
 --- An inner bind's word resolved against a column or kind head: the count
 -- axis, a kind of the column, a property, or nothing.
--- @return a context, or nil and a message where the word is foreign to the kind
+-- @return a context; nil and a message where the word is foreign to the kind;
+-- and the kind itself where the word named one, so a comparison no property
+-- claims can expand into that row's count.
 local function innerBind(head, word)
 	if word == Schema.grammar.countWord then
 		return countCtx
@@ -771,7 +773,7 @@ local function innerBind(head, word)
 	end
 	local kind = Schema.KindIn(head.column, word)
 	if kind then
-		return kindCtx(kind, false)
+		return kindCtx(kind, true), nil, kind
 	end
 	local refs = {}
 	for _, candidate in ipairs(Schema.KindsOf(head.column)) do
@@ -1000,7 +1002,7 @@ function Parser:innerGlue(start, negated, head, vpos, limit)
 		return nil
 	end
 	local word = Text.fold(sub(self.text, vpos, j - 1))
-	local ctx, foreign = innerBind(head, word)
+	local ctx, foreign, ofKind = innerBind(head, word)
 	if not ctx then
 		if foreign then
 			local _, stop = self:token(j, limit)
@@ -1027,6 +1029,25 @@ function Parser:innerGlue(start, negated, head, vpos, limit)
 		local ask
 		if main.r == "kindWord" then
 			ask = { on = "kind", kind = main.kind, test = { is = "exists" } }
+		elseif main.r == "count" and ofKind then
+			-- A comparison no property of the kind answers is that row's
+			-- count: the word narrows the rows and the count measures what it
+			-- leaves, exactly the pair the braced spelling holds.
+			local test = {
+				is = "scope",
+				terms = {
+					{
+						{ ["not"] = false, state = "ok", ask = { on = "kindWord", kind = ofKind } },
+						{
+							["not"] = false,
+							state = "ok",
+							ask = { on = "count", value = main.value },
+						},
+					},
+				},
+			}
+			ask = head.role == "column" and { on = "column", column = head.column, test = test }
+				or { on = "kind", kind = head.kind, test = test }
 		else
 			ask = askFor(head, main)
 			-- Remembered so the clause writes back as it was read, with the
@@ -1115,7 +1136,7 @@ function Parser:innerItem(head, negated, i, bodyEnd, run, problems)
 	local sep = sepAt <= bodyEnd and self:char(sepAt) or ""
 	if j > i and (sep == grammar.bind or Schema.comparisonStarts[sep]) then
 		local word = Text.fold(sub(self.text, i, j - 1))
-		local ctx, foreign = innerBind(head, word)
+		local ctx, foreign, ofKind = innerBind(head, word)
 		if foreign then
 			return i, foreign
 		end
@@ -1129,7 +1150,23 @@ function Parser:innerItem(head, negated, i, bodyEnd, run, problems)
 				return vpos
 			end
 			local main, extras = self:interpretSegs(segs, ctx, problems)
-			self:pushScopeTerm(run, negated, main, problems, word)
+			if main.r == "count" and ofKind and not negated then
+				-- A comparison no property of the kind answers is that row's
+				-- count: the word narrows the rows and the count measures
+				-- what it leaves, the same two terms spelled out.
+				run[#run + 1] =
+					{ ["not"] = false, state = "ok", ask = { on = "kindWord", kind = ofKind } }
+				run[#run + 1] =
+					{ ["not"] = false, state = "ok", ask = { on = "count", value = main.value } }
+			elseif main.r == "count" and ofKind then
+				-- Negating the pair is not negating its halves, so the minus
+				-- refuses the row count outright.
+				problems[#problems + 1] =
+					{ severity = "error", message = "the minus cannot negate a row count" }
+				run[#run + 1] = { ["not"] = negated, state = "incomplete" }
+			else
+				self:pushScopeTerm(run, negated, main, problems, word)
+			end
 			for _, seg in ipairs(extras) do
 				local more = self:interpretSegs({ seg }, ctxFor(head), problems)
 				self:pushScopeTerm(run, false, more, problems, seg.text)
@@ -1580,7 +1617,13 @@ function Parser:limited(start, negated, vpos, limit)
 	local span = { start = start, stop = stop - 1 }
 	if not count or count < 1 then
 		self:push(span, negated, "invalid", nil, {
-			{ message = grammar.limitWord .. " takes how many to list, as in " .. grammar.limitWord .. grammar.bind .. "20" },
+			{
+				message = grammar.limitWord
+					.. " takes how many to list, as in "
+					.. grammar.limitWord
+					.. grammar.bind
+					.. "20",
+			},
 		})
 		return stop
 	end
@@ -1741,7 +1784,9 @@ local function formatTerm(term)
 			.. formatExpr(ask.value)
 	else
 		local prop = ask.props[1].prop
-		out = prop.name .. (symbolled(ask.value) and "" or grammar.bind) .. formatExpr(ask.value)
+		out = (prop.word or prop.name)
+			.. (symbolled(ask.value) and "" or grammar.bind)
+			.. formatExpr(ask.value)
 	end
 	if term["not"] then
 		out = grammar.negate .. out
@@ -1783,7 +1828,8 @@ local function formatClause(clause)
 	if ask.on == "plain" then
 		out = formatExpr(ask.value)
 	elseif ask.on == "prop" then
-		local head = ask.ref.prop.door or (ask.ref.kind.word .. grammar.bind .. ask.ref.prop.name)
+		local head = ask.ref.prop.door
+			or (ask.ref.kind.word .. grammar.bind .. (ask.ref.prop.word or ask.ref.prop.name))
 		out = head .. (symbolled(ask.value) and "" or grammar.bind) .. formatExpr(ask.value)
 	else
 		local test = ask.test
@@ -1801,7 +1847,8 @@ local function formatClause(clause)
 		elseif test.is == "scope" then
 			out = head .. grammar.bind .. formatScope(test.terms)
 		elseif ask.inner then
-			local word = test.is == "count" and grammar.countWord or test.props[1].prop.name
+			local word = test.is == "count" and grammar.countWord
+				or (test.props[1].prop.word or test.props[1].prop.name)
 			out = head .. grammar.bind .. word .. formatExpr(test.value)
 		else
 			out = head .. (symbolled(test.value) and "" or grammar.bind) .. formatExpr(test.value)

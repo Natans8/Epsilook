@@ -20,8 +20,13 @@ from ..derive import DeriveContext
 from ..model import SECTIONS, CountFamily, Section, SectionColumns
 from ..progress import detail
 
-PACK_FORMAT = 58
+PACK_FORMAT = 59
 """What shape the artifact is in.
+
+59 renames the body-point vocabulary the other way round: the worn-model kind
+ships as `attach` and every attachment-point property -- the five model kinds'
+plus the dissolve, shadowy and vehicle anchors -- ships as `where`. A reader
+of 58 finds neither name it knows.
 
 58 renames the worn-model row kind: a model stuck to a body ships as `worn`
 rather than `attached`, so the kind's word stops colliding with the `attach`

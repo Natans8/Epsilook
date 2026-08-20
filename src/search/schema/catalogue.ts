@@ -81,8 +81,14 @@ const target = (): Prop => ({
     qualifier: true,
 });
 
-/** A point on a model that something attaches to. */
-const attachPoint = (hint: string): Prop => ({types: [enumeration], hint});
+/**
+ * A point on a model that something attaches to.
+ *
+ * The properties named `where` (the pack's key for every attachment point and anchor) are SPOKEN as `point`:
+ * the reader's word rides the declaration, so a rename of it never re-ships a pack. The missile's and chain's
+ * ends keep their own names — `from` and `to` say which end, which `point` cannot.
+ */
+const attachPoint = (hint: string, word?: string): Prop => ({types: [enumeration], hint, word});
 
 /* The spell itself: what it is called, says and shows, and how it goes off. Name, desc and icon are top-level words. */
 
@@ -218,7 +224,7 @@ export const barrage = defineKind({
     hint: t("tooltips:kind.barrage.hint"),
     props: {
         file: corpus(TIER.asset, path),
-        attach: attachPoint(t("tooltips:kind.barrage.props.attach")),
+        where: attachPoint(t("tooltips:kind.barrage.props.where"), "point"),
         target: target(),
     },
 });
@@ -229,30 +235,30 @@ export const ground = defineKind({
     props: {file: corpus(TIER.asset, path), target: target()},
 });
 
-export const worn = defineKind({
-    column: modelColumn, word: "worn", group: "worn",
-    hint: t("tooltips:kind.worn.hint"),
+export const attach = defineKind({
+    column: modelColumn, word: "attach", group: "attach",
+    hint: t("tooltips:kind.attach.hint"),
     props: {
         file: corpus(TIER.asset, path),
-        attach: attachPoint(t("tooltips:kind.worn.props.attach")),
+        where: attachPoint(t("tooltips:kind.attach.props.where"), "point"),
         target: target(),
     },
 });
 
 export const trail = defineKind({
-    column: modelColumn, word: "trail", group: "worn",
+    column: modelColumn, word: "trail", group: "attach",
     hint: t("tooltips:kind.trail.hint"),
     props: {file: corpus(TIER.asset, path), target: target()},
 });
 
 export const display = defineKind({
-    column: modelColumn, word: "display", group: "worn",
+    column: modelColumn, word: "display", group: "attach",
     hint: t("tooltips:kind.display.hint"),
     props: {
         id: {types: [id], hint: t("tooltips:kind.display.props.id")},
         name: corpus(TIER.asset, text),
         file: corpus(TIER.asset, path),
-        attach: attachPoint(t("tooltips:kind.display.props.attach")),
+        where: attachPoint(t("tooltips:kind.display.props.where"), "point"),
         target: target(),
     },
 });
@@ -262,24 +268,24 @@ export const display = defineKind({
 // NAME first and its id second; the file it happens to be drawn from is the last thing a reader means by
 // `model:{item:...}`, and naming it there read as though the item were a path.
 export const item = defineKind({
-    column: modelColumn, word: "item", group: "worn",
+    column: modelColumn, word: "item", group: "attach",
     hint: t("tooltips:kind.item.hint"),
     props: {
         name: corpus(TIER.asset, text),
         id: {types: [id], hint: t("tooltips:kind.item.props.id")},
         file: corpus(TIER.asset, path),
-        attach: attachPoint(t("tooltips:kind.item.props.attach")),
+        where: attachPoint(t("tooltips:kind.item.props.where"), "point"),
         target: target(),
     },
 });
 
 /** A weapon the caster already carries, identified by its slot rather than by a model file. */
 export const equipped = defineKind({
-    column: modelColumn, word: "equipped", group: "worn",
+    column: modelColumn, word: "equipped", group: "attach",
     hint: t("tooltips:kind.equipped.hint"),
     props: {
         slot: {types: [enumeration], hint: t("tooltips:kind.equipped.props.slot")},
-        attach: attachPoint(t("tooltips:kind.equipped.props.attach")),
+        where: attachPoint(t("tooltips:kind.equipped.props.where"), "point"),
         target: target(),
     },
 });
@@ -390,7 +396,7 @@ export const dissolve = defineKind({
     column: fxColumn, word: "dissolve", group: "overlay",
     hint: t("tooltips:kind.dissolve.hint"),
     props: {
-        attach: attachPoint(t("tooltips:kind.dissolve.props.attach")),
+        where: attachPoint(t("tooltips:kind.dissolve.props.where"), "point"),
         texture: corpus(TIER.asset, path),
         target: target(),
     },
@@ -406,7 +412,7 @@ export const shadowy = defineKind({
     column: fxColumn, word: "shadowy", group: "overlay",
     hint: t("tooltips:kind.shadowy.hint"),
     props: {
-        attach: attachPoint(t("tooltips:kind.shadowy.props.attach")),
+        where: attachPoint(t("tooltips:kind.shadowy.props.where"), "point"),
         colour: {types: [colour], synonyms: ["color"], hint: t("tooltips:kind.shadowy.props.colour")},
         target: target(),
     },
@@ -589,7 +595,7 @@ export const vehicle = defineKind({
     hint: t("tooltips:kind.vehicle.hint"),
     props: {
         seats: {types: [count], hint: t("tooltips:kind.vehicle.props.seats")},
-        attach: attachPoint(t("tooltips:kind.vehicle.props.attach")),
+        where: attachPoint(t("tooltips:kind.vehicle.props.where"), "point"),
         target: target(),
     },
 });

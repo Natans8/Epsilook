@@ -85,15 +85,24 @@ describe("the shipped schema", () => {
 
     it("keeps most kind words off the top level, where the column is the noun", () => {
         // `model:mount` reads as a whole question; `mount:` alone does not say what a mount is being asked about.
-        for (const word of ["mount", "trail", "equipped", "ground", "worn", "keybind", "invis"]) {
+        for (const word of ["mount", "trail", "equipped", "ground", "attach", "keybind", "invis"]) {
             assert.equal(HEADS.has(word), false, `${word} should not be a top-level head`);
         }
     });
 
-    it("calls the worn-model category `worn`, leaving `attach` to the attachment property", () => {
-        assert.ok(KINDS.has("model.worn"));
-        assert.equal(HEADS.has("attach"), false,
-            "`attach` must stay free for the attachment property to claim");
+    it("calls the stuck-on-a-body category `attach`, its point KEYED `where` and SPOKEN `point`", () => {
+        // The kind is the verb a reader reaches for; the point property stopped colliding with it by moving
+        // aside. Its KEY stays `where` — the pack's storage name, which a spoken-word change never moves —
+        // and its WORD is `point`, one word for the point across every kind that has one.
+        assert.ok(KINDS.has("model.attach"));
+        for (const kindId of ["model.attach", "model.display", "model.item", "model.equipped", "model.barrage"]) {
+            const held = KINDS.get(kindId);
+            assert.ok(held !== undefined, kindId);
+            assert.ok("where" in held.props, `${kindId} keys its point "where"`);
+            assert.equal(held.props.where?.word, "point", `${kindId} speaks its point as "point"`);
+            assert.equal(propIn(held, "point"), "where");
+            assert.equal(propIn(held, "where"), undefined, "the storage key is not a way in");
+        }
     });
 
     it("gives the spell column a head, while its kinds keep the obvious words", () => {

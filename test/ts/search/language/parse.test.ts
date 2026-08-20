@@ -321,16 +321,25 @@ describe("binds and their values", () => {
 describe("the quote law: a phrase is one literal string value", () => {
     it("a phrase is a leaf — colons, parens and pipes inside are data", () => {
         assert.deepEqual(valueOf(ok('name:"Embody Hero: Illidan"')),
-            {op: "contains", operand: {type: "text", value: "Embody Hero: Illidan", written: "Embody Hero: Illidan", verbatim: true}});
+            {
+                op: "contains",
+                operand: {type: "text", value: "Embody Hero: Illidan", written: "Embody Hero: Illidan", verbatim: true}
+            });
         assert.deepEqual(valueOf(ok('name:"Elixir (Greater)"')),
-            {op: "contains", operand: {type: "text", value: "Elixir (Greater)", written: "Elixir (Greater)", verbatim: true}});
+            {
+                op: "contains",
+                operand: {type: "text", value: "Elixir (Greater)", written: "Elixir (Greater)", verbatim: true}
+            });
         assert.deepEqual(valueOf(ok('model:"beam|chain"')),
             {op: "contains", operand: {text: "beam|chain", verbatim: true}});
     });
 
     it("an escaped quote is a literal quote", () => {
         assert.deepEqual(valueOf(ok(String.raw`name:"the \"real\" one"`)),
-            {op: "contains", operand: {type: "text", value: 'the "real" one', written: 'the "real" one', verbatim: true}});
+            {
+                op: "contains",
+                operand: {type: "text", value: 'the "real" one', written: 'the "real" one', verbatim: true}
+            });
     });
 
     it("quotes never group clauses: a quoted pair stays a phrase", () => {
@@ -392,7 +401,10 @@ describe("the quote law: a phrase is one literal string value", () => {
         assert.deepEqual(byId.ask.value, {op: "exact", operand: {type: "id", value: 150, written: "150"}});
         const [byName] = termsOf(ok('sound:{kit:"150"}'));
         assert.ok(byName.ask !== null && byName.ask.on === "props");
-        assert.deepEqual(byName.ask.value, {op: "contains", operand: {type: "text", value: "150", written: "150", verbatim: true}});
+        assert.deepEqual(byName.ask.value, {
+            op: "contains",
+            operand: {type: "text", value: "150", written: "150", verbatim: true}
+        });
     });
 
     it("an unclosed phrase runs to the end of input", () => {
@@ -836,6 +848,25 @@ describe("the operator-glued inner bind", () => {
     it("keeps the content reading for a foreign word, and for the colon-glued shape", () => {
         assert.deepEqual(valueOf(ok("model:cast=5")), {op: "contains", operand: {text: "cast=5"}});
         assert.deepEqual(valueOf(ok("sound:kit:150")), {op: "contains", operand: {text: "kit:150"}});
+    });
+
+    it("reads a comparison no property answers as that ROW's count: the pair the braces spell", () => {
+        // `worn>2` is the column desugar one level down — the kind word narrows and the count measures what
+        // it leaves — so both spellings parse to the kind-word-plus-count pair.
+        for (const spelled of ["model:{attach>2}", "model:attach>2"]) {
+            const terms = termsOf(ok(spelled));
+            assert.equal(terms.length, 2, spelled);
+            assert.equal(terms[0].ask?.on, "kindWord", spelled);
+            assert.equal(terms[1].ask?.on, "count", spelled);
+        }
+        assert.deepEqual(shape("model:{attach>2}"), shape("model:{attach count>2}"));
+        // A property that CLAIMS the comparison keeps its own reading — the count never shadows a value.
+        const claimed = termsOf(ok("model:{missile>2}"));
+        assert.equal(claimed.length, 1);
+        assert.equal(claimed[0].ask?.on, "props");
+        // The pair cannot carry the term's own minus: negating a conjunction is not negating its halves.
+        const negated = parse("model:{-attach>2}");
+        assert.ok(negated.diagnostics.some((d) => d.severity === "error"));
     });
 });
 

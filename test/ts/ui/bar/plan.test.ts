@@ -506,6 +506,9 @@ test("a trailing lone escape is literal text: the commit doubles it so it cannot
     assert.equal(commitSegment('name:{"a\\', 0).text, 'name:"a\\\\"');
     // An even run is already paired — every escape shields the one after it — and stays untouched.
     assert.equal(commitSegment("name:{\\\\", 0).text, "name:\\\\");
+    // The creation gesture's own closer, shielded by the typed escape, comes back off the interior: the
+    // reader typed one backslash, and one literal backslash is what settles.
+    assert.equal(commitSegment("model:{\\}", 0).text, "model:\\\\");
 });
 
 test("replacing a selection lands the new text where it stood, the caret after it", () => {

@@ -94,8 +94,9 @@ end
 Inspect.LISTED = 12
 
 --- The values shown beside a linked subject on the line, by axis, where the
--- line would be blind without them: where a model attaches.
-Inspect.BESIDE = { model = { attach = true } }
+-- line would be blind without them: the point a model attaches at, keyed by
+-- the property's storage name.
+Inspect.BESIDE = { model = { where = true } }
 
 --- The axes whose every part is a link whatever it can be handed, because
 -- the tooltip is where the part's detail lives: an effect's implicit targets
@@ -222,6 +223,9 @@ function Inspect.Values(part)
 		if value ~= nil then
 			out[#out + 1] = {
 				name = prop.name,
+				-- What a line or tooltip PRINTS for the property: its spoken word. The name above stays the
+				-- storage key every data read keys by.
+				label = prop.word or prop.name,
 				text = Epsilook:FormatPartValue(part.axis, part.kind, prop.name, value),
 				id = type(value) == "table" and value.id or nil,
 				path = prop.types[1] == "path",
@@ -303,10 +307,10 @@ local function written(value)
 	return plain(value)
 end
 
---- The values written bare beside a subject, without their name: a phrase
+--- The values written bare beside a subject, without their word: a phrase
 -- that reads on its own, and an attachment point, which can only be where
--- the model hangs.
-local BARE = { how = true, attach = true }
+-- the model hangs. Keyed by the property's storage name.
+local BARE = { how = true, where = true }
 
 --- A value beside a subject on a line: its name in grey and the value, a
 -- target written as who it is on.
@@ -316,7 +320,7 @@ local function beside(value)
 	elseif BARE[value.name] then
 		return written(value)
 	end
-	return GREY .. value.name .. " " .. END .. written(value)
+	return GREY .. value.label .. " " .. END .. written(value)
 end
 
 --- A value joined to the line before it: one more field, after the dash
@@ -436,7 +440,7 @@ function Inspect.FillTooltip(tooltip, part)
 	end
 	local values = Inspect.Values(part)
 	for _, value in ipairs(values) do
-		tooltip:AddLine(GREY .. value.name .. END .. " " .. detailed(value), 1, 1, 1)
+		tooltip:AddLine(GREY .. value.label .. END .. " " .. detailed(value), 1, 1, 1)
 	end
 	for _, extra in ipairs(Epsilook:GetPartExtras(part)) do
 		local text = extra.text ~= "" and extra.text or tostring(extra.value)
@@ -525,7 +529,12 @@ function Inspect.FillAxisTooltip(tooltip, spellID, axis)
 	local part = {}
 	for i = 1, math.min(n, Inspect.LISTED) do
 		Epsilook:GetPartDataByIndex(spellID, axis, i, part)
-		tooltip:AddLine(GREY .. part.kind .. END .. " " .. unextended(Inspect.Subject(part) or ""), 1, 1, 1)
+		tooltip:AddLine(
+			GREY .. part.kind .. END .. " " .. unextended(Inspect.Subject(part) or ""),
+			1,
+			1,
+			1
+		)
 	end
 	if n > Inspect.LISTED then
 		tooltip:AddLine("and " .. (n - Inspect.LISTED) .. " more", 0.62, 0.62, 0.62)
@@ -881,7 +890,7 @@ local function line(spellID, part, n, indent, label, verb)
 		if Inspect.DETAILED[part.axis] or pictured or Inspect.ClipOf(part, actions, shown) then
 			out = out .. Shell.Link(spellID, verb, shown, part.axis, n, colour, icon)
 			if Inspect.ROLED[part.axis .. "." .. part.kind] then
-				out = out .. Shell.DASH .. GREY .. subject.name .. END
+				out = out .. Shell.DASH .. GREY .. subject.label .. END
 			end
 			local shownBeside = Inspect.BESIDE[part.axis]
 			for i = 2, #values do

@@ -360,10 +360,6 @@ function ChipEl({chip, warned, notes, text, act}: {
                 className={styles.chipSect}
                 onOpen={act.negate}
             />
-            {/* The bound property is a CELL, not a loud word beside the value: a lane already draws an inner
-                bind that way, and collapsing to the compact form turned `attach chest` into two words with a
-                space between them rather than one saying what the other is. */}
-            {chip.sub !== undefined && <span className={styles.chipSub}>{headCase(chip.sub)}</span>}
             <span className={styles.chipBody}><Pieces pieces={chip.body} text={text}/></span>
             <Affordance label={t("bar.delete")} onPress={act.remove}/>
         </span>

@@ -298,6 +298,25 @@ function inertEscape(interior: string): string {
     return run % 2 === 1 ? interior + GRAMMAR.escape : interior;
 }
 
+/**
+ * The editor's own closer, freed where a trailing escape captured it.
+ *
+ * The creation gesture spawns the closing brace, and an escape typed just inside it shields that brace into
+ * the slot: the scope reads unclosed and its interior ends `\}` — a brace the reader never typed as content.
+ * This state is its own signature: a DELIBERATE literal `\}` keeps the spawned closer beyond it as the plan's
+ * suffix, so an escaped brace at the very end of an UNCLOSED slot can only be the captured closer. It comes
+ * back off the interior here; the lone escape it leaves behind is {@link inertEscape}'s ordinary case.
+ *
+ * @param slot An unclosed scope's interior — the caller has checked the suffix is empty.
+ * @returns The interior without the captured brace, or unchanged where none was captured.
+ */
+function freeCloser(slot: string): string {
+    if (!slot.endsWith(GRAMMAR.scope.close)) return slot;
+    let run = 0;
+    while (run < slot.length - 1 && slot[slot.length - 2 - run] === GRAMMAR.escape) run += 1;
+    return run % 2 === 1 ? slot.slice(0, -1) : slot;
+}
+
 /** Whether the interior's final character is the closer of the scope that was opened before it. */
 function closesAtEnd(interior: string): boolean {
     return closerAt(interior) === interior.length - 1;
@@ -796,7 +815,8 @@ export function commitSegment(text: string, at: number): Commit {
             removed: false,
         };
     }
-    let interior = closePhrase(inertEscape(plan.slot.trim()));
+    const raw = plan.suffix === "" ? freeCloser(plan.slot) : plan.slot;
+    let interior = closePhrase(inertEscape(raw.trim()));
     // The simplification runs to its FIXPOINT: an interior that is itself one whole scope sheds that scope
     // too, or `model:{{fire}}` would commit to the editing form's own spelling and lose a brace pair per
     // pass instead of settling once.

@@ -73,6 +73,15 @@ export interface Prop {
     readonly prefix?: string;
 
     /**
+     * The word this property is SPOKEN by inside its kind's scope, where it differs from its name.
+     *
+     * The name is the property's storage identity — the key the pack ships and every reference carries — so
+     * renaming what a reader types is this one field, with no pack re-ship behind it. Declared, it replaces
+     * the name as the way in and as every surface's spelling of the property; the name itself stops resolving.
+     */
+    readonly word?: string;
+
+    /**
      * The unabbreviated name, where the property's name is a shortcut for a longer word.
      *
      * Reading and writing are declared apart because they are not symmetric, exactly as a numeric type's notations
@@ -244,7 +253,7 @@ export function nameOf(kind: Kind): string {
  * @returns Its full name, or the name itself where it declares none.
  */
 export function propNameOf(name: string, prop: Prop): string {
-    return prop.full ?? name;
+    return prop.full ?? spokenProp(name, prop);
 }
 
 /**
@@ -252,10 +261,25 @@ export function propNameOf(name: string, prop: Prop): string {
  *
  * @param name The property's own name — its key in the kind's declaration.
  * @param prop The property.
- * @returns Its prefix, or the name itself where it declares none.
+ * @returns Its prefix, or its spoken word, or the name itself.
  */
 export function doorOf(name: string, prop: Prop): string {
-    return prop.prefix ?? name;
+    return prop.prefix ?? spokenProp(name, prop);
+}
+
+/**
+ * The word a property is SPOKEN and printed by inside its kind's scope.
+ *
+ * The name is the property's storage identity — the key the pack ships and every reference carries — and
+ * renaming what a reader types must not move it: a spoken-word change is one declared field, with no pack
+ * re-ship behind it. Undeclared, the name is the word, as it is for most properties.
+ *
+ * @param name The property's own name — its key in the kind's declaration.
+ * @param prop The property.
+ * @returns Its declared word, or the name itself.
+ */
+export function spokenProp(name: string, prop: Prop): string {
+    return prop.word ?? name;
 }
 
 /** One operand resolved against a property: the value, and the notation that accepted it. */

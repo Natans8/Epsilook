@@ -11,7 +11,7 @@ import {strict as assert} from "node:assert";
 import {run} from "../../../src/search/evaluate/kernel";
 import {
     chain, delivery, description, effect, expansion, missile, name as nameKind, scale,
-    sound as soundKind, spellId, tint, worn,
+    sound as soundKind, spellId, tint, attach,
 } from "../../../src/search/schema/catalogue";
 import type {Kind} from "../../../src/search/schema/kinds";
 import {parse} from "../../../src/search/language/parse";
@@ -57,14 +57,14 @@ const WORLD: readonly Spec[] = [
     /* 2 — a fire model that is NOT a missile, beside a missile that is not fire */ {
         id: 102, name: "Flame Shield", xpac: "tbc", delivery: {cast: 0},
         model: [
-            row(worn, {file: "spell/fire/flameshield.m2", attach: "chest", target: 1}),
+            row(attach, {file: "spell/fire/flameshield.m2", where: "chest", target: 1}),
             m("spell/arcane/orb.m2", "head", "head", "forward spin"),
         ],
     },
     /* 3 — five model rows, an unbreakable channel, and "arcane" in the description */ {
         id: 103, name: "Arcane Torrent", desc: "Channels arcane power while kneeling.", xpac: "wotlk",
         delivery: {channel: 5000, unbreakable: 1},
-        model: [1, 2, 3, 4, 5].map((i) => row(worn, {file: `spell/arcane/torrent${i}.m2`, attach: "head"})),
+        model: [1, 2, 3, 4, 5].map((i) => row(attach, {file: `spell/arcane/torrent${i}.m2`, where: "head"})),
     },
     /* 4 */ {
         id: 104, name: "Ghost Wolf", xpac: "cata", delivery: {cast: 0},

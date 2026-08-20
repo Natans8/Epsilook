@@ -789,15 +789,6 @@
 /* The property a compact chip's value binds, drawn as its own cell. Same recession and same rule as the head it
  * follows, so `attach | chest` reads as one thing saying what another is — which is what the lane's inner bind
  * already looked like before the compact form flattened it to two words. */
-.chipSub {
-    display: inline-flex;
-    align-items: center;
-    padding: 0.2rem 0.5rem;
-    border-right: 1px solid var(--border-ctrl);
-    color: var(--text);
-    font-size: 0.82em;
-}
-
 /* A vocabulary's picture inside a chip. Sized on the LINE here rather than on a shared width: a chip carries one
  * badge at a time, so what it has to agree with is the text beside it, not eleven siblings in a column. */
 .chipArt {

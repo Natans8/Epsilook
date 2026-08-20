@@ -12,7 +12,7 @@
  * echo.
  */
 import {GRAMMAR, PREFIX_OPERATORS, spelling, spellingsOf} from "./grammar";
-import {doorOf, formatValue, sentinelOf, wordOf} from "../schema/kinds";
+import {doorOf, formatValue, sentinelOf, spokenProp, wordOf} from "../schema/kinds";
 import {headWord} from "../schema/schema";
 import {COMPARISONS, exact} from "../vocabulary/operators";
 import type {Ask, Clause, Parsed, ParsedOperand, PropRef, ScopeTerm, ValueExpr} from "./ast";
@@ -295,6 +295,12 @@ function termText(term: ScopeTerm, tier: Spelling, enclosing: PropRef["kind"] | 
     if (ask.on === "count") return `${negate}${bindTo(GRAMMAR.countWord, valueText(ask.value, undefined, tier))}`;
     const ref = ask.props[0];
     const text = valueText(ask.value, ref, tier);
+    // A word SHARED ACROSS KINDS — `file:wolf` reaching every kind's file — keeps that word: the kind-word
+    // and subject spellings below fit only refs of one kind, and naming one kind would narrow the ask to it.
+    // Several props of ONE kind are the kind-dispatch shape and fall through to the kind's own word.
+    if (ask.props.some((held) => held.kind !== ref.kind)) {
+        return `${negate}${bindTo(spokenProp(ref.prop, propOf(ref)), text)}`;
+    }
     if (subjectSpeaksBare(ask.value, ref, tier, text)) return `${negate}${text}`;
     // Inside the kind's OWN scope its word is already the door overhead: writing it again names a property the
     // kind does not have, and the spelling stops parsing. The subject of a ONE-property kind speaks bare —
@@ -303,13 +309,13 @@ function termText(term: ScopeTerm, tier: Spelling, enclosing: PropRef["kind"] | 
         const props = Object.keys(ref.kind.props);
         return props.length === 1 && props[0] === ref.prop
             ? `${negate}${termValueText(ask.value, tier, ref)}`
-            : `${negate}${bindTo(ref.prop, text)}`;
+            : `${negate}${bindTo(spokenProp(ref.prop, propOf(ref)), text)}`;
     }
     // A kind's SUBJECT binds through the KIND's word — the door the reader has — never through the schema's
     // own property name: `mount:horse`, not the `name:horse` that surfaced a field nobody typed.
     const subject = Object.keys(ref.kind.props)[0] === ref.prop && ref.kind.word !== undefined
         ? ref.kind.word
-        : ref.prop;
+        : spokenProp(ref.prop, propOf(ref));
     return `${negate}${bindTo(subject, text)}`;
 }
 

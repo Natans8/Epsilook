@@ -15,7 +15,8 @@
     "noValue": "{{word}}: names no value",
     "noValueIgnored": "{{word}}: names no value and was ignored",
     "valueNotScope": "{{word}}: takes a value, not a scope",
-    "countsRows": "{{head}}:{{value}} counts {{label}} rows"
+    "countsRows": "{{head}}:{{value}} counts {{label}} rows",
+    "negatedRowCount": "the minus cannot negate a row count — negating a pair is not negating its halves"
   },
   "axis": {
     "noOrdering": "the {{word}} axis has no ordering",
