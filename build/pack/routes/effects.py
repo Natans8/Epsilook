@@ -22,6 +22,7 @@ from __future__ import annotations
 from collections.abc import Callable, Container, Mapping
 from dataclasses import dataclass, field
 
+from ..drift import REUSED_SPAWN_OBJECT_EFFECTS
 from ..sources import read_enum_names
 from ..tables import Tables
 from ..targets import NO_TARGET, implicit_target_bit
@@ -47,6 +48,10 @@ EFFECT_SPAWN_OBJECT = frozenset({
 """Spawns a gameobject: misc0 is a `gameobject_template` entry.
 
 The four differ in slot and lifetime, never in what the misc value means.
+
+Slots 2 to 4 spawn one too, on the builds where they still mean that; their
+ids are declared in `REUSED_SPAWN_OBJECT_EFFECTS` rather than here, because
+what they select depends on the build being packed.
 """
 
 AURA_MOD_INVISIBILITY = 18
@@ -127,6 +132,15 @@ class MiscPayload:
     effects: frozenset[int] = frozenset()
     """The selector. A payload names one or the other, never both."""
 
+    retired: Mapping[int, tuple[int, ...]] = field(default_factory=dict)
+    """Effect ids that select this payload only on builds older than the
+    version each one maps to, because the game reused the id afterwards.
+
+    Declared beside the selector it widens, so the reader resolves one build's
+    ids without knowing which payload drifts. An id meaning the same thing on
+    every build belongs in `effects`.
+    """
+
     zero_is_a_value: bool = False
     """Whether a misc value of zero is data. True only where the number is a
     channel rather than a row id."""
@@ -137,6 +151,20 @@ class MiscPayload:
     The name is a key into the rosters the reader is handed, so a payload that
     needs narrowing declares it here rather than adding a parameter.
     """
+
+    def selects(self, version: str) -> frozenset[int]:
+        """The effect ids that reach this payload on one build.
+
+        Args:
+            version: the build being packed, dotted.
+
+        Returns:
+            The stable ids, plus every retired id this build predates.
+        """
+        build = tuple(int(part) for part in version.split("."))
+        return self.effects | frozenset(
+            effect for effect, reused_in in self.retired.items()
+            if build[:len(reused_in)] < reused_in)
 
 
 MISC_PAYLOADS: tuple[MiscPayload, ...] = (
@@ -153,7 +181,8 @@ MISC_PAYLOADS: tuple[MiscPayload, ...] = (
                 roster="keybounds"),
     MiscPayload(lambda rows: rows.altnames, aura=AURA_OVERRIDE_NAME),
     MiscPayload(lambda rows: rows.anim_sets, aura=AURA_ANIM_REPLACEMENT_SET),
-    MiscPayload(lambda rows: rows.objects, effects=EFFECT_SPAWN_OBJECT),
+    MiscPayload(lambda rows: rows.objects, effects=EFFECT_SPAWN_OBJECT,
+                retired=REUSED_SPAWN_OBJECT_EFFECTS),
 )
 """Every payload whose misc value is a reference, declared once.
 
@@ -428,7 +457,8 @@ def read_summon_control(tables: Tables) -> dict[int, int]:
 
 def read_spell_effect_rows(tables: Tables, spell_names: Container[int],
                            rosters: Mapping[str, Container[int]],
-                           target_bits: Mapping[int, int]) -> SpellEffectRows:
+                           target_bits: Mapping[int, int],
+                           version: str) -> SpellEffectRows:
     """Read `SpellEffect` once and split it into every payload it feeds.
 
     Args:
@@ -441,6 +471,8 @@ def read_spell_effect_rows(tables: Tables, spell_names: Container[int],
             effect or key override the build lacks has nothing to show.
         target_bits: implicit-target id to target bit, from
             `implicit_target_bits`.
+        version: the build being packed, which decides the effect ids a
+            payload with a retired selector claims.
 
     Returns:
         Every payload, with the mechanics rows left over after consumption.
@@ -455,7 +487,8 @@ def read_spell_effect_rows(tables: Tables, spell_names: Container[int],
         raise KeyError(f"MISC_PAYLOADS names rosters nobody supplied: "
                        f"{sorted(missing)}")
     by_aura = {p.aura: p for p in MISC_PAYLOADS if p.aura}
-    by_effect = {effect: p for p in MISC_PAYLOADS for effect in p.effects}
+    by_effect = {effect: p
+                 for p in MISC_PAYLOADS for effect in p.selects(version)}
 
     for row in tables.rows("SpellEffect", SPELL_EFFECT_COLUMNS):
         spell = to_int(row[0])

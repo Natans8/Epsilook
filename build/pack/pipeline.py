@@ -320,7 +320,8 @@ class Derivations:
             return read_spell_effect_rows(
                 self.tables, self.names.names,
                 {"screens": self.fx.screens, "keybounds": self.keybinds},
-                implicit_target_bits(self.build.version))
+                implicit_target_bits(self.build.version),
+                self.build.version)
 
     @cached_property
     def alt_names(self) -> dict[int, str]:

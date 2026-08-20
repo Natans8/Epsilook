@@ -83,6 +83,17 @@ OPTIONAL_COLUMNS = {
     ("BarrageEffect", "AttachmentPoint"): "-1",
 }
 
+# Effect ids the game reused, mapped to the first build where the new meaning
+# holds. Slots 2 to 4 of SUMMON_OBJECT spawn a gameobject through Wrath; from
+# Cataclysm the same ids carry SURVEY, CHANGE_RAID_MARKER and SHOW_CORPSE_LOOT,
+# whose misc value is not an entry. WoWDBDefs names only the modern meaning, so
+# a build's own enum cannot be asked which one it is on.
+REUSED_SPAWN_OBJECT_EFFECTS = {
+    105: (4, 0),  # SUMMON_OBJECT_SLOT2 -> SURVEY
+    106: (4, 0),  # SUMMON_OBJECT_SLOT3 -> CHANGE_RAID_MARKER
+    107: (4, 0),  # SUMMON_OBJECT_SLOT4 -> SHOW_CORPSE_LOOT
+}
+
 # SpellName.db2 was split out of Spell.db2 in BfA. The first candidate whose
 # table this build has wins; both spellings read the same downstream.
 SPELL_NAME_SOURCES = [

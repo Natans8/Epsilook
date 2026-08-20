@@ -1134,10 +1134,18 @@ are distinct because they fail differently:
 | A column postdates the build  | An optional column, naming a default  | The declared default stands in                      |
 | The data moved between tables | An ordered list of candidates         | The first candidate this build has wins             |
 | An enum value's name differs  | Per-build guards on the enum file     | The name resolves per build                         |
+| An id's meaning was reused    | The first build of the new meaning    | The old meaning holds on earlier builds             |
 | A whole source is absent      | A release map                         | Routes needing it degrade, declared                 |
 | The array shape changed       | Nothing — the header is read          | Handled by reading                                  |
 | The values differ             | Nothing — measured per pack           | Bounds taken from one build are wrong on the others |
 | **Anything undeclared**       | —                                     | **The build fails loudly**                          |
+
+**A reused id is the one difference the source cannot answer.** Every other row is settled by looking: a table is there
+or it is not, a column is there or it is not, and WoWDBDefs guards a name that changed. But when the game retires an
+effect id and later hands the number to something else, the definitions carry only the modern meaning, so the old one is
+declared with the first build that stopped meaning it. `SUMMON_OBJECT_SLOT2` through `SLOT4` are the shipped case: they
+spawn a gameobject through Wrath, and from Cataclysm the same three ids are `SURVEY`, `CHANGE_RAID_MARKER` and
+`SHOW_CORPSE_LOOT`, whose misc value is not an entry.
 
 Two shapes are not drift and must not be filed as it. A **pinned cross-build source** deliberately reads a different
 build, which is a property of the route rather than of this build. And a version that cannot be expressed at all is a

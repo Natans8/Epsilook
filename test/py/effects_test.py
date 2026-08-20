@@ -14,7 +14,8 @@ from pack.routes.effects import (AURA_ANIM_REPLACEMENT_SET, AURA_KEYBOUND_OVERRI
                                  AURA_OVERRIDE_NAME, AURA_SCREEN_EFFECT,
                                  AURA_SET_VEHICLE_ID, AURA_SHAPESHIFT, AURA_TRANSFORM,
                                  EFFECT_APPLY_AURA, EFFECT_PLAY_SOUND, EFFECT_SUMMON,
-                                 MISC_PAYLOADS, EffectRow, read_spell_effect_rows)
+                                 EFFECT_SPAWN_OBJECT, MISC_PAYLOADS, EffectRow,
+                                 read_spell_effect_rows)
 from pack.targets import TARGET_AREA, TARGET_CASTER, TARGET_TARGET
 from support import BuildTables
 
@@ -22,6 +23,13 @@ SPELLS = frozenset({100, 200, 300})
 
 # ImplicitTarget id -> bit, standing in for one build's resolved enum.
 TARGET_BITS = {1: TARGET_CASTER, 2: TARGET_TARGET, 3: TARGET_AREA}
+
+WRATH = "3.4.3.58936"
+MODERN = "9.2.7.45745"
+"""One build either side of the point the reused effect ids changed meaning."""
+
+EFFECT_SUMMON_OBJECT_SLOT2 = 105
+"""Spawns a gameobject through Wrath, SURVEY from Cataclysm on."""
 
 SUMMON_PROPERTIES = """\
 ID,Control
@@ -40,11 +48,12 @@ def effect_rows(*rows: str) -> str:
 ROSTERS = {"screens": frozenset({50}), "keybounds": frozenset({60})}
 
 
-def read(tables: BuildTables, spell_effect: str, **rosters: frozenset[int]):
+def read(tables: BuildTables, spell_effect: str, version: str = MODERN,
+         **rosters: frozenset[int]):
     """Read one `SpellEffect` fixture, overriding any roster by name."""
     return read_spell_effect_rows(
         tables(SpellEffect=spell_effect, SummonProperties=SUMMON_PROPERTIES),
-        SPELLS, {**ROSTERS, **rosters}, TARGET_BITS)
+        SPELLS, {**ROSTERS, **rosters}, TARGET_BITS, version)
 
 
 def test_a_misc_value_lands_where_its_aura_sends_it(tables: BuildTables) -> None:
@@ -338,7 +347,8 @@ def test_every_reference_payload_is_declared_not_branched() -> None:
     assert len(auras) == len(set(auras)), "two payloads claim one aura"
     # The effect half resolves the same way, so an overlap there would also
     # silently leave the last declaration holding the selector.
-    effects = [effect for p in MISC_PAYLOADS for effect in p.effects]
+    effects = [effect for p in MISC_PAYLOADS
+               for effect in (*p.effects, *p.retired)]
     assert len(effects) == len(set(effects)), "two payloads claim one effect"
 
 
@@ -348,4 +358,26 @@ def test_a_roster_nobody_supplied_is_refused(tables: BuildTables) -> None:
     with pytest.raises(KeyError):
         read_spell_effect_rows(
             tables(SpellEffect=effect_rows(), SummonProperties=SUMMON_PROPERTIES),
-            SPELLS, {"screens": frozenset()}, TARGET_BITS)
+            SPELLS, {"screens": frozenset()}, TARGET_BITS, MODERN)
+
+
+def test_a_reused_effect_id_spawns_an_object_only_on_the_older_build(
+        tables: BuildTables) -> None:
+    """The id is one number meaning two things, and only the build tells them
+    apart: a slot the game later handed to SURVEY would otherwise read that
+    effect's misc value as a gameobject entry on every modern pack."""
+    fixture = effect_rows(f"100,{EFFECT_SUMMON_OBJECT_SLOT2},0,7000,0,1,0,0,0,0")
+
+    assert read(tables, fixture, WRATH).objects.ids == {100: {7000}}
+    assert read(tables, fixture, MODERN).objects.ids == {}
+
+
+def test_a_stable_spawn_effect_is_read_on_every_build(
+        tables: BuildTables) -> None:
+    """The drift widens the selector and never replaces it, so the slot that
+    kept its meaning must not ride on the build."""
+    slot1 = min(EFFECT_SPAWN_OBJECT)
+    fixture = effect_rows(f"100,{slot1},0,7000,0,1,0,0,0,0")
+
+    assert read(tables, fixture, WRATH).objects.ids == {100: {7000}}
+    assert read(tables, fixture, MODERN).objects.ids == {100: {7000}}
