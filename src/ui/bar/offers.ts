@@ -329,6 +329,30 @@ function propOffer(name: string, prop: Prop, tone: string, owner?: string): Offe
 }
 
 /**
+ * The kind a POSITIVE standing term of the scope names, where one does.
+ *
+ * Read lexically off the slot's other terms: a term that is exactly a kind's word has said what the row IS,
+ * and the offers follow it. A negated kind refines rather than sorts, so it narrows nothing; with several
+ * standing — a contradiction the parse warns about — the first speaks for the offers.
+ *
+ * @param column The scope's column.
+ * @param slot The slot's text — the scope's interior.
+ * @param composingAt Where the term being composed starts, which is never a standing term.
+ * @returns The standing kind, or undefined.
+ */
+function standingKind(column: Column, slot: string, composingAt: number): Kind | undefined {
+    for (const start of termStarts(slot)) {
+        if (start === composingAt) continue;
+        const end = slot.indexOf(" ", start);
+        const word = slot.slice(start, end < 0 ? undefined : end);
+        if (word === "" || word.startsWith(GRAMMAR.negate)) continue;
+        const kind = kindIn(column, fold(word));
+        if (kind !== undefined) return kind;
+    }
+    return undefined;
+}
+
+/**
  * Every property reachable inside one head's scope: a kind's own, or every kind's across a column.
  *
  * Under a COLUMN each property also names the kinds that declare it, unless every kind of the column does. The
@@ -772,13 +796,17 @@ export function offersAt(plan: BarPlan, caret: number, history: readonly string[
         // Past an inner bind the caret is inside one property's value, where nothing but its own words answer;
         // a property's head is the same position reached through its own door.
         if (context.role === "prop" || inner !== null) return wordsGroup(composing, [], typed, vocab);
+        // A kind word STANDING in the scope has already said what the row is, so the offers become that
+        // kind's own: its properties and words, never a sibling kind — a row is one kind, and offering
+        // `missile` beside a standing `attach` would compose a scope that can never match.
+        const standing = context.role === "column" ? standingKind(context.column, slot, term.start) : undefined;
         // A scope's offers, split by what taking a row DOES: the words that complete a condition where they
         // stand — the subject's own values, the flag words, a valueless kind's word — then the doors that take
         // a value of their own, a kind's word and a property's alike. `scale:{}` takes an amount, and
         // `scale:{attach:...}` is the same scope saying something else about the same row.
         const offered = [
-            ...(context.role === "column" ? kindOffers(context.column) : []),
-            ...propOffers(context),
+            ...(context.role === "column" && standing === undefined ? kindOffers(context.column) : []),
+            ...propOffers(standing === undefined ? context : {role: "kind", kind: standing}),
         ];
         const flags = offered.filter((offer) => offer.shape === "word");
         let doors = offered.filter((offer) => offer.shape === "door");

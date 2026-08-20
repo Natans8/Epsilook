@@ -43,6 +43,32 @@ test("an empty bar with nothing remembered still offers the axes", () => {
     assert.deepEqual(at("", 0).groups.map((group) => group.id), ["axes"]);
 });
 
+test("a kind STANDING in the scope narrows the offers to its own: only what can still match", () => {
+    // With `attach` said, the row's kind is settled: the panel becomes attach's children — its properties —
+    // and never a sibling kind, whose conjunction could only ever answer nothing.
+    const query = "model:{attach }";
+    const offers = at(query, query.indexOf("}"));
+    const doors = words(offers, "doors");
+    assert.ok(doors.includes("point"), "the standing kind's own point property is offered");
+    assert.ok(!doors.includes("file"), "its SUBJECT is reached by the kind's own word, not offered again");
+    assert.ok(!doors.includes("missile"), "a sibling kind is not");
+    assert.ok(!doors.includes("motion"), "nor a property only a sibling declares");
+    assert.ok(!doors.includes("attach"), "nor the standing kind again");
+    // A NEGATED kind refines rather than sorts, so it narrows nothing.
+    const refined = "model:{-attach }";
+    assert.ok(words(at(refined, refined.indexOf("}")), "doors").includes("missile"));
+});
+
+test("two positive kinds on one row warn: a row is one kind, the scope can match nothing", () => {
+    const warned = parse("model:{attach missile}");
+    assert.ok(warned.diagnostics.some((d) => d.severity === "warning"
+        && d.message.includes("one kind")), "the empty meet is said, never silent");
+    // The scope still parses and runs; and a negated kind collides with nothing.
+    assert.equal(warned.clauses[0].state, "ok");
+    assert.ok(!parse("model:{attach -missile}").diagnostics.some(
+        (d) => d.severity === "warning" && d.message.includes("one kind")));
+});
+
 test("a top-level word offers the doors it could open, from its first character", () => {
     assert.ok(words(at("m", 1), "axes").includes("model"));
     const offers = at("mo", 2);
@@ -54,13 +80,13 @@ test("a top-level word offers the doors it could open, from its first character"
 });
 
 test("a top-level bind whose word opens no door says so, with the real doors unnarrowed", () => {
-    const offers = at("attach:chest", 12);
-    assert.equal(offers.takes?.what.includes("attach"), true);
+    const offers = at("point:chest", 11);
+    assert.equal(offers.takes?.what.includes("point"), true);
     // The doors that DO exist are the answer; the unknown word narrows nothing.
     assert.ok(words(offers, "axes").includes("model"));
     // The known-door and escaped spellings stay out of it.
     assert.equal(at("model:fire", 10).takes?.what.includes("opens no door") ?? false, false);
-    assert.equal(at(String.raw`\attach:chest`, 13).takes, null);
+    assert.equal(at(String.raw`\point:chest`, 12).takes, null);
 });
 
 test("inside the sort scope the doors offer bare — no colon — and the directives stay out", () => {
@@ -199,8 +225,10 @@ test("past an inner bind the property answers, not the scope it sits in", () => 
 
 test("the offers narrow to the word under the caret, not to the whole slot", () => {
     // Two terms in one scope: the second is what is being typed.
+    // The standing missile narrows the doors to its own, so "mo" completes to motion — never to the
+    // sibling mount, whose conjunction with a standing missile could only answer nothing.
     const offers = at("model:{missile mo}", 17);
-    assert.deepEqual(words(offers, "doors"), ["mount"]);
+    assert.deepEqual(words(offers, "doors"), ["motion"]);
     assert.deepEqual(offers.stub, {start: 8, end: 10});
 });
 

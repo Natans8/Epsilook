@@ -325,7 +325,9 @@ test("a commit converges the chip-invisible rewrites: the settled text says what
 
 test("the brace shed is the engine's call: a spelling that would change the ask keeps its braces", () => {
     // The colon-glued spelling reads as content, so shedding would silently change the question.
-    assert.equal(commitSegment("model:{attach:chest}", 0).text, "model:{attach:chest}");
+    assert.equal(commitSegment("model:{point:chest}", 0).text, "model:{point:chest}");
+    // A kind with a TOP-LEVEL door of its own sheds all the way onto it: `attach:chest` is the same ask.
+    assert.equal(commitSegment("model:{attach:chest}", 0).text, "attach:chest");
     // The operator-glued spelling reads back as the same one-term scope, so it sheds — and the commit then
     // converges on the canonical count spelling, which the chip draws identically.
     assert.equal(commitSegment("model:{count>=4}", 0).text, "model>=4");
@@ -406,7 +408,7 @@ test("the brace shed asks the FORMATTER's rule, not two spellings: an alternatio
     // canonical identity-list spelling is an open formatter question, not this rule's.
     assert.equal(commitSegment("id:{133,134}", 0).text, "id:133,134");
     // And the reverse still holds: alike spellings that ask differently keep their braces.
-    assert.equal(commitSegment("model:{attach:chest}", 0).text, "model:{attach:chest}");
+    assert.equal(commitSegment("model:{point:chest}", 0).text, "model:{point:chest}");
 });
 
 test("a scope closing before its segment ends never gains a second brace", () => {
@@ -439,7 +441,7 @@ test("a commit prefers the spelling that parses: the editing braces never break 
     // The bare number settles wearing the unit it was read in, as the written tier's law says it must.
     assert.equal(commitSegment("scale:{-50}", 0).text, "scale:-50%");
     // A braced form that asks something real still keeps its braces where shedding would change the ask.
-    assert.equal(commitSegment("model:{attach:chest}", 0).text, "model:{attach:chest}");
+    assert.equal(commitSegment("model:{point:chest}", 0).text, "model:{point:chest}");
 });
 
 test("a selection takes text by the character and a chip whole", () => {

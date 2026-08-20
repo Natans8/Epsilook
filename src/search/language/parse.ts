@@ -825,12 +825,26 @@ class Parser {
         return out;
     }
 
-    /** The legal-but-misleading shapes: both warned, neither refused. */
+    /** The legal-but-misleading shapes: all warned, none refused. */
     private scopeWarnings(terms: ScopeTerm[][], pend: Pending[]): void {
         for (const run of terms) {
             const ok = run.filter((t) => t.state === "ok" && t.ask !== null);
             const positives = ok.filter((t) => !t.not);
             if (positives.length === 0) continue;
+
+            // A row is exactly one kind, so two POSITIVE kind words on one row are an empty meet — the scope
+            // still runs, to nothing, and the warning says why. A negated kind refines and collides with none.
+            const kinds: KindDecl[] = [];
+            for (const positive of positives) {
+                if (positive.ask?.on === "kindWord") kinds.push(positive.ask.kind);
+            }
+            if (new Set(kinds).size > 1) {
+                pend.push({
+                    severity: "warning",
+                    message: i18n.t("diagnostics:scope.twoKinds",
+                        {a: wordOf(kinds[0]), b: wordOf(kinds[1])}),
+                });
+            }
 
             const negatedContent = ok.find((t) => t.not && t.ask?.on === "content");
             if (negatedContent !== undefined && positives.every((t) => t.ask?.on === "content")) {

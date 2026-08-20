@@ -97,8 +97,8 @@ test("a head is what OPENS a clause, whichever glue it takes; the same word insi
     assert.deepEqual(spelled("sound:count>2"), [
         ["sound:", "head"], ["count", "word"], [">", "op"], ["2", "number"],
     ]);
-    assert.deepEqual(spelled("model:{attach:chest}"), [
-        ["model:", "head"], ["{", "delim"], ["attach", "word"], [":", "op"], ["chest", "word"], ["}", "delim"],
+    assert.deepEqual(spelled("model:{point:chest}"), [
+        ["model:", "head"], ["{", "delim"], ["point", "word"], [":", "op"], ["chest", "word"], ["}", "delim"],
     ]);
     // A negation opens the term it excludes, so the head after it is still a head.
     assert.deepEqual(spelled("-model:fire")[1], ["model:", "head"]);

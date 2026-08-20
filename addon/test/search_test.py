@@ -54,6 +54,8 @@ PROBES = [
     # A comparison no property of a row-word claims is that row's count — the pair the braces spell — while a
     # property that claims it keeps its own reading. Both engines must draw the same line, glued and braced.
     "model:{attach>2}", "model:attach>2", "model:{display>2}", "model:{missile>2}", "model:{attach count>2}",
+    # The attach kind's own top-level door, and the shared point word behind it.
+    "attach:horse", "attach:{point:chest}", "model:{attach file:wolf}",
 ]
 """Queries across every column and most types, each answered by both engines."""
 
@@ -70,17 +72,19 @@ def count(engine: LuaRuntime, query: str) -> int:
 def first(engine: LuaRuntime, query: str, limit: int) -> list[int]:
     # language=Lua
     engine.execute(b"""
-    function FIRST(q, n)
-      local out = {}
-      local step = Epsilook.Search.Find(q)
-      for _ = 1, n do
-        local at, id = step()
-        if not at then break end
-        out[#out + 1] = id
-      end
-      return out
-    end
-    """)
+                   function FIRST(q, n)
+                       local out = {}
+                       local step = Epsilook.Search.Find(q)
+                       for _ = 1, n do
+                           local at, id = step()
+                           if not at then
+                               break
+                           end
+                           out[#out + 1] = id
+                       end
+                       return out
+                   end
+                   """)
     found = unwrap(lua_function(engine, b"FIRST")(query.encode("utf-8"), limit))
     # An empty Lua table is neither list nor mapping; a query with no answer is the empty list.
     return [] if found == {} else [int(str(v)) for v in as_list(found)]
@@ -89,15 +93,15 @@ def first(engine: LuaRuntime, query: str, limit: int) -> list[int]:
 def test_the_iterator_resumes_where_it_stopped(engine: LuaRuntime) -> None:
     # language=Lua
     engine.execute(b"""
-    function RESUME(q)
-      local step = Epsilook.Search.Find(q)
-      local a1, i1 = step()
-      local a2, i2 = step()
-      local again = Epsilook.Search.Find(q, a1 + 1)
-      local b2, j2 = again()
-      return a2 == b2 and i2 == j2
-    end
-    """)
+                   function RESUME(q)
+                       local step = Epsilook.Search.Find(q)
+                       local a1, i1 = step()
+                       local a2, i2 = step()
+                       local again = Epsilook.Search.Find(q, a1 + 1)
+                       local b2, j2 = again()
+                       return a2 == b2 and i2 == j2
+                   end
+                   """)
     assert lua_function(engine, b"RESUME")(b"model:missile") is True
 
 

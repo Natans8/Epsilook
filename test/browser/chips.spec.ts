@@ -76,10 +76,10 @@ test("a term alone in its alternation run takes the stranded or-edge with it", a
 test("a commit keeps the braces where shedding them would change the ask", async () => {
     // The colon-glued spelling reads as content, so the braces may not be shed on the settle. The single
     // pair draws as the lane, whose head cell is the negate toggle — the VALUE is what opens it.
-    await openWith("model:{attach:chest}");
+    await openWith("model:{point:chest}");
     await page.locator("[class*='settled']").getByText("chest").click();
     await barInput(page).blur();
-    await expectQuery(page, "model:{attach:chest}");
+    await expectQuery(page, "model:{point:chest}");
 });
 
 test("an invalid clause stays raw text and reopens raw, never wrapped", async () => {
@@ -103,12 +103,12 @@ test("focus returning to the resting bar brings the editing form back at the rem
 test("an inner x is right even when settling the same segment shifts every span inside it", async () => {
     // The URL text was never committed: settling it trims the scope's interior, so a span read from the render
     // points at the wrong characters. The term is named by index, so the removal lands where it was aimed.
-    await openWith("model:{ attach:chest attach:head }");
+    await openWith("model:{ point:chest point:head }");
     // The SECOND inner bind's mark: the marks read left to right, each at the tail of its own pill.
     await deletes().nth(1).click();
     await barInput(page).blur();
     // The survivor keeps its braces: the colon-glued spelling would ask a different question.
-    await expectQuery(page, "model:{attach:chest} ");
+    await expectQuery(page, "model:{point:chest} ");
 });
 
 test("Ctrl+A selects every chip rather than flattening the bar to raw text", async () => {

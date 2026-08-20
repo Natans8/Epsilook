@@ -236,7 +236,7 @@ export const ground = defineKind({
 });
 
 export const attach = defineKind({
-    column: modelColumn, word: "attach", group: "attach",
+    column: modelColumn, word: "attach", global: true, group: "attach",
     hint: t("tooltips:kind.attach.hint"),
     props: {
         file: corpus(TIER.asset, path),

@@ -85,16 +85,17 @@ describe("the shipped schema", () => {
 
     it("keeps most kind words off the top level, where the column is the noun", () => {
         // `model:mount` reads as a whole question; `mount:` alone does not say what a mount is being asked about.
-        for (const word of ["mount", "trail", "equipped", "ground", "attach", "keybind", "invis"]) {
+        for (const word of ["mount", "trail", "equipped", "ground", "keybind", "invis"]) {
             assert.equal(HEADS.has(word), false, `${word} should not be a top-level head`);
         }
     });
 
     it("calls the stuck-on-a-body category `attach`, its point KEYED `where` and SPOKEN `point`", () => {
-        // The kind is the verb a reader reaches for; the point property stopped colliding with it by moving
-        // aside. Its KEY stays `where` — the pack's storage name, which a spoken-word change never moves —
-        // and its WORD is `point`, one word for the point across every kind that has one.
+        // The kind is the verb a reader reaches for — a top-level door, earned — and the point property
+        // stopped colliding with it by moving aside. Its KEY stays `where` — the pack's storage name, which
+        // a spoken-word change never moves — and its WORD is `point`, one word for the point everywhere.
         assert.ok(KINDS.has("model.attach"));
+        assert.equal(HEADS.get("attach")?.role, "kind");
         for (const kindId of ["model.attach", "model.display", "model.item", "model.equipped", "model.barrage"]) {
             const held = KINDS.get(kindId);
             assert.ok(held !== undefined, kindId);

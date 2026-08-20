@@ -42,6 +42,7 @@
   },
   "scope": {
     "innerBindScope": "an axis inside a scope takes a value, not a scope",
+    "twoKinds": "a row is one kind — {{a}} and {{b}} never share one, so this can match nothing",
     "nested": "a scope cannot hold another scope",
     "emptyMeansAny": "{{word}}:{} means any {{word}} row — the same as {{word}}:*",
     "unclosedBeforeNext": "the scope was not closed — closed it before the next clause",

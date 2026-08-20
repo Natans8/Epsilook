@@ -42,6 +42,7 @@
   },
   "scope": {
     "innerBindScope": "",
+    "twoKinds": "",
     "nested": "",
     "emptyMeansAny": "",
     "unclosedBeforeNext": "",
