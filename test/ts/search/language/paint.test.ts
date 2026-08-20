@@ -63,6 +63,23 @@ test("a closed-vocabulary word is marked as one; corpus text is not", () => {
     assert.equal(runFor("model:{fire attach:chest}", "fire").vocab, undefined);
 });
 
+test("a doorless clause paints no doors: a colon inside a value is content, not a property", () => {
+    // `model:mount:horse` is one content ask — the parse gave the colon no meaning — so the highlight must not
+    // claim the property reading: the known word demotes to plain text and its colon goes quiet with it.
+    const runs = paint("model:mount:horse");
+    const mount = runs.find((run) => run.start === "model:".length);
+    assert.equal(mount?.kind, "word");
+    assert.equal(mount?.door, undefined);
+    assert.equal(mount?.tone, undefined);
+    assert.equal(runs.find((run) => run.start === "model:mount".length)?.kind, "word");
+    // An unknown word before a comparison inside a value is content too, and marks no door.
+    assert.equal(runFor("model:foo<bar", "foo").door, undefined);
+    // The same word inside a scope IS the property it looks like, and stays the door.
+    assert.equal(runFor("model:{mount:horse}", "mount").door, true);
+    // The words ABOUT the query keep their weight in a doorless clause: the wildcard and the any-word.
+    assert.equal(runFor("model:*", "*").kind, "meta");
+});
+
 test("a property is marked as the door it is, in its column's tone; a head is not a property", () => {
     const runs = paint("sound:count>2 model:{attach:chest}");
     const at = (word: string): Run | undefined =>

@@ -15,6 +15,7 @@ import {COMPARISON_STARTS, GRAMMAR, PREFIX_OPERATORS, spellingsOf} from "./gramm
 import {parse} from "./parse";
 import {HEADS} from "../schema/schema";
 import {fold, foldTypography} from "../text/normalize";
+import {escapeRegExp} from "../text/patterns";
 
 /** The role one run of query text plays. */
 export type RunKind = "head" | "meta" | "op" | "delim" | "quote" | "regex" | "number" | "word" | "space";
@@ -61,6 +62,9 @@ const OPS = new Set<string>([
 
 /** What a property opens: the bind, or the comparison it is being measured by. */
 const DOOR_GLUES = new Set<string>([GRAMMAR.bind, ...COMPARISON_STARTS]);
+
+/** A run made of nothing but the bind — the colon a doorless clause's value carries as plain text. */
+const BIND_ONLY = new RegExp(`^${escapeRegExp(GRAMMAR.bind)}+$`);
 
 /**
  * Whether a slash standing at `at` opens a pattern rather than being an ordinary character.
@@ -279,19 +283,38 @@ export function paint(text: string): Run[] {
         const column = ask.on === "plain" ? null
             : ask.on === "column" ? ask.column
                 : ask.on === "kind" ? ask.kind.column : ask.ref.kind.column;
+        // Only a row scope holds properties, so only there is a door live. Everywhere else a word the lexer
+        // drew loud — a known head glued to a colon, say — is the value's own text: `model:mount:horse` is one
+        // content ask, its colon meaningless, and painting `mount` as a property would claim a reading the
+        // parse did not make. The wildcard and the any-word stay loud: they are about the query wherever they
+        // stand.
+        const scoped = (ask.on === "column" || ask.on === "kind") && ask.test?.is === "scope";
+        if (!scoped) {
+            over(clause.span, (run) => {
+                const held = fold(text.slice(run.start, run.end));
+                if (run.kind === "meta" && held !== GRAMMAR.anyWord && held !== GRAMMAR.wildcard) {
+                    return {...run, kind: "word"};
+                }
+                if (run.kind === "op" && run.start > clause.span.start && BIND_ONLY.test(held)) {
+                    return {...run, kind: "word"};
+                }
+                return run;
+            });
+        }
         if (column !== null) {
             // An ENCLOSURE goes with the head: a brace or a group belongs to the clause it encloses, so it
             // wears that clause's colour. The alternation does not — `|` means the same thing wherever it
             // stands, and a universal token that changed colour by neighbourhood would be saying otherwise.
             over(clause.span, (run) => (run.kind === "head" || run.kind === "meta"
-                || (run.kind === "delim" && ENCLOSURES.has(text[run.start]))
+            || (run.kind === "delim" && ENCLOSURES.has(text[run.start]))
                 ? {...run, tone: column.key} : run));
         }
         if (clause.not) negate(clause.span);
         // A PROPERTY of the thing being asked about — `sound:count>2`, `model:{attach:chest}` — is a word about
         // the query rather than one of the data: the word is followed by the operator it opens, which is what
-        // tells it from a value word standing beside one. A head is already its own kind by here.
-        if (column !== null) {
+        // tells it from a value word standing beside one. A head is already its own kind by here. Only a scope
+        // holds properties at all, so a doorless clause marks none.
+        if (column !== null && scoped) {
             for (const [i, run] of runs.entries()) {
                 const next = runs[i + 1];
                 if (run.kind !== "word" || run.start < clause.span.start || run.end > clause.span.end) continue;

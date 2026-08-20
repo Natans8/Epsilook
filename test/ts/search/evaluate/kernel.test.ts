@@ -10,6 +10,7 @@ import {describe, it} from "node:test";
 
 import type {Ask} from "../../../../src/search/language/ast";
 import type {Dataset} from "../../../../src/search/evaluate/rows";
+import {formatQuery} from "../../../../src/search/index";
 
 import {answers, complement, DATA, EVERY, parsed} from "../world";
 
@@ -45,6 +46,24 @@ describe("the walk", () => {
 
     it("matches a phrase with punctuation and spacing folded, like any other token", () => {
         assert.deepEqual(ids('model:"right hand"'), [0, 1, 10]);
+    });
+
+    it("reads a colon inside a value as content, squashed like any bare token", () => {
+        // A second colon has no meaning, so the token is one content term and its squashed reading crosses the
+        // colon exactly as it crosses a space; the quoted spelling is the strict string, and separates.
+        assert.deepEqual(ids("model:right:hand"), [0, 1, 10]);
+        assert.deepEqual(ids('model:"right:hand"'), []);
+    });
+
+    it("answers the same set for a query and its formatted spellings", () => {
+        for (const query of [
+            "model:right:hand", 'model:"right:hand"', "sound:{kit:150}", "model:{fire -missile}",
+            "model:(fire|arcane)", "cast:instant",
+        ]) {
+            for (const tier of ["canonical", "written"] as const) {
+                assert.deepEqual(ids(formatQuery(parsed(query), tier)), ids(query), `${query} (${tier})`);
+            }
+        }
     });
 });
 

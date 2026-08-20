@@ -22,10 +22,17 @@ import type {AxisType} from "../vocabulary/value-types";
 import {TYPES} from "../vocabulary/value-types";
 import {notationOf, spellIn, spelledNotation} from "../vocabulary/units";
 
-/** Characters that would change a bare value's reading, whatever its position or type. */
+/**
+ * Characters that would change a bare value's reading, whatever its position or type.
+ *
+ * The bind is deliberately NOT one of them: a colon inside a value has no meaning — only a comparison glues an
+ * inner bind, and a value whose leading word would have bound never parses into a bare operand in the first
+ * place — so `model:mount:horse` re-reads as exactly the content it carries. Quoting it would not be an escape:
+ * quotes are strict, so the phrase flips the squashed substring reading to a verbatim one and changes the answer.
+ */
 const NEEDS_PHRASE = new RegExp(`[\\s${escapeRegExp([
     GRAMMAR.phrase, GRAMMAR.scope.open, GRAMMAR.scope.close,
-    GRAMMAR.group.open, GRAMMAR.group.close, GRAMMAR.or, GRAMMAR.wildcard, GRAMMAR.bind,
+    GRAMMAR.group.open, GRAMMAR.group.close, GRAMMAR.or, GRAMMAR.wildcard,
 ].join(""))}]`);
 
 /** Leading characters that would open an operator, a pattern or a negation instead of text. */

@@ -19,6 +19,8 @@ describe("formatQuery", () => {
             // Values whose bare spelling would re-read as structure keep their quotes.
             '"model:fire"', '"-fire"', 'name:"fi*re"', 'model:"/fire"', 'name:"1,2"', 'name:"<3"',
             String.raw`"a \\"`, "model:{fire|frost missile}",
+            // A colon inside a value has no meaning, so the bare spelling re-reads as itself.
+            "model:mount:horse", "sound:kit:150", 'model:"mount:horse"',
         ]) {
             const once = canonical(query);
             assert.equal(canonical(once), once, query);
@@ -69,6 +71,18 @@ describe("formatQuery", () => {
         assert.equal(canonical('name:"fi*re"'), 'name:"fi*re"');
         assert.equal(canonical('model:"/fire"'), 'model:"/fire"');
         assert.equal(canonical('name:"1,2"'), 'name:"1,2"');
+    });
+
+    it("keeps a value's colon bare: quoting is not an escape, it changes the ask", () => {
+        // The colon-glued shape keeps its content reading — only a comparison glues an inner bind — so the bare
+        // spelling re-reads as the same content, where the phrase would flip its squashed match to a verbatim one.
+        assert.equal(canonical("model:mount:horse"), "model:mount:horse");
+        assert.equal(canonical("sound:kit:150"), "sound:kit:150");
+        assert.equal(canonical("model:mount:horse|fire"), "model:(mount:horse|fire)");
+        // A one-term scope promotes to the bind form, which reads the colon the same way.
+        assert.equal(canonical("model:{foo:bar}"), "model:foo:bar");
+        // The reader who QUOTED chose the string, and that choice stays.
+        assert.equal(canonical('model:"mount:horse"'), 'model:"mount:horse"');
     });
 
     it("glues a scope term's alternation, which is the spelling a scope reads", () => {
