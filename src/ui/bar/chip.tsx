@@ -14,8 +14,8 @@
 import type {MouseEvent as ReactMouseEvent, ReactElement, ReactNode} from "react";
 import {createContext, Fragment, useContext, useMemo} from "react";
 import {useTranslation} from "react-i18next";
-import type {ChipView, LaneView, Piece, Span} from "../../search/index";
-import {describe, GRAMMAR, NEGATION, parse} from "../../search/index";
+import type {ChipView, LaneView, Piece, Run, Span} from "../../search/index";
+import {describe, GRAMMAR, NEGATION, paint, parse, runsWithin} from "../../search/index";
 import {Classed, Pattern} from "./classed";
 import styles from "./bar.module.css";
 
@@ -229,8 +229,19 @@ function SortArrow({descending, label, onPress}: {
  */
 export const ChipArt = createContext<Readonly<Record<string, string>>>({});
 
+/**
+ * The segment's painted runs, so every raw surface inside it takes a SLICE rather than painting itself.
+ *
+ * A fragment cannot classify itself into the same answer: lexically `attach:` is a top-level head and wears
+ * gold, while the query it was cut from knows it is a model door and wears blue. Drawn either way the same
+ * characters read as two different things depending on which surface the reader is looking at. Carried as
+ * context rather than threaded, because only the two leaves that draw raw text need it.
+ */
+export const ChipRuns = createContext<readonly Run[]>([]);
+
 function Pieces({pieces, text}: { readonly pieces: readonly Piece[]; readonly text: string }): ReactElement {
     const art = useContext(ChipArt);
+    const runs = useContext(ChipRuns);
     const out: ReactNode[] = [];
     for (let i = 0; i < pieces.length; i++) {
         const piece = pieces[i];
@@ -264,7 +275,8 @@ function Pieces({pieces, text}: { readonly pieces: readonly Piece[]; readonly te
         if (piece.is === "dead") {
             out.push(
                 <span key={i} className={styles.deadFrag}>
-                    <Classed text={text.slice(piece.span.start, piece.span.end)}/>
+                    <Classed text={text.slice(piece.span.start, piece.span.end)}
+                             runs={runsWithin(runs, piece.span)}/>
                 </span>,
             );
             continue;
@@ -374,6 +386,7 @@ function LaneEl({lane, warned, notes, text, act}: {
     readonly text: string;
     readonly act: SegmentActions;
 }): ReactElement {
+    const runs = useContext(ChipRuns);
     const {t} = useTranslation();
     return (
         <span
@@ -406,7 +419,8 @@ function LaneEl({lane, warned, notes, text, act}: {
                         <Fragment key={i}>
                             {joint}
                             <span className={styles.deadFrag} onClick={openItem}>
-                                <Classed text={text.slice(item.span.start, item.span.end)}/>
+                                <Classed text={text.slice(item.span.start, item.span.end)}
+                                         runs={runsWithin(runs, item.span)}/>
                             </span>
                         </Fragment>
                     );
@@ -466,6 +480,7 @@ function Raw({text, span, at, erred, selected}: {
     /** The bar's selection, in the segment's coordinates, or absent while nothing is selected. */
     readonly selected?: Span;
 }): ReactElement | null {
+    const runs = useContext(ChipRuns);
     if (text === "") return null;
     const covered = selected === undefined ? undefined
         : {
@@ -480,7 +495,7 @@ function Raw({text, span, at, erred, selected}: {
             data-at={at + span.start}
             data-plain=""
         >
-            <Classed text={text} selected={covered}/>
+            <Classed text={text} runs={runsWithin(runs, span)} selected={covered}/>
         </span>
     );
 }
@@ -499,6 +514,9 @@ export function SettledSegment({text, at, act, selected}: {
 }): ReactElement {
     const {t} = useTranslation();
     const views = useMemo(() => describe(parse(text)), [text]);
+    // Painted once for the whole segment: a chip's raw fragments are cut out of it, and a cut cannot be
+    // re-classified into the same answer as the query it came from.
+    const painted = useMemo(() => paint(text), [text]);
     const parts: ReactNode[] = [];
     let drawn = 0;
     /** One stretch of raw text, keyed by where it starts. */
@@ -565,5 +583,5 @@ export function SettledSegment({text, at, act, selected}: {
         drawn = view.span.end;
     });
     if (drawn < text.length) parts.push(raw(drawn, text.length, false));
-    return <>{parts}</>;
+    return <ChipRuns.Provider value={painted}>{parts}</ChipRuns.Provider>;
 }

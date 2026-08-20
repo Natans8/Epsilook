@@ -99,6 +99,16 @@ export interface ScopeTerm {
     readonly not: boolean;
     readonly state: "ok" | "incomplete";
     readonly ask: ScopeAsk | null;
+    /**
+     * The word that opened this term, kept where its value never arrived.
+     *
+     * The clause level already works this way — an incomplete clause carries the head it resolved and a null
+     * test, which is why `model:` still wears its column's colour. A term had nowhere to keep the same fact, so
+     * `model:{attach:}` forgot between two keystrokes that `attach` was a door at all, and the word went from
+     * coloured to plain and back as the value was typed. Set only where the bind RESOLVED: a word this scope
+     * cannot read is foreign, and is refused before it reaches here.
+     */
+    readonly door?: string;
 }
 
 /**

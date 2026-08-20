@@ -310,17 +310,25 @@ export function paint(text: string): Run[] {
         }
         if (clause.not) negate(clause.span);
         // A PROPERTY of the thing being asked about — `sound:count>2`, `model:{attach:chest}` — is a word
-        // about the query rather than one of the data. Only the binds the parse RESOLVED mark one: each ok
-        // term whose ask names a property or the count re-promotes its opening word, in the clause's tone. A
-        // foreign or broken bind marks nothing — painting it as a door claims a reading the parse refused.
+        // about the query rather than one of the data. Only the binds the parse RESOLVED mark one: a foreign
+        // bind marks nothing, because painting it as a door claims a reading the parse refused.
         if (column !== null && scoped && (ask.on === "column" || ask.on === "kind")
             && ask.test?.is === "scope") {
             for (const term of ask.test.terms.flat()) {
-                if (term.state !== "ok" || term.ask === null) continue;
-                // A kind word takes the same door when a value follows its glue: `attach:*` asks the kind for
-                // any value of its subject, which is the same door `attach:chest` opens. Reading the ask alone
-                // would paint the two apart, though the reader typed one word in one place.
-                if (term.ask.on !== "props" && term.ask.on !== "count" && term.ask.on !== "kindWord") continue;
+                // A door the reader has opened is a door before its value arrives. A term whose value is
+                // missing keeps the word it resolved, so the three keystrokes of `model:{attach:chest}` do not
+                // paint that word three ways — the missing value is drawn as the term's state, which is what
+                // the clause level has always done for `model:`.
+                if (term.state !== "ok") {
+                    if (term.door === undefined) continue;
+                } else if (term.ask === null) {
+                    continue;
+                    // A kind word takes the same door when a value follows its glue: `attach:*` asks the kind
+                    // for any value of its subject, the same door `attach:chest` opens. Reading the ask alone
+                    // would paint the two apart, though the reader typed one word in one place.
+                } else if (term.ask.on !== "props" && term.ask.on !== "count" && term.ask.on !== "kindWord") {
+                    continue;
+                }
                 const word = runs.find((run) => run.start >= term.span.start && run.start < term.span.end
                     && run.kind === "word");
                 const next = word === undefined ? undefined : runs[runs.indexOf(word) + 1];
@@ -333,8 +341,11 @@ export function paint(text: string): Run[] {
             }
         }
         // A kind word IS the vocabulary — `model:missile` names a kind rather than searching for the letters.
-        if (ask.on === "kind" && ask.test?.is === "exists") {
-            over(clause.span, (run) => (run.kind === "word" ? {...run, vocab: true} : run));
+        // It keeps its column's tone doing it: the same word opens a door one keystroke later, and a word of
+        // the LANGUAGE reads as one in both roles. The dot is what says it is standing as a value here.
+        if (ask.on === "kind" && ask.test?.is === "exists" && column !== null) {
+            over(clause.span, (run) => (run.kind === "word"
+                ? {...run, vocab: true, tone: column.key} : run));
         }
         const test = ask.on === "column" || ask.on === "kind" ? ask.test : null;
         if (test?.is !== "scope") continue;
@@ -346,8 +357,13 @@ export function paint(text: string): Run[] {
                 // The term's VALUE is what came from the vocabulary; the door that opened it did not. A word
                 // wearing both marks draws two underlines at once and says it is a value and a property in the
                 // same breath, so the door keeps its own mark and the blanket passes over it.
+                //
+                // A KIND word marked here is a word of the language stood in a value's place, so it keeps its
+                // column's tone the way the same word does when it opens a door. A vocabulary VALUE — an
+                // attachment point, an expansion — is data, and data wears no tone in any position.
+                const tone = inner.on === "kindWord" ? column?.key : undefined;
                 over(term.span, (run) => (run.kind === "word" && run.door !== true
-                    ? {...run, vocab: true} : run));
+                    ? {...run, vocab: true, ...(tone === undefined ? {} : {tone})} : run));
             }
         }
     }

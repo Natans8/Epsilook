@@ -909,7 +909,10 @@ class Parser {
                     if (this.mode === "final") {
                         pend.push({severity: "warning", message: i18n.t("diagnostics:bind.noValueIgnored", {word})});
                     }
-                    run.push({span: {start: termStart, end: vpos}, not: termNot, state: "incomplete", ask: null});
+                    run.push({
+                        span: {start: termStart, end: vpos}, not: termNot, state: "incomplete",
+                        ask: null, door: word,
+                    });
                     return {kind: "done", next: vpos};
                 }
                 const {main, extras} = this.interpretSegs(segs, bind.ctx, pend);

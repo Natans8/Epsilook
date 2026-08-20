@@ -131,3 +131,46 @@ test("a door never wears the value's vocabulary mark: one word says one thing", 
     assert.equal(runFor("model:{point:chest}", "point").vocab, undefined);
     assert.equal(runFor("model:{point:chest}", "chest").vocab, true);
 });
+
+test("a word reads one way through the keystrokes that build a clause around it", () => {
+    // The reader types `attach`, then the colon, then the value. The word meant the same thing throughout and
+    // was painted three ways: a gold vocabulary word, then nothing at all, then a toned door. The middle one
+    // was the parse dropping the door it had already resolved — its own diagnostic names `attach:` — and the
+    // outer two were a hue carrying a role the colon already carries.
+    const attach = (text: string): Run => runFor(text, "attach");
+    for (const text of ["model:{attach}", "model:{attach:}", "model:{attach:chest}"]) {
+        assert.equal(attach(text).tone, "model", text);
+    }
+    // Standing as a value it keeps the vocabulary's dotted mark; opening a door it does not.
+    assert.equal(attach("model:{attach}").vocab, true);
+    assert.equal(attach("model:{attach:}").door, true);
+    assert.equal(attach("model:{attach:chest}").door, true);
+    assert.equal(attach("model:{attach:chest}").vocab, undefined);
+});
+
+test("an unfinished value does not un-door the word that opened it, and invents no doors", () => {
+    // The clause level has always worked this way: `model:` keeps its column's colour and carries its state.
+    assert.equal(runFor("model:", "model").tone, "model");
+    assert.equal(runFor("model:", "model").state, "error");
+    // A term now does too — the door is resolved, only its value is missing.
+    assert.equal(runFor("model:{point:}", "point").door, true);
+    assert.equal(runFor("model:{point:}", "point").tone, "model");
+    // But only where the parse RESOLVED the word. A foreign bind and an unknown one stay plain: painting them
+    // would claim a reading that does not exist, which is the whole reason the demotion is there.
+    assert.equal(runFor("model:{draenei sound:}", "sound").door, undefined);
+    assert.equal(runFor("model:{draenei sound:}", "sound").tone, undefined);
+    assert.equal(runFor("model:{blerg:}", "blerg").door, undefined);
+    assert.equal(runFor("model:{blerg:}", "blerg").tone, undefined);
+});
+
+test("a word of the LANGUAGE is toned in either role; a word of the DATA never is", () => {
+    // A kind word is the language whether it answers or asks, so it keeps its column's tone as a value.
+    assert.equal(runFor("model:missile", "missile").tone, "model");
+    assert.equal(runFor("model:missile", "missile").vocab, true);
+    // An attachment point and an expansion are DATA that happens to come from a closed set: marked, never
+    // toned, so a tone in the raw text always means "this word is part of the query's structure".
+    assert.equal(runFor("model:{point:chest}", "chest").tone, undefined);
+    assert.equal(runFor("model:{point:chest}", "chest").vocab, true);
+    assert.equal(runFor("id:{xpac:legion}", "legion").tone, undefined);
+    assert.equal(runFor("id:{xpac:legion}", "legion").vocab, true);
+});
