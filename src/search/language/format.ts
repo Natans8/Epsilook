@@ -351,8 +351,13 @@ export function formatQuery(parsed: Parsed, tier: "canonical" | "written" = "can
  * would change what the reader sees — the order and how much of it — so every formatted query carries them.
  */
 export function directiveTexts(parsed: Parsed): string[] {
-    const out = parsed.sorts.map((sort) =>
-        `${GRAMMAR.sortWord}${GRAMMAR.bind}${sort.descending ? GRAMMAR.negate : ""}${headWord(sort.head)}`);
+    const out: string[] = [];
+    const doors = parsed.sorts.map((sort) => `${sort.descending ? GRAMMAR.negate : ""}${headWord(sort.head)}`);
+    // One door spells plainly; a sequence spells scoped, the concise form `sort:{name -cast}` reads back to.
+    if (doors.length === 1) out.push(`${GRAMMAR.sortWord}${GRAMMAR.bind}${doors[0]}`);
+    else if (doors.length > 1) {
+        out.push(`${GRAMMAR.sortWord}${GRAMMAR.bind}${GRAMMAR.scope.open}${doors.join(" ")}${GRAMMAR.scope.close}`);
+    }
     if (parsed.limit !== null) out.push(`${GRAMMAR.limitWord}${GRAMMAR.bind}${String(parsed.limit.value)}`);
     return out;
 }
@@ -383,7 +388,7 @@ function clauseTexts(parsed: Parsed, tier: Spelling): string[][] {
  */
 export function queryKey(parsed: Parsed): string {
     const directives = directiveTexts(parsed).join(" ");
-    return (directives === "" ? "" : directives + " ") + clauseTexts(parsed, "folded")
+    return (directives === "" ? "" : directives + "\u0000") + clauseTexts(parsed, "folded")
         .map((group) => group.toSorted().join(" "))
         .toSorted()
         .join(` ${GRAMMAR.or} `);

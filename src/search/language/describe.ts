@@ -123,11 +123,14 @@ export type ClauseView =
 }
     /**
      * A DIRECTIVE: it shapes the list rather than the set, so it draws apart from the ask chips — no column
-     * tone, its own neutral cell. A descending sort's value keeps the minus it is spelled with.
+     * tone, its own neutral cell. A descending sort's value keeps the minus it is spelled with, and a scoped
+     * sort — several doors on one span — is ONE view, since the bar draws each span once.
      */
     | {
     readonly form: "directive"; readonly span: Span; readonly notes: readonly string[];
-    readonly word: string; readonly value: string
+    readonly word: string; readonly value: string;
+    /** A sort's direction — the first door's, where a scope mixes them; absent on the limit. */
+    readonly descending?: boolean;
 };
 
 /** The word-vocabulary types: values from a closed set, marked apart from corpus text. */
@@ -450,12 +453,23 @@ function askView(ask: Ask, not: boolean): AskView | null {
  * @returns One {@link ClauseView} per entry of `parsed.clauses`.
  */
 export function describe(parsed: Parsed): ClauseView[] {
+    // A scoped sort parses to several directives sharing ONE span; the bar draws each span once, so they
+    // group back into one view whose value is the door sequence.
+    const sortViews: Extract<ClauseView, { form: "directive" }>[] = [];
+    for (const sort of parsed.sorts) {
+        const door = `${sort.descending ? GRAMMAR.negate : ""}${headWord(sort.head)}`;
+        const last = sortViews.at(-1);
+        if (last !== undefined && last.span.start === sort.span.start && last.span.end === sort.span.end) {
+            sortViews[sortViews.length - 1] = {...last, value: `${last.value} ${door}`};
+        } else {
+            sortViews.push({
+                form: "directive", span: sort.span, notes: [],
+                word: GRAMMAR.sortWord, value: door, descending: sort.descending,
+            });
+        }
+    }
     const directives: ClauseView[] = [
-        ...parsed.sorts.map((sort): ClauseView => ({
-            form: "directive", span: sort.span, notes: [],
-            word: GRAMMAR.sortWord,
-            value: `${sort.descending ? GRAMMAR.negate : ""}${headWord(sort.head)}`,
-        })),
+        ...sortViews,
         ...(parsed.limit === null ? [] : [{
             form: "directive" as const, span: parsed.limit.span, notes: [],
             word: GRAMMAR.limitWord, value: String(parsed.limit.value),

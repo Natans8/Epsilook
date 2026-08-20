@@ -22,6 +22,7 @@
     "tools/simplify.ts",
     "tools/translate.ts",
     "tools/schema.ts",
+    "tools/vacuous.ts",
     // The test suite is the same engine on the same runtime — Node, no DOM —
     // so it belongs to this target rather than to a third one. A directory
     // rather than a file list: tests are added constantly, and a test that

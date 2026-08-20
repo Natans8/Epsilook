@@ -53,6 +53,16 @@ test("a top-level word offers the doors it could open, from its first character"
     assert.equal(offers.groups[0].offers[0].insert, "model:");
 });
 
+test("a top-level bind whose word opens no door says so, with the real doors unnarrowed", () => {
+    const offers = at("attach:chest", 12);
+    assert.equal(offers.takes?.what.includes("attach"), true);
+    // The doors that DO exist are the answer; the unknown word narrows nothing.
+    assert.ok(words(offers, "axes").includes("model"));
+    // The known-door and escaped spellings stay out of it.
+    assert.equal(at("model:fire", 10).takes?.what.includes("opens no door") ?? false, false);
+    assert.equal(at(String.raw`\attach:chest`, 13).takes, null);
+});
+
 test("a door reads by every spelling it has, and writes only its own", () => {
     // `animation` and `animations` both reach the anim door; the offer still spells it `anim`.
     const offers = at("animat", 6);

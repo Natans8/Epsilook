@@ -23,7 +23,9 @@
     "result_one": "spell",
     "result_other": "spells",
     "searching": "searching…",
-    "elapsed": "{{ms}} ms"
+    "elapsed": "{{ms}} ms",
+    "showingFirst": "showing the first {{shown}}",
+    "showingLast": "showing the last {{shown}}"
   },
   "bar": {
     "placeholder": "Search spells — a word, or an axis like scale:",
@@ -36,7 +38,9 @@
     "include": "Ask for this again",
     "plaintext": "Plain text",
     "plaintextHint": "Show the query as the text you typed",
-    "plaintextShort": "text"
+    "plaintextShort": "text",
+    "sortAsc": "Ascending — turn the order round",
+    "sortDesc": "Descending — turn the order round"
   },
   "surface": {
     "history": "Recent searches",

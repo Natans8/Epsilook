@@ -715,6 +715,12 @@ export function offersAt(plan: BarPlan, caret: number, history: readonly string[
     // there, which is the answer rather than the complaint.
     const foreign = bound && inner === null;
 
+    // The same answer at the TOP level: a bind whose word opens no door. The doors that do exist stand
+    // unnarrowed, since the word typed is not a way into any of them.
+    const topWord = slot.slice(term.start + (negated ? 1 : 0), term.start + Math.max(bind, 0));
+    const topForeign = context === null && bind >= 0 && at > term.start + bind
+        && /^[\p{L}\p{N}_]+$/u.test(topWord);
+
     // The property whose value is being composed, whichever door reached it: a property's own door, an inner
     // bind, or a KIND's word — which is the door to its subject, the first property it declares.
     const subject = context?.role === "kind" ? Object.entries(context.kind.props)[0] : undefined;
@@ -729,7 +735,10 @@ export function offersAt(plan: BarPlan, caret: number, history: readonly string[
                 }
                 : null);
     const groups = ((): OfferGroup[] => {
-        if (context === null) return typed.length < DOOR_THRESHOLD ? [] : group("axes", doorOffers(), typed);
+        if (context === null) {
+            if (topForeign) return group("axes", doorOffers(), "");
+            return typed.length < DOOR_THRESHOLD ? [] : group("axes", doorOffers(), typed);
+        }
         // Past an inner bind the caret is inside one property's value, where nothing but its own words answer;
         // a property's head is the same position reached through its own door.
         if (context.role === "prop" || inner !== null) return wordsGroup(composing, [], typed, vocab);
@@ -751,16 +760,18 @@ export function offersAt(plan: BarPlan, caret: number, history: readonly string[
         ];
     })();
     const scope = context !== null && context.role !== "prop" ? context : null;
-    const takes = foreign && scope !== null
-        ? {
-            title: boundWord,
-            what: i18n.t("diagnostics:scope.foreignProperty", {
-                kind: scope.role === "column" ? scope.column.key : wordOf(scope.kind),
-                word: boundWord,
-            }),
-            how: "",
-        }
-        : composing === null ? null : takesOf(composing.prop, composing.name, composing.what);
+    const takes = topForeign
+        ? {title: topWord, what: i18n.t("diagnostics:clause.unknownDoor", {word: topWord}), how: ""}
+        : foreign && scope !== null
+            ? {
+                title: boundWord,
+                what: i18n.t("diagnostics:scope.foreignProperty", {
+                    kind: scope.role === "column" ? scope.column.key : wordOf(scope.kind),
+                    word: boundWord,
+                }),
+                how: "",
+            }
+            : composing === null ? null : takesOf(composing.prop, composing.name, composing.what);
 
     // The ghost is drawn in the slot's own mirror, so it may only ever be appended: anywhere but the end it would
     // shift the mirrored text out from under the field's own caret.

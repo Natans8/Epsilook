@@ -1,5 +1,6 @@
 {
   "clause": {
+    "unknownDoor": "\"{{word}}\" opens no door",
     "negatesNothing": "\"{{symbol}}\" negates nothing",
     "empty": "{{what}} {{why}}",
     "emptySubject": "the value",

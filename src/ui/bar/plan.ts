@@ -12,7 +12,8 @@
  */
 import type {Span} from "../../search/index";
 import {
-    classify, describe, equivalent, escapedAt, fold, GRAMMAR, HEADS, parse, PREFIX_OPERATORS, spellingsOf,
+    classify, describe, directiveTexts, equivalent, escapedAt, fold, GRAMMAR, HEADS, parse, PREFIX_OPERATORS,
+    spellingsOf,
 } from "../../search/index";
 
 /** The transformed head of the open segment, when it has one. */
@@ -811,6 +812,27 @@ export function toggleNegation(text: string, at: number): Keystroke {
         ? text.slice(0, at) + text.slice(at + 1)
         : text.slice(0, at) + GRAMMAR.negate + text.slice(at);
     return {text: next, caret: at, operation: true};
+}
+
+/**
+ * The arrow affordance on a sort chip: the directive's segment with every door turned the other way round,
+ * respelled through the parser and the formatter rather than by touching characters. A scoped sequence flips
+ * whole, exactly as the exclusion before the sort word turns it whole.
+ *
+ * @param text The query text.
+ * @param at Any offset inside the sort directive's segment.
+ * @returns The new text with the caret after the respelled directive, or null where the segment is no sort.
+ */
+export function toggleSort(text: string, at: number): Commit | null {
+    const seg = segmentAt(text, at);
+    const parsed = parse(text.slice(seg.start, seg.end), {mode: "final"});
+    if (parsed.sorts.length === 0 || parsed.limit !== null) return null;
+    const flipped = directiveTexts({
+        ...parsed,
+        sorts: parsed.sorts.map((sort) => ({head: sort.head, descending: !sort.descending, span: sort.span})),
+    }).join(" ");
+    const next = text.slice(0, seg.start) + flipped + text.slice(seg.end);
+    return {text: next, caret: seg.start + flipped.length, removed: false};
 }
 
 /**

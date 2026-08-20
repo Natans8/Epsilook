@@ -1431,16 +1431,97 @@ function Parser:bound(start, negated, head, vpos, limit)
 	return stop
 end
 
+--- One sort door resolved: the word's own minus reads as descending, and the
+-- exclusion before the sort word INVERTS that -- `-sort:-cast` turns back to
+-- ascending, on the single door and on each scope member alike.
+-- @return a directive without its span, or nil where nothing resolves
+local function sortMember(text, negated)
+	local grammar = Schema.grammar
+	local minus = text:sub(1, #grammar.negate) == grammar.negate
+	if minus then
+		text = text:sub(#grammar.negate + 1)
+	end
+	local head = text ~= "" and Schema.HeadOf(Text.fold(text)) or nil
+	if not head then
+		return nil
+	end
+	return { head = head, descending = negated ~= minus }
+end
+
+--- The refusal every unreadable sort shares.
+function Parser:refuseSort(span, negated)
+	local grammar = Schema.grammar
+	local example = grammar.sortWord .. grammar.bind
+	self:push(span, negated, "invalid", nil, {
+		{
+			message = grammar.sortWord
+				.. " takes a head word, as in "
+				.. example
+				.. "name or "
+				.. example
+				.. grammar.negate
+				.. "model",
+		},
+	})
+end
+
+--- A scoped sort: the doors between the braces become directives in written
+-- order. A member nothing resolves, an empty scope, or one that never closes
+-- refuses the whole directive.
+function Parser:sortScope(start, negated, vpos, limit)
+	local grammar = Schema.grammar
+	local members = {}
+	local i = vpos + 1
+	local closed = false
+	local sound = true
+	while i <= limit do
+		local c = self:char(i)
+		if isWs(c) then
+			i = i + 1
+		elseif c == grammar.scope.close then
+			closed = true
+			i = i + 1
+			break
+		else
+			local j = i
+			while j <= limit and not isWs(self:char(j)) and self:char(j) ~= grammar.scope.close do
+				j = j + 1
+			end
+			local member = sortMember(sub(self.text, i, j - 1), negated)
+			if member then
+				members[#members + 1] = member
+			else
+				sound = false
+			end
+			i = j
+		end
+	end
+	local span = { start = start, stop = i - 1 }
+	if not closed or not sound or #members == 0 then
+		self:refuseSort(span, negated)
+		return i
+	end
+	for _, member in ipairs(members) do
+		member.span = span
+		self.sorts[#self.sorts + 1] = member
+	end
+	return i
+end
+
 --- An ordering directive: `sort:` and a door word, which must resolve to
 -- a head -- a column, a kind or a property. The exclusion before the word
 -- or before the sort word means the other way round, and both together mean
 -- it still: `sort:-cast`, `-sort:cast`, `-sort:-cast`. The directive is kept
 -- apart from the clauses, since it selects nothing. A bare `sort` orders by
--- the default door, the spell's id.
+-- the default door, the spell's id. A scope holds a sequence of doors, each
+-- with its own direction: `sort:{name -cast}` is `sort:name sort:-cast`.
 -- @param vpos where the door word starts, or nil for a bare sort
 -- @return the position to continue from
 function Parser:sorted(start, negated, vpos, limit)
 	local grammar = Schema.grammar
+	if vpos and self:char(vpos) == grammar.scope.open then
+		return self:sortScope(start, negated, vpos, limit)
+	end
 	local text, stop = grammar.sortDefault, vpos
 	if vpos then
 		local segs
@@ -1449,49 +1530,47 @@ function Parser:sorted(start, negated, vpos, limit)
 	else
 		stop = start + #grammar.sortWord + (negated and #grammar.negate or 0)
 	end
-	local descending = negated
-	if text:sub(1, #grammar.negate) == grammar.negate then
-		descending = true
-		text = text:sub(#grammar.negate + 1)
-	end
-	local head = text ~= "" and Schema.HeadOf(Text.fold(text)) or nil
 	local span = { start = start, stop = stop - 1 }
-	if not head then
-		local example = grammar.sortWord .. grammar.bind
-		self:push(span, negated, "invalid", nil, {
-			{
-				message = grammar.sortWord
-					.. " takes a head word, as in "
-					.. example
-					.. "name or "
-					.. example
-					.. grammar.negate
-					.. "model",
-			},
-		})
+	local member = sortMember(text, negated)
+	if not member then
+		self:refuseSort(span, negated)
 		return stop
 	end
-	self.sorts[#self.sorts + 1] = { head = head, descending = descending, span = span }
+	member.span = span
+	self.sorts[#self.sorts + 1] = member
 	return stop
 end
 
 --- The results-limiting directive: the limit word and a whole number. A
 -- display directive like the sort -- it selects nothing, the count stays the
--- query's truth, and only what is listed trims. The last one written wins;
--- a negated or numberless one is refused, since neither has a reading.
+-- query's truth, and only what is listed trims. A minus takes the count from
+-- the end of the ordered answer instead, and the exclusion before the word
+-- means the same; where several limits are written the smallest count
+-- consumes the larger. A numberless one is refused.
 function Parser:limited(start, negated, vpos, limit)
 	local grammar = Schema.grammar
 	local segs, stop = self:token(vpos, limit)
 	local text = segs[1] and segs[1].form == "bare" and segs[1].text or ""
+	local last = negated
+	if sub(text, 1, #grammar.negate) == grammar.negate then
+		last = true
+		text = sub(text, #grammar.negate + 1)
+	end
 	local count = text:match("^%d+$") and tonumber(text) or nil
 	local span = { start = start, stop = stop - 1 }
-	if negated or not count or count < 1 then
+	if not count or count < 1 then
 		self:push(span, negated, "invalid", nil, {
 			{ message = grammar.limitWord .. " takes how many to list, as in " .. grammar.limitWord .. grammar.bind .. "20" },
 		})
 		return stop
 	end
-	self.limit = count
+	if self.limit == nil or count < math.abs(self.limit) then
+		if last then
+			self.limit = -count
+		else
+			self.limit = count
+		end
+	end
 	return stop
 end
 
@@ -1729,11 +1808,19 @@ function Query.Format(parsed)
 		groups[#groups + 1] = table.concat(words, " ")
 	end
 	local out = table.concat(groups, " " .. grammar["or"] .. " ")
+	local doors = {}
 	for _, sort in ipairs(parsed.sorts) do
-		local word = grammar.sortWord
-			.. grammar.bind
-			.. (sort.descending and grammar.negate or "")
-			.. Schema.HeadWord(sort.head)
+		doors[#doors + 1] = (sort.descending and grammar.negate or "") .. Schema.HeadWord(sort.head)
+	end
+	if #doors > 0 then
+		-- One door spells plainly; a sequence spells scoped, the concise form.
+		local body = #doors == 1 and doors[1]
+			or (grammar.scope.open .. table.concat(doors, " ") .. grammar.scope.close)
+		local word = grammar.sortWord .. grammar.bind .. body
+		out = out == "" and word or (out .. " " .. word)
+	end
+	if parsed.limit then
+		local word = grammar.limitWord .. grammar.bind .. tostring(parsed.limit)
 		out = out == "" and word or (out .. " " .. word)
 	end
 	return out

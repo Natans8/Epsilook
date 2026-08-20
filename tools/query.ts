@@ -51,7 +51,9 @@ for (const d of parsed.diagnostics) toStderr("diagnostic:", JSON.stringify(d));
 const found = run(parsed, dataset);
 const spells = parsed.sorts.length > 0 ? order(found, parsed.sorts, dataset)
     : [...found].toSorted((a, b) => loaded.spells.ids[a] - loaded.spells.ids[b]);
-const listed = parsed.limit === null ? spells : spells.slice(0, parsed.limit.value);
+// A negative limit lists the END of the ordered answer: `first:-5` is the last five.
+const listed = parsed.limit === null ? spells
+    : parsed.limit.value >= 0 ? spells.slice(0, parsed.limit.value) : spells.slice(parsed.limit.value);
 const ids = listed.map((at) => loaded.spells.ids[at]);
 const limit = Math.max(0, Number(values.limit) || 0);
 const nameOf = (id: number): string => {

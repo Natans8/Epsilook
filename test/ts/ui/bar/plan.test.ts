@@ -9,8 +9,22 @@ import test from "node:test";
 import {
     backspaceAtStart, commitSegment, deleteAtEnd, firstDiff, grownSegment, insertAtGap, keywordBehind, openHead,
     pairDelimiter, planAt, removeSegment, removeSelection, removeTerm, scopedForm, scopeGesture, segmentAt,
-    segmentsOf, selectionOver, selectionStep, slotStart, termStarts,
+    segmentsOf, selectionOver, selectionStep, slotStart, termStarts, toggleSort,
 } from "../../../../src/ui/bar/plan";
+
+test("the sort arrow turns the whole directive round, respelled through the formatter", () => {
+    assert.deepEqual(toggleSort("model:fire sort:cast", 12),
+        {text: "model:fire sort:-cast", caret: 21, removed: false});
+    assert.deepEqual(toggleSort("model:fire sort:-cast", 12),
+        {text: "model:fire sort:cast", caret: 20, removed: false});
+    // A scoped sequence flips whole, each door's own direction inverted.
+    assert.equal(toggleSort("sort:{name -cast} fire", 3)?.text, "sort:{-name cast} fire");
+    // The exclusion spelling collapses into the door's minus on the way through.
+    assert.equal(toggleSort("-sort:cast", 0)?.text, "sort:cast");
+    // A segment that is no sort — plain text, a chip, the limit — offers no turn.
+    assert.equal(toggleSort("model:fire sort:cast", 3), null);
+    assert.equal(toggleSort("first:5", 3), null);
+});
 
 test("terms start at zero and after each balanced space; a trailing space opens an empty tail", () => {
     assert.deepEqual(termStarts(""), [0]);

@@ -101,6 +101,14 @@ type ScopeHead = Exclude<Head, { role: "prop" }>;
 
 /* ------------------------------------------------------------------ the parser */
 
+/** One sort door resolved: the head its word names, and whether its own minus reads as descending. */
+function sortMember(text: string): { head: Head; minus: boolean } | null {
+    const minus = text.startsWith(GRAMMAR.negate);
+    const word = minus ? text.slice(GRAMMAR.negate.length) : text;
+    const head = word !== "" ? HEADS.get(fold(word)) : undefined;
+    return head === undefined ? null : {head, minus};
+}
+
 class Parser {
     private readonly clauses: Clause[] = [];
     private readonly diagnostics: Diagnostic[] = [];
@@ -234,15 +242,19 @@ class Parser {
                 if (this.text[j] === GRAMMAR.bind) return this.bound(start, not, head, j + 1, limit);
                 if (COMPARISON_STARTS.has(this.text[j])) return this.bound(start, not, head, j, limit);
             }
+            // An unknown word before a colon stays ordinary text — 12,477 spell names carry one, so pasting a
+            // name must never be a syntax error. The control surface is what says the word opens no door.
         }
         return this.term(start, not, i, limit);
     }
 
     /**
      * An ordering directive: `sort:` and a door word, which must resolve to a head. The exclusion before the
-     * word or before the sort word means the other way round, and both together mean it still — `sort:-cast`,
-     * `-sort:cast`, `-sort:-cast`. The directive is kept apart from the clauses, since it selects nothing.
-     * A bare `sort` orders by the default door, the spell's id.
+     * word INVERTS the door's own direction — `-sort:cast` is `sort:-cast`, and `-sort:-cast` turns back to
+     * `sort:cast`. The directive is kept apart from the clauses, since it selects nothing.
+     * A bare `sort` orders by the default door, the spell's id. A scope holds a SEQUENCE of doors, each with
+     * its own direction — `sort:{name -cast}` is `sort:name sort:-cast` said once — and the exclusion before
+     * the sort word INVERTS each member's own direction: `-sort:{name -cast}` is `sort:{-name cast}`.
      *
      * @param start Where the directive's text began, negation included.
      * @param not Whether the sort word itself was negated.
@@ -251,6 +263,7 @@ class Parser {
      * @returns The position to continue from.
      */
     private sorted(start: number, not: boolean, vpos: number | null, limit: number): number {
+        if (vpos !== null && this.text[vpos] === GRAMMAR.scope.open) return this.sortScope(start, not, vpos, limit);
         let text: string = GRAMMAR.sortDefault;
         let stop = start + GRAMMAR.sortWord.length + (not ? GRAMMAR.negate.length : 0);
         if (vpos !== null) {
@@ -259,36 +272,82 @@ class Parser {
             text = only !== undefined && only.form === "bare" ? only.text : "";
             stop = token.end;
         }
-        let descending = not;
-        if (text.startsWith(GRAMMAR.negate)) {
-            descending = true;
-            text = text.slice(GRAMMAR.negate.length);
-        }
-        const head = text !== "" ? HEADS.get(fold(text)) : undefined;
         const span: Span = {start, end: stop};
-        if (head === undefined) {
-            const state: ClauseState = this.mode === "final" ? "invalid" : "incomplete";
-            const pend: Pending[] = this.mode === "final"
-                ? [{
-                    severity: "error",
-                    message: i18n.t("diagnostics:sort.takesDoor",
-                        {word: GRAMMAR.sortWord, bind: GRAMMAR.bind, negate: GRAMMAR.negate}),
-                }]
-                : [];
-            this.push(span, not, state, null, pend);
+        const member = sortMember(text);
+        if (member === null) {
+            this.refuseSort(span, not);
             return stop;
         }
-        this.sorts.push({head, descending, span});
+        // The exclusion before the sort word inverts the door's own direction, here as in the scope.
+        this.sorts.push({head: member.head, descending: not !== member.minus, span});
         return stop;
+    }
+
+    /** The refusal every unreadable sort shares: an error in final text, quiet while typing. */
+    private refuseSort(span: Span, not: boolean): void {
+        const state: ClauseState = this.mode === "final" ? "invalid" : "incomplete";
+        const pend: Pending[] = this.mode === "final"
+            ? [{
+                severity: "error",
+                message: i18n.t("diagnostics:sort.takesDoor",
+                    {word: GRAMMAR.sortWord, bind: GRAMMAR.bind, negate: GRAMMAR.negate}),
+            }]
+            : [];
+        this.push(span, not, state, null, pend);
+    }
+
+    /**
+     * A scoped sort: the doors between the braces become directives in written order. A member nothing resolves,
+     * an empty scope, or one that never closes refuses the whole directive — a sequence half of which orders is
+     * worse than one that says so.
+     *
+     * @param start Where the directive's text began, negation included.
+     * @param not Whether the sort word itself was negated, which INVERTS each member's own direction.
+     * @param vpos The opening brace.
+     * @param limit The end of the text.
+     * @returns The position to continue from.
+     */
+    private sortScope(start: number, not: boolean, vpos: number, limit: number): number {
+        const members: { head: Head; minus: boolean }[] = [];
+        let i = vpos + 1;
+        let closed = false;
+        let sound = true;
+        while (i < limit) {
+            const c = this.text[i];
+            if (isWs(c)) {
+                i++;
+                continue;
+            }
+            if (c === GRAMMAR.scope.close) {
+                closed = true;
+                i++;
+                break;
+            }
+            let j = i;
+            while (j < limit && !isWs(this.text[j]) && this.text[j] !== GRAMMAR.scope.close) j++;
+            const member = sortMember(this.text.slice(i, j));
+            if (member === null) sound = false;
+            else members.push(member);
+            i = j;
+        }
+        const span: Span = {start, end: i};
+        if (!closed || !sound || members.length === 0) {
+            this.refuseSort(span, not);
+            return i;
+        }
+        for (const member of members) this.sorts.push({head: member.head, descending: not !== member.minus, span});
+        return i;
     }
 
     /**
      * The results-limiting directive: `first:` and a whole number. A display directive like the sort — it
-     * selects nothing, the count stays the query's truth, and only what is listed trims. The last one written
-     * wins; a negated or numberless one is refused, since neither has a reading.
+     * selects nothing, the count stays the query's truth, and only what is listed trims. A minus takes the
+     * count from the END of the ordered answer instead — `first:-5` lists the last five — and the exclusion
+     * before the word means the same, as it does on the sort. Where several limits are written the smallest
+     * count consumes the larger, whichever end each takes from; a numberless one is refused.
      *
      * @param start Where the directive's text began, negation included.
-     * @param not Whether the directive was negated, which nothing can mean.
+     * @param not Whether the directive was negated, which takes the count from the end.
      * @param vpos Where the number starts.
      * @param limit The end of the text.
      * @returns The position to continue from.
@@ -296,10 +355,15 @@ class Parser {
     private limited(start: number, not: boolean, vpos: number, limit: number): number {
         const token = this.scan.token(vpos, limit, {inScope: false, groups: false});
         const [only] = token.segs;
-        const text = only !== undefined && only.form === "bare" ? only.text : "";
+        let text = only !== undefined && only.form === "bare" ? only.text : "";
+        let last = not;
+        if (text.startsWith(GRAMMAR.negate)) {
+            last = true;
+            text = text.slice(GRAMMAR.negate.length);
+        }
         const count = /^\d+$/.test(text) ? Number(text) : null;
         const span: Span = {start, end: token.end};
-        if (not || count === null || count < 1) {
+        if (count === null || count < 1) {
             const state: ClauseState = this.mode === "final" ? "invalid" : "incomplete";
             const pend: Pending[] = this.mode === "final"
                 ? [{
@@ -311,7 +375,8 @@ class Parser {
             this.push(span, not, state, null, pend);
             return token.end;
         }
-        this.limit = {value: count, span};
+        const value = last ? -count : count;
+        if (this.limit === null || count < Math.abs(this.limit.value)) this.limit = {value, span};
         return token.end;
     }
 

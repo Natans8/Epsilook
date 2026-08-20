@@ -13,7 +13,7 @@ import {useMemo, useRef, useState} from "react";
 import type {BarPlan, Commit, Keystroke} from "./plan";
 import {
     commitSegment, firstDiff, grownSegment, insertAtGap, planAt, removeSegment, removeTerm, scopedForm,
-    scopeGesture, segmentAt, slotStart, toggleNegation,
+    scopeGesture, segmentAt, slotStart, toggleNegation, toggleSort,
 } from "./plan";
 import type {CaretRequest} from "./open";
 import type {SegmentActions} from "./chip";
@@ -393,6 +393,14 @@ export function useEditingSession(
             const flipped = toggleNegation(step.text, seg.start + item.span.start);
             clearSelection();
             restAfter(flipped.text, segmentAt(flipped.text, seg.start).end);
+        },
+        toggleSort: (): void => {
+            const {step, shifted} = pressCommit(start);
+            const turned = toggleSort(step.text, shifted);
+            if (turned === null) return;
+            pushUndo(step.text);
+            clearSelection();
+            restAfter(turned.text, turned.caret);
         },
         grow: (flavour): void => {
             const {step, shifted} = pressCommit(start);

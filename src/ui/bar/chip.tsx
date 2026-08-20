@@ -55,6 +55,8 @@ export interface SegmentActions {
     readonly negateOpen: () => void;
     /** Flips one of a lane's terms, by its index among the items. */
     readonly negateTerm: (index: number) => void;
+    /** Turns a sort directive's order round, every door of a scoped sequence together. */
+    readonly toggleSort: () => void;
 }
 
 /** The column tones, by key; a column without a declared tone renders neutral. */
@@ -176,6 +178,42 @@ function Affordance({label, onPress}: {
 /** The alternation connective, wherever a gate or a lane run meets the next — the typed word, never a symbol. */
 function Or(): ReactElement {
     return <span className={styles.vOr}>{GRAMMAR.orWord}</span>;
+}
+
+/**
+ * The direction arrow on a sort capsule: it says which way the order runs, and a press turns it round — the
+ * arrow is the invert gesture, the text beside it stays the edit gesture. Geometry, not a glyph, for the same
+ * centring reason as the delete mark.
+ */
+function SortArrow({descending, label, onPress}: {
+    readonly descending: boolean;
+    readonly label: string;
+    readonly onPress: () => void;
+}): ReactElement {
+    return (
+        <span className={styles.markSlot}>
+            <button
+                type="button"
+                className={styles.sortArrow}
+                aria-label={label}
+                tabIndex={-1}
+                onMouseDown={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }}
+                onClick={(e) => {
+                    e.stopPropagation();
+                    onPress();
+                }}
+            >
+                <svg className={styles.mark} viewBox="0 0 12 12" aria-hidden="true" focusable="false">
+                    {descending
+                        ? <path d="M6 2.8 V9.2 M3.4 6.8 L6 9.4 L8.6 6.8"/>
+                        : <path d="M6 9.2 V2.8 M3.4 5.2 L6 2.6 L8.6 5.2"/>}
+                </svg>
+            </button>
+        </span>
+    );
 }
 
 /**
@@ -463,6 +501,7 @@ export function SettledSegment({text, at, act, selected}: {
     /** The stretch of this segment the bar's selection covers, in the segment's own coordinates. */
     readonly selected?: Span;
 }): ReactElement {
+    const {t} = useTranslation();
     const views = useMemo(() => describe(parse(text)), [text]);
     const parts: ReactNode[] = [];
     let drawn = 0;
@@ -488,9 +527,17 @@ export function SettledSegment({text, at, act, selected}: {
         } else if (view.form === "directive") {
             // A directive shapes the list, not the set: its capsule stands apart from every ask chip — no
             // column tone — while the text inside stays the reader's own characters, hit-testable as ever.
+            // A sort carries its direction arrow: the arrow inverts, the text edits.
             parts.push(
                 <span key={i} className={styles.directive}>
                     {raw(view.span.start, view.span.end, false)}
+                    {view.descending !== undefined && (
+                        <SortArrow
+                            descending={view.descending}
+                            label={t(view.descending ? "bar.sortDesc" : "bar.sortAsc")}
+                            onPress={act.toggleSort}
+                        />
+                    )}
                 </span>,
             );
         } else {

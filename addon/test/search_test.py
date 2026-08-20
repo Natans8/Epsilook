@@ -42,19 +42,14 @@ PROBES = [
     'name:"-a"', 'name:"anti-magic"', "name:antimagic", 'name:"\\""', 'model:"fire missile"', 'desc:"you take"',
     # The escape shields the next character everywhere: no door, no negation, no phrase, no alternation.
     "\\model:fire", "\\-fire", 'name:\\" fire', "model:fire\\|frost", "model:{a\\}b}",
-    # Sort directives: both engines must key, direct and tiebreak alike, id order included.
+    # Sort directives: both engines must key, direct and tiebreak alike, id order included. The name probe pins
+    # the single-kind subject rule (a subtext never keys), the cast probe the instant complement (no delivery row
+    # keys nought, a nought cast keys nothing), the xpac probe the ladder rank, and the scope the sequence form.
     "model:missile sort:-name", "fire sort:id", "model:* sort:-model",
+    "model:missile sort:name", "xpac:wotlk sort:cast", "model:missile sort:xpac",
+    "model:missile sort:{-xpac name}",
 ]
 """Queries across every column and most types, each answered by both engines."""
-
-PARITY_PENDING = [
-    # Counts agree on both; the ORDERINGS diverge at the key-reading level and the reconciliation is its own
-    # dive: ascending name disagrees from the second id (359859, then lua 78532 against web 53786 — a fold or
-    # empty-name rule difference the descending probe does not reach), and cast keys disagree on which spells
-    # carry a value at all (lua starts 22966 where web starts 21745). Move one back to PROBES when it agrees.
-    "model:missile sort:name", "xpac:wotlk sort:cast",
-]
-"""Sort probes whose orderings still diverge between the engines; excluded from the loop until reconciled."""
 
 
 def method(api: LuaTable, name: bytes) -> LuaFunction:

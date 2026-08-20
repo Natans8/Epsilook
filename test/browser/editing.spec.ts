@@ -53,12 +53,7 @@ test("commit simplifies to its fixpoint — nested braces shed in one settle", a
     await expectQuery(page, "model:fire ");
 });
 
-// FIXME: a keystroke straight after entering a chip can land in the PREVIOUS session's input — a traced run
-// showed the first Backspace's handler holding the stale plan {head: null, slot: ""} while the visible slot
-// held the chip's value, so the press died in an input that had nothing to delete. The whole-keyword rule
-// itself is pinned by unit tests and the inner-bind cell below; this cell is the reproduction of the stale
-// -session defect and turns back on when it is fixed.
-test.fixme("boundary Backspace peels the braces, then takes the whole keyword in one press", async () => {
+test("boundary Backspace peels the braces, then takes the whole keyword in one press", async () => {
     await seed(page, "model:fire", "sound:bell");
     // Entered from the front, the way the Delete and Escape cells enter — arrows land on the side they came
     // from, so one ArrowRight from the front gap stands at the first chip's slot start.
@@ -79,9 +74,11 @@ test.fixme("boundary Backspace peels the braces, then takes the whole keyword in
     await expectQuery(page, "fire sound:bell ");
     expect(await slot(page)).toMatchObject({start: 0});
 
-    // One undo brings the keyword back whole.
+    // One undo brings the keyword back whole — landing as an OPEN chip at the change, per the traversal
+    // ruling, so the query wears the editing braces and the slot holds the restored value.
     await page.keyboard.press("Control+z");
-    await expectQuery(page, "model:fire sound:bell ");
+    await expectQuery(page, "model:{fire} sound:bell ");
+    expect(await slot(page)).toMatchObject({value: "fire"});
 });
 
 test("Backspace straight after an inner bind takes that keyword whole, at any depth", async () => {

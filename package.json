@@ -19,6 +19,7 @@
     "battery": "node tools/build.mjs --cli && node tools/battery.mjs",
     "lint": "oxlint --type-aware",
     "surface": "node tools/build.mjs --cli && node tools/surface.mjs",
+    "vacuous": "node tools/build.mjs --cli && node tools/vacuous.mjs",
     "translate": "node tools/build.mjs --cli && node tools/translate.mjs",
     "schema": "node tools/build.mjs --cli && node tools/schema.mjs"
   },

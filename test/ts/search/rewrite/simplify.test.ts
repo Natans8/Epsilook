@@ -172,6 +172,14 @@ describe("standalone suggestions", () => {
             assert.deepEqual(answers(offer.parsed), answers(input), offer.rule.id);
         }
     });
+
+    it("R19 stands alone too: the dead sort drops and the clauses stay as written", () => {
+        const offers = suggestions(parsed("model:{fire} sort:cast sort:-cast"));
+        const offer = offers.find((held) => held.rule.id === "R19");
+        assert.ok(offer !== undefined);
+        assert.equal(formatQuery(offer.parsed), "model:fire sort:cast");
+        assert.deepEqual(suggestions(parsed("fire sort:cast sort:id")).map((held) => held.rule.id), []);
+    });
 });
 
 describe("equivalence reads through simplification", () => {
@@ -180,6 +188,11 @@ describe("equivalence reads through simplification", () => {
         assert.ok(equivalent(parsed("model:{fire}"), parsed("model:fire")));
         assert.ok(equivalent(parsed("spell:{cast>=2s cast<=5s}"), parsed("cast:2s-5s")));
         assert.ok(equivalent(parsed("missile:*"), parsed("model:{missile}")));
+        // R19 and R20: a dead sort is no sort, and of two limits only the smallest was ever the query.
+        assert.ok(equivalent(parsed("fire sort:name sort:-name"), parsed("fire sort:name")));
+        assert.ok(equivalent(parsed("fire first:20 first:5"), parsed("fire first:5")));
+        assert.ok(!equivalent(parsed("fire sort:name"), parsed("fire sort:-name")));
+        assert.ok(!equivalent(parsed("fire first:5"), parsed("fire first:-5")));
     });
 
     it("calls a query that constrains nothing equivalent to the empty query", () => {

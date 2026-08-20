@@ -7,11 +7,11 @@
  * a kind door whose rows can repeat keys by how many rows the spell has; a one-row column keys by its first
  * kind's subject, which is what sorting by it means — the spell's name, its id.
  */
-import type {Head} from "../schema/schema";
 import type {SortDirective} from "../language/ast";
-import type {Kind, Prop} from "../schema/kinds";
+import type {Kind} from "../schema/kinds";
 import {kindsOf} from "../schema/schema";
 import {fold} from "../text/normalize";
+import {ordinal, ordinalRank} from "../vocabulary/value-types";
 import type {Dataset, Row, Stored} from "./rows";
 
 /** One spell's key on one door: a folded string, a number, or nothing to be ordered by. */
@@ -28,12 +28,28 @@ function keyOf(stored: Stored | undefined): Key {
     return typeof text === "string" && text !== "" ? fold(text) : null;
 }
 
-/** The extreme of a spell's values on one property of one kind, in the sort's direction; null with none. */
-function extreme(rows: readonly Row[], kind: Kind, name: string, descending: boolean): Key {
+/** A rung's key is its rank on the ladder: expansions order by age, never by how their names spell. */
+function rungKey(stored: Stored | undefined): Key {
+    const key = keyOf(stored);
+    if (typeof key !== "string") return key;
+    const rank = ordinalRank(key);
+    return rank >= 0 ? rank : null;
+}
+
+/**
+ * The key of a spell's values on one property of one kind: the extreme in the sort's direction, null with none.
+ *
+ * A single kind keys by its subject row — the first of the kind — never by an extreme over secondary rows: a
+ * spell sorts by its name, not by whichever of its name and subtext happens to fold lower.
+ */
+function extreme(
+    rows: readonly Row[], kind: Kind, name: string, descending: boolean, read: (stored: Stored | undefined) => Key,
+): Key {
     let best: Key = null;
     for (const row of rows) {
         if (row.kind !== kind) continue;
-        const value = keyOf(row.props[name]);
+        const value = read(row.props[name]);
+        if (kind.single === true) return value;
         if (value === null) continue;
         if (best === null || (descending ? value > best : value < best)) best = value;
     }
@@ -71,7 +87,8 @@ function keyReader(sort: SortDirective, dataset: Dataset): (spell: number) => Ke
     const of = kind;
     if (name === undefined) return (spell) => source.rows(spell).filter((row) => row.kind === of).length;
     const prop = name;
-    return (spell) => extreme(source.rows(spell), of, prop, sort.descending);
+    const read = of.props[prop]?.types[0] === ordinal ? rungKey : keyOf;
+    return (spell) => extreme(source.rows(spell), of, prop, sort.descending, read);
 }
 
 /**

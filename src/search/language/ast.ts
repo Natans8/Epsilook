@@ -167,7 +167,9 @@ export interface Parsed {
     readonly sorts: readonly SortDirective[];
     /**
      * How many results to list, or null for all of them. A display directive: the count stays the query's
-     * truth, and only what is LISTED trims. The last one written wins, and the span is that one's.
+     * truth, and only what is LISTED trims. Negative counts from the END of the ordered answer — `first:-5`
+     * lists the last five. Where several limits are written the smallest count consumes the larger, whichever
+     * end each takes from, and the span is the winner's.
      */
     readonly limit: { readonly value: number; readonly span: Span } | null;
     readonly diagnostics: readonly Diagnostic[];

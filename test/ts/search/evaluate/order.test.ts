@@ -26,7 +26,7 @@ describe("the sort directives", () => {
     it("a prop door orders by the value, ascending by default and the other way negated", () => {
         const up = ordered("model:missile sort:name");
         const down = ordered("model:missile sort:-name");
-        assert.deepEqual([...up].reverse(), down);
+        assert.deepEqual(up.toReversed(), down);
         // The name kind's subject keys the spell column, so the first spell is the alphabetically first name.
         const byId = ordered("model:missile sort:id");
         assert.deepEqual(byId, [...byId].toSorted((a, b) => a - b));
@@ -42,5 +42,25 @@ describe("the sort directives", () => {
     it("several directives apply in written order, and the tiebreak is the spell's own order", () => {
         const spells = ordered("model:* sort:-model sort:id");
         assert.equal(new Set(spells).size, spells.length);
+    });
+
+    it("a single kind keys by its subject row: a spell sorts by its name, never by its subtext", () => {
+        const up = ordered("sort:name");
+        // Silence's subtext folds before every name; keying off it would put the spell first.
+        assert.equal(up[0], 10);
+        assert.equal(up.at(-1), 11);
+    });
+
+    it("a spell with no value on the door sorts last whichever direction", () => {
+        const up = ordered("sort:cast");
+        const down = ordered("sort:-cast");
+        // The instants key nought, the casts follow by time, and the castless spells close both orders.
+        assert.deepEqual(up, [2, 4, 0, 1, 3, 5, 6, 7, 8, 9, 10, 11]);
+        assert.deepEqual(down, [1, 0, 2, 4, 3, 5, 6, 7, 8, 9, 10, 11]);
+    });
+
+    it("an ordinal door keys by its rank on the ladder, not by how its rungs spell", () => {
+        // Alphabetical rungs would open on bfa; the ladder opens on classic.
+        assert.deepEqual(ordered("sort:xpac"), [0, 1, 11, 2, 9, 3, 7, 4, 10, 5, 8, 6]);
     });
 });

@@ -68,6 +68,17 @@ def test_format_writes_the_operator_in_place_of_the_colon(engine: LuaRuntime) ->
     assert formatted(engine, "fire or frost") == "fire | frost"
 
 
+def test_the_limit_keeps_the_smallest_and_a_minus_counts_from_the_end(engine: LuaRuntime) -> None:
+    assert parsed(engine, "fire first:20 first:5")["limit"] == 5
+    assert parsed(engine, "fire first:5 first:20")["limit"] == 5
+    assert parsed(engine, "fire first:-5")["limit"] == -5
+    assert parsed(engine, "fire -first:5")["limit"] == -5
+    assert parsed(engine, "fire first:3 first:-5")["limit"] == 3
+    assert parsed(engine, "fire top:7")["limit"] == 7
+    assert "limit" not in parsed(engine, "fire")
+    assert parsed(engine, "first:x")["problems"]
+
+
 def test_a_unit_written_anywhere_in_a_range_is_the_phrase_s_own(engine: LuaRuntime) -> None:
     """A bare bound beside a spelled one takes the sibling's notation before
     either is read: `2ms-5` is two milliseconds to five of them, and read alone
@@ -109,9 +120,9 @@ def test_a_sort_directive_is_kept_apart_from_the_clauses(engine: LuaRuntime) -> 
     fmt = lua_function(engine, b"Epsilook.Query.Format")
     parse = lua_function(engine, b"Epsilook.Query.Parse")
     assert fmt(parse(b"name:fire sort:-id")) == b"name:fire sort:-id"
-    # Either exclusion, and both, mean the other way; bare sort is sort:id.
+    # The exclusion inverts the door's own direction; bare sort is sort:id.
     assert fmt(parse(b"-sort:id")) == b"sort:-id"
-    assert fmt(parse(b"-sort:-id")) == b"sort:-id"
+    assert fmt(parse(b"-sort:-id")) == b"sort:id"
     assert fmt(parse(b"fire sort")) == b"fire sort:id"
     assert fmt(parse(b"-sort")) == b"sort:-id"
     # A word that is no head is refused, and a sort alone still asks.
@@ -119,3 +130,16 @@ def test_a_sort_directive_is_kept_apart_from_the_clauses(engine: LuaRuntime) -> 
     api = lua_table(engine, b"Epsilook")
     empty = cast(LuaFunction, api[b"IsQueryEmpty"])
     assert empty(api, lua_function(engine, b"Epsilook.Query.Parse")(b"sort:id")) is False
+
+
+def test_a_scope_holds_a_sort_sequence_and_it_is_the_canonical_form(engine: LuaRuntime) -> None:
+    tree = parsed(engine, "fire sort:{name -cast}")
+    sorts = cast(list[Record], tree["sorts"])
+    assert [s["descending"] for s in sorts] == [False, True]
+    assert formatted(engine, "fire sort:name sort:-cast") == "fire sort:{name -cast}"
+    assert formatted(engine, "fire sort:{name -cast}") == "fire sort:{name -cast}"
+    assert formatted(engine, "fire -sort:{name -cast} first:-5") == "fire sort:{-name cast} first:-5"
+    # Half a sequence ordering would lie: an unknown member, an empty scope and an unclosed one all refuse.
+    for bad in ("sort:{name zzz}", "sort:{}", "sort:{name"):
+        assert parsed(engine, bad)["problems"], bad
+        assert parsed(engine, bad).get("sorts") in ([], {}, None), bad

@@ -616,6 +616,14 @@ local paging
 -- @param text the query as typed, for the header
 -- @param fromIndex the spell row to resume from
 local function page(tree, text, fromIndex)
+	-- The query's own limit caps what the pager lists. The end-counting form
+	-- needs the whole answer before its first line, which a forward pager
+	-- cannot give; the sort's other direction brings that end to the front.
+	local limit = tree.limit
+	if limit and limit < 0 then
+		say(Shell.Said("first:-" .. -limit .. " lists the end; turn the sort round and list the front"))
+		return
+	end
 	-- The answer to the command comes first, before the job does anything,
 	-- so a search that takes frames to find its first hit is never a silence.
 	local sorted = Epsilook:IsQuerySorted(tree)
@@ -630,8 +638,13 @@ local function page(tree, text, fromIndex)
 		local axes = Epsilook:GetPartAxes()
 		local step = Epsilook:FindSpells(tree, fromIndex, Shell.SLICE)
 		local spell, counts = {}, {}
+		local seenBefore = fromIndex and paging and paging.seen or 0
+		local want = Shell.Page()
+		if limit and limit - seenBefore < want then
+			want = limit - seenBefore
+		end
 		local shown, resume = 0, nil
-		while shown < Shell.Page() do
+		while shown < want do
 			local at, spellID, after = step()
 			if at == nil then
 				break
@@ -651,8 +664,8 @@ local function page(tree, text, fromIndex)
 			paging = nil
 			return
 		end
-		local seen = (fromIndex and paging and paging.seen or 0) + shown
-		if shown < Shell.Page() then
+		local seen = seenBefore + shown
+		if shown < Shell.Page() or (limit and seen >= limit) then
 			paging = nil
 			say(Shell.Said(seen .. " for " .. text))
 			return

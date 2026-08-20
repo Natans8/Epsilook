@@ -28,6 +28,8 @@ const row = (kind: Kind, props: Record<string, Stored>): Row => ({kind, props});
 interface Spec {
     readonly id: number;
     readonly name: string;
+    /** A subtext, carried as a second name row exactly as the pack dataset carries it. */
+    readonly sub?: string;
     readonly desc?: string;
     readonly xpac: string;
     readonly delivery?: Record<string, Stored>;
@@ -95,11 +97,13 @@ const WORLD: readonly Spec[] = [
         id: 110, name: "Arcane Missile", xpac: "cata",
         model: [m("spell/arcane/arcane_missile.m2", "right hand", "chest", "parabola")],
     },
-    /* 11 */ {id: 111, name: "Silence", xpac: "classic"},
+    /* 11 — a subtext that folds before every name, so a sort keying off it would surface */
+    {id: 111, name: "Silence", sub: "aasub", xpac: "classic"},
 ];
 
 function spellRows(spec: Spec): readonly Row[] {
     const rows: Row[] = [row(nameKind, {text: spec.name})];
+    if (spec.sub !== undefined) rows.push(row(nameKind, {text: spec.sub}));
     if (spec.desc !== undefined) rows.push(row(description, {text: spec.desc}));
     if (spec.delivery !== undefined) rows.push(row(delivery, spec.delivery));
     return rows;

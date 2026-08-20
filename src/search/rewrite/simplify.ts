@@ -23,8 +23,9 @@
  * through simplification: two queries ask the same question exactly when their simplified canonical forms agree.
  */
 import {formatQuery, queryKey} from "../language/format";
-import type {Parsed} from "../language/ast";
+import type {Parsed, SortDirective} from "../language/ast";
 import {parse} from "../language/parse";
+import type {Head} from "../schema/schema";
 import type {Rule} from "./rules";
 import {RULES} from "./rules";
 import type {Ctx, Tree} from "./tree";
@@ -95,13 +96,44 @@ function fixpoint(tree: Tree, rules: readonly Rule[], ctx: Ctx): { tree: Tree; a
  * @param parsed A parse, from {@link ./parse!parse}.
  * @returns The simplified parse, the rules that fired, and any notes for the user.
  */
+/** One sort directive's door, said the same way whichever spelling reached it. */
+function doorOf(head: Head): string {
+    if (head.role === "column") return `c:${head.column.key}`;
+    if (head.role === "kind") return `k:${head.kind.id}`;
+    return `p:${head.kind.id}.${head.name}`;
+}
+
+/**
+ * R19's rewrite: the sorts with every dead directive dropped, or `null` where all of them live.
+ *
+ * A later sort on a door an earlier directive already orders is dead whichever direction it takes: the only pairs
+ * it could reorder are those the earlier key ties, and equal keys on a door are equal both ways round.
+ */
+function liveSorts(sorts: readonly SortDirective[]): SortDirective[] | null {
+    const seen = new Set<string>();
+    const live = sorts.filter((sort) => {
+        const door = doorOf(sort.head);
+        if (seen.has(door)) return false;
+        seen.add(door);
+        return true;
+    });
+    return live.length === sorts.length ? null : live;
+}
+
 export function simplify(parsed: Parsed): Simplified {
     const notes = new Set<string>();
     const {tree, applied} = fixpoint(treeOf(parsed), RULES, {note: (text) => notes.add(text)});
+    // The rules rewrite CLAUSES; the directives ride beside the tree, and only R19 — a dead sort dropping —
+    // touches them, since any other shedding of what orders and trims the display would change what the reader
+    // sees. The limit needs no rule: the parse itself keeps only the smallest (R20).
+    const sorts = liveSorts(parsed.sorts);
+    if (sorts !== null) applied.push("R19");
     if (applied.length === 0) return {parsed, applied, notes: [...notes]};
-    // The rules rewrite CLAUSES; the directives ride through untouched, since a simplification that shed what
-    // orders and trims the display would change what the reader sees.
-    return {parsed: {...toParsed(tree), sorts: parsed.sorts, limit: parsed.limit}, applied, notes: [...notes]};
+    return {
+        parsed: {...toParsed(tree), sorts: sorts ?? parsed.sorts, limit: parsed.limit},
+        applied,
+        notes: [...notes],
+    };
 }
 
 /** One rule's standalone effect on a query: what the query becomes under that rule alone. */
@@ -133,6 +165,12 @@ export function suggestions(parsed: Parsed): readonly Suggestion[] {
     const before = queryKey(toParsed(tree));
     const offers: Suggestion[] = [];
     for (const rule of RULES) {
+        if (rule.id === "R19") {
+            const live = liveSorts(parsed.sorts);
+            if (live === null) continue;
+            offers.push({rule, parsed: {...toParsed(tree), sorts: live, limit: parsed.limit}, notes: []});
+            continue;
+        }
         if (rule.apply === undefined) continue;
         const notes = new Set<string>();
         const result = fixpoint(tree, [rule], {note: (text) => notes.add(text)});

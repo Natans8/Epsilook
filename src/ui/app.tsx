@@ -84,9 +84,16 @@ export function App({info, searcher}: {
     // groups, so `xpac:zzz` constrained nothing and reported the whole pack — a wrong answer wearing the
     // authority of a number. The bar already squiggles the clause; the count says what is wrong instead of
     // counting. Only in final text: while typing, anything a further keystroke could rescue stays quiet.
-    const broken = useMemo(
-        () => parse(text, {mode: "final"}).diagnostics.filter((d: Diagnostic) => d.severity === "error"),
-        [text]);
+    const finalParse = useMemo(() => parse(text, {mode: "final"}), [text]);
+    const broken = finalParse.diagnostics.filter((d: Diagnostic) => d.severity === "error");
+    // A limit trims what is LISTED, never the count — invisible while the count is the only display, so the
+    // status line says what the directive did.
+    const showing = (count: number): string => {
+        const limit = finalParse.limit;
+        if (limit === null) return "";
+        const shown = Math.min(Math.abs(limit.value), count).toLocaleString();
+        return `, ${limit.value >= 0 ? t("count.showingFirst", {shown}) : t("count.showingLast", {shown})}`;
+    };
 
     return (
         <div className={styles.page}>
@@ -152,6 +159,7 @@ export function App({info, searcher}: {
                         {broken.length > 0 ? broken[0].message
                             : result !== null && (
                             `${result.count.toLocaleString()} ${t("count.result", {count: result.count})}`
+                            + showing(result.count)
                             + `, ${t("count.elapsed", {ms: result.ms})}`
                         )}
                     </div>

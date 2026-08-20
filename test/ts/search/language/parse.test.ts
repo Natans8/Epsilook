@@ -118,6 +118,8 @@ describe("plain search", () => {
     });
 
     it("an unknown word before a colon is ordinary text, never an error", () => {
+        // 12,477 spell names carry a colon, so pasting one must never be a syntax error. The control surface
+        // is what says the word opens no door, while the text still searches.
         assert.deepEqual(valueOf(ok("foo:bar")), {op: "contains", operand: {text: "foo:bar"}});
         const parsed = parse("Hero: Illidan");
         assert.equal(parsed.clauses.length, 2);
@@ -778,6 +780,7 @@ const VALID_FIXTURES: readonly string[] = [
     "model：火", "name:Огненный", "Огненный", "name:al'ar", "name:al’ar",
     "model<=4", "scale>50", "cast<2", "name=Fireball", "model:{count<=4}", "a=b",
     "name:/^fire/", "model:/beam|chain/", "model:{/^spells/ fire}", String.raw`name:/a\/b/`, "/fire/",
+    "fire sort:-name first:20", "model:fire sort:{name -cast} first:-5", "-sort:-id",
 ];
 
 describe("the truncation fuzz: a prefix of a valid query is never an error", () => {
@@ -985,15 +988,32 @@ it("reads juxtaposition as alternation on a kind that cannot repeat", () => {
 
 describe("the directives: sort orders and first trims, and neither selects anything", () => {
     it("sort takes a door, negation on either side means descending, and bare sort is the default door", () => {
-        const one = parse("fire sort:name");
-        assert.equal(one.clauses.length, 1, "the directive is no clause");
-        assert.equal(one.sorts.length, 1);
-        assert.equal(one.sorts[0].descending, false);
-        for (const spelled of ["sort:-cast", "-sort:cast", "-sort:-cast"]) {
+        const sorted = parse("fire sort:name");
+        assert.equal(sorted.clauses.length, 1, "the directive is no clause");
+        assert.equal(sorted.sorts.length, 1);
+        assert.equal(sorted.sorts[0].descending, false);
+        for (const spelled of ["sort:-cast", "-sort:cast"]) {
             assert.equal(parse(spelled).sorts[0]?.descending, true, spelled);
         }
+        // The exclusion INVERTS the door's own direction, so the two minuses turn back.
+        assert.equal(parse("-sort:-cast").sorts[0]?.descending, false);
         assert.equal(parse("sort").sorts[0]?.head.role, "column");
         assert.deepEqual(parse("fire sort:name sort:-model").sorts.map((s) => s.descending), [false, true]);
+    });
+
+    it("a scope holds a sort sequence, each door with its own direction", () => {
+        assert.deepEqual(parse("fire sort:{name -cast}").sorts.map((s) => s.descending), [false, true]);
+        // The scoped spelling is the canonical form of a sequence, and the two spellings converge on it.
+        assert.equal(formatQuery(parse("fire sort:name sort:-cast")), "fire sort:{name -cast}");
+        assert.equal(formatQuery(parse("fire sort:{name -cast}")), "fire sort:{name -cast}");
+        // The directive's own exclusion inverts each member's direction.
+        assert.deepEqual(parse("fire -sort:{name -cast}").sorts.map((s) => s.descending), [true, false]);
+        // Half a sequence ordering would lie: an unknown member refuses the whole directive, and so does an
+        // empty or unclosed scope.
+        for (const bad of ["sort:{name zzz}", "sort:{}", "sort:{name"]) {
+            assert.equal(parse(bad).sorts.length, 0, bad);
+            assert.equal(parse(bad).diagnostics.filter((d) => d.severity === "error").length, 1, bad);
+        }
     });
 
     it("a sort door nothing resolves is refused in final text, quiet while typing", () => {
@@ -1003,19 +1023,29 @@ describe("the directives: sort orders and first trims, and neither selects anyth
         assert.deepEqual(parse("sort:zzz", {mode: "typing"}).diagnostics, []);
     });
 
-    it("first takes a whole number, the last one written wins, and the synonyms reach it", () => {
+    it("first takes a whole number, the smallest consumes the larger, and the synonyms reach it", () => {
         assert.equal(parse("fire first:20").limit?.value, 20);
         assert.equal(parse("fire first:20 first:5").limit?.value, 5);
+        assert.equal(parse("fire first:5 first:20").limit?.value, 5);
         assert.equal(parse("fire limit:3").limit?.value, 3);
         assert.equal(parse("fire top:7").limit?.value, 7);
         assert.equal(parse("fire").limit, null);
         assert.equal(parse("first:x").diagnostics.filter((d) => d.severity === "error").length, 1);
-        assert.equal(parse("-first:2").diagnostics.filter((d) => d.severity === "error").length, 1);
+    });
+
+    it("a minus takes the count from the end, on the number or on the word, and the smallest still wins", () => {
+        assert.equal(parse("fire first:-5").limit?.value, -5);
+        assert.equal(parse("fire -first:5").limit?.value, -5);
+        assert.equal(parse("fire -first:-5").limit?.value, -5);
+        assert.equal(parse("fire first:-3 first:5").limit?.value, -3);
+        assert.equal(parse("fire first:3 first:-5").limit?.value, 3);
+        assert.equal(parse("first:-x").diagnostics.filter((d) => d.severity === "error").length, 1);
     });
 
     it("the formatter carries the directives, and the round trip holds", () => {
         const text = "fire sort:-name first:20";
         assert.equal(formatQuery(parse(text)), text);
+        assert.equal(formatQuery(parse("fire first:-5")), "fire first:-5");
     });
 });
 

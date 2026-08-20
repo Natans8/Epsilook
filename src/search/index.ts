@@ -78,7 +78,7 @@ export {describe, glyphOf, NEGATION} from "./language/describe";
 export type {QueryWords} from "./vocabulary/locale-words";
 export {applyQueryWords, QUERY_WORD_LANGUAGES} from "./language/query-words";
 
-export {formatQuery, operandText, queryKey, unbracedTerm} from "./language/format";
+export {directiveTexts, formatQuery, operandText, queryKey, unbracedTerm} from "./language/format";
 
 export type {Boundary, Rule, RuleExample, RuleTier} from "./rewrite/rules";
 export {KEPT, RULES} from "./rewrite/rules";

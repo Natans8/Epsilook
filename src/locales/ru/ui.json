@@ -23,7 +23,9 @@
     "result_one": "",
     "result_other": "",
     "searching": "",
-    "elapsed": ""
+    "elapsed": "",
+    "showingFirst": "",
+    "showingLast": ""
   },
   "bar": {
     "placeholder": "",
@@ -36,7 +38,9 @@
     "include": "",
     "plaintext": "",
     "plaintextHint": "",
-    "plaintextShort": ""
+    "plaintextShort": "",
+    "sortAsc": "",
+    "sortDesc": ""
   },
   "surface": {
     "history": "",

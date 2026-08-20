@@ -636,10 +636,18 @@ SPELL_VALUES["spell.spell"] = function(cols, prop, cache)
 	if prop.name == "cast" then
 		local castMs = delivery.castMs
 		return function(spell)
-			-- A spell with no delivery row has no value here: matching reads
-			-- absence as no row, and the sort's law is nothing last.
+			-- The matching law read backwards: no delivery row is the instant
+			-- complement, a cast of nought, while a row whose cast is nought is
+			-- a channel-only spell with no cast value to be ordered by.
 			local at = rowOf(Reader.number(blob, ids, spell))
-			return at and Reader.number(deliveryBlob, castMs, at) or nil
+			if at == nil then
+				return 0
+			end
+			local cast = Reader.number(deliveryBlob, castMs, at)
+			if cast > 0 then
+				return cast
+			end
+			return nil
 		end
 	elseif prop.name == "channel" then
 		local flags, durMs = delivery.flags, delivery.durMs

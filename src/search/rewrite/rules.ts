@@ -757,6 +757,27 @@ export const RULES: readonly Rule[] = Object.freeze([
             {from: "model:{fire count:<4}", to: "model:{fire count<4}"},
         ],
     },
+    // Applied by the simplify driver over the directives, not by the fixpoint: the tree the rules rewrite holds
+    // clauses alone, and the directives ride beside it.
+    {
+        id: "R19", name: "dead-sort", tier: "simplify",
+        law: i18n.t("rules:law.R19"),
+        examples: [
+            {from: "fire sort:name sort:-name", to: "fire sort:name"},
+            {from: "fire sort:{cast cast id}", to: "fire sort:{cast id}"},
+        ],
+    },
+    // The parse itself consumes: a Parsed carries at most one limit, so nothing is left to rewrite.
+    {
+        id: "R20", name: "smallest-limit", tier: "parse",
+        law: i18n.t("rules:law.R20"),
+        examples: [{from: "fire first:20 first:5", to: "fire first:5"}],
+    },
+    {
+        id: "R21", name: "sort-fusion", tier: "format",
+        law: i18n.t("rules:law.R21"),
+        examples: [{from: "fire sort:name sort:-cast", to: "fire sort:{name -cast}"}],
+    },
 ]);
 
 /** Every boundary: the rewrites deliberately not performed, and why each would be wrong. */
