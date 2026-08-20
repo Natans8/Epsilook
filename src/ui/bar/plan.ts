@@ -12,7 +12,7 @@
  */
 import type {Span} from "../../search/index";
 import {
-    classify, describe, equivalent, fold, GRAMMAR, HEADS, parse, PREFIX_OPERATORS, spellingsOf,
+    classify, describe, equivalent, escapedAt, fold, GRAMMAR, HEADS, parse, PREFIX_OPERATORS, spellingsOf,
 } from "../../search/index";
 
 /** The transformed head of the open segment, when it has one. */
@@ -64,7 +64,8 @@ export function termStarts(text: string): number[] {
     let depth = 0;
     for (let at = 0; at < text.length; at++) {
         const ch = text[at];
-        if (ch === GRAMMAR.escape && quote) {
+        // The escape shields the next character everywhere outside a regex, not only inside a phrase.
+        if (ch === GRAMMAR.escape) {
             at += 1;
             continue;
         }
@@ -256,7 +257,7 @@ export function planAt(text: string, openAt: number): BarPlan {
 function closePhrase(interior: string): string {
     let quote = false;
     for (let at = 0; at < interior.length; at++) {
-        if (interior[at] === GRAMMAR.escape && quote) at += 1;
+        if (interior[at] === GRAMMAR.escape) at += 1;
         else if (interior[at] === GRAMMAR.phrase) quote = !quote;
     }
     return quote ? interior + GRAMMAR.phrase : interior;
@@ -278,7 +279,8 @@ function closerAt(interior: string): number {
     let depth = 1;
     for (let at = 0; at < interior.length; at++) {
         const ch = interior[at];
-        if (ch === GRAMMAR.escape && quote) {
+        // The escape shields the next character everywhere outside a regex, not only inside a phrase.
+        if (ch === GRAMMAR.escape) {
             at += 1;
             continue;
         }
@@ -384,9 +386,31 @@ export function backspaceAtStart(at: BarPlan): Keystroke | null {
         const open = at.open.slice(0, at.head.consumed - 1) + at.slot;
         return {text: at.before + open + at.after, caret: cut};
     }
+    // Left of a BOUND head's slot sits its bind, and one press takes the whole keyword with it — the ruled
+    // reading: backspace straight after a head erases the head, never one character of it.
+    if (at.head !== null && at.head.bound) {
+        return {text: at.before + at.slot + at.after, caret: at.before.length, operation: true};
+    }
     const cut = slotStart(at) - 1;
     if (cut < 0) return null;
     return {text: text.slice(0, cut) + text.slice(cut + 1), caret: cut};
+}
+
+/**
+ * The keyword ending at `caret`: the run of word characters and the unescaped bind closing it — what one
+ * Backspace takes whole. The ruled reading holds at any depth, so `fx:{scale:|}` steps to `fx:{|}` in one press
+ * exactly as the head cell's own bind does.
+ *
+ * @param slot The slot's text.
+ * @param caret The caret's offset in it.
+ * @returns The keyword's start offset, or null where no keyword ends just left of the caret.
+ */
+export function keywordBehind(slot: string, caret: number): number | null {
+    if (caret <= 0 || slot[caret - 1] !== GRAMMAR.bind) return null;
+    if (escapedAt(slot, caret - 1)) return null;
+    let start = caret - 1;
+    while (start > 0 && /[\p{L}\p{N}_]/u.test(slot[start - 1])) start--;
+    return start;
 }
 
 /**

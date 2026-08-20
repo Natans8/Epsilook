@@ -30,12 +30,12 @@ import type {
 import {propOf} from "./ast";
 import {COMPARISON_STARTS, GRAMMAR, PREFIX_OPERATORS, spellingsOf} from "./grammar";
 import {isFlag, wordOf} from "../schema/kinds";
-import {path, text} from "../vocabulary/value-types";
+import {path as pathType, text as textType} from "../vocabulary/value-types";
 import type {Interp, Pending, ValueCtx} from "./operand";
 import {combineAlternatives, countCtx, ctxFor, kindCtx, propCtx, topCtx} from "./operand";
 import {escapeRegExp} from "../text/patterns";
 import type {Seg} from "./scan";
-import {isWs, scanPhrase, Scanner, scopeShaped, splitAlternatives} from "./scan";
+import {isWs, scanPhrase, Scanner, scopeShaped, splitAlternatives, splitBare} from "./scan";
 import type {Head} from "../schema/schema";
 import {HEADS, headWord, kindIn, kindsOf, propIn} from "../schema/schema";
 import {fold, foldTypography} from "../text/normalize";
@@ -406,6 +406,10 @@ class Parser {
         let i = open;
         while (i < limit) {
             const c = this.text[i];
+            if (c === GRAMMAR.escape && i + 1 < limit) {
+                i += 2;
+                continue;
+            }
             if (c === GRAMMAR.phrase) {
                 i = scanPhrase(this.text, i, limit).end;
                 continue;
@@ -424,6 +428,10 @@ class Parser {
         let close = -1;
         while (i < limit) {
             const c = this.text[i];
+            if (c === GRAMMAR.escape && i + 1 < limit) {
+                i += 2;
+                continue;
+            }
             if (c === GRAMMAR.phrase) {
                 i = scanPhrase(this.text, i, limit).end;
                 continue;
@@ -596,7 +604,7 @@ class Parser {
     private alternateWhereSingle(head: ScopeHead, runs: ScopeTerm[][]): ScopeTerm[][] {
         if (head.role !== "kind" || head.kind.single !== true) return runs;
         const subject = Object.values(head.kind.props)[0];
-        if (subject !== undefined && subject.types.some((type) => type === text || type === path)) return runs;
+        if (subject !== undefined && subject.types.some((type) => type === textType || type === pathType)) return runs;
         return runs.flatMap((run) => {
             const loose = run.filter(statesBareValue);
             if (loose.length < 2) return [run];
@@ -835,7 +843,7 @@ class Parser {
                 // A bare operand reaches here only through the whitespace bridge — adjacent bare segments never
                 // come from one token — so it is the spaced spelling of the glued operator form, and its
                 // alternatives split at the separator the glued form would have.
-                const bareParts = operand.text.split(GRAMMAR.or).filter((part) => part !== "");
+                const bareParts = splitBare(operand.text);
                 const alternatives = operand.form === "phrase" ? null
                     : operand.form === "bare" ? (bareParts.length > 0 ? bareParts : [operand.text])
                         : splitAlternatives(operand.text);
@@ -868,7 +876,7 @@ class Parser {
 
         if (segs.length >= 2 && segs.every((s) => (s.form === "bare" || s.form === "group") && s.closed)) {
             const lists = segs.map((s) => s.form === "bare"
-                ? s.text.split(GRAMMAR.or).filter((p) => p !== "")
+                ? splitBare(s.text)
                 : splitAlternatives(s.text));
             const size = lists.reduce((n, list) => n * Math.max(list.length, 1), 1);
             if (segs.some((s, at) => s.form === "group" && lists[at].length >= 2)
@@ -929,7 +937,7 @@ class Parser {
 
     /** Splits glued alternation, then reads each alternative. */
     private bareAlternatives(t: string, ctx: ValueCtx): Interp {
-        const real = t.split(GRAMMAR.or).filter((p) => p !== "");
+        const real = splitBare(t);
         if (real.length === 0) return {r: "empty", why: i18n.t("diagnostics:why.noValue")};
         if (real.length === 1) return this.alternative(real[0], ctx, true);
         // A unit written on ONE alternative is the value's own: `200|500ms` is two readings in milliseconds,

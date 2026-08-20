@@ -983,6 +983,38 @@ it("reads juxtaposition as alternation on a kind that cannot repeat", () => {
     assert.equal(runs("desc:{kneel dance}"), 1);
 });
 
+describe("the escape works everywhere: a shielded character is data, outside a regex", () => {
+    it("an escaped word opens no door — the term is inert text", () => {
+        const parsed = parse(String.raw`\model:fire`);
+        assert.equal(parsed.clauses.length, 1);
+        assert.equal(parsed.clauses[0].ask?.on, "plain");
+    });
+
+    it("an escaped minus negates nothing", () => {
+        const parsed = parse(String.raw`\-fire`);
+        assert.equal(parsed.clauses.length, 1);
+        assert.equal(parsed.clauses[0].not, false);
+        assert.equal(parsed.clauses[0].ask?.on, "plain");
+    });
+
+    it("an escaped quote opens no phrase, so the rest of the query stays its own clauses", () => {
+        const parsed = parse(String.raw`name:\" fire`);
+        assert.equal(parsed.clauses.length, 2);
+        assert.equal(parsed.clauses[1].ask?.on, "plain");
+    });
+
+    it("an escaped pipe does not alternate, and an escaped brace does not close a scope", () => {
+        const glued = ok("model:{fire\\|frost}");
+        assert.ok(glued.on === "column" && glued.test?.is === "scope");
+        assert.equal((glued.test as ScopeTest).terms.length, 1, "one run, not two alternatives");
+        // Down to the value too: the bare run's own alternation split steps over the pair, so the operand is
+        // one text rather than an anyOf.
+        assert.equal(valueOf(ok("model:fire\\|frost")).op, "contains");
+        const braced = parse("model:{a\\}b}");
+        assert.equal(braced.clauses.length, 1, "the escaped brace stayed inside the scope");
+    });
+});
+
 it("a punctuation-only operand warns on the bare spelling, and quotes make it a real ask", () => {
     // Bare substring matching squashes punctuation away, so the bare ask is dead on arrival and the warning
     // spells the escapes: the pattern, and the strict phrase. Quotes are STRICT, so the quoted spellings are

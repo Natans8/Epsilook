@@ -7,8 +7,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-    backspaceAtStart, commitSegment, deleteAtEnd, firstDiff, grownSegment, insertAtGap, openHead, planAt,
-    pairDelimiter, removeSegment, removeSelection, removeTerm, scopedForm, scopeGesture, segmentAt,
+    backspaceAtStart, commitSegment, deleteAtEnd, firstDiff, grownSegment, insertAtGap, keywordBehind, openHead,
+    pairDelimiter, planAt, removeSegment, removeSelection, removeTerm, scopedForm, scopeGesture, segmentAt,
     segmentsOf, selectionOver, selectionStep, slotStart, termStarts,
 } from "../../../../src/ui/bar/plan";
 
@@ -180,14 +180,16 @@ test("slotStart translates the input caret into a text offset", () => {
     assert.equal(slotStart(planAt("fire", 0)), 0);
 });
 
-test("boundary backspace on a bound head dissolves the bind, caret where it was", () => {
+test("boundary backspace on a bound head takes the whole keyword in one press", () => {
+    // The ruled reading: backspace straight after a head erases the head, never one character of it.
     const step = backspaceAtStart(planAt("scale:>50", 9));
-    assert.equal(step?.text, "scale>50");
-    assert.equal(step?.caret, 5);
-    // The dissolved text still transforms through the operator glue; the caret offset lands at its slot start.
-    const next = planAt(step?.text ?? "", step?.caret ?? 0);
-    assert.equal(next.slot, ">50");
-    assert.equal((step?.caret ?? 0) - slotStart(next), 0);
+    assert.equal(step?.text, ">50");
+    assert.equal(step?.caret, 0);
+    assert.equal(step?.operation, true);
+    // Mid-bar, the neighbours stand untouched and the caret lands where the keyword began.
+    const mid = backspaceAtStart(planAt("fire cast:2s frost", 11));
+    assert.equal(mid?.text, "fire 2s frost");
+    assert.equal(mid?.caret, 5);
 });
 
 test("boundary backspace on an operator-glued head shrinks the word, untransforming when unknown", () => {
@@ -210,11 +212,20 @@ test("boundary backspace on a MIDDLE segment merges it into its left neighbour",
     assert.equal(step?.caret, 10);
 });
 
-test("a dissolved negated head keeps its glyph in the raw text", () => {
+test("a negated head goes whole too — the glyph is part of the cell the press removes", () => {
     const step = backspaceAtStart(planAt("-scale:5", 8));
-    assert.equal(step?.text, "-scale5");
-    assert.equal(planAt(step?.text ?? "", 0).head, null);
-    assert.equal(step?.caret, 6);
+    assert.equal(step?.text, "5");
+    assert.equal(step?.caret, 0);
+});
+
+test("the keyword behind a caret is the word and its bind, at any depth, unescaped binds only", () => {
+    // The inner-bind half of the same ruling: fx:{scale:|} steps to fx:{|} in one press.
+    assert.equal(keywordBehind("scale:", 6), 0);
+    assert.equal(keywordBehind("missile from:", 13), 8);
+    // Not a bind just left of the caret, or an escaped one: nothing to take.
+    assert.equal(keywordBehind("scale:5", 7), null);
+    assert.equal(keywordBehind("a\\:", 3), null);
+    assert.equal(keywordBehind(":", 1), 0);
 });
 
 test("openHead is the plan's own read exposed: null on the empty segment", () => {
@@ -466,6 +477,10 @@ test("an escaped delimiter is the character itself, so it pairs nothing", () => 
     assert.equal(pairDelimiter("name:/a\\", 8, 8, "/"), null);
     // The same holds for the phrase, which had the same defect: the escape is the language's, not the regex's.
     assert.equal(pairDelimiter('name:"foo\\', 10, 10, '"'), null);
+    // And OUTSIDE a leaf too, since the escape shields the next character everywhere: a quote typed after a
+    // backslash at a value's start is the literal character, opening nothing.
+    assert.equal(pairDelimiter("name:\\", 6, 6, '"'), null);
+    assert.equal(pairDelimiter("model:\\", 7, 7, "{"), null);
 });
 
 test("the step-over needs a real closer: a slash that is only text swallows nothing", () => {

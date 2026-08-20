@@ -99,6 +99,22 @@ test("the arrows steer the list, wrapping at either end, and the field points at
     expect((await litOffer(page).textContent())?.trim().startsWith(words[words.length - 1])).toBe(true);
 });
 
+test("an escaped quote spawns no pair and wants no closer", async () => {
+    await clearBar(page);
+    // The bind's own scope gesture fires as ever; the escape then shields the quote INSIDE the scope.
+    await page.keyboard.type("name:\\", {delay: 5});
+    await page.keyboard.type('"', {delay: 5});
+    await expectQuery(page, 'name:{\\"}');
+    await expect(ghostText(page)).toHaveCount(0);
+});
+
+test("an escaped word opens no door: no chip, no scope, no offers", async () => {
+    await clearBar(page);
+    await page.keyboard.type("\\model:fire", {delay: 5});
+    await expectQuery(page, "\\model:fire");
+    await expect(surface(page)).toHaveCount(0);
+});
+
 test("steering the list previews the lit offer as the slot's ghost", async () => {
     await clearBar(page);
     await page.keyboard.type("mo", {delay: 5});

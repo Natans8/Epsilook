@@ -232,7 +232,8 @@ function bindIn(term: string): number {
     let depth = 0;
     for (let at = 0; at < term.length; at++) {
         const ch = term[at];
-        if (ch === GRAMMAR.escape && quote) {
+        // The escape shields the next character everywhere outside a regex, not only inside a phrase.
+        if (ch === GRAMMAR.escape) {
             at += 1;
             continue;
         }
@@ -566,7 +567,8 @@ function closerGhost(value: string): string {
     let quote = false;
     for (let at = 0; at < value.length; at++) {
         const ch = value[at];
-        if (ch === GRAMMAR.escape && quote) {
+        // The escape shields the next character everywhere outside a regex, not only inside a phrase.
+        if (ch === GRAMMAR.escape) {
             at += 1;
             continue;
         }

@@ -366,6 +366,15 @@ test("a column's scope never offers a word that belongs to one of its kinds", ()
     assert.ok(words(at("icon:{}", 6), "doors").includes("fid"));
 });
 
+test("an escaped quote wants no closer, and an escaped word is offered nothing", () => {
+    // The user's report: at `name:\"` the surface offered a closing quote — for a quote the escape had made a
+    // literal character, which opens nothing and wants nothing.
+    assert.equal(at('name:\\"', 7).ghost, "");
+    // An escaped word opens no door, so the surface has nothing to offer it.
+    const offers = at("\\mod", 4);
+    assert.deepEqual(offers.groups, []);
+});
+
 test("an enclosure left open is ghosted with what would close it", () => {
     // The pairing spawns closers as they are typed, so an open one means the reader deleted it or pasted
     // around it — and until it closes, everything after it is inside it.

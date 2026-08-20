@@ -58,6 +58,7 @@ export type {Head} from "./schema/schema";
 export {buildSchema, HEADS, headWord, kindIn, kindsOf, propIn, schemaProblems} from "./schema/schema";
 
 export {GRAMMAR, PREFIX_OPERATORS, spellingsOf} from "./language/grammar";
+export {escapedAt, unescaped} from "./language/scan";
 
 export type {
     Ask, Clause, ClauseState, Diagnostic, Fix, Parsed, ParsedOperand, ParseMode, PropRef, RowTest,

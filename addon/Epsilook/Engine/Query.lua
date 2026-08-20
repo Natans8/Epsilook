@@ -634,14 +634,32 @@ local function alternative(text, ctx, alone)
 end
 
 --- Read a bare segment: glued alternation split, then each alternative read.
+-- The split steps over escaped pairs, so a shielded alternation character is
+-- part of the value rather than a fork in it.
 local function bareAlternatives(text, ctx)
 	local real = {}
 	local or_ = Schema.grammar["or"]
-	local escaped = or_:gsub("%p", "%%%0")
-	for part in (text .. or_):gmatch("([^" .. escaped .. "]*)" .. escaped) do
-		if part ~= "" then
-			real[#real + 1] = part
+	local escape = Schema.grammar.escape
+	local cur = {}
+	local i = 1
+	while i <= #text do
+		local c = sub(text, i, i)
+		if c == escape and i < #text then
+			cur[#cur + 1] = sub(text, i, i + 1)
+			i = i + 2
+		elseif c == or_ then
+			if #cur > 0 then
+				real[#real + 1] = table.concat(cur)
+			end
+			cur = {}
+			i = i + 1
+		else
+			cur[#cur + 1] = c
+			i = i + 1
 		end
+	end
+	if #cur > 0 then
+		real[#real + 1] = table.concat(cur)
 	end
 	if #real == 0 then
 		return empty("nothing to read")
@@ -846,12 +864,18 @@ function Parser:token(from, limit)
 			cur = {}
 		end
 	end
+	local escape = Schema.grammar.escape
 	while i <= limit do
 		local c = self:char(i)
-		if isWs(c) then
+		-- The escape shields the next character from every structural reading
+		-- below; the pair joins the bare run as it was typed.
+		if c == escape and i < limit and not isWs(self:char(i + 1)) then
+			cur[#cur + 1] = c
+			cur[#cur + 1] = self:char(i + 1)
+			i = i + 2
+		elseif isWs(c) then
 			break
-		end
-		if c == phrase then
+		elseif c == phrase then
 			flush(i)
 			local quoted, stop, closed = scanPhrase(self.text, i, limit)
 			segs[#segs + 1] =
@@ -997,7 +1021,9 @@ function Parser:skipBraces(open, limit)
 	local depth, i = 0, open
 	while i <= limit do
 		local c = self:char(i)
-		if c == grammar.phrase then
+		if c == grammar.escape and i < limit then
+			i = i + 2
+		elseif c == grammar.phrase then
 			local _, stop = scanPhrase(self.text, i, limit)
 			i = stop
 		else
@@ -1236,7 +1262,9 @@ function Parser:scope(start, negated, head, brace, limit)
 	local i, closeAt, inner = brace + 1, nil, nil
 	while i <= limit do
 		local c = self:char(i)
-		if c == grammar.phrase then
+		if c == grammar.escape and i < limit then
+			i = i + 2
+		elseif c == grammar.phrase then
 			local _, stop = scanPhrase(self.text, i, limit)
 			i = stop
 		elseif c == open then

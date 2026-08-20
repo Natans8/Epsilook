@@ -23,6 +23,56 @@ export interface Source {
 
 export const isWs = (c: string): boolean => /\s/.test(c);
 
+/**
+ * The value an escaped spelling reads as: each escape drops, the character it shielded stays.
+ *
+ * The escape works EVERYWHERE outside a regex, not only inside a phrase: `\-a` is text starting with a dash and
+ * negates nothing, `\model:` opens no door. The scanner keeps the pair in a bare run's text so every position
+ * survives for the surfaces that draw the query as typed; this is the one read that turns the spelling into the
+ * value. A trailing lone escape is kept as itself — there is nothing after it to shield.
+ */
+export function unescaped(text: string): string {
+    let out = "";
+    for (let i = 0; i < text.length; i++) {
+        if (text[i] === GRAMMAR.escape && i + 1 < text.length) {
+            out += text[i + 1];
+            i++;
+            continue;
+        }
+        out += text[i];
+    }
+    return out;
+}
+
+/** Whether the character at `at` is escaped: shielded by an odd run of escapes just before it. */
+export function escapedAt(text: string, at: number): boolean {
+    let backslashes = 0;
+    for (let i = at - 1; i >= 0 && text[i] === GRAMMAR.escape; i--) backslashes++;
+    return backslashes % 2 === 1;
+}
+
+/** Splits a bare run at the alternation character, stepping over escaped pairs; empty parts drop. */
+export function splitBare(text: string): string[] {
+    const parts: string[] = [];
+    let cur = "";
+    for (let i = 0; i < text.length; i++) {
+        const c = text[i];
+        if (c === GRAMMAR.escape && i + 1 < text.length) {
+            cur += c + text[i + 1];
+            i++;
+            continue;
+        }
+        if (c === GRAMMAR.or) {
+            parts.push(cur);
+            cur = "";
+            continue;
+        }
+        cur += c;
+    }
+    parts.push(cur);
+    return parts.filter((p) => p !== "");
+}
+
 /** One piece of a value token: a bare run, a phrase, a regular expression, or a parenthesised group. */
 export interface Seg {
     readonly form: "bare" | "phrase" | "regex" | "group";
@@ -65,6 +115,10 @@ export function scopeShaped(inner: string): boolean {
     let i = 0;
     while (i < inner.length) {
         const c = inner[i];
+        if (c === GRAMMAR.escape && i + 1 < inner.length) {
+            i += 2;
+            continue;
+        }
         if (c === GRAMMAR.phrase) {
             i = scanPhrase(inner, i, inner.length).end;
             continue;
@@ -85,6 +139,11 @@ export function splitAlternatives(inner: string): string[] {
     let i = 0;
     while (i < inner.length) {
         const c = inner[i];
+        if (c === GRAMMAR.escape && i + 1 < inner.length) {
+            cur += inner.slice(i, i + 2);
+            i += 2;
+            continue;
+        }
         if (c === GRAMMAR.phrase) {
             const end = scanPhrase(inner, i, inner.length).end;
             cur += inner.slice(i, end);
@@ -136,6 +195,13 @@ export class Scanner {
         const regexHere = opts.inScope || opts.groups;
         while (i < limit) {
             const c = this.text[i];
+            // An escape shields the next character from every structural reading below — it joins the bare run
+            // as the pair it was typed as, and `unescaped` is the one read that turns the pair into its value.
+            if (c === GRAMMAR.escape && i + 1 < limit && !isWs(this.text[i + 1])) {
+                cur += c + this.text[i + 1];
+                i += 2;
+                continue;
+            }
             if (isWs(c)) break;
             if (opts.inScope && (c === GRAMMAR.scope.close || c === GRAMMAR.scope.open)) break;
             // …or straight after a lone operator symbol, so that `=/fire/` parses far enough to be refused

@@ -110,6 +110,14 @@ export function classify(text: string): Run[] {
     let groups = 0;
     while (at < folded.length) {
         const ch = folded[at];
+        // The escape shields the next character from every structural reading, so the pair is plain text —
+        // and what follows it cannot open a head, because the term it sits in is inert.
+        if (ch === GRAMMAR.escape && at + 1 < folded.length && !/\s/.test(folded[at + 1])) {
+            push(at, at + 2, "word");
+            at += 2;
+            opening = false;
+            continue;
+        }
         if (ch === GRAMMAR.regex && opensPattern(folded, at, scopes, groups)) {
             // A pattern is a leaf like a phrase, with the phrase's own two differences: a backslash escapes
             // whatever follows it, and the value ends at whitespace, so an unclosed pattern runs no further

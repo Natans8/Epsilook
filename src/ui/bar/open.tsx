@@ -17,7 +17,7 @@ import {useTranslation} from "react-i18next";
 import {GRAMMAR} from "../../search/index";
 import {headCase} from "./chip";
 import type {BarPlan, Keystroke} from "./plan";
-import {backspaceAtStart, deleteAtEnd, pairDelimiter, slotStart, writeSlot} from "./plan";
+import {backspaceAtStart, deleteAtEnd, keywordBehind, pairDelimiter, slotStart, writeSlot} from "./plan";
 import styles from "./bar.module.css";
 
 /** Where the caret starts this session, in slot coordinates; an anchor makes it a selection. */
@@ -294,6 +294,18 @@ export function OpenSegment({
             e.preventDefault();
             onKeystroke(step, true, el.value);
             return;
+        }
+        // Straight after an inner bind, one press takes the whole keyword — the ruled reading at any depth:
+        // fx:{scale:|} steps to fx:{|}, exactly as the head cell's own bind does at the slot's start.
+        if (e.key === "Backspace" && collapsed && a > 0) {
+            const from = keywordBehind(el.value, a);
+            if (from !== null) {
+                e.preventDefault();
+                const value = el.value.slice(0, from) + el.value.slice(a);
+                onKeystroke(
+                    {text: writeSlot(at, value), caret: slotStart(at) + from, operation: true}, true, value);
+                return;
+            }
         }
         // Every other pairing is the shared rule, delivered as one undoable operation.
         // The head cell holds characters the field does not, and they are what say whether a slash here opens a

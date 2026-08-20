@@ -40,6 +40,8 @@ PROBES = [
     # Quotes are strict: a quoted operand matches its characters as written, punctuation included, while the
     # bare spelling squashes punctuation away. Both engines must draw the same line.
     'name:"-a"', 'name:"anti-magic"', "name:antimagic", 'name:"\\""', 'model:"fire missile"', 'desc:"you take"',
+    # The escape shields the next character everywhere: no door, no negation, no phrase, no alternation.
+    "\\model:fire", "\\-fire", 'name:\\" fire', "model:fire\\|frost", "model:{a\\}b}",
 ]
 """Queries across every column and most types, each answered by both engines."""
 
