@@ -440,10 +440,11 @@ function propOffers(context: { role: "column"; column: Column } | { role: "kind"
  * @param prop The property whose value is being composed.
  * @param tone The column tone every offer wears.
  * @param vocab The closed vocabularies the pack carries.
+ * @param kind The kind the property belongs to, where one does — read for the arity question alone.
  * @param key The `<kind word>.<prop name>` the pack files an enum vocabulary under, where the property is a kind's.
  * @returns The lists, each in its own draw order.
  */
-function valueOffers(prop: Prop, tone: string, vocab: Vocabulary, key?: string):
+function valueOffers(prop: Prop, tone: string, vocab: Vocabulary, kind?: Kind, key?: string):
     { values: Offer[]; listed: Offer[]; any: Offer[] } {
     // A spelling carrying a space would split into two terms where it lands, so it travels quoted — the phrase
     // is the language's own spelling for exactly this, and a word vocabulary reads a quoted word.
@@ -454,10 +455,16 @@ function valueOffers(prop: Prop, tone: string, vocab: Vocabulary, key?: string):
     });
     const sentinels = Object.values(prop.sentinels ?? {})
         .map((spelling) => word(spelling, i18n.t("ui:surface.sentinelNote")));
-    // A row plays on several participants at once, so the roles are the one vocabulary today that is a true
-    // multiple choice -- and the shape the coming flag sets take.
+    // Whether offering a second value is a kindness or a dead end is the ARITY question, and it is asked here
+    // rather than answered by the vocabulary being closed. Two values chain when a row could carry both --
+    // the roles, and the flag sets they are the shape of -- or when the kind holds one row, so the pair reads
+    // as alternatives instead. On a kind that REPEATS, two values of one scalar property describe one row and
+    // no row is two things: `point:chest,head` is nothing at all, and a list that answers nothing is worse
+    // than no list. A sentinel and the any-word never chain either — each is the whole answer.
+    const several = prop.types.includes(bitmask) || prop.types.includes(flag);
+    const chains = several || kind?.single === true;
     const roles = prop.types.includes(bitmask)
-        ? TARGET_ROLES.map((role) => word(role, roleNote(role), true)) : [];
+        ? TARGET_ROLES.map((role) => word(role, roleNote(role), chains)) : [];
     const any = operatorsOf(prop).includes("present")
         ? [word(GRAMMAR.anyWord, i18n.t("ui:surface.anyNote"))] : [];
     // An ordered vocabulary is small, closed and carried by the pack, so it lists itself, spelled the way the
@@ -465,12 +472,12 @@ function valueOffers(prop: Prop, tone: string, vocab: Vocabulary, key?: string):
     // the key the pack stores, the game's own abbreviations, and the number, so a reader counting the ladder
     // finds the rung standing there — by the rule that lets `animation` reach the anim door.
     const rungs = prop.types.includes(ordinal)
-        ? vocab.rungs.map((rung) => ({...word(rung.word, rung.note ?? ""), reads: rung.reads}))
+        ? vocab.rungs.map((rung) => ({...word(rung.word, rung.note ?? "", chains), reads: rung.reads}))
         : [];
     // A closed vocabulary lists itself the same way, from the words the pack's own rows store. The word is its
     // own meaning, so a row carries no note — the takes header already says what the property is.
     const listed = prop.types.includes(enumeration) && key !== undefined
-        ? (vocab.enums?.[key] ?? []).map((spelling) => word(spelling, "")) : [];
+        ? (vocab.enums?.[key] ?? []).map((spelling) => word(spelling, "", chains)) : [];
     return {values: [...sentinels, ...rungs, ...roles], listed, any};
 }
 
@@ -541,6 +548,13 @@ function historyGroup(history: readonly string[]): OfferGroup[] {
 interface Composing {
     readonly prop: Prop;
     readonly tone: string;
+    /**
+     * The kind the property belongs to, where one does.
+     *
+     * Carried for the arity question and nothing else: whether two values of this property could describe one
+     * row decides whether offering a second is a kindness or a dead end.
+     */
+    readonly kind?: Kind;
     /** The word that reached it — a property's name, or the kind's word where that is the door. */
     readonly name: string;
     /** What to say it is, where the door says it better than the property does. */
@@ -555,6 +569,7 @@ type Context =
     | { readonly role: "kind"; readonly kind: Kind }
     | {
     readonly role: "prop"; readonly prop: Prop; readonly tone: string; readonly name: string;
+    readonly kind: Kind;
     readonly key: string
 };
 
@@ -566,7 +581,7 @@ function contextOf(plan: BarPlan): Context | null {
     if (head.role === "column") return {role: "column", column: head.column};
     if (head.role === "kind") return {role: "kind", kind: head.kind};
     return {
-        role: "prop", prop: head.prop, tone: head.kind.column.key, name: head.name,
+        role: "prop", prop: head.prop, tone: head.kind.column.key, name: head.name, kind: head.kind,
         key: `${wordOf(head.kind)}.${head.name}`,
     };
 }
@@ -593,14 +608,16 @@ function innerProp(context: Context, word: string): Composing | null {
     // the expansion, and titling it `rung` names an internal that no reader has ever seen.
     if (subject !== undefined && named !== undefined) {
         return {
-            prop: subject, tone, name: folded, what: named.hint,
+            prop: subject, tone, name: folded, what: named.hint, kind: named,
             key: `${wordOf(named)}.${Object.keys(named.props)[0]}`,
         };
     }
     const kinds = context.role === "column" ? kindsOf(context.column) : [context.kind];
     for (const kind of kinds) {
         const name = propIn(kind, folded);
-        if (name !== undefined) return {prop: kind.props[name], tone, name, key: `${wordOf(kind)}.${name}`};
+        if (name !== undefined) {
+            return {prop: kind.props[name], tone, name, kind, key: `${wordOf(kind)}.${name}`};
+        }
     }
     return null;
 }
@@ -719,7 +736,7 @@ function unitGhost(prop: Prop | null, typed: string): string {
 function wordsGroup(composing: Composing | null, flags: readonly Offer[], typed: string,
                     vocab: Vocabulary): OfferGroup[] {
     const held = composing === null ? {values: [], listed: [], any: []}
-        : valueOffers(composing.prop, composing.tone, vocab, composing.key);
+        : valueOffers(composing.prop, composing.tone, vocab, composing.kind, composing.key);
     // A vocabulary the panel can show WHOLE lists itself before a keystroke — that is what a picker is. One the
     // cap would truncate is a corpus in spirit whatever its type says, so it waits for a character and narrows
     // in, the way the doors do.
@@ -832,10 +849,10 @@ export function offersAt(plan: BarPlan, caret: number, history: readonly string[
     const subject = context?.role === "kind" ? Object.entries(context.kind.props)[0] : undefined;
     const composing: Composing | null = inner ?? (
         context?.role === "prop"
-            ? {prop: context.prop, tone: context.tone, name: context.name, key: context.key}
+            ? {prop: context.prop, tone: context.tone, name: context.name, kind: context.kind, key: context.key}
             : subject !== undefined && bind < 0 && context?.role === "kind"
                 ? {
-                    prop: subject[1], tone: context.kind.column.key,
+                    prop: subject[1], tone: context.kind.column.key, kind: context.kind,
                     name: wordOf(context.kind), what: context.kind.hint,
                     key: `${wordOf(context.kind)}.${subject[0]}`,
                 }

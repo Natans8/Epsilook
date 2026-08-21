@@ -10,7 +10,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {flatOffers, NO_OFFERS, offerGhost, offerSlot, offersAt} from "../../../../src/ui/bar/offers";
-import type {Offers} from "../../../../src/ui/bar/offers";
+import type {Offer, Offers, Vocabulary} from "../../../../src/ui/bar/offers";
 import {planAt, slotStart, writeSlot} from "../../../../src/ui/bar/plan";
 import type {Rung} from "../../../../src/search/index";
 import {parse} from "../../../../src/search/index";
@@ -288,6 +288,26 @@ test("a role is taken with the glue behind it, and the same list is offered agai
     assert.deepEqual(
         flatOffers(again).filter((offer) => offer.chains === true).map((offer) => offer.word).toSorted(),
         ["area", "both", "caster", "others", "target"]);
+});
+
+test("a value chains only where a second one could say something", () => {
+    // The arity question, which the vocabulary being CLOSED does not answer. An expansion's kind holds one row
+    // per spell, so two of them read as alternatives and a list is meaningful. An attach point's kind REPEATS
+    // and each row carries one point, so two of them describe one row and no row is two things --
+    // `model:{point:chest,head}` is nothing at all, and a list that answers nothing is worse than no list.
+    const offerFor = (text: string, caret: number, vocab: Vocabulary, word: string): Offer | undefined => {
+        const plan = planAt(text, caret);
+        return flatOffers(offersAt(plan, caret - slotStart(plan), [], vocab))
+            .find((offer) => offer.word === word);
+    };
+
+    const expansion = offerFor("xpac:", 5, {rungs: LADDER}, "TBC");
+    assert.equal(expansion?.chains, true, "an expansion's kind holds one row, so a second reads as an alternative");
+
+    const motion = offerFor("missile:{motion:}", 16, {rungs: [], enums: {"missile.motion": ["Parabola"]}},
+        "Parabola");
+    assert.ok(motion !== undefined, "the motions are offered where a motion takes its value");
+    assert.notEqual(motion.chains, true, "two motions describe one missile, and no missile is two motions");
 });
 
 test("every offer, taken, writes a query the parser reads without an error", () => {
