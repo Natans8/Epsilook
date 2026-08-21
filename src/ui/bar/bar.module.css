@@ -342,6 +342,22 @@
     text-underline-offset: 3px;
 }
 
+/* THE VOCABULARY MARK, defined once and worn by every surface that draws one — raw query text, a chip's word,
+ * a swatch and its word as one object, a row of the control surface. It was four declarations in three
+ * different dim tokens, so one meaning had three appearances and none of them read at a glance.
+ *
+ * Two pixels because one is not one: at a fractional device ratio the browser snaps a 1px border to a single
+ * PHYSICAL pixel, and a dotted line only draws half of that, so the mark was landing as a row of sub-pixel
+ * specks. Derived from currentColor rather than from a palette token, so it follows whatever tone the word
+ * wears and needs no per-palette upkeep; dimmed, because a mark must not outweigh the word it sits under.
+ *
+ * A BORDER rather than an underline, for two reasons that are not cosmetic: text-decoration is one property,
+ * so a state squiggle would replace the vocabulary mark instead of layering with it, and a decoration does not
+ * span an inline-flex group, so a swatch and its word would stop reading as one object. */
+:root {
+    --vocab-mark: 2px dotted color-mix(in srgb, currentColor 70%, transparent);
+}
+
 /* A closed-vocabulary word is marked, not tinted. A schema word answers in one role and asks in another —
  * `model:{attach}` names the kind, `model:{attach:chest}` opens it — and a hue that changed between them made
  * one word look like two things a keystroke apart. The tone says which column the word belongs to and the dot
@@ -349,7 +365,7 @@
  * currentColor so it follows whatever tone the word wears, dimmed because a mark must not outweigh the word it
  * sits under. The chip's vWord keeps the gold: a chip body has no tone of its own to carry this. */
 .runVocab {
-    border-bottom: 1px dotted color-mix(in srgb, currentColor 55%, transparent);
+    border-bottom: var(--vocab-mark);
 }
 
 /* what the parse could not read, and what it read with a reservation */
@@ -649,7 +665,7 @@
  * tooltip's affordance, in the same hue. */
 .vWord {
     color: var(--gold);
-    border-bottom: 1px dotted var(--gold-dim);
+    border-bottom: var(--vocab-mark);
 }
 
 .vMeta {
@@ -698,7 +714,7 @@
     display: inline-flex;
     align-items: center;
     gap: 3px;
-    border-bottom: 1px dotted var(--tag-btn);
+    border-bottom: var(--vocab-mark);
     padding-bottom: 1px;
 }
 

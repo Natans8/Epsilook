@@ -168,7 +168,7 @@
 
 /* A word offer wears the mark a vocabulary word wears inside a chip, and no tint — one accent per row. */
 .vocab {
-    border-bottom: 1px dotted var(--tag-btn);
+    border-bottom: var(--vocab-mark);
 }
 
 /* A remembered search is painted by the bar's own highlighter, so it reads exactly as it will once it lands. */
