@@ -1845,6 +1845,37 @@ def check_mypy_strict(rep: Report) -> None:
            f"strict by default, {len(exempt)} {STRICT_EXEMPT_HOME}/ module(s) exempt")
 
 
+def check_kit_effect_types(rep: Report) -> None:
+    """Every value of a polymorphic discriminator must be named, gaps included.
+
+    `SpellVisualKitEffect.EffectType` chooses which table the row's `Effect`
+    column points at, so a value nobody has named is a reference the build
+    cannot follow and, worse, cannot report: the walk dispatches by looking a
+    handler up, so an undeclared type is skipped in silence rather than
+    refused. Six of them turned out to be carrying rows, one of them the third
+    most common type in the table.
+
+    The enum's value space is contiguous, which is what makes a hole checkable
+    without the game data: a gap between the lowest and highest declared value
+    is a value the file has forgotten. A type with no route is fine and says so
+    with an absent `handler`; a type with no row at all is the failure.
+    """
+    path = ROOT / "build" / "enums" / "spell_visual_kit_effect_types.json"
+    if not path.exists():
+        rep.skip("kit effect types", "build/enums not present yet")
+        return
+    declared = {int(key) for key in
+                json.loads(path.read_text(encoding="utf-8"))["values"]}
+    holes = sorted(set(range(min(declared), max(declared) + 1)) - declared)
+    if holes:
+        rep.fail("kit effect types",
+                 f"EffectType {', '.join(str(hole) for hole in holes)} "
+                 f"undeclared, so the build would skip those rows in silence")
+        return
+    rep.ok("kit effect types",
+           f"{len(declared)} values declared, {min(declared)} to {max(declared)}, no gaps")
+
+
 def check_soundkit_declaration(rep: Report) -> None:
     """The build and the cache sweeper must agree which build is pinned.
 
@@ -2402,6 +2433,7 @@ def main() -> int:
     check_delivery_declaration(rep)
     check_range_declaration(rep)
     check_mypy_strict(rep)
+    check_kit_effect_types(rep)
     check_soundkit_declaration(rep)
     check_supplement(rep)
     check_arcanum(rep)

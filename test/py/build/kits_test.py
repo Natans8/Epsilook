@@ -9,6 +9,7 @@ from pack.routes.models import (MODEL_CAT_AREA, MODEL_CAT_BARRAGE, MODEL_CAT_TRA
                                 UNPLACED, ModelSources)
 from pack.routes.procedures import ProcEffects
 from pack.routes.sounds import read_kit_types, read_soundkit_files, sound_type_names
+from pack.sources import load_local_enum
 from support import BuildTables
 
 SPELL_VISUAL_ANIM = """\
@@ -167,3 +168,26 @@ def test_a_kit_carries_what_it_is_for(tables: BuildTables) -> None:
     # to a gap in the list.
     assert set(names) >= {0, 1, 2, 3, 4, 6, 9, 10, 12, 13, 14, 16, 17, 19, 20,
                           21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 50, 52, 53}
+
+
+def test_every_effect_type_the_enum_defines_is_named() -> None:
+    """`EffectType` chooses which table `Effect` points at, so an undeclared
+    value is a reference the walk skips in silence: it dispatches by looking a
+    handler up, and a value with no row simply matches nothing. The value space
+    is contiguous, so a hole between the ends is a forgotten value."""
+    declared = load_local_enum("spell_visual_kit_effect_types")
+    assert set(range(min(declared), max(declared) + 1)) == set(declared)
+    assert all(payload.get("name") for payload in declared.values())
+
+
+def test_a_consumed_effect_type_says_where_it_points() -> None:
+    """A handler is what makes the build read the row, and `points_at` is the
+    table it reads. A type with neither is named but unrouted, which is a
+    stated gap rather than a silent one."""
+    declared = load_local_enum("spell_visual_kit_effect_types")
+    consumed = {value: payload for value, payload in declared.items()
+                if payload.get("handler")}
+    assert consumed
+    assert all(payload.get("points_at") for payload in consumed.values())
+    handlers = [payload["handler"] for payload in consumed.values()]
+    assert len(handlers) == len(set(handlers)), "a handler must select one type"

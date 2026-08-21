@@ -1,22 +1,32 @@
 {
   "enum": "SpellVisualKitEffect.EffectType",
-  "description": "SpellVisualKitEffect.EffectType says which table the row's Effect column points at. 'handler' names the build's dispatch bucket (absent = not consumed: carries no model/sound/attach column, or is redundant with the ParentSpellVisualKitID walk). Survey 2026-07-18: type 2 (SpellVisualKitModelAttach) is 100% redundant with that walk; 10 (UnitSoundType) plays the target unit's own sound (no concrete file); 15/20 are absent; the rest carry no model/sound columns.",
+  "description": "SpellVisualKitEffect.EffectType says which table the row's Effect column points at, which is what makes Effect a polymorphic column rather than a foreign key: the .dbd cannot express a conditional reference, so 'points_at' carries it here instead. 'handler' names the build's dispatch bucket, and its absence means the type is named but not consumed. Survey 2026-07-18 covered the consumed types: 2 (SpellVisualKitModelAttach) is 100% redundant with the ParentSpellVisualKitID walk, and 10 (UnitSoundType) plays the target unit's own sound, so neither reaches a concrete file. The unconsumed types were left undeclared until 2026-08-21, when a value-space audit found six of them carrying rows on 9.2.7 -- type 3 the third most common of all -- so every value the enum defines is now named whether or not a route reads it. A type with no route is a stated gap; a type with no row here was an invisible one.",
   "source": [
-    "https://github.com/wowdev/WoWDBDefs/blob/master/definitions/SpellVisualKitEffect.dbd"
+    "https://github.com/wowdev/WoWDBDefs/blob/master/definitions/SpellVisualKitEffect.dbd",
+    "https://github.com/wowdev/WoWDBDefs/blob/master/meta/enums/SpellVisualKitEffectType.dbde"
   ],
   "keys": "EffectType",
   "values": {
+    "0":  {"name": "None", "note": "an empty row: Effect is 0 too. 5 rows on 1.15.9, none on 9.2.7"},
     "1":  {"name": "SpellProceduralEffect", "handler": "proc",     "points_at": "SpellProceduralEffect.ID"},
     "2":  {"name": "SpellVisualKitModelAttach", "note": "redundant with the ParentSpellVisualKitID walk"},
+    "3":  {"name": "CameraEffect",          "points_at": "CameraEffect.ID", "note": "2,550 rows over 2,544 kits on 9.2.7, the most common unrouted type; table not downloaded"},
+    "4":  {"name": "CameraEffect2",         "points_at": "CameraEffect.ID", "note": "a second camera slot; 12 rows on 9.2.7"},
     "5":  {"name": "Sound",                 "handler": "sound",    "points_at": "SoundKitID"},
     "6":  {"name": "SpellVisualAnim",       "handler": "anim",     "points_at": "SpellVisualAnim.ID"},
     "7":  {"name": "ShadowyEffect",         "handler": "shadowy",  "points_at": "ShadowyEffect.ID"},
     "8":  {"name": "SpellEffectEmission",   "handler": "emission", "points_at": "SpellEffectEmission.ID (area-model emitter)"},
+    "9":  {"name": "OutlineEffect",         "points_at": "OutlineEffect.ID", "note": "126 rows over 91 kits on 9.2.7; table not downloaded"},
     "10": {"name": "UnitSoundType",         "note": "plays the target unit's own sound; no concrete file"},
     "11": {"name": "DissolveEffect",        "handler": "dissolve", "points_at": "DissolveEffect.ID"},
     "12": {"name": "EdgeGlowEffect",        "handler": "edge_glow","points_at": "EdgeGlowEffect.ID"},
     "13": {"name": "BeamEffect",            "handler": "beam",     "points_at": "BeamEffect.ID"},
+    "14": {"name": "ClientSceneEffect",     "points_at": "ClientSceneEffect.ID", "note": "29 rows on 9.2.7; table not downloaded"},
+    "15": {"name": "CloneEffect",           "points_at": "CloneEffect.ID", "note": "marked unused upstream, and no pack carries a row"},
+    "16": {"name": "GradientEffect",        "points_at": "GradientEffect.ID", "note": "266 rows over 265 kits on 9.2.7; table not downloaded"},
     "17": {"name": "BarrageEffect",         "handler": "barrage",  "points_at": "BarrageEffect.ID (multi-model volley)"},
-    "19": {"name": "SpellVisualScreenEffect","handler": "screen",  "points_at": "SpellVisualScreenEffect.ID"}
+    "18": {"name": "RopeEffect",            "points_at": "RopeEffect.ID", "note": "2 rows on 9.2.7; table not downloaded"},
+    "19": {"name": "SpellVisualScreenEffect","handler": "screen",  "points_at": "SpellVisualScreenEffect.ID"},
+    "20": {"name": "SpellVisualKitDecalAttach", "points_at": "SpellVisualKitDecalAttach.ID", "note": "absent before 12.1.0, where it carries 245 rows"}
   }
 }
