@@ -5,7 +5,7 @@ from __future__ import annotations
 from pack.derive.displays import Display, ResolvedDisplays
 from pack.derive.references import References, collect_references
 from pack.derive.walk import SpellVisuals
-from pack.routes import (CreatureModels, FxPayloads, GameObjectData, ItemModels,
+from pack.routes import (ChainEffect, CreatureModels, FxPayloads, GameObjectData, ItemModels,
                          MountData, ScreenRow, SpellEffectRows)
 from pack.routes.models import MODEL_CAT_DISPLAY, MODEL_CAT_ITEM, SCALE_UNIT, UNPLACED
 from pack.targets import NO_TARGET
@@ -56,7 +56,8 @@ def test_a_sounds_file_is_an_asset_but_its_kit_is_not() -> None:
 def test_a_chains_textures_are_followed() -> None:
     """The walk collects the chain; its files live one table further in."""
     found = collect(visuals=visuals(chains={100: {(3, 0, 0): NO_TARGET}}),
-                    fx=FxPayloads(chains={3: (0, 0, 0, 0, (701, 702), ())}))
+                    fx=FxPayloads(chains={3: ChainEffect(0, 0, 0, 0,
+                                                        (701, 702), ())}))
     assert found.chains == {3}
     assert found.assets == {701, 702}
 

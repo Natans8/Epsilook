@@ -172,6 +172,25 @@ class Definition:
         return {c.name: c for c in block.columns} if block else {}
 
 
+def _record_builds(rest: str, block: BuildBlock) -> None:
+    """Record what one BUILD line names, as single builds and as ranges.
+
+    An entry that does not parse is dropped rather than raised on, which is
+    the whole file's rule: a partial definition still beats none.
+    """
+    for entry in rest.split(","):
+        entry = entry.strip()
+        if "-" in entry:
+            lo_text, _, hi_text = entry.partition("-")
+            lo, hi = parse_build(lo_text), parse_build(hi_text)
+            if lo and hi:
+                block.ranges.append((lo, hi))
+            continue
+        parsed = parse_build(entry)
+        if parsed:
+            block.builds.append(parsed)
+
+
 def parse(text: str, table: str) -> Definition:
     """Parse one `.dbd` document. Never raises on malformed input — an
     unparseable line is skipped, because a partial definition still beats none."""
@@ -214,17 +233,7 @@ def parse(text: str, table: str) -> Definition:
             if keyword == "LAYOUT":
                 block.layouts.extend(h.strip() for h in rest.split(",") if h.strip())
             elif keyword == "BUILD":
-                for entry in rest.split(","):
-                    entry = entry.strip()
-                    if "-" in entry:
-                        lo_text, _, hi_text = entry.partition("-")
-                        lo, hi = parse_build(lo_text), parse_build(hi_text)
-                        if lo and hi:
-                            block.ranges.append((lo, hi))
-                    else:
-                        parsed = parse_build(entry)
-                        if parsed:
-                            block.builds.append(parsed)
+                _record_builds(rest, block)
             # COMMENT lines are human-readable only; nothing to record.
             continue
 

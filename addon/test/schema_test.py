@@ -64,7 +64,7 @@ def test_a_kit_and_a_sound_type_are_reachable_only_inside_their_column(engine: L
     assert head(b"type") is None
     # The column itself is the door, and it still is one.
     assert head(b"sound") is not None
-    kinds = cast(LuaTable, lua_table(engine, b"Epsilook.Schema.kindById"))
+    kinds = lua_table(engine, b"Epsilook.Schema.kindById")
     props = cast(LuaTable, cast(LuaTable, kinds[b"sound.sound"])[b"props"])
     plain = {}
     for row in as_list(props):

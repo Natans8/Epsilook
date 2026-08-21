@@ -182,12 +182,13 @@ def _rendered(value: object, indent: int) -> str:
             f"{pad}  {json.dumps(key, ensure_ascii=False)}: "
             f"{_rendered(held, indent + 2)}" for key, held in value.items())
         return "{\n" + body + "\n" + pad + "}"
-    assert isinstance(value, list)
+    if not isinstance(value, list):
+        raise TypeError(f"{type(value).__name__} has no rendering in a manifest")
     body = ",\n".join(f"{pad}  {_rendered(held, indent + 2)}" for held in value)
     return "[\n" + body + "\n" + pad + "]"
 
 
-def rendered(manifest: Mapping[str, object]) -> str:
+def rendered(document: Mapping[str, object]) -> str:
     """The manifest as the text that lands on disk.
 
     Indented down to the leaves and no further: a module entry, the counts, one
@@ -197,4 +198,4 @@ def rendered(manifest: Mapping[str, object]) -> str:
     moved, which is exactly the review a rebuild wants, while the skeleton
     stays readable. Parses back to the same document either way.
     """
-    return _rendered(manifest, 0) + "\n"
+    return _rendered(document, 0) + "\n"

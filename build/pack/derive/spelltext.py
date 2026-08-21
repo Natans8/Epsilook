@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Cook a spell description template into placeholder-free prose.
 
 The client stores a description as a template resolved at tooltip time against
@@ -21,7 +20,10 @@ pack even where it disagrees with a site rendering a later patch.
 
 from __future__ import annotations
 
+import ast
+import operator
 import re
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 
 from ..routes.values import DescriptionValues
@@ -151,6 +153,71 @@ _EMPTY_PARENS = re.compile(r"\(\s*\)")
 MAX_DEPTH = 6  # redirect chains reach 3 in practice; the cap is the cycle stop
 
 
+_ARITHMETIC: Mapping[type[ast.operator], Callable[[float, float], float]] = {
+    ast.Add: operator.add,
+    ast.Sub: operator.sub,
+    ast.Mult: operator.mul,
+    ast.Div: operator.truediv,
+    ast.FloorDiv: operator.floordiv,
+    ast.Pow: operator.pow,
+}
+"""The binary operators a template expression may use."""
+
+_SIGNS: Mapping[type[ast.unaryop], Callable[[float], float]] = {
+    ast.UAdd: operator.pos,
+    ast.USub: operator.neg,
+}
+"""The unary operators a template expression may use."""
+
+
+def _folded(node: ast.expr) -> float:
+    """One node of a parsed template expression, as its value.
+
+    Raises:
+        TypeError: the node is not arithmetic. Everything a template can
+            legitimately hold by this point is a number, a sign or a binary
+            operator, so anything else is a body that only looked like a sum.
+    """
+    # bool is a subclass of int, and `True` is not a quantity a template
+    # means -- the character filter upstream keeps letters out, but this
+    # function is the one that decides what counts as a number.
+    if (isinstance(node, ast.Constant) and not isinstance(node.value, bool)
+            and isinstance(node.value, (int, float))):
+        return node.value
+    if isinstance(node, ast.BinOp):
+        fold = _ARITHMETIC.get(type(node.op))
+        if fold is not None:
+            return fold(_folded(node.left), _folded(node.right))
+    if isinstance(node, ast.UnaryOp):
+        sign = _SIGNS.get(type(node.op))
+        if sign is not None:
+            return sign(_folded(node.operand))
+    raise TypeError(f"{type(node).__name__} is not arithmetic")
+
+
+def _arithmetic(body: str) -> float | None:
+    """The value of a resolved template expression, or None if it has none.
+
+    The body reaching here is digits and operators, every code already
+    substituted. It is still parsed rather than evaluated: the grammar admits
+    shapes that are not sums -- `(1)(2)` is a call, `1 2` is not an expression
+    at all -- and a parser refuses those by construction instead of relying on
+    a character filter to have thought of them.
+
+    Stripped first: a substituted code readily leaves the body opening on a
+    space, and the parser reads that as an indent where evaluation would have
+    skipped it.
+    """
+    try:
+        tree = ast.parse(body.strip(), mode="eval")
+    except (SyntaxError, ValueError, MemoryError, RecursionError):
+        return None
+    try:
+        return _folded(tree.body)
+    except (ArithmeticError, TypeError, ValueError, RecursionError):
+        return None
+
+
 def _num(v: float) -> str:
     """A number the way a tooltip writes one: no trailing .0, one decimal."""
     if v == int(v):
@@ -176,6 +243,7 @@ class TextLocale:
     -- and how a plural marker picks among its forms. A form list is
     variable-length, so the picking rule belongs to the locale.
     """
+
     seconds: tuple[str, ...] = ("sec",)
     minutes: tuple[str, ...] = ("min",)
     hours: tuple[str, ...] = ("hour", "hours")
@@ -300,7 +368,7 @@ class DescriptionCooker:
         """
         if depth > MAX_DEPTH:
             return ""
-        text = self._expand_redirects(text, spell, depth, seen)
+        text = self._expand_redirects(text, depth, seen)
         text = self._expand_variables(text, spell, depth)
         text = self._resolve_conditionals(text, spell, depth)
         # Difficulty markers are spelled with a `$`, so they go before code
@@ -311,7 +379,7 @@ class DescriptionCooker:
         text = self._substitute_codes(text, spell)
         return _strip_markup(text)
 
-    def _expand_redirects(self, text: str, spell: int, depth: int,
+    def _expand_redirects(self, text: str, depth: int,
                           seen: tuple[int, ...]) -> str:
         """`$@spelldescN` and friends: splice in another spell's own text.
 
@@ -447,11 +515,8 @@ class DescriptionCooker:
         body = body.replace("|", "")  # stray colour markers inside an expression
         if not re.fullmatch(r"[-+*/(). 0-9]+", body):
             return ""
-        try:
-            value = eval(body, {"__builtins__": {}}, {})  # noqa: S307 - digits and operators only
-        except (SyntaxError, ZeroDivisionError, TypeError, NameError):
-            return ""
-        if not isinstance(value, (int, float)):
+        value = _arithmetic(body)
+        if value is None:
             return ""
         return _amount(value)
 

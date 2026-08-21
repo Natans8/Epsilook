@@ -67,3 +67,41 @@ cache_dir = ".pytest_cache"
 # exclusion has to be maintained twice.
 [tool.mypy]
 cache_dir = ".mypy_cache"
+
+# The floor the package supports, not the interpreter that happens to run the
+# checker, so a feature newer than 3.12 is reported here rather than on
+# whichever machine is oldest.
+python_version = "3.12"
+
+# Global-only in mypy, so it cannot be scoped to the build the way the rest of
+# strict is below. Turning it on found one cast in the addon tests that restated
+# its own helper's return type; a cast this reports is redundant by proof rather
+# than by opinion, so the other trees carry it too.
+warn_redundant_casts = true
+
+# The data build is held to `mypy --strict`. It decides what every pack
+# contains, and a wrong type there does not crash -- it ships, as a search
+# answering wrongly, on an artifact nobody re-derives.
+#
+# Strict is spelled out rather than inherited because mypy accepts `strict`
+# only at the top level, and the rest of the repository is not there yet.
+# `check_mypy_strict` in tools/check.py reconciles this list against what
+# `mypy --strict` actually turns on, so a flag mypy adds later fails the
+# repository checks instead of quietly never reaching the build.
+[[tool.mypy.overrides]]
+module = "pack.*"
+check_untyped_defs = true
+disallow_any_generics = true
+disallow_incomplete_defs = true
+disallow_subclassing_any = true
+disallow_untyped_calls = true
+disallow_untyped_decorators = true
+disallow_untyped_defs = true
+extra_checks = true
+no_implicit_reexport = true
+strict_equality = true
+warn_return_any = true
+warn_unused_ignores = true
+# Not part of strict. A build full of per-version fallbacks is exactly where a
+# branch stops being reachable without anyone noticing.
+warn_unreachable = true

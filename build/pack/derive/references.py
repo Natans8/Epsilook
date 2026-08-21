@@ -119,7 +119,7 @@ def collect_references(visuals: SpellVisuals, effects: SpellEffectRows,
     for sounds in visuals.sounds.values():
         found.assets.update(file for _kit, file in sounds)
     for chain in found.chains:
-        found.assets.update(fx.chains[chain][4])
+        found.assets.update(fx.chains[chain].textures)
     for dissolve in found.dissolves:
         found.assets.update(fx.dissolves[dissolve][1])
     for screen in found.screens:

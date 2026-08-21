@@ -35,15 +35,16 @@ def used(reads: Reads, bucket: str) -> list[int]:
 def fx_chains(reads: Reads) -> SectionColumns:
     """Each drawn chain's tint and the hue word its corpus searches by."""
     ids = sorted(reads.references.chains)
+    drawn = [reads.fx.chains[chain] for chain in ids]
     return {"ids": ids,
-            "colors": [pack_rgb(*reads.fx.chains[chain][:3]) for chain in ids],
-            "hues": [hue_word(*reads.fx.chains[chain][:3]) for chain in ids]}
+            "colors": [pack_rgb(row.red, row.green, row.blue) for row in drawn],
+            "hues": [hue_word(row.red, row.green, row.blue) for row in drawn]}
 
 
 def fx_textures(reads: Reads) -> SectionColumns:
     """The textures each drawn chain paints with."""
     rows = sorted((chain, fid) for chain in reads.references.chains
-                  for fid in reads.fx.chains[chain][4])
+                  for fid in reads.fx.chains[chain].textures)
     return {"chainIds": [row[0] for row in rows], "fids": [row[1] for row in rows]}
 
 

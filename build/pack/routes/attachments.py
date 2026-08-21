@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from ..sources import load_local_enum
 
-M2_ATTACHMENT_NAMES = load_local_enum("m2_attachments")
+M2_ATTACHMENT_NAMES: dict[int, str] = load_local_enum("m2_attachments")
 """Raw M2 attachment id -> the game's own name for it (wowdev.wiki/M2)."""
 
 VEHICLE_GEO_COMPONENT_LINKS = [

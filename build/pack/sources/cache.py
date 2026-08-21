@@ -11,7 +11,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -73,7 +73,8 @@ wait grows rather than the rate.
 """
 
 
-def download(url: str, dest: Path, refresh: bool, headers: dict | None = None,
+def download(url: str, dest: Path, refresh: bool,
+             headers: Mapping[str, str] | None = None,
              optional: bool = False, absent: tuple[int, ...] = ABSENT) -> bool:
     """Download url to dest unless it is already cached (or refresh is set).
 
@@ -187,6 +188,7 @@ class Volatile:
     def get(self, origin: Origin, dest: Path, refresh: bool,
             optional: bool = False) -> bool:
         """Fetch unconditionally, which is what makes this policy the one it is."""
+        del refresh, optional  # nothing is conditional, so neither decides anything
         download_volatile(origin.address, dest)
         return True
 
@@ -209,6 +211,7 @@ class Tracked:
     def get(self, origin: Origin, dest: Path, refresh: bool,
             optional: bool = False) -> bool:
         """Confirm the file is in the checkout."""
+        del origin, refresh  # the file is here or it is not; nothing is fetched
         if not dest.exists():
             if optional:
                 return False
@@ -284,6 +287,7 @@ class Revalidated:
     def get(self, origin: Origin, dest: Path, refresh: bool,
             optional: bool = False) -> bool:
         """Fetch the body only where the oracle says the publication moved."""
+        del optional  # the oracle decides; an absence here is a failure, not a skip
         remembered = (self.token_file.read_text(encoding="utf-8").strip()
                       if self.token_file.exists() else "")
         have = cached(dest)

@@ -42,7 +42,8 @@ def read_member(archive: Path, member: str) -> Iterator[TextIO]:
             [find_7z(), "x", "-so", str(archive), member],
             stdout=subprocess.PIPE, stderr=complaints)
         stream = process.stdout
-        assert isinstance(stream, io.BufferedReader)
+        if not isinstance(stream, io.BufferedReader):
+            raise RuntimeError("7z was started with stdout=PIPE and has none")
         try:
             # `peek` blocks until the first byte arrives and leaves it in the
             # buffer: the only way to ask whether anything is coming.

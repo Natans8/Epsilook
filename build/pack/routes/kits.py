@@ -9,14 +9,14 @@ dropped rather than treated as an error.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Container
+from collections.abc import Callable, Container, Mapping
 from dataclasses import dataclass, field
 
 from ..sources import enum_id_where, load_local_enum
 from ..tables import Tables
 from .attachments import NO_ATTACHMENT, NO_MOTION
 from .columns import to_int
-from .fx import FxPayloads, expand_chain
+from .fx import ChainEffect, FxPayloads, expand_chain
 from .models import (MODEL_CAT_AREA, MODEL_CAT_BARRAGE, SCALE_UNIT, UNPLACED,
                      AttachModel, ModelSources)
 from .procedures import ProcEffects
@@ -94,8 +94,8 @@ ROSTERED_PAYLOADS: dict[int, RosteredPayload] = {
 """Effect type to the payload it keeps, for the types that only look one up."""
 
 
-def add_chains(chains: dict[int, tuple], chain_id: int, source: int,
-               destination: int, into: set[ChainDraw]) -> None:
+def add_chains(chains: Mapping[int, ChainEffect], chain_id: int,
+               source: int, destination: int, into: set[ChainDraw]) -> None:
     """Add a chain and every chain it nests, tagged with an attachment pair.
 
     Nested chains inherit the parent beam's attachments: they are segments of

@@ -64,8 +64,9 @@ from .routes import (AreaGates, CreatureModels, Delivery, FxPayloads,
 from .routes.anims import read_anim_emotes
 from .routes.sounds import read_kit_names, read_kit_types, sound_type_names
 from .routes.values import DescriptionValues
-from .sources import (Sources, fetch_sources, load_expansions,
-                      load_local_enum, read_anim_names, read_enum_names)
+from .sources import (ExpansionLadder, Sources, fetch_sources,
+                      load_expansions, load_local_enum, read_anim_names,
+                      read_enum_names)
 from .sources.cache import CACHE_DIR
 from .sources.client import CLIENTS
 from .sources.gobs import read_gob_displays
@@ -196,7 +197,7 @@ class Derivations:
     """
 
     def __init__(self, providers: Providers, build: Build,
-                 ladder: tuple[list[dict], dict[int, int]],
+                 ladder: ExpansionLadder,
                  values: DescriptionValues,
                  zone_maps: Mapping[int, int]) -> None:
         """Hold what every derivation reads from, and derive nothing yet."""
@@ -491,7 +492,7 @@ def declared_reads(sections: Iterable[Section]) -> frozenset[str]:
 
 
 def read_all(providers: Providers, build: Build,
-             ladder: tuple[list[dict], dict[int, int]],
+             ladder: ExpansionLadder,
              values: DescriptionValues,
              zone_maps: Mapping[int, int],
              wanted: Iterable[str] | None = None) -> DeriveContext:
@@ -601,7 +602,7 @@ def degraded_sections(sections: Iterable[Section], produced: Container[str],
 
 def produce(context: DeriveContext, unavailable: frozenset[str],
             policy: Mapping[Cardinality, Encoding] = FEWEST_BYTES,
-            sections: Sequence[Section] = SECTIONS
+            sections: Sequence[Section] | None = None
             ) -> tuple[dict[str, SectionColumns], dict[str, object]]:
     """Every section this build ships: what it produced, and what it encodes to.
 
@@ -615,6 +616,8 @@ def produce(context: DeriveContext, unavailable: frozenset[str],
         counting the encoded form would count a deduped pool rather than the
         rows it stands for.
     """
+    if sections is None:
+        sections = SECTIONS
     columns: dict[str, SectionColumns] = {}
     encoded: dict[str, object] = {}
     for section in sections:

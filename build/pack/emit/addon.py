@@ -29,6 +29,7 @@ there.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import Enum
@@ -207,14 +208,17 @@ def whole(value: object) -> int:
     only ever surface as a search answering wrongly.
 
     Raises:
+        TypeError: the value is not something a pack column carries.
         ValueError: the value has a fractional part.
     """
     if value is None or value == "":
         return 0
-    if isinstance(value, float) and value != int(value):
+    if not isinstance(value, (int, float, str)):
+        raise TypeError(f"{value!r} is not a number a column can carry")
+    if isinstance(value, float) and not value.is_integer():
         raise ValueError(f"{value!r} is fractional in a whole-number column; "
                          f"the column's first value decided it was whole")
-    return int(value)  # type: ignore[call-overload]
+    return int(value)
 
 
 def spelled_float(value: object) -> str:
@@ -226,10 +230,13 @@ def spelled_float(value: object) -> str:
     fail somewhere far from here.
 
     Raises:
+        TypeError: the value is not something a pack column carries.
         ValueError: the value is not finite.
     """
-    number = float(value or 0.0)  # type: ignore[arg-type]
-    if number != number or number in (float("inf"), float("-inf")):
+    if value is not None and not isinstance(value, (int, float, str)):
+        raise TypeError(f"{value!r} is not a number a column can carry")
+    number = float(value or 0.0)
+    if not math.isfinite(number):
         raise ValueError(f"{value!r} has no spelling the client reads back")
     return repr(number)
 
@@ -560,7 +567,7 @@ class Chunk:
     """What lands in the directory, by file name."""
 
 
-def toc_file(addon: str, title: str, notes: str, *, version: str, pack: str,
+def toc_file(title: str, notes: str, *, version: str, pack: str,
              demand: bool, sources: Sequence[str]) -> bytes:
     """One addon's toc, as the client reads it.
 
@@ -719,8 +726,8 @@ def chunks(sections: Sequence[Section], produced: Mapping[str, object], *,
         files[f"{axis}.lua"] = axis_source(axis, holding[axis], produced,
                                            pack=pack, built=built,
                                            variation=variation, policy=policy)
-    toc = toc_file(ADDON_PREFIX, "Epsilook Data",
-                   "Search data for Epsilook.", version=version, pack=pack,
+    toc = toc_file("Epsilook Data", "Search data for Epsilook.",
+                   version=version, pack=pack,
                    demand=True, sources=list(files))
     return Chunk(addon=ADDON_PREFIX, files={f"{ADDON_PREFIX}.toc": toc,
                                             **files})

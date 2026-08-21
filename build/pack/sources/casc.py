@@ -42,7 +42,7 @@ import threading
 import urllib.error
 import urllib.request
 import zlib
-from collections.abc import Callable, Iterator, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
@@ -224,6 +224,7 @@ class SelfHosted:
 
     def cdn(self, read: ReadText) -> Cdn:
         """The host itself, without asking it. See `Service.cdn`."""
+        del read  # the answer is the host, so there is no document to fetch
         return Cdn(self.host, self.path)
 
 
@@ -1004,7 +1005,7 @@ class Storage:
         return {key: Located(name, offset, size)
                 for key, offset, size in read_index(dest.read_bytes())}
 
-    def _get(self, url: str, headers: dict | None = None) -> bytes:
+    def _get(self, url: str, headers: Mapping[str, str] | None = None) -> bytes:
         """One request, straight back, held nowhere.
 
         What is left of this module's own fetching, and it is deliberately the

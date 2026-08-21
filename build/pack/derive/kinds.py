@@ -588,8 +588,8 @@ def _chains(reads: Reads) -> Iterable[SpellRow]:
     """The beams a spell draws, one row per texture each paints with."""
     for spell, chain, mask, source, destination in reads.rows.chains:
         payload = reads.fx.chains[chain]
-        tint = 0 if pack_rgb(*payload[:3]) == UNTINTED else chain
-        for texture in _per_texture(_painted(reads, payload[4])):
+        tint = 0 if pack_rgb(payload.red, payload.green, payload.blue) == UNTINTED else chain
+        for texture in _per_texture(_painted(reads, payload.textures)):
             yield spell, (texture, source, destination, tint, mask, chain)
 
 

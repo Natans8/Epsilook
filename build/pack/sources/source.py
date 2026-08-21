@@ -291,6 +291,7 @@ class Extracted:
         fetch writes through a temporary and renames, so an interrupted one
         leaves no destination to be stale.
         """
+        del refresh  # deliberately not forwarded; see above
         if self.extract.complete(self.into):
             log(f"  cached   {self.into.name}")
             return self.into

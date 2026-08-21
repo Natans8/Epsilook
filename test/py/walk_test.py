@@ -8,7 +8,7 @@ rather than a convenience.
 from __future__ import annotations
 
 from pack.derive.walk import KIT_BUCKETS, SpellVisuals, walk_spells
-from pack.routes import (FxPayloads, KitEffects, SpellEffectRows, VisualGraph,
+from pack.routes import (ChainEffect, FxPayloads, KitEffects, SpellEffectRows, VisualGraph,
                          VisualMissiles)
 from pack.routes.models import MODEL_CAT_MISSILE, SCALE_UNIT, UNPLACED
 from pack.targets import (NO_TARGET, TARGET_AREA, TARGET_CASTER, TARGET_TARGET,
@@ -53,7 +53,8 @@ def test_every_declared_family_reaches_the_spell() -> None:
     kits = KitEffects()
     for bucket in KIT_BUCKETS:
         bucket.of_kit(kits)[9] = {item}
-    vis = walk(graph(), kits, fx=FxPayloads(chains={3: (0, 0, 0, 0, (), ())}))
+    vis = walk(graph(), kits,
+               fx=FxPayloads(chains={3: ChainEffect(0, 0, 0, 0, (), ())}))
     for index, bucket in enumerate(KIT_BUCKETS):
         collected = bucket.of_spell(vis)[100]
         assert collected == {item: TARGET_CASTER}, f"family {index} did not collect"
@@ -115,7 +116,7 @@ def test_a_visuals_own_animation_sound_is_collected() -> None:
 
 def test_a_chains_own_sound_inherits_the_chains_audience() -> None:
     kits = KitEffects(chains={9: {(3, 1, 2)}})
-    fx = FxPayloads(chains={3: (0, 0, 0, 40, (), ())})
+    fx = FxPayloads(chains={3: ChainEffect(0, 0, 0, 40, (), ())})
     vis = walk(graph(), kits, fx=fx, soundkit_files={40: {501}})
     assert vis.sounds[100] == {(40, 501): TARGET_CASTER}
 

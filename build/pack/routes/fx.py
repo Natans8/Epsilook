@@ -8,7 +8,9 @@ is drawn is content.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
+from typing import NamedTuple
 
 from ..tables import Tables, array_columns
 from .colors import RGB_MASK, pack_rgb, to_channel
@@ -27,6 +29,26 @@ ARGB_ALPHA_SHIFT = 24
 Vignette = tuple[float, float, float]
 # ((file id, role), ...)
 Textures = tuple[tuple[int, int], ...]
+
+
+class ChainEffect(NamedTuple):
+    """One SpellChainEffects row: everything a beam segment draws with.
+
+    Named rather than a bare six-tuple because every reader wants a different
+    slot of it -- the colours, the sound, the textures, the segments it nests
+    -- and an index says nothing about which.
+    """
+
+    red: int
+    green: int
+    blue: int
+    sound: int
+    """The sound kit played while the beam holds, or 0."""
+    textures: tuple[int, ...]
+    """Deduplicated but kept in slot order, which is what the renderer layers
+    them in."""
+    nested: tuple[int, ...]
+    """The chains this one draws in turn. The graph may contain a cycle."""
 
 
 @dataclass
@@ -63,9 +85,9 @@ class ScreenRow:
 class FxPayloads:
     """Every fx payload table, keyed by its own row id."""
 
-    chains: dict[int, tuple[int, int, int, int, tuple[int, ...], tuple[int, ...]]] = \
+    chains: dict[int, ChainEffect] = \
         field(default_factory=dict)
-    """Chain -> (red, green, blue, sound kit, textures, nested chains)."""
+    """Chain -> what it draws."""
 
     beam_chain: dict[int, tuple[int, int, int]] = field(default_factory=dict)
     """Beam -> (the chain it draws, source attachment, destination attachment)."""
@@ -198,10 +220,8 @@ def read_fx_payloads(tables: Tables) -> FxPayloads:
         first = 5 + len(textures)
         chain_red, chain_green, chain_blue, sound = (
             to_int(value) for value in row[1:5])
-        payloads.chains[to_int(row[0])] = (
+        payloads.chains[to_int(row[0])] = ChainEffect(
             chain_red, chain_green, chain_blue, sound,
-            # Deduplicated but kept in slot order, which is what the renderer
-            # layers them in.
             tuple(dict.fromkeys(file for file in
                                 (to_int(value) for value in row[5:first]) if file)),
             tuple(chain for chain in
@@ -217,7 +237,8 @@ def read_fx_payloads(tables: Tables) -> FxPayloads:
     return payloads
 
 
-def expand_chain(chains: dict[int, tuple], chain_id: int, into: set[int]) -> None:
+def expand_chain(chains: Mapping[int, ChainEffect], chain_id: int,
+                 into: set[int]) -> None:
     """Add a chain and every chain it nests to `into`.
 
     A worklist, not a recursion: the graph may contain a cycle. Membership in
@@ -229,4 +250,4 @@ def expand_chain(chains: dict[int, tuple], chain_id: int, into: set[int]) -> Non
         if current in into or current not in chains:
             continue
         into.add(current)
-        queue.extend(chains[current][5])
+        queue.extend(chains[current].nested)

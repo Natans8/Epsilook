@@ -227,7 +227,8 @@ def main() -> None:
     log(f"Wrote {destination}  ({total:,} gzipped across {len(modules)} modules)")
 
     stated = manifest["meta"]
-    assert isinstance(stated, dict)
+    if not isinstance(stated, dict):
+        raise TypeError("the manifest's meta is not a mapping")
     built = str(stated["built"])
     versions.update(ROSTER, versions.entry(
         pack_id, label, built, payload,

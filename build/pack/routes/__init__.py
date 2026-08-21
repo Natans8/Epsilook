@@ -16,7 +16,8 @@ from .creatures import CreatureModels, read_creature_models
 from .delivery import Delivery, read_spell_delivery
 from .effects import (EffectRow, MaskedIds, SpellEffectRows,
                       implicit_target_bits, read_spell_effect_rows)
-from .fx import FxPayloads, ScreenRow, expand_chain, read_fx_payloads
+from .fx import (ChainEffect, FxPayloads, ScreenRow, expand_chain,
+                 read_fx_payloads)
 from .gameobjects import GameObjectData, read_gameobjects
 from .items import ItemModels, read_item_models
 from .keybinds import KeyboundOverride, read_keybound_overrides
@@ -39,6 +40,7 @@ from .visuals import VisualGraph, read_visual_graph
 __all__ = [
     "Area",
     "AreaGates",
+    "ChainEffect",
     "CreatureModels",
     "Delivery",
     "DescriptionValues",

@@ -28,23 +28,28 @@ the reader does not know is a silently wrong pack, not a smaller one.
 from __future__ import annotations
 
 from collections.abc import Mapping
+from types import MappingProxyType
 
 from ..model.section import Cardinality, Encoding
 
-FEWEST_BYTES: Mapping[Cardinality, Encoding] = {
+# Read-only at runtime rather than only in the annotation. Both policies are
+# the default argument of every function that takes one, so a stray write here
+# would not be a local mistake -- it would restate what the whole build packs,
+# for every later call in the process.
+FEWEST_BYTES: Mapping[Cardinality, Encoding] = MappingProxyType({
     Cardinality.TOTAL: Encoding.DENSE,
     # A partial column pads rather than skips: the filler compresses to nearly
     # nothing, and the row indexes that would replace it do not.
     Cardinality.PARTIAL: Encoding.DENSE,
     Cardinality.SHARED: Encoding.DEDUP,
-}
+})
 """What ships: the smallest artifact, measured."""
 
-FEWEST_ENTRIES: Mapping[Cardinality, Encoding] = {
+FEWEST_ENTRIES: Mapping[Cardinality, Encoding] = MappingProxyType({
     Cardinality.TOTAL: Encoding.DENSE,
     Cardinality.PARTIAL: Encoding.SPARSE,
     Cardinality.SHARED: Encoding.DEDUP,
-}
+})
 """The fewest values for a reader to walk, at a cost in bytes."""
 
 

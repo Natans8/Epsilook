@@ -276,5 +276,5 @@ def _fold_chain_sounds(vis: SpellVisuals, fx: FxPayloads,
             # A kit can name a chain the payload pass did not keep, so this
             # asks rather than indexes. Exiting on it would make one unresolved
             # row fatal to a build that renders perfectly well without it.
-            if (row := fx.chains.get(chain[0])) and (soundkit := row[3]):
+            if (row := fx.chains.get(chain[0])) and (soundkit := row.sound):
                 merge_masked(vis.sounds[spell], pairs.get(soundkit, ()), mask)

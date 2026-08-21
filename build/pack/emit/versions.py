@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import sys
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -79,7 +80,9 @@ def _read(manifest_path: Path) -> list[dict[str, object]]:
     if not manifest_path.exists():
         return []
     loaded = json.loads(manifest_path.read_text(encoding="utf-8"))
-    assert isinstance(loaded, list)
+    if not isinstance(loaded, list):
+        sys.exit(f"error: {manifest_path} is not a list of packs. The roster "
+                 f"is written by this build; delete it to start over.")
     return loaded
 
 

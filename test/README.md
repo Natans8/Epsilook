@@ -217,9 +217,11 @@ comparison does.
 Named, so the next session picks one instead of guessing. Ordered by what a defect there would cost.
 
 1. **`derive/spelltext.py` — the description cooker.** 618 lines of template parser, producing the text that is roughly
-   44% of a pack's bytes and the whole corpus behind `name:"desc …"`. It has no test file; it is reached only
-   indirectly, through `locales_test.py` importing a locale constant and `values_test.py` covering its inputs. A
-   template-shape regression here is invisible to every other tier. **This is the single most valuable test to write.**
+   44% of a pack's bytes and the whole corpus behind `name:"desc …"`. `spelltext_test.py` now pins one piece of it,
+   the arithmetic an expression body resolves to, against the interpreter's own answer over that grammar. That is the
+   evaluator and nothing above it: substitution, redirects, conditionals, plurals and the shape of a cooked sentence
+   are all still untested, and a template-shape regression there is invisible to every other tier. **This remains the
+   single most valuable place to write the next test.**
 2. **`check.py` has no test.** Thirty-two guards, and the entries reading "verified to fire" record a one-time manual
    act, not a repeatable one. Guards fail open. The cheapest fix is not a suite — it is a fixture directory of
    deliberate violations that the guard is run against.
@@ -257,8 +259,8 @@ same effort buys something.
 
 Line coverage would be actively misleading here. It would report `src/app/` — deliberately dead code — as the largest
 hole in the project and rank it above the cooker; and it would score the cooker's 618 lines as "covered" on the strength
-of one constant import. The map that matters is the tier table plus the thin list above, both of which say what is
-*unanswered*, which is the thing coverage is a proxy for.
+of one constant import and one evaluator test. The map that matters is the tier table plus the thin list above, both
+of which say what is *unanswered*, which is the thing coverage is a proxy for.
 
 If a number is ever wanted, measure the one that means something: **how many of the laws written in `docs/` have a
 fixture here.**

@@ -11,9 +11,10 @@ from __future__ import annotations
 
 import csv
 import sys
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import NamedTuple, Protocol, TextIO
 
 from ..drift import (TDB_CANDIDATE_TABLES, TDB_OPTIONAL_COLUMNS,
                      TDB_OPTIONAL_TABLES)
@@ -32,7 +33,7 @@ Every hotfix table declares it, and the overlay filters rows on it.
 
 # TrinityCore TDB release per game version. "hotfixes" is optional: the 3.3.5
 # branch ships a world-only dump.
-TDB_RELEASES = {
+TDB_RELEASES: Mapping[str, Mapping[str, str]] = {
     "9.2.7.45745": {
         "tag": "TDB927.22111",
         "asset": "TDB_full_927.22111_2022_11_20.7z",
@@ -178,6 +179,31 @@ release we distil" rather than "lossy in this one".
 """
 
 
+class RowWriter(Protocol):
+    """The one thing this module asks of a csv writer.
+
+    Structural rather than nominal because `csv.writer` returns a type the
+    standard library keeps private, and the alternative -- importing `_csv`
+    for its name -- would tie the distiller to an implementation detail to
+    say something this states outright.
+    """
+
+    def writerow(self, row: Iterable[object]) -> object:
+        """Write one row of already-stringified values."""
+
+
+class TableWriter(NamedTuple):
+    """Where one distilled table's rows go, and how a dump row maps onto it."""
+
+    writer: RowWriter
+    """The open csv writer for this table's file."""
+    columns: Sequence[int | None]
+    """Position in the dump row per wanted column; None where the release
+    lacks it and TDB_OPTIONAL_COLUMNS supplies the value instead."""
+    width: int
+    """How many values a dump row for this table must carry."""
+
+
 def tdb_column_index(table: str, column: str, schema: list[str]) -> int | None:
     """Find a column's position in a TDB table.
 
@@ -239,8 +265,8 @@ def distill_dump(lines: Iterable[str], name: str, want: Wanted,
             types are checked against TDB_LOSSY_COLUMNS.
     """
     schemas: dict[str, list[Column]] = {}
-    writers: dict[str, tuple] = {}
-    handles = []
+    writers: dict[str, TableWriter] = {}
+    handles: list[TextIO] = []
     stream = iter(lines)
     for line in stream:
         if line.startswith("CREATE TABLE `"):
@@ -267,16 +293,18 @@ def distill_dump(lines: Iterable[str], name: str, want: Wanted,
                 handles.append(handle)
                 writer = csv.writer(handle)
                 writer.writerow(keep)
-                writers[table] = (writer, idx, len(schemas[table]))
-            writer, idx, width = writers[table]
+                writers[table] = TableWriter(writer, idx, len(schemas[table]))
+            into_table = writers[table]
             for row in iter_insert_rows(line):
-                if len(row) != width:
-                    sys.exit(f"error: {table} row has {len(row)} values, schema has {width}")
-                writer.writerow([row[i] if i is not None
-                                 else TDB_OPTIONAL_COLUMNS[(table, column)]
-                                 for i, column in zip(idx, want[table])])
-    for handle in handles:
-        handle.close()
+                if len(row) != into_table.width:
+                    sys.exit(f"error: {table} row has {len(row)} values, "
+                             f"schema has {into_table.width}")
+                into_table.writer.writerow(
+                    [row[i] if i is not None
+                     else TDB_OPTIONAL_COLUMNS[(table, column)]
+                     for i, column in zip(into_table.columns, want[table])])
+    for open_file in handles:
+        open_file.close()
     for table, keep in want.items():
         if table not in schemas:
             if required and table not in TDB_OPTIONAL_TABLES:
@@ -316,7 +344,7 @@ def distilled(into: Path, want: Wanted) -> bool:
     return True
 
 
-def tdb_release(version: str) -> dict | None:
+def tdb_release(version: str) -> Mapping[str, str] | None:
     """Find the TDB release for a build, matched on the patch not the build id.
 
     TDB_RELEASES is keyed by full build id, but a TDB tracks a patch, so keying

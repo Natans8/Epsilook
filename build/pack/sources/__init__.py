@@ -13,7 +13,7 @@ from __future__ import annotations
 from .acquire import Roster, Sources, fetch_sources, source_roster
 from .enums import (enum_id_where, enum_ids_where, load_local_enum,
                     read_anim_names, read_enum_names)
-from .expansions import load_expansions
+from .expansions import ExpansionLadder, load_expansions
 from .source import Source
 from .wago import SOUNDKITNAME_BUILD, TABLES
 
@@ -30,6 +30,7 @@ __all__ = [
     "enum_id_where",
     "enum_ids_where",
     "fetch_sources",
+    "ExpansionLadder",
     "load_expansions",
     "load_local_enum",
     "read_anim_names",

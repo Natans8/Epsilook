@@ -51,6 +51,7 @@ import sys
 import time
 import tempfile
 import tokenize
+import tomllib
 from collections.abc import Iterable, Iterator
 from pathlib import Path
 
@@ -66,6 +67,7 @@ survive_console_encoding()
 
 SITE = ROOT / "site"
 MANIFEST = SITE / "data" / "versions.json"
+PYPROJECT = ROOT / "pyproject.toml"
 
 # <link href="css/app.css?v=X"> / <script src="js/app.js?v=X">, in EVERY page
 # under site/. 404.html loads the same stylesheet by a root-absolute href
@@ -1798,6 +1800,93 @@ def check_listfile_declaration(rep: Report) -> None:
     rep.ok("listfile declaration", f"build and tools agree on {theirs}")
 
 
+BUILD_STRICT_MODULE = "pack.*"
+"""The mypy override that holds the data build to strict."""
+
+
+def mypy_strict_flags() -> list[str] | None:
+    """What `mypy --strict` turns on, as config-file option names.
+
+    Read from mypy's own help rather than copied: the set grows between
+    releases, and the point of the guard is to notice when it does.
+
+    Returns:
+        The option names, or None when mypy cannot be asked.
+    """
+    exe = shutil.which("uv")
+    if exe is None:
+        return None
+    proc = subprocess.run([exe, "run", "mypy", "--help"], cwd=ROOT,
+                          capture_output=True, encoding="utf-8",
+                          errors="replace", check=False)
+    if proc.returncode != 0:
+        return None
+    lines = proc.stdout.splitlines()
+    for i, line in enumerate(lines):
+        if "enables the following flags" not in line:
+            continue
+        block = [line.split("enables the following flags:", 1)[1]]
+        for following in lines[i + 1:]:
+            # Continuation lines sit at the help's description indent; the next
+            # option starts back at the left. Flag names carry no spaces, so
+            # stripping all whitespace also repairs the mid-word wrapping.
+            if not re.match(r"^\s{20,}\S", following):
+                break
+            block.append(following)
+        joined = re.sub(r"\s+", "", "".join(block))
+        return [flag.removeprefix("--").replace("-", "_")
+                for flag in joined.split(",") if flag.startswith("--")]
+    return None
+
+
+def check_mypy_strict(rep: Report) -> None:
+    """The build's mypy settings must still add up to strict.
+
+    mypy accepts `strict` only at the top level, and this repository is strict
+    for the data build alone -- so the build's settings spell the flags out one
+    by one. A list written once drifts silently in one direction: mypy adds a
+    flag to strict, the spelled-out list does not have it, and the build quietly
+    stops being checked for whatever the new flag catches. Nothing fails, and
+    the config still says strict in its comment.
+
+    A flag counts as enabled whether it is set for the build or globally, and
+    either as `no_x = true` or as `x = false`, because mypy takes both spellings
+    for the inverted ones.
+    """
+    strict = mypy_strict_flags()
+    if strict is None:
+        rep.skip("mypy strict", "mypy could not be asked what --strict enables")
+        return
+
+    config = tomllib.loads(PYPROJECT.read_text(encoding="utf-8"))
+    settings = config.get("tool", {}).get("mypy", {})
+    overrides = [o for o in settings.get("overrides", [])
+                 if BUILD_STRICT_MODULE in
+                 ([o.get("module")] if isinstance(o.get("module"), str)
+                  else o.get("module", []))]
+    if not overrides:
+        rep.fail("mypy strict",
+                 f"pyproject.toml has no [[tool.mypy.overrides]] for "
+                 f"{BUILD_STRICT_MODULE}; the data build is not held to strict")
+        return
+
+    def enabled(option: str) -> bool:
+        inverse = (option.removeprefix("no_") if option.startswith("no_")
+                   else "no_" + option)
+        for table in (*overrides, settings):
+            if table.get(option) is True or table.get(inverse) is False:
+                return True
+        return False
+
+    missing = [option for option in strict if not enabled(option)]
+    if missing:
+        rep.fail("mypy strict",
+                 f"{BUILD_STRICT_MODULE} is missing {', '.join(missing)}; "
+                 f"mypy --strict enables it and the build does not")
+        return
+    rep.ok("mypy strict", f"{len(strict)} flags, all set for {BUILD_STRICT_MODULE}")
+
+
 def check_soundkit_declaration(rep: Report) -> None:
     """The build and the cache sweeper must agree which build is pinned.
 
@@ -2353,6 +2442,7 @@ def main() -> int:
     check_locale_catalogs(rep)
     check_delivery_declaration(rep)
     check_range_declaration(rep)
+    check_mypy_strict(rep)
     check_soundkit_declaration(rep)
     check_supplement(rep)
     check_arcanum(rep)

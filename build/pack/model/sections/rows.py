@@ -143,7 +143,9 @@ def walked(columns: SectionColumns) -> list[Triple]:
     kind-per-reference array and re-reads every reference for an answer already
     in hand.
     """
-    global _WALKED
+    # The one piece of module state in the build, and it is a cache rather
+    # than a fact: rebinding it changes no answer, only how long one takes.
+    global _WALKED  # pylint: disable=global-statement
     if _WALKED is None or _WALKED[0] is not columns:
         _WALKED = (columns, list(walk(columns)))
     return _WALKED[1]

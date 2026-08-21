@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pack.routes.attachments import NO_ATTACHMENT, NO_MOTION
-from pack.routes.fx import FxPayloads, ScreenRow
+from pack.routes.fx import ChainEffect, FxPayloads, ScreenRow
 from pack.routes.kits import read_kit_effects
 from pack.routes.models import (MODEL_CAT_AREA, MODEL_CAT_BARRAGE, MODEL_CAT_TRAIL, SCALE_UNIT,
                                 UNPLACED, ModelSources)
@@ -52,7 +52,8 @@ PROCS = ProcEffects(
     anims={13: ((0, 12),)})
 
 FX = FxPayloads(
-    chains={70: (0, 0, 0, 0, (), (71,)), 71: (0, 0, 0, 0, (), ())},
+    chains={70: ChainEffect(0, 0, 0, 0, (), (71,)),
+            71: ChainEffect(0, 0, 0, 0, (), ())},
     beam_chain={80: (70, 1, 2)},
     dissolves={400: (1.0, (), -1)}, glows={500: 0xFF0000},
     shadowies={600: (0, 0, -1)},
