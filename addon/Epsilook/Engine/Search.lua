@@ -363,7 +363,7 @@ local function poolPropTest(cache, axis, kind, prop, expr, notations)
 	local named = Schema.IsNamed(prop)
 	local tests = {}
 	for _, plan in ipairs(plans) do
-		if vocab == nil or (named and plan.type == "id") then
+		if vocab == nil or (named and Schema.IsIdentity(plan.type)) then
 			-- The stored number is the value: compare it directly.
 			tests[#tests + 1] = plan.test
 		elseif not named or plan.type == "text" then
@@ -1188,7 +1188,7 @@ local function pooledValue(kind, prop, descending)
 	end
 	local vocab = Data.GetVocabName(axis, kind.word, prop.name)
 	local named = Schema.IsNamed(prop)
-	local textual_ = vocab ~= nil and (named or (prop.types[1] ~= "id"))
+	local textual_ = vocab ~= nil and (named or not Schema.IsIdentity(prop.types[1]))
 	local refs, refsBlob = table_.refs, table_.refsBlob
 	local read = node.kind == "int" and Reader.number or Reader.value
 	return function(spell)

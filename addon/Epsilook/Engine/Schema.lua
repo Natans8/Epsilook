@@ -28,7 +28,7 @@ local Text = Epsilook.Text
 local floor, abs = math.floor, math.abs
 
 --- The shape of declarations this file reads. Another is refused at load.
-Schema.FORMAT = 3
+Schema.FORMAT = 4
 
 --- The synthetic property behind the count word, so a cardinality reads its
 -- operands like any numeric axis. Its word is read off the grammar at load.
@@ -250,10 +250,18 @@ function Schema.BareOp(typeName)
 	return Schema.Accepts(typeName, "contains") and "contains" or "exact"
 end
 
+--- Whether a type is an identity: a number naming one row of some registry.
+-- Read off the declaration rather than by naming a type, because there are
+-- nine of them and a tenth must not need an edit here.
+function Schema.IsIdentity(typeName)
+	local declaredType = Schema.types[typeName]
+	return declaredType ~= nil and declaredType.identity == true
+end
+
 --- Whether a property names a thing with both an id and a name, so a row
 -- carries two readings of one stored number.
 function Schema.IsNamed(prop)
-	return prop.types[1] == "id" and prop.types[2] == "text"
+	return Schema.IsIdentity(prop.types[1]) and prop.types[2] == "text"
 end
 
 --- The ordered vocabulary ordinal values live in, lowest rank first, and the
@@ -390,7 +398,7 @@ function Schema.ParseType(typeName, written)
 	end
 	if Schema.IsTextual(typeName) then
 		return written
-	elseif typeName == "id" or typeName == "count" then
+	elseif Schema.IsIdentity(typeName) or typeName == "count" then
 		return wholeNumber(written)
 	elseif typeName == "ordinal" then
 		if #ladder == 0 then

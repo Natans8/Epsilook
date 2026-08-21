@@ -229,7 +229,7 @@ function Inspect.Values(part)
 				text = Epsilook:FormatPartValue(part.axis, part.kind, prop.name, value),
 				id = type(value) == "table" and value.id or nil,
 				path = prop.types[1] == "path",
-				number = prop.types[1] == "id" and type(value) ~= "table",
+				number = Epsilook.Schema.IsIdentity(prop.types[1]) and type(value) ~= "table",
 				colour = prop.types[1] == "colour" and value or nil,
 				stored = Epsilook.Data.GetStored(part.axis, part.kind, part.slot, prop.name),
 				vocab = Epsilook.Data.GetVocabName(part.axis, part.kind, prop.name),

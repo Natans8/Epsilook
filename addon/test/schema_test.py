@@ -26,8 +26,8 @@ def test_numeric_notations_read_as_the_web_does(engine: LuaRuntime) -> None:
     assert parse(b"bitmask", b"caster") == b"caster"
     assert parse(b"bitmask", b"everyone") is None
     assert parse(b"ordinal", b"wrath") == b"WotLK"
-    assert parse(b"id", b"133") == 133
-    assert parse(b"id", b"13.3") is None
+    assert parse(b"spellId", b"133") == 133
+    assert parse(b"spellId", b"13.3") is None
 
 
 def test_a_range_reads_both_bounds_in_one_notation(engine: LuaRuntime) -> None:
