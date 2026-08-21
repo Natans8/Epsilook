@@ -17,6 +17,8 @@ import {useTranslation} from "react-i18next";
 import type {ChipView, ClauseView, LaneView, Piece, Run, Span} from "../../search/index";
 import {describe, GRAMMAR, NEGATION, paint, parse, runsWithin} from "../../search/index";
 import {Classed, Pattern} from "./classed";
+import type {SegmentActions} from "./session";
+import {toneOf} from "./tone";
 import styles from "./bar.module.css";
 
 /**
@@ -27,60 +29,6 @@ import styles from "./bar.module.css";
  * carries the weight instead.
  */
 export const headCase = (word: string): string => word.toLowerCase();
-
-/** What a settled segment can ask of the bar. Offsets are into the segment's own raw spelling. */
-export interface SegmentActions {
-    /** Opens the segment for editing: at the slot's start or end, or at a raw offset. */
-    readonly open: (side: "start" | "end" | number) => void;
-    /** Removes the segment whole. */
-    readonly remove: () => void;
-    /**
-     * Removes one term from inside the segment's scope, by its index among the lane's items.
-     *
-     * An INDEX rather than a span: a press settles whatever segment was open first, and that commit can rewrite
-     * the very segment being acted on (trimming a scope's interior shifts every span inside it). The index
-     * survives that, because a commit never adds or removes a term.
-     */
-    readonly removeTerm: (index: number) => void;
-    /**
-     * Grows the segment: a fresh term slot, or a fresh value alternative.
-     *
-     * TODO: no caller until the control surface lands the `+` affordance that presses it. The rewrite and its
-     *   tests are in place, so what is missing is the button, not the behaviour.
-     */
-    readonly grow: (flavour: "term" | "alternative") => void;
-    /** Flips the whole segment between asking for and excluding what it names. */
-    readonly negate: () => void;
-    /**
-     * The same flip on the segment currently being EDITED, in place.
-     *
-     * Apart from {@link negate} because every settled action commits the open segment before it acts, which
-     * would end the session the reader is still inside — and editing is when a reader most wants to invert.
-     */
-    readonly negateOpen: () => void;
-    /** Flips one of a lane's terms, by its index among the items. */
-    readonly negateTerm: (index: number) => void;
-    /** Turns one door of a sort directive round, by its position among the directive's sorts. */
-    readonly toggleSort: (door: number) => void;
-}
-
-/** The column tones, by key; a column without a declared tone renders neutral. */
-const TONES: Record<string, string | undefined> = {
-    model: styles.toneModel, sound: styles.toneSound, anim: styles.toneAnim,
-    fx: styles.toneFx, mech: styles.toneMech, spell: styles.toneSpell, id: styles.toneSpell,
-};
-
-/**
- * The tone one column wears, for any surface that draws in the chip language.
- *
- * The control surface draws the chip an offer would become, so it reads the tones from here rather than keeping
- * a second table: a column added to one of them and not the other would show two colours for one axis.
- *
- * @param column The column's key.
- * @returns Its tone class, or an empty string where the column declares none.
- */
-export const toneOf = (column: string | undefined): string =>
-    (column === undefined ? "" : TONES[column] ?? "");
 
 /**
  * A guarded press: the chip owns it — no bar-level aim, no focus theft before the open lands. The event is
@@ -352,7 +300,7 @@ function Sect({head, not, hint, className, onOpen}: {
 
 /** The state classes a chip or lane wears over its tone. */
 function stateClass(base: string, tone: string, not: boolean, warned: boolean): string {
-    const parts = [base, TONES[tone] ?? "", not ? styles.chipNegated : "", warned ? styles.chipWarned : ""];
+    const parts = [base, toneOf(tone), not ? styles.chipNegated : "", warned ? styles.chipWarned : ""];
     return parts.filter((part) => part !== "").join(" ");
 }
 

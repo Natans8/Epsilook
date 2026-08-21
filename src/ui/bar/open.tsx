@@ -15,47 +15,14 @@ import type {KeyboardEvent, ReactElement, ReactNode} from "react";
 import {useLayoutEffect, useRef} from "react";
 import {useTranslation} from "react-i18next";
 import {GRAMMAR, NEGATION} from "../../search/index";
+import type {Assist} from "./assist";
 import {headCase} from "./chip";
 import type {BarPlan, Keystroke} from "./plan";
 import {
     backspaceAtStart, deleteAtEnd, keywordBehind, negatesBefore, pairDelimiter, slotStart, writeSlot,
 } from "./plan";
+import type {CaretRequest} from "./session";
 import styles from "./bar.module.css";
-
-/** Where the caret starts this session, in slot coordinates; an anchor makes it a selection. */
-export interface CaretRequest {
-    readonly at: number;
-    readonly anchor?: number;
-}
-
-/**
- * The control surface as the slot sees it: what is on offer, and the four things a keyboard can do about it.
- *
- * The slot owns the keys because the caret never leaves it — a combobox steers its list from the field — so the
- * surface's own gestures have to be answered here, before the bar's traversal claims the same keys.
- */
-export interface Assist {
-    /** How many offers stand, whether or not the panel is drawn — what the arrows have to steer. */
-    readonly count: number;
-    /** Whether the panel is drawn. Escape puts it away without touching the offers behind it. */
-    readonly open: boolean;
-    /** The lit offer's index, or -1 when the reader has lit none. */
-    readonly lit: number;
-    /** The completion drawn dim after the caret, or empty. */
-    readonly ghost: string;
-    /** The panel's element id, which the field names in `aria-controls`. */
-    readonly listId: string;
-    /** The lit option's element id, which the field points at while the focus stays put. */
-    readonly activeId?: string;
-    /** Walks the light through the offers, wrapping at either end. */
-    readonly move: (dir: -1 | 1) => void;
-    /** Applies the lit offer. */
-    readonly pick: () => void;
-    /** Dismisses the surface until what is on offer changes. */
-    readonly close: () => void;
-    /** Takes the ghost into the slot. */
-    readonly accept: () => void;
-}
 
 /**
  * The open segment. Remounted per session — the mount is what seeds the input and places the caret.

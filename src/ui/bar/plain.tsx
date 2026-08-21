@@ -16,8 +16,8 @@ import {useLayoutEffect, useMemo, useRef, useState} from "react";
 import {pairDelimiter, planAt, slotStart, writeSlot} from "./plan";
 import type {Offer, Vocabulary} from "./offers";
 import {NO_VOCABULARY, offerSlot, offersAt} from "./offers";
-import {useOfferPanel} from "./panel";
-import {optionId, Surface} from "./surface";
+import {optionId, useOfferPanel} from "./panel";
+import {Surface} from "./surface";
 import {Classed} from "./classed";
 // Two sheets, two jobs: the bar's own frame is shared with the chip view, the rest is this view's alone.
 import frame from "./bar.module.css";
@@ -141,7 +141,12 @@ export function PlainBar({text, onText, placeholder, label, history = NO_HISTORY
             move(step);
             return;
         }
-        if (shown && here >= 0 && (e.key === "Enter" || e.key === "Tab")) {
+        // A MODIFIED Tab is the platform's own: Shift+Tab walks the focus backwards, and taking an offer on it
+        // would trap a keyboard reader in the field for as long as the panel stands. The chip view's slot has
+        // always guarded this and this surface had not — the divergence the shared panel state was split out to
+        // stop, in the one half that stayed written twice.
+        const bareTab = e.key === "Tab" && !e.shiftKey && !e.ctrlKey && !e.altKey;
+        if (shown && here >= 0 && (e.key === "Enter" || bareTab)) {
             e.preventDefault();
             apply(flat[here]);
             return;
@@ -150,7 +155,7 @@ export function PlainBar({text, onText, placeholder, label, history = NO_HISTORY
         // the platform, which moved the focus to the next control -- the view switch, which is the one thing a
         // reader mid-query does not want. An offer's ghost is that offer; a unit or a closer has no row and is
         // written straight in.
-        if (shown && e.key === "Tab" && ghosting) {
+        if (shown && bareTab && ghosting) {
             e.preventDefault();
             // Whatever the field DREW: the ghost names its own offer, so the word previewed and the word
             // delivered cannot come apart.

@@ -10,13 +10,40 @@
  * Split out of the bar because it reaches the session through four calls and nothing reaches back into it.
  */
 import {useMemo, useState} from "react";
-import type {Assist} from "./open";
 import type {Offer, Offers, Vocabulary} from "./offers";
 import {NO_OFFERS, offerSlot, offersAt} from "./offers";
-import {useOfferPanel} from "./panel";
+import {optionId, useOfferPanel} from "./panel";
 import {slotStart, writeSlot} from "./plan";
-import {optionId} from "./surface";
 import type {EditingSession} from "./session";
+
+/**
+ * The control surface as the slot sees it: what is on offer, and the four things a keyboard can do about it.
+ *
+ * The slot owns the keys because the caret never leaves it — a combobox steers its list from the field — so the
+ * surface's own gestures have to be answered here, before the bar's traversal claims the same keys.
+ */
+export interface Assist {
+    /** How many offers stand, whether or not the panel is drawn — what the arrows have to steer. */
+    readonly count: number;
+    /** Whether the panel is drawn. Escape puts it away without touching the offers behind it. */
+    readonly open: boolean;
+    /** The lit offer's index, or -1 when the reader has lit none. */
+    readonly lit: number;
+    /** The completion drawn dim after the caret, or empty. */
+    readonly ghost: string;
+    /** The panel's element id, which the field names in `aria-controls`. */
+    readonly listId: string;
+    /** The lit option's element id, which the field points at while the focus stays put. */
+    readonly activeId?: string;
+    /** Walks the light through the offers, wrapping at either end. */
+    readonly move: (dir: -1 | 1) => void;
+    /** Applies the lit offer. */
+    readonly pick: () => void;
+    /** Dismisses the surface until what is on offer changes. */
+    readonly close: () => void;
+    /** Takes the ghost into the slot. */
+    readonly accept: () => void;
+}
 
 /** What the bar draws of the control surface, and the contract the slot answers to. */
 export interface BarAssist {

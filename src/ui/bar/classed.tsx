@@ -10,6 +10,7 @@ import type {Run, Span} from "../../search/index";
 import {classify, paint} from "../../search/index";
 import type {PatternKind} from "./pattern";
 import {patternRuns} from "./pattern";
+import {runToneOf} from "./tone";
 import styles from "./bar.module.css";
 
 /** The colour class per run kind; a plain word paints nothing and inherits the text colour. */
@@ -42,12 +43,6 @@ const PATTERN_CLASS: Record<PatternKind, string | undefined> = {
     // about itself rather than matching a character, which is the one thing the tone means here. The library
     // keeps them apart and this palette does not; they are separate the moment a reason to separate them shows.
     classBoundary: styles.rxMeta, classMeta: styles.rxMeta, classRange: styles.rxMeta,
-};
-
-/** The tone class per column key — the same families the chips wear, so one query reads one colour language. */
-const TONE_CLASS: Record<string, string | undefined> = {
-    model: styles.runModel, sound: styles.runSound, anim: styles.runAnim,
-    fx: styles.runFx, mech: styles.runMech, spell: styles.runSpell, id: styles.runSpell,
 };
 
 /**
@@ -109,7 +104,7 @@ export function Classed({text, rich, runs: given, mirrored, selected}: {
             // Exclusion outranks the column's tone, exactly as it does on a chip: the minus and the word it
             // excludes are one red unit, and the tone says which column that unit reaches.
             run.negated === true ? styles.runNeg
-                : run.tone === undefined ? byKind[run.kind] : TONE_CLASS[run.tone] ?? byKind[run.kind],
+                : run.tone === undefined ? byKind[run.kind] : runToneOf(run.tone) ?? byKind[run.kind],
             // Loudness is spent on the any-word alone — the one word that is a VALUE and yet not data. A door
             // needs none: it already wears its column's tone, and a value never wears one, so the colour has
             // already said which of the two this is. Marking doors as well made the same door read two ways,

@@ -15,9 +15,49 @@ import {
     commitSegment, firstDiff, grownSegment, insertAtGap, planAt, removeSegment, removeTerm, scopedForm, shiftScope,
     scopeGesture, segmentAt, slotStart, toggleNegation, toggleSort,
 } from "./plan";
-import type {CaretRequest} from "./open";
-import type {SegmentActions} from "./chip";
 import {laneItemAt} from "./lane";
+
+/** Where the caret starts this session, in slot coordinates; an anchor makes it a selection. */
+export interface CaretRequest {
+    readonly at: number;
+    readonly anchor?: number;
+}
+
+/** What a settled segment can ask of the bar. Offsets are into the segment's own raw spelling. */
+export interface SegmentActions {
+    /** Opens the segment for editing: at the slot's start or end, or at a raw offset. */
+    readonly open: (side: "start" | "end" | number) => void;
+    /** Removes the segment whole. */
+    readonly remove: () => void;
+    /**
+     * Removes one term from inside the segment's scope, by its index among the lane's items.
+     *
+     * An INDEX rather than a span: a press settles whatever segment was open first, and that commit can rewrite
+     * the very segment being acted on (trimming a scope's interior shifts every span inside it). The index
+     * survives that, because a commit never adds or removes a term.
+     */
+    readonly removeTerm: (index: number) => void;
+    /**
+     * Grows the segment: a fresh term slot, or a fresh value alternative.
+     *
+     * TODO: no caller until the control surface lands the `+` affordance that presses it. The rewrite and its
+     *   tests are in place, so what is missing is the button, not the behaviour.
+     */
+    readonly grow: (flavour: "term" | "alternative") => void;
+    /** Flips the whole segment between asking for and excluding what it names. */
+    readonly negate: () => void;
+    /**
+     * The same flip on the segment currently being EDITED, in place.
+     *
+     * Apart from {@link negate} because every settled action commits the open segment before it acts, which
+     * would end the session the reader is still inside — and editing is when a reader most wants to invert.
+     */
+    readonly negateOpen: () => void;
+    /** Flips one of a lane's terms, by its index among the items. */
+    readonly negateTerm: (index: number) => void;
+    /** Turns one door of a sort directive round, by its position among the directive's sorts. */
+    readonly toggleSort: (door: number) => void;
+}
 
 /** The open position, the plan it implies, and every operation that moves it. */
 export interface EditingSession {

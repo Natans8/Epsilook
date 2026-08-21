@@ -138,3 +138,20 @@ test("the plaintext view offers the same words, and takes one without rewriting 
     await expectQuery(page, "model:");
     expect(await plainField(page).inputValue()).toBe("model:");
 });
+
+test("a modified Tab stays the platform's: Shift+Tab leaves the field with the panel standing", async () => {
+    if (await plainSwitch(page).getAttribute("aria-checked") !== "true") await plainSwitch(page).click();
+    await plainField(page).click();
+    await page.keyboard.press("Control+a");
+    await page.keyboard.press("Backspace");
+    await page.keyboard.type("mo", {delay: 5});
+    await expect(page.locator("[data-surface]")).toBeVisible();
+    // A lit row is what a bare Tab would take, so this is the cell where the modifier has to be the difference.
+    await page.keyboard.press("ArrowDown");
+
+    await page.keyboard.press("Shift+Tab");
+    // Nothing written, and the focus walked backwards — the one thing Shift+Tab means. Taking the offer here
+    // would hold a keyboard reader in the field for as long as the panel stood.
+    expect(await held()).toBe("mo");
+    await expect(plainField(page)).not.toBeFocused();
+});

@@ -18,13 +18,11 @@ import {useLayoutEffect, useRef} from "react";
 import {useTranslation} from "react-i18next";
 import type {Offer, Offers} from "./offers";
 import {Classed} from "./classed";
-import {toneOf} from "./chip";
+import {optionId} from "./panel";
+import {toneOf} from "./tone";
 import {NEGATION} from "../../search/index";
 import bar from "./bar.module.css";
 import styles from "./surface.module.css";
-
-/** The id one option answers to, so the input can point at it without moving the focus. */
-export const optionId = (list: string, index: number): string => `${list}-opt-${String(index)}`;
 
 /** One offer, drawn as the thing it will become. */
 function Row({offer, negated, lit, id, onPick, onLight}: {

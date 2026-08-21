@@ -107,6 +107,44 @@ function simplerOf(text: string, plain: boolean): Simpler {
 }
 
 /**
+ * One knob: a captioned select whose choice is a URL parameter.
+ *
+ * The three of them differ only in what they list and which parameter they write, and every one needs a refetch —
+ * another pack, another pack language, another bundled catalog — so the reload belongs to the control rather than
+ * to each caller's own change handler.
+ */
+function Knob({caption, param, value, options, disabled, hint}: {
+    readonly caption: string;
+    /** The URL parameter this knob writes. Writing it reloads, which is what fetches the choice. */
+    readonly param: string;
+    readonly value: string;
+    /** What it lists: the value written, and what the row reads as. */
+    readonly options: readonly { readonly value: string; readonly label: string }[];
+    /**
+     * Whether the choice is refused. A knob with one option is drawn and disabled rather than hidden — the axis
+     * exists whether or not this pack has anything to say on it, and a control that vanishes says nothing.
+     */
+    readonly disabled?: boolean;
+    /** Why it is refused, where it is. */
+    readonly hint?: string;
+}): ReactElement {
+    return (
+        <label className={styles.knob} title={hint}>
+            {caption}
+            <select
+                value={value}
+                disabled={disabled}
+                onChange={(e) => {
+                    reloadWith(param, e.target.value);
+                }}
+            >
+                {options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+            </select>
+        </label>
+    );
+}
+
+/**
  * The simplify button, to the bar's right, with its preview.
  *
  * Simplification is explicit-only, so the button is the one door — but a rewrite the reader cannot see before
@@ -243,36 +281,21 @@ export function App({info, searcher}: {
                 <h1 className={styles.title}>{t("harness.title")}</h1>
                 <span className={styles.subtitle}>{t("harness.subtitle")}</span>
                 <span className={styles.knobs}>
-                    <label className={styles.knob}>
-                        {t("harness.version")}
-                        <select
-                            value={info.version.id}
-                            onChange={(e) => {
-                                reloadWith("v", e.target.value);
-                            }}
-                        >
-                            {info.versions.filter((v) => v.hidden !== true).map((v) => (
-                                <option key={v.id} value={v.id}>{v.label}</option>
-                            ))}
-                        </select>
-                    </label>
-                    <label
-                        className={styles.knob}
-                        title={info.locales.length < 2 ? t("harness.onlyLanguage") : undefined}
-                    >
-                        {t("harness.packLanguage")}
-                        <select
-                            value={info.locale}
-                            disabled={info.locales.length < 2}
-                            onChange={(e) => {
-                                reloadWith("lang", e.target.value);
-                            }}
-                        >
-                            {info.locales.map((locale) => (
-                                <option key={locale} value={locale}>{locale}</option>
-                            ))}
-                        </select>
-                    </label>
+                    <Knob
+                        caption={t("harness.version")}
+                        param="v"
+                        value={info.version.id}
+                        options={info.versions.filter((v) => v.hidden !== true)
+                            .map((v) => ({value: v.id, label: v.label}))}
+                    />
+                    <Knob
+                        caption={t("harness.packLanguage")}
+                        param="lang"
+                        value={info.locale}
+                        options={info.locales.map((locale) => ({value: locale, label: locale}))}
+                        disabled={info.locales.length < 2}
+                        hint={info.locales.length < 2 ? t("harness.onlyLanguage") : undefined}
+                    />
                 </span>
             </header>
 
@@ -327,17 +350,12 @@ export function App({info, searcher}: {
             </section>
 
             <footer className={styles.footer}>
-                <label className={styles.knob}>
-                    {t("harness.appLanguage")}
-                    <select
-                        value={i18n.resolvedLanguage ?? "en"}
-                        onChange={(e) => {
-                            reloadWith("lng", e.target.value);
-                        }}
-                    >
-                        {APP_LANGUAGES.map((code) => <option key={code} value={code}>{code}</option>)}
-                    </select>
-                </label>
+                <Knob
+                    caption={t("harness.appLanguage")}
+                    param="lng"
+                    value={i18n.resolvedLanguage ?? "en"}
+                    options={APP_LANGUAGES.map((code) => ({value: code, label: code}))}
+                />
             </footer>
         </div>
     );

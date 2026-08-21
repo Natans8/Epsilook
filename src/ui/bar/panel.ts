@@ -14,6 +14,9 @@ import {useId, useState} from "react";
 import type {Offer, Offers} from "./offers";
 import {flatOffers, offerGhost} from "./offers";
 
+/** The id one option answers to, so the input can point at it without moving the focus. */
+export const optionId = (list: string, index: number): string => `${list}-opt-${String(index)}`;
+
 /** The panel's state, and everything a keyboard or a pointer may do to it. */
 export interface OfferPanel {
     /** Every offer in draw order — what the arrows walk and what a pick indexes into. */
