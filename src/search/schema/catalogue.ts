@@ -46,8 +46,9 @@ import type {Prop} from "./kinds";
 import {defineKind, TIER} from "./kinds";
 import type {AxisType} from "../vocabulary/value-types";
 import {
-    bitmask, colour, count, enumeration, flag, id, length, multiplier, offset, ordinal, path, percent, percentChange,
-    rotation, seconds, text,
+    animKitId, bitmask, channelId, colour, count, creatureId, displayId, enumeration, fileId, flag, itemId, length,
+    multiplier, objectId, offset, ordinal, path, percent, percentChange, rotation, seconds, soundKitId,
+    spellId as spellIdentity, text,
 } from "../vocabulary/value-types";
 
 /** A property with no role in chipless search. */
@@ -65,14 +66,15 @@ const corpus = (tier: number, ...types: readonly AxisType[]): Prop =>
  * The hint is stated here rather than inherited: falling back to the first type would describe the property as an id
  * alone, which is the notation a reader is least likely to have.
  *
+ * @param what Which identity the digits name, so a surface can lead a sound kit and a spell to different places.
  * @param hint One line naming the thing, a whole sentence so a locale can phrase it its own way.
  * @param tier The relevance tier for chipless search, or omitted to keep the property out of it.
  * @returns The property declaration.
  */
-const named = (hint: string, tier?: number): Prop => {
+const named = (what: AxisType, hint: string, tier?: number): Prop => {
     return tier === undefined
-        ? {types: [id, text], hint}
-        : {types: [id, text], plain: [text], tier, hint};
+        ? {types: [what, text], hint}
+        : {types: [what, text], plain: [text], tier, hint};
 };
 
 /** Which participants a row plays on. */
@@ -107,7 +109,7 @@ const placement = (): Record<string, Prop> => ({
     offset: {types: [offset], qualifier: true},
     rotation: {types: [rotation], qualifier: true},
     anim: {types: [enumeration], qualifier: true},
-    animkit: {types: [id], qualifier: true},
+    animkit: {types: [animKitId], qualifier: true},
 });
 
 /* The spell itself: what it is called, says and shows, and how it goes off. Name, desc and icon are top-level words. */
@@ -130,7 +132,7 @@ export const icon = defineKind({
     hint: t("tooltips:kind.icon.hint"),
     props: {
         name: corpus(TIER.asset, text),
-        fid: {types: [id], hint: t("tooltips:kind.icon.props.fid")},
+        fid: {types: [fileId], hint: t("tooltips:kind.icon.props.fid")},
     },
 });
 
@@ -212,7 +214,7 @@ export const range = defineKind({
 export const spellId = defineKind({
     column: idColumn, single: true,
     hint: t("tooltips:kind.spellId.hint"),
-    props: {value: corpus(TIER.id, id)},
+    props: {value: corpus(TIER.id, spellIdentity)},
 });
 
 export const expansion = defineKind({
@@ -279,7 +281,7 @@ export const display = defineKind({
     column: modelColumn, word: "display", group: "attach",
     hint: t("tooltips:kind.display.hint"),
     props: {
-        id: {types: [id], hint: t("tooltips:kind.display.props.id")},
+        id: {types: [displayId], hint: t("tooltips:kind.display.props.id")},
         name: corpus(TIER.asset, text),
         file: corpus(TIER.asset, path),
         where: attachPoint(t("tooltips:kind.display.props.where"), "point"),
@@ -297,7 +299,7 @@ export const item = defineKind({
     hint: t("tooltips:kind.item.hint"),
     props: {
         name: corpus(TIER.asset, text),
-        id: {types: [id], hint: t("tooltips:kind.item.props.id")},
+        id: {types: [itemId], hint: t("tooltips:kind.item.props.id")},
         file: corpus(TIER.asset, path),
         where: attachPoint(t("tooltips:kind.item.props.where"), "point"),
         target: target(),
@@ -334,7 +336,7 @@ export const sound = defineKind({
     hint: t("tooltips:kind.sound.hint"),
     props: {
         file: corpus(TIER.asset, path),
-        kit: named(t("tooltips:kind.sound.props.kit"), TIER.asset),
+        kit: named(soundKitId, t("tooltips:kind.sound.props.kit"), TIER.asset),
         type: {types: [enumeration], hint: t("tooltips:kind.sound.props.type")},
         target: target(),
     },
@@ -346,7 +348,7 @@ export const animKit = defineKind({
     column: animColumn, word: "kit", group: "played",
     hint: t("tooltips:kind.animKit.hint"),
     props: {
-        id: {types: [id], hint: t("tooltips:kind.animKit.props.id")},
+        id: {types: [animKitId], hint: t("tooltips:kind.animKit.props.id")},
         anim: corpus(TIER.asset, enumeration),
         boneset: {types: [enumeration], hint: t("tooltips:kind.animKit.props.boneset")},
         target: target(),
@@ -502,7 +504,7 @@ export const camo = defineKind({
 export const morph = defineKind({
     column: fxColumn, word: "morph", global: true, group: "transform",
     hint: t("tooltips:kind.morph.hint"),
-    props: {creature: named(t("tooltips:kind.morph.props.creature"), TIER.asset), target: target()},
+    props: {creature: named(creatureId, t("tooltips:kind.morph.props.creature"), TIER.asset), target: target()},
 });
 
 export const shapeshift = defineKind({
@@ -527,7 +529,7 @@ export const summon = defineKind({
     column: fxColumn, word: "summon", global: true, group: "spawn",
     hint: t("tooltips:kind.summon.hint"),
     props: {
-        creature: named(t("tooltips:kind.summon.props.creature"), TIER.asset),
+        creature: named(creatureId, t("tooltips:kind.summon.props.creature"), TIER.asset),
         control: corpus(TIER.asset, enumeration),
         target: target(),
     },
@@ -536,7 +538,7 @@ export const summon = defineKind({
 export const gameObject = defineKind({
     column: fxColumn, word: "object", group: "spawn", full: "gameobject",
     hint: t("tooltips:kind.gameObject.hint"),
-    props: {object: named(t("tooltips:kind.gameObject.props.object"), TIER.asset), target: target()},
+    props: {object: named(objectId, t("tooltips:kind.gameObject.props.object"), TIER.asset), target: target()},
 });
 
 /** A full-screen effect. Searched by its textures; the effect-type words are not part of the vocabulary. */
@@ -574,7 +576,7 @@ export const triggers = defineKind({
     column: mechColumn, word: "triggers", global: true, group: "link",
     hint: t("tooltips:kind.triggers.hint"),
     props: {
-        spell: named(t("tooltips:kind.triggers.props.spell")),
+        spell: named(spellIdentity, t("tooltips:kind.triggers.props.spell")),
         how: of(enumeration),
         target: target(),
     },
@@ -584,7 +586,7 @@ export const origin = defineKind({
     column: mechColumn, word: "origin", global: true, group: "link",
     hint: t("tooltips:kind.origin.hint"),
     props: {
-        spell: named(t("tooltips:kind.origin.props.spell")),
+        spell: named(spellIdentity, t("tooltips:kind.origin.props.spell")),
         how: of(enumeration),
         target: target(),
     },
@@ -602,7 +604,7 @@ export const invis = defineKind({
     column: mechColumn, word: "invis", group: "stealth", full: "invisibility",
     hint: t("tooltips:kind.invis.hint"),
     props: {
-        channel: {types: [id], hint: t("tooltips:kind.invis.props.channel")},
+        channel: {types: [channelId], hint: t("tooltips:kind.invis.props.channel")},
         target: target(),
     },
 });
@@ -611,7 +613,7 @@ export const detect = defineKind({
     column: mechColumn, word: "detect", group: "stealth",
     hint: t("tooltips:kind.detect.hint"),
     props: {
-        channel: {types: [id], hint: t("tooltips:kind.detect.props.channel")},
+        channel: {types: [channelId], hint: t("tooltips:kind.detect.props.channel")},
         count: {types: [count], hint: t("tooltips:kind.detect.props.count")},
         target: target(),
     },

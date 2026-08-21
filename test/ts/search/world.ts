@@ -47,7 +47,9 @@ const WORLD: readonly Spec[] = [
     /* 0 */ {
         id: 100, name: "Fireball", xpac: "classic", delivery: {cast: 2500},
         model: [m("spell/fire/fireball_missile.m2", "right hand", "chest", "parabola")],
-        sound: [row(soundKind, {file: "sound/spell/fireballcast.ogg", kit: {id: 150, text: "FireImpact"}, target: 1})],
+        sound: [row(soundKind, {
+            file: "sound/spell/fireballcast.ogg", kit: {soundKitId: 150, text: "FireImpact"}, target: 1,
+        })],
         mech: [row(effect, {name: "SCHOOL_DAMAGE", target: 2})],
     },
     /* 1 */ {
@@ -73,7 +75,7 @@ const WORLD: readonly Spec[] = [
     /* 5 */ {id: 105, name: "Giant Growth", xpac: "legion", delivery: {channel: -1}, fx: [row(scale, {amount: 50})]},
     /* 6 — a kit NAMED by digits, for the quote law */ {
         id: 106, name: "Odd Chime", xpac: "bfa",
-        sound: [row(soundKind, {file: "sound/odd.ogg", kit: {id: 9999, text: "150"}})],
+        sound: [row(soundKind, {file: "sound/odd.ogg", kit: {soundKitId: 9999, text: "150"}})],
     },
     /* 7 — no visuals at all; found by its description and its id */ {
         id: 133, name: "Pure Thought", desc: "A spell with no visuals, pure arcane thought.", xpac: "wotlk",

@@ -252,7 +252,7 @@ describe("alternation", () => {
     });
 
     it("compares numerically where a bare token is an equality test", () => {
-        const any = matcher("anyOf", "id")!;
+        const any = matcher("anyOf", "spellId")!;
         assert.equal(any(133, [133, 116]), true);
         assert.equal(any(999, [133, 116]), false);
     });

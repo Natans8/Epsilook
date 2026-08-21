@@ -13,7 +13,7 @@ import {camo, chain, description, expansion} from "../../../../src/search/schema
 import {COLUMNS, fxColumn, modelColumn} from "../../../../src/search/schema/columns";
 import {defineKind, formatValue, hintOf, KINDS, operatorsOf, parseValue} from "../../../../src/search/schema/kinds";
 import {buildSchema, HEADS, kindIn, kindsOf, propIn, schemaProblems} from "../../../../src/search/schema/schema";
-import {flag, id, path, text, TYPES} from "../../../../src/search/vocabulary/value-types";
+import {flag, itemId, path, spellId, text, TYPES} from "../../../../src/search/vocabulary/value-types";
 import {parse} from "../../../../src/search/language/parse";
 import {isFlag} from "../../../../src/search/schema/kinds";
 
@@ -261,14 +261,14 @@ describe("operatorsOf", () => {
         // Offering an operator only one notation answers would make the result depend on what the operand happened to
         // look like.
         const kit = KINDS.get("sound.sound")!.props.kit;
-        assert.deepEqual(kit.types.map((t) => t.name), ["id", "text"]);
+        assert.deepEqual(kit.types.map((t) => t.name), ["soundKitId", "text"]);
         assert.deepEqual(operatorsOf(kit).toSorted(), ["anyOf", "exact", "present"]);
     });
 
     it("leaves a single-type property with everything that type accepts", () => {
         assert.deepEqual(operatorsOf({types: [text]}).toSorted(),
             ["anyOf", "contains", "exact", "glob", "present", "regex"]);
-        assert.deepEqual(operatorsOf({types: [id]}).toSorted(), ["anyOf", "exact", "present"]);
+        assert.deepEqual(operatorsOf({types: [spellId]}).toSorted(), ["anyOf", "exact", "present"]);
     });
 });
 
@@ -292,7 +292,7 @@ describe("parseValue and formatValue", () => {
 
     it("dispatches an operand to the first notation that accepts it", () => {
         const kit = KINDS.get("sound.sound")!.props.kit;
-        assert.deepEqual(parseValue(kit, "85701"), {type: TYPES.get("id"), value: 85701});
+        assert.deepEqual(parseValue(kit, "85701"), {type: TYPES.get("soundKitId"), value: 85701});
         assert.deepEqual(parseValue(kit, "frostbolt"), {type: TYPES.get("text"), value: "frostbolt"});
         assert.equal(parseValue(delivery().props.cast, "frostbolt"), null);
     });
@@ -312,7 +312,7 @@ describe("hintOf", () => {
 
     it("falls back to the first type's line", () => {
         assert.equal(hintOf({types: [path]}), path.hint);
-        assert.equal(hintOf({types: [id, text]}), id.hint);
+        assert.equal(hintOf({types: [spellId, text]}), spellId.hint);
     });
 });
 
@@ -404,11 +404,12 @@ describe("the declaration checks", () => {
 
     it("fires when a second identity notation joins chipless search", () => {
         // A bare number in chipless search means the spell's own id; a second identity door would give the same
-        // digits a second answer.
+        // digits a second answer. Declared with a DIFFERENT member of the identity family, because the rule is
+        // about what an identity is and not about which one the spell's own door happens to use.
         const problems = problemsWith({
             column: modelColumn, word: "numbered",
             hint: "a deliberate second identity door",
-            props: {ref: {types: [id], plain: [id], tier: 1}},
+            props: {ref: {types: [itemId], plain: [itemId], tier: 1}},
         });
         assert.equal(problems.length, 1);
         assert.match(problems[0], /more than one identity notation/);

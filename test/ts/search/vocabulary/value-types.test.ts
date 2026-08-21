@@ -12,8 +12,9 @@ import {describe, it} from "node:test";
 import {exact, ORDERING, present} from "../../../../src/search/vocabulary/operators";
 import type {Rung} from "../../../../src/search/vocabulary/value-types";
 import {
-    angle, bitmask, colour, composite, count, defineType, enumeration, flag, id, length, multiplier, offset,
-    ordinal, path, percent, percentChange, rotation, seconds, setOrdinalLadder, TARGET_ROLES, text, TYPES,
+    angle, animKitId, bitmask, channelId, colour, composite, count, creatureId, defineType, displayId, enumeration,
+    fileId, flag, isIdentity, itemId, length, multiplier, objectId, offset, ordinal, path, percent, percentChange,
+    rotation, seconds, setOrdinalLadder, soundKitId, spellId, TARGET_ROLES, text, TYPES,
 } from "../../../../src/search/vocabulary/value-types";
 
 /** Four rungs of a real ladder, synonyms and all — enough for every reading rule to have a case that separates it. */
@@ -49,7 +50,15 @@ const CANONICAL: [string, string[]][] = [
     ["enum", ["UNIT_TARGET_ENEMY", "JUMP_DEST"]],
     ["ordinal", ["Legion", "Wrath of the Lich King"]],
     ["bitmask", ["caster", "both"]],
-    ["id", ["133", "0", "9007199254740991"]],
+    ["spellId", ["133", "0", "9007199254740991"]],
+    ["soundKitId", ["1234"]],
+    ["creatureId", ["299"]],
+    ["objectId", ["180000"]],
+    ["displayId", ["307"]],
+    ["itemId", ["19019"]],
+    ["fileId", ["135812"]],
+    ["animKitId", ["1119"]],
+    ["channelId", ["0", "3"]],
     ["count", ["0", "4", "128"]],
     ["seconds", ["1.5s", "0s", "120s"]],
     ["percent", ["30%", "0%", "7.5%"]],
@@ -66,8 +75,11 @@ const CANONICAL: [string, string[]][] = [
 describe("the type registry", () => {
     it("holds exactly the catalogue", () => {
         assert.deepEqual([...TYPES.keys()].toSorted(), [
-            "angle", "bitmask", "colour", "coordinate", "count", "enum", "flag", "id", "length", "multiplier",
-            "offset", "ordinal", "path", "percent", "percentChange", "rotation", "seconds", "text",
+            "angle", "animKitId", "bitmask", "channelId", "colour", "coordinate",
+            "count", "creatureId", "displayId", "enum", "fileId", "flag",
+            "itemId", "length", "multiplier", "objectId", "offset", "ordinal",
+            "path", "percent", "percentChange", "rotation", "seconds", "soundKitId",
+            "spellId", "text",
         ]);
     });
 
@@ -266,7 +278,40 @@ describe("the operator table", () => {
     it("gives an id equality only, with no ordering, substring or glob", () => {
         // One spell id is not "before" another in any sense a reader means, and matching part of an id is how a
         // six-digit number comes to select hundreds of rows instead of one.
-        assert.deepEqual(accepts(id), ["anyOf", "exact", "present"]);
+        assert.deepEqual(accepts(spellId), ["anyOf", "exact", "present"]);
+    });
+
+    it("reads and writes every identity alike, whatever its number names", () => {
+        // The family exists so a SURFACE can tell a spell id from a file id. Matching cannot, and must not: an
+        // operand that parses one way here and another way there would make the same digits mean two things.
+        const family = [animKitId, channelId, creatureId, displayId, fileId, itemId, objectId, soundKitId, spellId];
+        for (const type of family) {
+            assert.deepEqual(accepts(type), ["anyOf", "exact", "present"], type.name);
+            assert.equal(type.storage, "int", type.name);
+            assert.equal(type.quantity, true, type.name);
+            assert.equal(type.parse!("133"), 133, type.name);
+            assert.equal(type.parse!("frostbolt"), null, type.name);
+            assert.equal(type.parse!("-1"), null, type.name);
+            assert.equal(type.format!(133), "133", type.name);
+        }
+    });
+
+    it("knows its own members, and claims no type that is not one", () => {
+        // The question every surface asks is "is this an identity", and asking it by comparing against one member
+        // answers for that member alone -- which is how a family quietly stops being recognised as it grows.
+        const family = [animKitId, channelId, creatureId, displayId, fileId, itemId, objectId, soundKitId, spellId];
+        for (const type of family) assert.ok(isIdentity(type), type.name);
+        for (const type of [count, text, path, enumeration, ordinal, colour, flag, bitmask, angle]) {
+            assert.equal(isIdentity(type), false, type.name);
+        }
+        assert.equal(isIdentity(undefined), false);
+    });
+
+    it("registers every identity under its own name, so no two share a declaration", () => {
+        const family = [animKitId, channelId, creatureId, displayId, fileId, itemId, objectId, soundKitId, spellId];
+        const names = family.map((type) => type.name);
+        assert.equal(new Set(names).size, family.length);
+        for (const type of family) assert.equal(TYPES.get(type.name), type, type.name);
     });
 
     it("gives a bitmask equality only, so part of a role name never matches", () => {
@@ -346,18 +391,18 @@ describe("the operator table", () => {
 
     it("declines by omission, so an unaccepted operator is a static error", () => {
         assert.equal(text.accepts.includes(ORDERING[0]), false);
-        assert.equal(id.accepts.includes(ORDERING[0]), false);
+        assert.equal(spellId.accepts.includes(ORDERING[0]), false);
     });
 });
 
 describe("what each type refuses to parse", () => {
     it("makes an id reject anything that is not safe digits", () => {
-        assert.equal(id.parse!("frostbolt"), null);
-        assert.equal(id.parse!("1.5"), null);
-        assert.equal(id.parse!("-1"), null);
-        assert.equal(id.parse!(""), null);
+        assert.equal(spellId.parse!("frostbolt"), null);
+        assert.equal(spellId.parse!("1.5"), null);
+        assert.equal(spellId.parse!("-1"), null);
+        assert.equal(spellId.parse!(""), null);
         // Beyond the safe integer range the value no longer survives a round trip.
-        assert.equal(id.parse!("99999999999999999999"), null);
+        assert.equal(spellId.parse!("99999999999999999999"), null);
     });
 
     it("makes a colour reject anything that is neither a hex triplet nor a known name", () => {

@@ -174,10 +174,15 @@ define(["regex"], ["text", "path"], (stored, operand) => {
 
 /* ----------------------------------------------------------------------- numbers */
 
-/** Types whose stored value and operand are both numeric. */
-const NUMERIC = [
-    "id", "count", "seconds", "percent", "percentChange", "multiplier", "length", "coordinate", "angle",
-];
+/**
+ * Types whose stored value and operand are both numeric.
+ *
+ * Read off the declarations rather than listed here. A quantity is something a type SAYS it is, and a hand list is a
+ * second copy of that rule: it goes stale the day a type is declared, and stale here means an operator the type
+ * accepts has no implementation to answer it. Identities are quantities too — what keeps them from being compared
+ * for order is the operator table, which never offers them one.
+ */
+const NUMERIC = [...TYPES.values()].filter((type) => type.quantity === true).map((type) => type.name);
 
 /**
  * Reads an operand as a number.

@@ -355,22 +355,93 @@ function wholeNumber(written: string): number | null {
     return Number.isSafeInteger(n) ? n : null;
 }
 
+/* ----------------------------------------------------------------------- identities */
+
 /**
- * An identity: a spell id, a sound kit id, an icon file id.
+ * Every registered identity, so a caller may ask whether a type is one without naming them all.
  *
- * Accepts equality only. Ids have no order a reader means anything by, and matching part of an id is how a six-digit
- * number comes to select hundreds of rows instead of one.
+ * Membership rather than a declared field: the question is asked about a type the caller already holds, and a field
+ * would let a type outside the family answer yes by declaring it.
  */
-export const id = defineType<number>({
-    name: "id",
-    storage: "int",
-    parse: wholeNumber,
-    format: (n) => String(n),
-    accepts: [exact, present, anyOf],
-    hint: t("tooltips:type.id"),
-    quantity: true,
-    ui: "number",
-});
+const IDENTITIES = new Set<AxisType>();
+
+/**
+ * Whether a type is an identity: a number naming one row of some registry.
+ *
+ * Asked wherever a surface treats identities alike — a group of them reads as a list of things, where a group of
+ * measurements reads as a gate. Comparing against one member instead answers for that member alone, and stops
+ * recognising the rest the moment the family grows.
+ *
+ * @param type The type to test, or nothing.
+ * @returns Whether it belongs to the identity family.
+ */
+export function isIdentity(type: AxisType | undefined): boolean {
+    return type !== undefined && IDENTITIES.has(type);
+}
+
+/**
+ * Builds one member of the identity family.
+ *
+ * The family shares everything an identity IS: a whole number that survives a round trip, equality only, and no
+ * order — ids have none a reader means anything by, and matching part of one is how a six-digit number comes to
+ * select hundreds of rows instead of one.
+ *
+ * Members differ in what their number NAMES, and that is the whole reason they are separate types. Matching cannot
+ * tell them apart and is not meant to; a surface can, which is what lets a spell id and a file id offer different
+ * controls and lead to different places while reading and writing identically.
+ *
+ * @param spec The type's name, the control where the default number box is not the one to start from, and a hint
+ *   where the member says more about its number than the family already does.
+ * @returns The registered type.
+ */
+function identity(spec: { name: string; hint?: string; ui?: Affordance }): AxisType<number> {
+    const type = defineType<number>({
+        name: spec.name,
+        storage: "int",
+        parse: wholeNumber,
+        format: (n) => String(n),
+        accepts: [exact, present, anyOf],
+        hint: spec.hint ?? t("tooltips:type.id"),
+        quantity: true,
+        ui: spec.ui ?? "number",
+    });
+    IDENTITIES.add(type);
+    return type;
+}
+
+/** A spell, by the id the game's own spell table gives it — the number a reader is likeliest to already have. */
+export const spellId = identity({name: "spellId"});
+
+/** A sound kit: the row a spell's sounds are drawn from. */
+export const soundKitId = identity({name: "soundKitId"});
+
+/** A creature: what a morph turns into, or what a summon brings. */
+export const creatureId = identity({name: "creatureId"});
+
+/** A game object: the row a spawned object is built from. */
+export const objectId = identity({name: "objectId"});
+
+/** A creature display: which of a creature's several looks is worn. */
+export const displayId = identity({name: "displayId"});
+
+/** An item: the row a held or worn model is drawn from. */
+export const itemId = identity({name: "itemId"});
+
+/** An asset file, by the file id the game stores rather than by the path the listfile gives it. */
+export const fileId = identity({name: "fileId"});
+
+/** An animation kit: the row a played kit names. */
+export const animKitId = identity({name: "animKitId"});
+
+/**
+ * An invisibility channel: which of the game's channels something hides in, or can see into.
+ *
+ * The least comfortable member of the family. A channel is a small closed set rather than the open registry the
+ * others index, but it carries no names of its own either, and {@link enumeration} is a type whose value is a name.
+ * It reads and writes as its siblings do, and what control it should offer is measured from the loaded pack rather
+ * than assumed here.
+ */
+export const channelId = identity({name: "channelId"});
 
 /** A cardinality: how many rows of something a spell has. Derived at query time, never stored. */
 export const count = defineType<number>({

@@ -25,7 +25,7 @@ import type {
     Ask, Column, Dataset, Kind, Row, RowSource, RowTest, Rung, ScopeTerm, Stored, ValueExpr,
 } from "./search/index";
 import {
-    animColumn, catalogue, colour as colourType, COLOUR_NAMES, enumeration, fold, fxColumn, id as idType, idColumn,
+    animColumn, catalogue, colour as colourType, COLOUR_NAMES, enumeration, fold, fxColumn, idColumn, isIdentity,
     KINDS, mechColumn, modelColumn, setOrdinalLadder, soundColumn, spellColumn, squash, TARGET_ROLES,
     kindsOf, text as textType, wordOf,
 } from "./search/index";
@@ -311,8 +311,13 @@ export class PackRowSource implements RowSource {
             }
             const lookup = this.vocabs[this.table.vocab[at.kind]?.[name] ?? ""];
             const resolved = lookup?.(stored);
-            if (prop.types[0] === idType && prop.types[1] === textType) {
-                props[name] = typeof resolved === "string" ? {id: stored, text: resolved} : stored;
+            if (isIdentity(prop.types[0]) && prop.types[1] === textType) {
+                // Keyed by the type NAMES the property declares, which is what the row reader looks a notation up
+                // by. Spelling either key here would tie the record to one identity and quietly stop resolving the
+                // moment a property names a different one.
+                props[name] = typeof resolved === "string"
+                    ? {[prop.types[0].name]: stored, [textType.name]: resolved}
+                    : stored;
             } else if (lookup !== undefined) {
                 if (resolved !== undefined) props[name] = resolved;
             } else {
@@ -498,13 +503,13 @@ function invert(l: LoadedPack, sources: ReadonlyMap<Column, PackRowSource>): Inv
                     textual(value, own);
                 } else if (typeof value === "object") {
                     // The record form is keyed by type name; its strings seed as text, and its numbers seed by
-                    // identity exactly when the property declares the id notation.
-                    const ids = r.kind.props[name].types.includes(idType);
+                    // identity exactly when the property declares an identity notation.
+                    const ids = r.kind.props[name].types.some(isIdentity);
                     for (const held of Object.values(value)) {
                         if (typeof held === "string") textual(held, own);
                         else if (ids) identity(held, own);
                     }
-                } else if (r.kind.props[name].types.includes(idType)) {
+                } else if (r.kind.props[name].types.some(isIdentity)) {
                     identity(value, own);
                 }
             }
@@ -522,12 +527,12 @@ function invert(l: LoadedPack, sources: ReadonlyMap<Column, PackRowSource>): Inv
 
     /* Which kinds a numeric-looking or colour token could match, derived from the declarations rather than listed:
      * a hand list would go quietly stale the day a kind gains such a property, and a stale list here is an
-     * undersized seed. The id type is excluded — identity is exact, and the `digits` lookups above answer it. */
+     * undersized seed. Identities are excluded — identity is exact, and the `digits` lookups above answer it. */
     const numericKinds = new Map<Column, Kind[]>();
     const colourKinds = new Map<Column, Kind[]>();
     for (const kind of KINDS.values()) {
         const types = Object.values(kind.props).flatMap((prop) => prop.types);
-        if (types.some((type) => type.quantity === true && type !== idType)) {
+        if (types.some((type) => type.quantity === true && !isIdentity(type))) {
             numericKinds.set(kind.column, [...(numericKinds.get(kind.column) ?? []), kind]);
         }
         if (types.includes(colourType)) {

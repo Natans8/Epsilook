@@ -22,9 +22,9 @@ export {fold, squash} from "./text/normalize";
 
 export type {Affordance, AxisType, Rung, Storage, Value} from "./vocabulary/value-types";
 export {
-    angle, bitmask, colour, composite, count, defineType, enumeration, flag, id, length, offset,
-    ordinal, ordinalRungs, path, percent, percentChange, seconds, setOrdinalLadder, TARGET_ROLES, text,
-    TYPES,
+    angle, animKitId, bitmask, channelId, colour, composite, count, creatureId, defineType, displayId, enumeration,
+    fileId, flag, isIdentity, itemId, length, objectId, offset, ordinal, ordinalRungs, path, percent, percentChange,
+    seconds, setOrdinalLadder, soundKitId, spellId, TARGET_ROLES, text, TYPES,
 } from "./vocabulary/value-types";
 
 export {COLOUR_NAMES} from "./vocabulary/colour-names";
