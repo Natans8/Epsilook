@@ -275,9 +275,11 @@ test("every spelling that reaches an expansion narrows to it, and picking one wr
         await expect(offerRows(page).first()).toContainText("WoD");
     }
 
-    // Taking one writes the NAME, not the way in that found it.
+    // Taking one writes the NAME, not the way in that found it -- and the glue behind it, because an expansion
+    // is a closed vocabulary on a kind holding one row, so a second value would read as an alternative and the
+    // run is left open to say one. A dangling glue separates nothing until it does.
     await offerRows(page).first().click();
-    await expectQuery(page, "xpac:{WoD}");
+    await expectQuery(page, "xpac:{WoD,}");
 });
 
 test("a chip names the expansion, whichever way in the reader wrote", async () => {
@@ -303,7 +305,7 @@ test("an offer once taken is spent: the same text typed again is not silently li
     await page.keyboard.type("xpac:6", {delay: 5});
     await expect(offerRows(page).first()).toBeVisible();
     await offerRows(page).first().click();
-    await expectQuery(page, "xpac:{WoD}");
+    await expectQuery(page, "xpac:{WoD,}");
 
     await clearBar(page);
     await page.keyboard.type("xpac:6", {delay: 5});
