@@ -8,14 +8,38 @@ sometimes a launch sound and an anim kit.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import NamedTuple
 
 from ..tables import Tables
 from .attachments import DEFAULT_MISSILE_SOURCE
 from .columns import to_int
 from .models import ModelSources, file_for_effect_name
 
-# (file id, motion, source attachment, destination attachment)
-Missile = tuple[int, int, int, int]
+class Missile(NamedTuple):
+    """One projectile a visual launches, and where it flies between.
+
+    Named for the same reason the attached model is: four numbers in a row, so a
+    swapped pair is accepted rather than raised.
+    """
+
+    file: int
+    """The projectile's model."""
+
+    motion: int
+    """The flight path it follows."""
+
+    source: int
+    """Where on the caster it launches from."""
+
+    destination: int
+    """Where on the target it arrives."""
+
+    effect: int = 0
+    """The `SpellVisualEffectName` row it was reached through, or zero.
+
+    Zero where the projectile is the caster's own weapon rather than a model
+    the effect-name table named.
+    """
 
 
 @dataclass
@@ -90,7 +114,7 @@ def read_missiles(tables: Tables, models: ModelSources) -> dict[int, VisualMissi
         # A weapon type with no file resolves to the caster's own weapon,
         # thrown as the projectile.
         if file := file_for_effect_name(models, name_id):
-            into.models.add((file, motion, source, destination))
+            into.models.add(Missile(file, motion, source, destination, name_id))
         if sound:
             into.soundkits.add(sound)
         if animkit:
@@ -104,11 +128,14 @@ def read_missiles(tables: Tables, models: ModelSources) -> dict[int, VisualMissi
             if found is None:
                 continue
             merged.models.update(
-                (file, motion,
-                 source if source >= 0
-                 else (visual_source if visual_source >= 0 else DEFAULT_MISSILE_SOURCE),
-                 destination if destination >= 0 else visual_destination)
-                for file, motion, source, destination in found.models)
+                Missile(shot.file, shot.motion,
+                        shot.source if shot.source >= 0
+                        else (visual_source if visual_source >= 0
+                              else DEFAULT_MISSILE_SOURCE),
+                        shot.destination if shot.destination >= 0
+                        else visual_destination,
+                        shot.effect)
+                for shot in found.models)
             merged.soundkits.update(found.soundkits)
             merged.animkits.update(found.animkits)
         if merged:

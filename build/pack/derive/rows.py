@@ -207,11 +207,11 @@ def build_rows(visuals: SpellVisuals, effects: SpellEffectRows,
                bonesets: Mapping[int, Mapping[int, list[str]]]) -> PackRows:
     """Flatten everything at least two sections read, once."""
     models = sorted(
-        ModelRow(spell, file, category, mask, source, destination, ref, motion,
-                 placement, built)
+        ModelRow(spell, worn.file, worn.category, mask, worn.source,
+                 worn.destination, worn.ref, worn.motion, worn.placement,
+                 worn.built)
         for spell, payloads in visuals.models.items()
-        for (file, category, source, destination, ref, motion, placement, built), mask
-        in payloads.items())
+        for worn, mask in payloads.items())
     vehicles = sorted((spell, vehicle)
                       for spell, ids in effects.vehicles.ids.items()
                       for vehicle in ids if seats.seats.get(vehicle))

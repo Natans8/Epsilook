@@ -22,7 +22,7 @@ from .gameobjects import GameObjectData, read_gameobjects
 from .items import ItemModels, read_item_models
 from .keybinds import KeyboundOverride, read_keybound_overrides
 from .kits import KitEffects, read_kit_effects
-from .missiles import (MissileMotion, VisualMissiles, read_missile_motions,
+from .missiles import (Missile, MissileMotion, VisualMissiles, read_missile_motions,
                        read_missiles)
 from .models import ModelSources, read_model_sources
 from .mounts import MountData, read_mounts
@@ -64,6 +64,7 @@ __all__ = [
     "SpellText",
     "VehicleSeats",
     "VisualGraph",
+    "Missile",
     "VisualMissiles",
     "attribute_bit",
     "expand_chain",

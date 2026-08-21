@@ -109,13 +109,13 @@ def collect_references(visuals: SpellVisuals, effects: SpellEffectRows,
             # A negative file id is the build's own equipped-weapon slot: it
             # stands for whatever the caster is holding and names no asset, so
             # asking the listfile about it would report a name missing forever.
-            if model[0] > 0:
-                found.assets.add(model[0])
+            if model.file > 0:
+                found.assets.add(model.file)
             # An item pill shows the icon the game shows in the bag.
-            if model[1] == MODEL_CAT_ITEM and model[4]:
-                found.icons.add(items.icon_fid.get(model[4], 0))
-            if model[1] == MODEL_CAT_DISPLAY:
-                found.displays.add(model[4])
+            if model.category == MODEL_CAT_ITEM and model.ref:
+                found.icons.add(items.icon_fid.get(model.ref, 0))
+            if model.category == MODEL_CAT_DISPLAY:
+                found.displays.add(model.ref)
     for sounds in visuals.sounds.values():
         found.assets.update(file for _kit, file in sounds)
     for chain in found.chains:

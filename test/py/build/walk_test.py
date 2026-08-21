@@ -8,15 +8,16 @@ rather than a convenience.
 from __future__ import annotations
 
 from pack.derive.walk import KIT_BUCKETS, SpellVisuals, walk_spells
-from pack.routes import (ChainEffect, FxPayloads, KitEffects, SpellEffectRows, VisualGraph,
-                         VisualMissiles)
-from pack.routes.models import MODEL_CAT_MISSILE, SCALE_UNIT, UNPLACED
+from pack.routes import (ChainEffect, FxPayloads, KitEffects, Missile,
+                         SpellEffectRows, VisualGraph, VisualMissiles)
+from pack.routes.models import (MODEL_CAT_MISSILE, SCALE_UNIT, UNPLACED,
+                                AttachModel)
 from pack.targets import (NO_TARGET, TARGET_AREA, TARGET_CASTER, TARGET_TARGET,
                           merge_masked)
 
 SPELLS = frozenset({100})
 
-MODEL = (500, 1, 2, 3, 0, 0, UNPLACED, SCALE_UNIT)
+MODEL = AttachModel(500, 1, 2, 3, 0, 0, UNPLACED, SCALE_UNIT)
 """A missile model: file, category, source, destination, ref, motion, how it is
 placed, and the size the model itself is."""
 
@@ -91,11 +92,12 @@ def test_a_target_bit_becomes_a_caster_bit_on_a_self_cast_spell() -> None:
 
 def test_a_missile_carries_no_target_type_of_its_own() -> None:
     """A missile set has no event row, so it takes only what the edge gave it."""
-    launched = {7: VisualMissiles(models={(500, 4, 2, 3)}, soundkits=set(),
+    launched = {7: VisualMissiles(models={Missile(500, 4, 2, 3)}, soundkits=set(),
                                   animkits={11})}
     vis = walk(graph(extra=TARGET_AREA, other_mask=NO_TARGET), missiles=launched)
     assert vis.models[100] == {
-        (500, MODEL_CAT_MISSILE, 2, 3, 0, 4, UNPLACED, SCALE_UNIT): TARGET_AREA}
+        AttachModel(500, MODEL_CAT_MISSILE, 2, 3, 0, 4,
+                    UNPLACED, SCALE_UNIT): TARGET_AREA}
     assert vis.animkits[100] == {11: TARGET_AREA}
 
 

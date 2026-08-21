@@ -7,7 +7,8 @@ from pack.derive.references import References, collect_references
 from pack.derive.walk import SpellVisuals
 from pack.routes import (ChainEffect, CreatureModels, FxPayloads, GameObjectData, ItemModels,
                          MountData, ScreenRow, SpellEffectRows)
-from pack.routes.models import MODEL_CAT_DISPLAY, MODEL_CAT_ITEM, SCALE_UNIT, UNPLACED
+from pack.routes.models import (MODEL_CAT_DISPLAY, MODEL_CAT_ITEM,
+                                SCALE_UNIT, UNPLACED, AttachModel)
 from pack.targets import NO_TARGET
 
 
@@ -36,14 +37,14 @@ def collect(*, visuals: SpellVisuals | None = None,
 
 
 def test_a_models_file_is_an_asset() -> None:
-    found = collect(visuals=visuals(models={100: {(500, 1, 0, 0, 0, 0): NO_TARGET}}))
+    found = collect(visuals=visuals(models={100: {AttachModel(500, 1, 0, 0, 0, 0, UNPLACED, SCALE_UNIT): NO_TARGET}}))
     assert found.assets == {500}
 
 
 def test_a_fileless_sentinel_is_never_looked_up() -> None:
     """A negative id is the build's own equipped-weapon slot. It names no
     asset, so asking about it would report a name missing forever."""
-    found = collect(visuals=visuals(models={100: {(-3, 1, 0, 0, 0, 0): NO_TARGET}}))
+    found = collect(visuals=visuals(models={100: {AttachModel(-3, 1, 0, 0, 0, 0, UNPLACED, SCALE_UNIT): NO_TARGET}}))
     assert found.assets == set()
 
 
@@ -92,7 +93,8 @@ def test_every_named_display_is_collected_and_its_skins_are_assets() -> None:
     once each; the textures a display paints are named like a chain's, and
     only for displays something reached."""
     found = collect(
-        visuals=visuals(models={100: {(500, MODEL_CAT_DISPLAY, 0, 0, 6, 0, UNPLACED, SCALE_UNIT): NO_TARGET}}),
+        visuals=visuals(models={100: {AttachModel(500, MODEL_CAT_DISPLAY, 0, 0, 6, 0,
+                                        UNPLACED, SCALE_UNIT): NO_TARGET}}),
         displays=ResolvedDisplays(creatures=[Display(1, 2, 800)],
                                   forms=[Display(3, 4, 0)]),
         mounts=MountData(links=[(100, 7)], fid={7: 900}),
@@ -131,7 +133,8 @@ def test_an_icon_stays_out_of_the_asset_set() -> None:
 def test_an_items_inventory_icon_joins_the_same_pass() -> None:
     """An item pill shows the icon the game shows in the bag."""
     found = collect(
-        visuals=visuals(models={100: {(500, MODEL_CAT_ITEM, 0, 0, 77, 0, UNPLACED, SCALE_UNIT): NO_TARGET}}),
+        visuals=visuals(models={100: {AttachModel(500, MODEL_CAT_ITEM, 0, 0, 77, 0,
+                                        UNPLACED, SCALE_UNIT): NO_TARGET}}),
         items=ItemModels(icon_fid={77: 951}))
     assert found.icons == {951}
     assert found.assets == {500}
@@ -145,6 +148,6 @@ def test_an_unresolvable_icon_is_not_asked_about() -> None:
 def test_one_pass_resolves_both_sets() -> None:
     """The listfile is streamed once for the whole build, so the two sets are
     asked for together even though the pack treats them differently."""
-    found = collect(visuals=visuals(models={100: {(500, 1, 0, 0, 0, 0): NO_TARGET}}),
+    found = collect(visuals=visuals(models={100: {AttachModel(500, 1, 0, 0, 0, 0, UNPLACED, SCALE_UNIT): NO_TARGET}}),
                     spell_icons={100: 950})
     assert found.wanted == {500, 950}

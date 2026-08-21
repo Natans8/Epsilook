@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from pack.routes.attachments import DEFAULT_MISSILE_SOURCE
-from pack.routes.missiles import (MissileMotion, VisualMissiles, read_missile_motions,
-                                  read_missiles)
+from pack.routes.missiles import (Missile, MissileMotion, VisualMissiles,
+                                  read_missile_motions, read_missiles)
 from pack.routes.models import WEAPON_FID_RANGED, ModelSources
 from support import BuildTables
 
@@ -48,26 +48,27 @@ def missiles(tables: BuildTables) -> dict[int, VisualMissiles]:
 def test_the_row_wins_where_it_says_anything(tables: BuildTables) -> None:
     """Settled in game: the visual said Chest, the row said Base, and it
     launched from the base."""
-    assert (8000, 7, 1, 2) in missiles(tables)[10].models
+    assert Missile(8000, 7, 1, 2, 1) in missiles(tables)[10].models
 
 
 def test_the_visual_fills_in_what_the_row_leaves_unset(
         tables: BuildTables) -> None:
     """Complementary rather than redundant, so both are read."""
-    assert (8000, 7, 5, 6) in missiles(tables)[10].models
+    assert Missile(8000, 7, 5, 6, 1) in missiles(tables)[10].models
 
 
 def test_a_row_declaring_only_a_source_takes_the_visuals_destination(
         tables: BuildTables) -> None:
     """The two ends resolve independently."""
-    assert (8000, 8, 9, 6) in missiles(tables)[10].models
+    assert Missile(8000, 8, 9, 6, 1) in missiles(tables)[10].models
 
 
 def test_with_neither_declaring_a_source_the_default_stands_in(
         tables: BuildTables) -> None:
     """Materialised rather than left blank, so pill, search and exports
     agree."""
-    assert (8000, 0, DEFAULT_MISSILE_SOURCE, -1) in missiles(tables)[11].models
+    assert (Missile(8000, 0, DEFAULT_MISSILE_SOURCE, -1, 1)
+            in missiles(tables)[11].models)
 
 
 def test_the_raid_set_merges_with_the_base_set(tables: BuildTables) -> None:
@@ -78,14 +79,14 @@ def test_the_motion_pairs_with_the_projectile_not_the_set(
         tables: BuildTables) -> None:
     """It rides the same row as the model, so a set naming several motions
     becomes several rows."""
-    assert {motion for _, motion, _, _ in missiles(tables)[10].models} == {7, 8}
+    assert {shot.motion for shot in missiles(tables)[10].models} == {7, 8}
 
 
 def test_a_weapon_type_with_no_file_is_thrown_as_its_sentinel(
         tables: BuildTables) -> None:
     """The caster's own weapon as the projectile."""
-    assert any(fid == WEAPON_FID_RANGED
-               for fid, _, _, _ in missiles(tables)[11].models)
+    assert any(shot.file == WEAPON_FID_RANGED
+               for shot in missiles(tables)[11].models)
 
 
 def test_a_launch_sound_and_animkit_ride_the_set(tables: BuildTables) -> None:
@@ -102,8 +103,9 @@ def test_a_visual_with_no_missile_set_contributes_nothing(
 def test_a_missile_row_belonging_to_no_set_is_skipped(
         tables: BuildTables) -> None:
     """Set 0 is not a set, so the row reaches no visual."""
-    assert all(8000 != fid or motion != 0 or source != DEFAULT_MISSILE_SOURCE
-               for fid, motion, source, _ in missiles(tables)[10].models)
+    assert all(shot.file != 8000 or shot.motion != 0
+               or shot.source != DEFAULT_MISSILE_SOURCE
+               for shot in missiles(tables)[10].models)
 
 
 def test_a_motion_with_no_name_is_not_a_motion(tables: BuildTables) -> None:

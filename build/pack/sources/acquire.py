@@ -22,6 +22,7 @@ from .expansions import expansions_source
 from .listfile import listfile_source, supplement_source
 from .source import Source
 from .tdb import tdb_locale_source, tdb_source
+from .visual_effect_names import visual_effect_names_source
 from .wago import locale_tables_source, pinned_tables_source, tables_source
 
 
@@ -50,6 +51,14 @@ class Roster:
 
     expansions: Source
     """The committed ladder of which expansion introduced a spell."""
+
+    visual_effect_names: Source
+    """The committed names for visual effects, distilled from a vendored client.
+
+    Checked in for the same reason the ladder is: the strings were stripped out
+    of the client during Mists of Pandaria, and no published archive serves a
+    build from the window where they were last complete.
+    """
 
     tdb: Source | None
     """The TrinityCore release for this build, or None when none maps to it."""
@@ -122,6 +131,7 @@ def source_roster(version: str, locales: Sequence[str] = (),
                   listfile=listfile_source(),
                   supplement=supplement_source(),
                   expansions=expansions_source(),
+                  visual_effect_names=visual_effect_names_source(),
                   tdb=tdb_source(version),
                   locale_tables={locale: locale_tables_source(version, locale)
                                  for locale in locales},
@@ -163,11 +173,13 @@ def fetch_sources(version: str, refresh: bool, locales: Sequence[str] = (),
     for source in roster.enums:
         acquired(source, refresh)
     listfile = acquired(roster.listfile, refresh)
-    # Acquired for the check and the log rather than for a path: both are
-    # tracked files, read where they are declared -- `listfile.SUPPLEMENT` and
-    # `expansions.EXPANSIONS_FILE`.
+    # Acquired for the check and the log rather than for a path: all three are
+    # tracked files, read where they are declared -- `listfile.SUPPLEMENT`,
+    # `expansions.EXPANSIONS_FILE` and
+    # `visual_effect_names.VISUAL_EFFECT_NAMES_FILE`.
     acquired(roster.supplement, refresh)
     acquired(roster.expansions, refresh)
+    acquired(roster.visual_effect_names, refresh)
     if roster.tdb is None:
         log(f"TDB: no release maps to {version}; the routes that need one "
             f"degrade as declared")

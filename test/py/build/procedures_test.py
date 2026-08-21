@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from pack.routes.attachments import NO_ATTACHMENT, NO_MOTION
-from pack.routes.models import (MODEL_CAT_AREA, MODEL_CAT_TRAIL, SCALE_UNIT, UNPLACED,
-                                ModelSources)
+from pack.routes.models import (MODEL_CAT_AREA, MODEL_CAT_TRAIL, SCALE_UNIT,
+                                UNPLACED, AttachModel, ModelSources)
 from pack.routes.procedures import ProcEffects, read_proc_effects
 from support import BuildTables
 
@@ -94,8 +94,10 @@ def test_a_model_procedure_resolves_through_its_own_table(
         tables: BuildTables) -> None:
     """Two Types reach two tables and land in one bucket, tagged by category."""
     assert procs(tables).models == {
-        14: (8300, MODEL_CAT_AREA, NO_ATTACHMENT, NO_ATTACHMENT, 0, NO_MOTION, UNPLACED, SCALE_UNIT),
-        16: (8400, MODEL_CAT_TRAIL, NO_ATTACHMENT, NO_ATTACHMENT, 0, NO_MOTION, UNPLACED, SCALE_UNIT),
+        14: AttachModel(8300, MODEL_CAT_AREA, NO_ATTACHMENT, NO_ATTACHMENT, 0,
+                         NO_MOTION, UNPLACED, SCALE_UNIT),
+        16: AttachModel(8400, MODEL_CAT_TRAIL, NO_ATTACHMENT, NO_ATTACHMENT, 0,
+                         NO_MOTION, UNPLACED, SCALE_UNIT),
     }
 
 

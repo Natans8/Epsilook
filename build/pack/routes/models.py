@@ -140,14 +140,22 @@ placement columns at all, so they take this rather than each inventing a
 neutral of their own.
 """
 
-class AttachModel(NamedTuple):
+
+@dataclass(frozen=True)
+class AttachModel:
     """One model a kit puts on a unit, and everything the row says about it.
 
-    Named rather than a bare tuple because the fields are eight integers and a
-    placement, so a positional mistake is a value landing in a neighbour that
-    accepts it -- a reference read as a motion, and nothing raising. It is still
-    a tuple, so the positions keep working for the code that builds and unpacks
-    it, and it stays hashable, which the per-kit sets rely on.
+    Named rather than a bare tuple because almost every field is a number, so a
+    positional mistake is a value landing in a neighbour that accepts it -- a
+    reference read as a motion, and nothing raising. Frozen, so it stays
+    hashable for the per-kit sets.
+
+    What identity means here is a decision rather than a default. A row is what
+    the client draws, so two rows drawing the same model at the same place with
+    the same placement are one row, even when they were reached through
+    different effect names -- which happens on 334 rows at 9.2.7. Keeping the
+    effect out of the comparison is what holds that collapse in place; putting
+    it back in would split those rows and show a spell two identical pills.
     """
 
     file: int
@@ -173,6 +181,24 @@ class AttachModel(NamedTuple):
 
     built: int
     """The size the model itself is, before the row's own scale applies."""
+
+    effect: int = field(default=0, compare=False)
+    """The `SpellVisualEffectName` row the model was reached through, or zero.
+
+    Carried so a name recovered from an older client can find the row that
+    wears it. Only the routes that go through the effect-name table have one:
+    an area model, a weapon trail and a barrage volley carry their file
+    directly, and giving them a borrowed id would name them after something
+    they never touched.
+
+    `compare=False` is the whole of the identity decision above: the effect
+    rides the row without defining it, so rows that differ in nothing else
+    still collapse and the first one read keeps its name. Table order decides
+    which that is, and table order is deterministic, so the build stays
+    reproducible.
+
+    It defaults because the five routes without one should not have to say so.
+    """
 
 
 PLACEMENT_COLUMNS = ("Scale", "Offset_0", "Offset_1", "Offset_2",
@@ -441,15 +467,15 @@ def _attached_model(name_id: int, attach: int, placement: Placement,
         display = generic.get(name_id, 0)
         file = creatures.fid_for_display(display)
         return (AttachModel(file, MODEL_CAT_DISPLAY, attach, NO_ATTACHMENT, display,
-                            NO_MOTION, placement, built) if file else None)
+                            NO_MOTION, placement, built, name_id) if file else None)
     if name_type == EFFECT_NAME_TYPE_ITEM:
         # The row keeps the item as its ref even when the item has no name.
         item = generic.get(name_id, 0)
         file = items.model_fid.get(item, 0)
         return (AttachModel(file, MODEL_CAT_ITEM, attach, NO_ATTACHMENT, item,
-                            NO_MOTION, placement, built) if file else None)
+                            NO_MOTION, placement, built, name_id) if file else None)
     file = file_for_effect_name(models, name_id)
     if file:
         return AttachModel(file, MODEL_CAT_ATTACH, attach, NO_ATTACHMENT, 0, NO_MOTION,
-                           placement, built)
+                           placement, built, name_id)
     return None

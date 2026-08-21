@@ -5,8 +5,9 @@ from __future__ import annotations
 from pack.routes.attachments import NO_ATTACHMENT, NO_MOTION
 from pack.routes.fx import ChainEffect, FxPayloads, ScreenRow
 from pack.routes.kits import KitEffects, read_kit_effects
-from pack.routes.models import (MODEL_CAT_AREA, MODEL_CAT_BARRAGE, MODEL_CAT_TRAIL, SCALE_UNIT,
-                                UNPLACED, ModelSources)
+from pack.routes.models import (MODEL_CAT_AREA, MODEL_CAT_BARRAGE,
+                                MODEL_CAT_TRAIL, SCALE_UNIT, UNPLACED,
+                                AttachModel, ModelSources)
 from pack.routes.procedures import ProcEffects
 from pack.routes.sounds import read_kit_types, read_soundkit_files, sound_type_names
 from pack.sources import load_local_enum
@@ -42,14 +43,15 @@ ParentSpellVisualKitID,EffectType,Effect
 """
 
 MODELS = ModelSources(
-    attach_models={1: {(8000, 0, 5, NO_ATTACHMENT, 0, NO_MOTION, UNPLACED, SCALE_UNIT)}},
+    attach_models={1: {AttachModel(8000, 0, 5, NO_ATTACHMENT, 0, NO_MOTION,
+                                   UNPLACED, SCALE_UNIT)}},
     attach_anims={1: {17}}, attach_animkits={1: {42}},
     emission_fid={20: 8300}, barrage_fid={30: 8400}, barrage_attach={30: 3})
 
 PROCS = ProcEffects(
     chain={10: 70}, tints={11: 0xFF0000}, freezes={12},
-    models={13: (8500, MODEL_CAT_TRAIL, NO_ATTACHMENT, NO_ATTACHMENT, 0, NO_MOTION,
-                 UNPLACED, SCALE_UNIT)},
+    models={13: AttachModel(8500, MODEL_CAT_TRAIL, NO_ATTACHMENT, NO_ATTACHMENT, 0,
+                            NO_MOTION, UNPLACED, SCALE_UNIT)},
     anims={13: ((0, 12),)})
 
 FX = FxPayloads(
@@ -81,7 +83,8 @@ def test_the_attached_models_seed_the_buckets_the_walk_fills(
     """They arrive from a different table; the walk unions rather than
     replaces."""
     resolved = kits(tables)
-    assert (8000, 0, 5, NO_ATTACHMENT, 0, NO_MOTION, UNPLACED, SCALE_UNIT) in resolved.models[1]
+    assert AttachModel(8000, 0, 5, NO_ATTACHMENT, 0, NO_MOTION,
+                       UNPLACED, SCALE_UNIT) in resolved.models[1]
     assert resolved.animkits[1] == {42, 700}
     assert resolved.visual_anims[1] == {17, 12}
 
@@ -98,8 +101,8 @@ def test_a_procedure_reaches_the_bucket_it_was_sorted_into(
     assert resolved.tints[3] == {11}
     assert resolved.freezes == {4}
     assert resolved.models[5] == {
-        (8500, MODEL_CAT_TRAIL, NO_ATTACHMENT, NO_ATTACHMENT, 0, NO_MOTION, UNPLACED,
-         SCALE_UNIT)}
+        AttachModel(8500, MODEL_CAT_TRAIL, NO_ATTACHMENT, NO_ATTACHMENT, 0, NO_MOTION,
+                    UNPLACED, SCALE_UNIT)}
     assert resolved.anims[5] == {(0, 12)}
 
 
@@ -129,10 +132,11 @@ def test_the_emission_and_barrage_models_carry_their_categories(
         tables: BuildTables) -> None:
     resolved = kits(tables)
     assert resolved.models[10] == {
-        (8300, MODEL_CAT_AREA, NO_ATTACHMENT, NO_ATTACHMENT, 0, NO_MOTION, UNPLACED,
-         SCALE_UNIT)}
+        AttachModel(8300, MODEL_CAT_AREA, NO_ATTACHMENT, NO_ATTACHMENT, 0,
+                    NO_MOTION, UNPLACED, SCALE_UNIT)}
     assert resolved.models[11] == {
-        (8400, MODEL_CAT_BARRAGE, 3, NO_ATTACHMENT, 0, NO_MOTION, UNPLACED, SCALE_UNIT)}
+        AttachModel(8400, MODEL_CAT_BARRAGE, 3, NO_ATTACHMENT, 0, NO_MOTION,
+                    UNPLACED, SCALE_UNIT)}
 
 
 def test_a_kit_or_effect_of_zero_is_skipped(tables: BuildTables) -> None:

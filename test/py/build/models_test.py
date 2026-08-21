@@ -7,9 +7,11 @@ from collections.abc import Callable
 from pack.routes.attachments import NO_ATTACHMENT, NO_MOTION
 from pack.routes.creatures import CreatureModels
 from pack.routes.items import ItemModels
-from pack.routes.models import (MODEL_CAT_ATTACH, MODEL_CAT_DISPLAY, MODEL_CAT_ITEM, SCALE_UNIT, UNPLACED,
-                                WEAPON_FID_MAIN, WEAPON_FID_OFF, ModelSources, Placement,
-                                read_effect_names, read_model_sources)
+from pack.routes.models import (MODEL_CAT_ATTACH, MODEL_CAT_DISPLAY,
+                                MODEL_CAT_ITEM, SCALE_UNIT, UNPLACED,
+                                WEAPON_FID_MAIN, WEAPON_FID_OFF, AttachModel,
+                                ModelSources, Placement, read_effect_names,
+                                read_model_sources)
 from support import BuildTables
 from pack.sources.gobs import read_gob_displays
 
@@ -103,37 +105,41 @@ def sources(tables: BuildTables,
 
 
 def test_a_plain_row_attaches_its_own_file(tables: BuildTables) -> None:
-    assert (8000, MODEL_CAT_ATTACH, 5, NO_ATTACHMENT, 0, NO_MOTION, PLACED,
-            BUILT_HALF) \
+    assert AttachModel(8000, MODEL_CAT_ATTACH, 5, NO_ATTACHMENT, 0, NO_MOTION,
+                       PLACED, BUILT_HALF, 1) \
         in sources(tables).attach_models[900]
 
 
 def test_the_attachment_is_part_of_the_key(tables: BuildTables) -> None:
     """The same model at two points stays two rows."""
     assert sources(tables).attach_models[900] == {
-        (8000, MODEL_CAT_ATTACH, 5, NO_ATTACHMENT, 0, NO_MOTION, PLACED, BUILT_HALF),
-        (8000, MODEL_CAT_ATTACH, 11, NO_ATTACHMENT, 0, NO_MOTION, WORN, BUILT_HALF),
+        AttachModel(8000, MODEL_CAT_ATTACH, 5, NO_ATTACHMENT, 0, NO_MOTION,
+                    PLACED, BUILT_HALF, 1),
+        AttachModel(8000, MODEL_CAT_ATTACH, 11, NO_ATTACHMENT, 0, NO_MOTION,
+                    WORN, BUILT_HALF, 1),
     }
 
 
 def test_an_item_row_carries_the_item_as_its_ref(tables: BuildTables) -> None:
     """The category says which id space the ref is in."""
     assert sources(tables).attach_models[901] == {
-        (8200, MODEL_CAT_ITEM, 5, NO_ATTACHMENT, 700, NO_MOTION, UNPLACED, SCALE_UNIT)}
+        AttachModel(8200, MODEL_CAT_ITEM, 5, NO_ATTACHMENT, 700, NO_MOTION,
+                    UNPLACED, SCALE_UNIT, 2)}
 
 
 def test_a_display_row_resolves_through_the_creature_chain(
         tables: BuildTables) -> None:
     """Pure client data, so it works without a server dump."""
     assert sources(tables).attach_models[902] == {
-        (8100, MODEL_CAT_DISPLAY, 5, NO_ATTACHMENT, 50, NO_MOTION, UNPLACED, SCALE_UNIT)}
+        AttachModel(8100, MODEL_CAT_DISPLAY, 5, NO_ATTACHMENT, 50, NO_MOTION,
+                    UNPLACED, SCALE_UNIT, 3)}
 
 
 def test_a_weapon_row_with_no_file_becomes_its_slot_sentinel(
         tables: BuildTables) -> None:
     assert sources(tables).attach_models[903] == {
-        (WEAPON_FID_MAIN, MODEL_CAT_ATTACH, 5, NO_ATTACHMENT, 0, NO_MOTION, UNPLACED,
-         SCALE_UNIT)}
+        AttachModel(WEAPON_FID_MAIN, MODEL_CAT_ATTACH, 5, NO_ATTACHMENT, 0,
+                    NO_MOTION, UNPLACED, SCALE_UNIT, 4)}
 
 
 def test_an_unnamed_weapon_file_is_dropped_to_its_sentinel(
@@ -141,8 +147,8 @@ def test_an_unnamed_weapon_file_is_dropped_to_its_sentinel(
     """The Classic placeholder: a file id on a weapon row naming no real
     asset."""
     assert sources(tables).attach_models[904] == {
-        (WEAPON_FID_OFF, MODEL_CAT_ATTACH, 5, NO_ATTACHMENT, 0, NO_MOTION, UNPLACED,
-         SCALE_UNIT)}
+        AttachModel(WEAPON_FID_OFF, MODEL_CAT_ATTACH, 5, NO_ATTACHMENT, 0,
+                    NO_MOTION, UNPLACED, SCALE_UNIT, 5)}
 
 
 def test_a_named_file_on_a_weapon_row_is_left_alone(tables: BuildTables) -> None:
@@ -177,8 +183,8 @@ def test_an_unwritten_scale_is_native_size(tables: BuildTables) -> None:
     as one: it would draw every attached model at nothing, which looks like a
     rendering fault rather than a decoding one.
     """
-    worn = next(row[-2] for row in sources(tables).attach_models[900]
-                if row[2] == 11)
+    worn = next(row.placement for row in sources(tables).attach_models[900]
+                if row.source == 11)
     assert worn.scale == SCALE_UNIT
 
 
@@ -188,9 +194,10 @@ def test_a_model_carries_the_size_it_was_built_at(tables: BuildTables) -> None:
     data holds. Kit 900's second row asks for no scale at all and its model is
     half size anyway -- reading the attachment's alone calls that unscaled.
     """
-    worn = next(row for row in sources(tables).attach_models[900] if row[2] == 11)
-    assert worn[-2].scale == SCALE_UNIT, "the attachment asks for nothing"
-    assert worn[-1] == BUILT_HALF, "and the model is half size regardless"
+    worn = next(row for row in sources(tables).attach_models[900]
+                if row.source == 11)
+    assert worn.placement.scale == SCALE_UNIT, "the attachment asks for nothing"
+    assert worn.built == BUILT_HALF, "and the model is half size regardless"
 
 
 def test_an_emission_resolves_to_its_area_model(tables: BuildTables) -> None:
