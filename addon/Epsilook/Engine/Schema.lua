@@ -239,6 +239,19 @@ function Schema.IsQuantity(typeName)
 	return declaredType ~= nil and declaredType.quantity == true
 end
 
+--- Whether a property stores no value, so its own word is what selects it.
+-- Asked of the whole declaration rather than of its first type, which is the
+-- one place the two engines could read a property differently without any
+-- probe seeing it: today every flag property declares nothing else.
+function Schema.IsFlag(prop)
+	for _, typeName in ipairs(prop.types) do
+		if typeName == "flag" then
+			return true
+		end
+	end
+	return false
+end
+
 --- Whether a type is read as text, where a bare token is a substring.
 function Schema.IsTextual(typeName)
 	return typeName == "text" or typeName == "path" or typeName == "enum"

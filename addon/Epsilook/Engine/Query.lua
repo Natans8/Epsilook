@@ -374,7 +374,7 @@ end
 -- a reader types to select the rows carrying it. The spellings are the same
 -- list the matcher compares against.
 local function isFlagWord(prop, text)
-	if prop.types[1] ~= "flag" then
+	if not Schema.IsFlag(prop) then
 		return false
 	end
 	local folded = Text.fold(text)
@@ -1257,7 +1257,7 @@ local function statesBareValue(term)
 	if ask.on == "props" then
 		local allFlags = true
 		for _, ref in ipairs(ask.props) do
-			if ref.prop.types[1] ~= "flag" then
+			if not Schema.IsFlag(ref.prop) then
 				allFlags = false
 				break
 			end
@@ -1801,15 +1801,40 @@ local function symbolled(expr)
 	return op ~= nil and op.symbol ~= nil and op.form == "prefix"
 end
 
---- An operand written back, quoted where it carries a space or a quote.
+--- One character as a pattern matching itself, punctuation escaped, since the
+-- grammar's own characters are data and several of them mean something to the
+-- matcher.
+local function literally(c)
+	if c:find("%w") then
+		return c
+	end
+	return "%" .. c
+end
+
+--- An operand written back, phrased where its spelling requires it.
+-- A verbatim operand keeps its quotes whatever it holds: quotes are strict, so
+-- the phrase is part of what the ask means, and dropping it turns a
+-- matched-as-written ask back into a squashed one, which is a different
+-- question. The other branches serve operands that were never quoted but have
+-- no bare spelling at all.
 local function quoted(operand)
 	local grammar = Schema.grammar
 	local written = Query.OperandText(operand)
-	if written:find("%s") or written:find(grammar.phrase, 1, true) then
-		local escaped = written:gsub(grammar.phrase, grammar.escape .. grammar.phrase)
-		return grammar.phrase .. escaped .. grammar.phrase
+	-- Not the escape: an operand carrying one has a bare spelling that reads
+	-- back as itself, and phrasing it would double the escape it already has.
+	local phrase = operand.verbatim == true
+		or written == ""
+		or written:find("%s") ~= nil
+		or written:find(grammar.phrase, 1, true) ~= nil
+	if not phrase then
+		return written
 	end
-	return written
+	-- Both characters are shielded in ONE pass. Two passes would have an order
+	-- to get right, since escaping the quote after doubling the escape doubles
+	-- back over the escapes the first pass just wrote.
+	local shielded = "[" .. literally(grammar.escape) .. literally(grammar.phrase) .. "]"
+	local body = written:gsub(shielded, grammar.escape .. "%0")
+	return grammar.phrase .. body .. grammar.phrase
 end
 
 --- One value expression written back as query text.
@@ -1831,8 +1856,37 @@ local function formatExpr(expr)
 	return Schema.operators[expr.op].symbol .. quoted(expr.operand)
 end
 
+--- Whether a term's properties reach more than one kind, which is the shape a
+-- word shared across kinds makes: `file:wolf` reaching every kind's file.
+local function spansKinds(refs)
+	for i = 2, #refs do
+		if refs[i].kind ~= refs[1].kind then
+			return true
+		end
+	end
+	return false
+end
+
+--- Whether a bound scope term is written under its KIND's word rather than its
+-- property's.
+-- A kind's subject binds through the kind's word, the door the reader has,
+-- never through the schema's own storage name. A word shared across kinds
+-- keeps the property's, since naming one kind would narrow an ask that reaches
+-- several; and inside the kind's own scope its word is already the door
+-- overhead, so writing it again would name a property the kind has not.
+local function speaksAsKind(ask, enclosing)
+	local ref = ask.props[1]
+	return ref.kind.worded
+		and ref.kind.props[1] == ref.prop
+		and ref.kind ~= enclosing
+		and not spansKinds(ask.props)
+end
+
 --- One scope term written back: its word and value, the exclusion before it.
-local function formatTerm(term)
+-- @param term the term
+-- @param enclosing the kind whose scope holds the term, or nil inside a
+--   column's, where no kind is overhead
+local function formatTerm(term, enclosing)
 	local grammar = Schema.grammar
 	local ask = term.ask
 	local out
@@ -1845,10 +1899,24 @@ local function formatTerm(term)
 			.. (symbolled(ask.value) and "" or grammar.bind)
 			.. formatExpr(ask.value)
 	else
-		local prop = ask.props[1].prop
-		out = (prop.word or prop.name)
-			.. (symbolled(ask.value) and "" or grammar.bind)
-			.. formatExpr(ask.value)
+		local ref = ask.props[1]
+		if Schema.IsFlag(ref.prop) then
+			-- A flag stores no value: the word IS the ask, so it is written
+			-- alone. Bound to its own name it spells a property taking a value
+			-- it cannot take, and the spelling stops parsing.
+			out = ref.prop.word or ref.prop.name
+		elseif ref.kind == enclosing and #ref.kind.props == 1 then
+			-- The subject of a one-property kind speaks bare inside that
+			-- kind's own scope: every bare value the scope reads lands on the
+			-- one property it has.
+			out = formatExpr(ask.value)
+		else
+			local head = ref.prop.word or ref.prop.name
+			if speaksAsKind(ask, enclosing) then
+				head = ref.kind.word
+			end
+			out = head .. (symbolled(ask.value) and "" or grammar.bind) .. formatExpr(ask.value)
+		end
 	end
 	if term["not"] then
 		out = grammar.negate .. out
@@ -1858,14 +1926,16 @@ end
 
 --- A scope's runs written back inside braces, terms a space apart and runs
 -- an or apart; the terms that do not run are left out.
-local function formatScope(runs)
+-- @param runs the scope's runs
+-- @param enclosing the kind whose scope this is, or nil for a column's
+local function formatScope(runs, enclosing)
 	local grammar = Schema.grammar
 	local groups = {}
 	for _, run in ipairs(runs) do
 		local words = {}
 		for _, term in ipairs(run) do
 			if term.state == "ok" and term.ask then
-				words[#words + 1] = formatTerm(term)
+				words[#words + 1] = formatTerm(term, enclosing)
 			end
 		end
 		groups[#groups + 1] = table.concat(words, " ")
@@ -1907,7 +1977,12 @@ local function formatClause(clause)
 			out = ask.on == "column" and (head .. grammar.bind .. grammar.wildcard)
 				or (ask.kind.column .. grammar.bind .. ask.kind.word)
 		elseif test.is == "scope" then
-			out = head .. grammar.bind .. formatScope(test.terms)
+			-- A kind's scope carries that kind overhead; a column's carries none.
+			local enclosing
+			if ask.on == "kind" then
+				enclosing = ask.kind
+			end
+			out = head .. grammar.bind .. formatScope(test.terms, enclosing)
 		elseif ask.inner then
 			local word = test.is == "count" and grammar.countWord
 				or (test.props[1].prop.word or test.props[1].prop.name)

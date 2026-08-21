@@ -73,3 +73,34 @@ def test_a_kit_and_a_sound_type_are_reachable_only_inside_their_column(engine: L
     # The file and the kit are read by a bare word; what the kit is FOR is not.
     assert plain["type"] == 0, plain
     assert plain["file"] > 0 and plain["kit"] > 0, plain
+
+
+def test_a_flag_is_read_off_the_whole_declaration(engine: LuaRuntime) -> None:
+    """A flag stores no value, so its own word is what selects it, and asking
+    only the first declared type would read a property that declares a flag
+    second as an ordinary one. Every flag the pack ships declares nothing else,
+    so the narrower reading agrees today and would part company silently. The
+    two synthetic properties are here for exactly that reason.
+    """
+    # language=Lua
+    engine.execute(b"""
+                   function FLAGS_DECLARED()
+                       local flags = 0
+                       for _, kind in ipairs(Epsilook.Schema.kinds) do
+                           for _, prop in ipairs(kind.props) do
+                               if Epsilook.Schema.IsFlag(prop) ~= (prop.types[1] == "flag") then
+                                   return -1
+                               end
+                               if Epsilook.Schema.IsFlag(prop) then
+                                   flags = flags + 1
+                               end
+                           end
+                       end
+                       return flags
+                   end
+                   """)
+    # The pack ships flags, and on every one of them the two readings agree.
+    assert int(str(lua_function(engine, b"FLAGS_DECLARED")())) > 0
+    is_flag = lua_function(engine, b"Epsilook.Schema.IsFlag")
+    assert is_flag(engine.eval(b'{types = {"length", "flag"}}')) is True
+    assert is_flag(engine.eval(b'{types = {"length"}}')) is False

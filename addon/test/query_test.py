@@ -143,3 +143,43 @@ def test_a_scope_holds_a_sort_sequence_and_it_is_the_canonical_form(engine: LuaR
     for bad in ("sort:{name zzz}", "sort:{}", "sort:{name"):
         assert parsed(engine, bad)["problems"], bad
         assert parsed(engine, bad).get("sorts") in ([], {}, None), bad
+
+
+def test_a_scope_term_is_written_under_the_door_that_reached_it(engine: LuaRuntime) -> None:
+    """A term reached through a kind's door is written under that door, never
+    under the storage name of the property it fanned out to. Writing the name
+    asks a different question: `attach:chest` came back as `file:chest`, which
+    reaches every kind's file rather than the attachment's, and the two terms
+    of `spell:{name:fire desc:kneel}` both came back as `text:`, which no
+    longer says which kind either was on.
+    """
+    assert formatted(engine, "model:{attach:chest fire}") == "model:{attach:chest fire}"
+    assert formatted(engine, "spell:{name:fire desc:kneel}") == "spell:{name:fire desc:kneel}"
+    # A word SHARED across kinds keeps the property's word, since naming one
+    # kind would narrow an ask that reaches all of them.
+    assert formatted(engine, "model:{attach file:wolf}") == "model:{attach file:wolf}"
+    # Inside a kind's own scope its word is already the door overhead, so the
+    # property binds by its own word there.
+    assert formatted(engine, "missile:{from:chest}") == "missile:{from:chest}"
+    assert formatted(engine, "attach:{point:chest}") == "attach:{point:chest}"
+
+
+def test_a_flag_in_a_scope_is_written_alone(engine: LuaRuntime) -> None:
+    """A flag stores no value, so the word IS the ask. Bound to its own name it
+    spells a property taking a value it cannot take, and the spelling stops
+    parsing: `range:{melee unlimited}` came back as `melee:melee`.
+    """
+    assert formatted(engine, "range:{melee unlimited}") == "range:{melee dist=unlimited}"
+
+
+def test_a_quoted_operand_is_written_back_quoted(engine: LuaRuntime) -> None:
+    """Quotes are strict, so the phrase is part of what the ask means and
+    dropping it turns a matched-as-written ask back into a squashed one:
+    `name:"anti-magic"` came back as `name:antimagic`, a different question.
+    """
+    assert formatted(engine, 'name:"anti-magic"') == 'name:"anti-magic"'
+    assert formatted(engine, 'name:"-a"') == 'name:"-a"'
+    # The escape is shielded alongside the quote: shielding the quote alone
+    # leaves the escape before it eating the closing one, and the phrase ends
+    # early on text that is nothing but punctuation.
+    assert formatted(engine, r'name:\" fire') == r'name:"\\\"" fire'

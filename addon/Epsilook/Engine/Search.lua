@@ -207,7 +207,7 @@ end
 
 --- Whether an operand written as text names a flag property by one of its words.
 local function flagWord(prop, expr)
-	if prop.types[1] ~= "flag" or not expr.operand or not expr.operand.text then
+	if not Schema.IsFlag(prop) or not expr.operand or not expr.operand.text then
 		return false
 	end
 	if expr.op ~= "contains" and expr.op ~= "exact" then

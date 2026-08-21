@@ -90,6 +90,71 @@ def first(engine: LuaRuntime, query: str, limit: int) -> list[int]:
     return [] if found == {} else [int(str(v)) for v in as_list(found)]
 
 
+def test_every_probe_written_back_asks_the_same_question(engine: LuaRuntime) -> None:
+    """The writer's own law, and the one that needs no second engine: text
+    handed back has to read as the query it came from.
+
+    `FormatQuery` is public surface, so a spelling that re-reads as something
+    else is a query the addon changed behind the reader. Six of the probes
+    above did: a term reached through a kind's door came back under the storage
+    name of the property it fanned out to, a flag came back bound to its own
+    name and stopped parsing, and a quoted operand came back bare, which is the
+    squashed reading rather than the written-as-typed one it was.
+
+    The parse is compared rather than the text, because two spellings of one
+    question are both correct and only the question has to survive; the spans
+    and the problem list are dropped, being about the text that was typed.
+
+    Quoting is compared by direction rather than by equality. An operand
+    holding a quote of its own has no bare spelling at all, so writing it back
+    necessarily phrases it and the phrase is strict -- a mark the reader never
+    typed. Gaining one that way is the only spelling available; losing one is
+    the defect, since the ask then matches loosely where it matched as written.
+    """
+    parse = lua_function(engine, b"Epsilook.Query.Parse")
+    write = lua_function(engine, b"Epsilook.Query.Format")
+
+    def asked(tree: object) -> list[object]:
+        """The ask of every clause that runs, which is the question the text asked."""
+        clauses = as_dict(tree).get("clauses")
+        if not isinstance(clauses, list):
+            return []
+        out: list[object] = []
+        for clause in clauses:
+            if isinstance(clause, dict) and clause.get("state") == "ok":
+                out.append(clause.get("ask"))
+        return out
+
+    def structure(value: object) -> object:
+        """The ask with its quoting marks dropped, which is compared apart."""
+        if isinstance(value, dict):
+            return {key: structure(held) for key, held in value.items() if key != "verbatim"}
+        if isinstance(value, list):
+            return [structure(held) for held in value]
+        return value
+
+    def strict(value: object) -> int:
+        """How many of an ask's operands are matched as written."""
+        if isinstance(value, dict):
+            return (1 if value.get("verbatim") is True else 0) + sum(strict(held) for held in value.values())
+        if isinstance(value, list):
+            return sum(strict(held) for held in value)
+        return 0
+
+    changed: list[str] = []
+    for probe in PROBES:
+        tree = parse(probe.encode("utf-8"))
+        written = write(tree)
+        assert isinstance(written, bytes)
+        once = written.decode("utf-8")
+        before, after = asked(tree), asked(parse(written))
+        if structure(before) != structure(after):
+            changed.append(f"{probe!r} was written back as {once!r}, which asks something else")
+        elif strict(after) < strict(before):
+            changed.append(f"{probe!r} was written back as {once!r}, dropping a quote that was strict")
+    assert not changed, "\n".join(changed)
+
+
 def test_the_iterator_resumes_where_it_stopped(engine: LuaRuntime) -> None:
     # language=Lua
     engine.execute(b"""
