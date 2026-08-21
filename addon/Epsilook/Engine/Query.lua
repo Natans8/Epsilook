@@ -393,8 +393,19 @@ local function kindCtx(kind, countFallback)
 	local ctx = {}
 	local word = kind.word
 	local refs = {}
+	local comparable = {}
 	for _, prop in ipairs(kind.props) do
 		refs[#refs + 1] = { kind = kind, prop = prop }
+		-- A qualifier refines a row rather than naming a subject of its own,
+		-- so a comparison written on the KIND's word was never about it:
+		-- `attach>2` asks how many models a spell attaches, not how big one of
+		-- them is drawn. It stays reachable by name, which is where a reader
+		-- who meant it says so. Without this a kind's count meaning is taken
+		-- by whichever qualifier is declared first and happens to accept the
+		-- operator.
+		if not prop.qualifier then
+			comparable[#comparable + 1] = refs[#refs]
+		end
 	end
 	local subject = refs[1] and refs[1].prop or Schema.COUNT_PROP
 	local function illTyped()
@@ -402,7 +413,7 @@ local function kindCtx(kind, countFallback)
 	end
 	--- The first property whose context answers a method, else the count's where the position allows.
 	local function firstOf(method, ...)
-		for _, ref in ipairs(refs) do
+		for _, ref in ipairs(comparable) do
 			local answer = propCtx({ ref }, word)[method](...)
 			if answer then
 				return answer
@@ -416,7 +427,7 @@ local function kindCtx(kind, countFallback)
 	ctx.wordStar = true
 	function ctx.operator(op, operand, phrase)
 		local claimed = false
-		for _, ref in ipairs(refs) do
+		for _, ref in ipairs(comparable) do
 			local value, typeName = Schema.ParseValue(ref.prop, operand)
 			if value ~= nil then
 				claimed = true

@@ -10,8 +10,10 @@
  * transform of the app rather than a second account of it.
  *
  * Only what a reader consumes is exported: an optional field a declaration leaves unset is omitted rather than
- * written as null, and a field only the web's own surfaces read (relevance tiers, the qualifier warning, kind
- * groups, operator precedence) stays out. Exporting a field nothing consumes is a promise nobody made.
+ * written as null, and a field only the web's own surfaces read (relevance tiers, kind groups, operator precedence)
+ * stays out. Exporting a field nothing consumes is a promise nobody made — but a field a second engine must EVALUATE
+ * is not one of those, however surface-like it looks. `qualifier` reads as a warning about how a scope is written and
+ * also decides what a comparison on a kind's own word means, and leaving it out gave the addon a different answer.
  */
 import type {Notation, Operator} from "../src/search/index";
 import {
@@ -20,7 +22,7 @@ import {
 } from "../src/search/index";
 
 /** The shape of this output. A reader refuses another rather than misreading it. */
-const SCHEMA_FORMAT = 5;
+const SCHEMA_FORMAT = 6;
 
 /** A record with its undefined and null fields left out, so an absent declaration is an absent key. */
 function trimmed<T extends Record<string, unknown>>(record: T): Partial<T> {
@@ -88,6 +90,9 @@ function main(): void {
             // As pairs rather than a record: a record keyed by a number is a record keyed by its decimal spelling once
             // serialised, and a reader would have to know to convert the key back.
             sentinels: Object.entries(prop.sentinels ?? {}).map(([value, word]) => ({value: Number(value), word})),
+            // Not a surface fact: a qualifier is left out of the offer a comparison on the KIND's own word makes, so
+            // `attach>2` counts the models a spell attaches rather than binding to how big one of them is drawn.
+            qualifier: prop.qualifier === true,
             hint: hintOf(prop),
         })),
     }));

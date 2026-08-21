@@ -28,7 +28,7 @@ local Text = Epsilook.Text
 local floor, abs = math.floor, math.abs
 
 --- The shape of declarations this file reads. Another is refused at load.
-Schema.FORMAT = 5
+Schema.FORMAT = 6
 
 --- The synthetic property behind the count word, so a cardinality reads its
 -- operands like any numeric axis. Its word is read off the grammar at load.
