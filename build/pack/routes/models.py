@@ -140,9 +140,40 @@ placement columns at all, so they take this rather than each inventing a
 neutral of their own.
 """
 
-# (file id, category, source attachment, destination attachment, ref, motion,
-#  placement, the model's own size)
-AttachModel = tuple[int, int, int, int, int, int, Placement, int]
+class AttachModel(NamedTuple):
+    """One model a kit puts on a unit, and everything the row says about it.
+
+    Named rather than a bare tuple because the fields are eight integers and a
+    placement, so a positional mistake is a value landing in a neighbour that
+    accepts it -- a reference read as a motion, and nothing raising. It is still
+    a tuple, so the positions keep working for the code that builds and unpacks
+    it, and it stays hashable, which the per-kit sets rely on.
+    """
+
+    file: int
+    """The asset the row draws, whichever table it was reached through."""
+
+    category: int
+    """Which id space `ref` is in, and which word the row renders under."""
+
+    source: int
+    """Where on the unit the model attaches."""
+
+    destination: int
+    """Where it attaches at the far end, for the rows that span two points."""
+
+    ref: int
+    """The entity the model came from, read in `category`'s id space."""
+
+    motion: int
+    """How it travels, for the rows that move."""
+
+    placement: Placement
+    """Scale, offset, rotation and animation: how the row places the model."""
+
+    built: int
+    """The size the model itself is, before the row's own scale applies."""
+
 
 PLACEMENT_COLUMNS = ("Scale", "Offset_0", "Offset_1", "Offset_2",
                      "Yaw", "Pitch", "Roll",
@@ -409,16 +440,16 @@ def _attached_model(name_id: int, attach: int, placement: Placement,
         # builds with no server dump.
         display = generic.get(name_id, 0)
         file = creatures.fid_for_display(display)
-        return ((file, MODEL_CAT_DISPLAY, attach, NO_ATTACHMENT, display, NO_MOTION,
-                 placement, built) if file else None)
+        return (AttachModel(file, MODEL_CAT_DISPLAY, attach, NO_ATTACHMENT, display,
+                            NO_MOTION, placement, built) if file else None)
     if name_type == EFFECT_NAME_TYPE_ITEM:
         # The row keeps the item as its ref even when the item has no name.
         item = generic.get(name_id, 0)
         file = items.model_fid.get(item, 0)
-        return ((file, MODEL_CAT_ITEM, attach, NO_ATTACHMENT, item, NO_MOTION,
-                 placement, built) if file else None)
+        return (AttachModel(file, MODEL_CAT_ITEM, attach, NO_ATTACHMENT, item,
+                            NO_MOTION, placement, built) if file else None)
     file = file_for_effect_name(models, name_id)
     if file:
-        return (file, MODEL_CAT_ATTACH, attach, NO_ATTACHMENT, 0, NO_MOTION,
-                placement, built)
+        return AttachModel(file, MODEL_CAT_ATTACH, attach, NO_ATTACHMENT, 0, NO_MOTION,
+                           placement, built)
     return None

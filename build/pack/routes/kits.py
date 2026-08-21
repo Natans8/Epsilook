@@ -153,15 +153,15 @@ def read_kit_effects(tables: Tables, models: ModelSources, procs: ProcEffects,
             file = models.emission_fid.get(effect, 0)
             if file:
                 kits.models.setdefault(kit, set()).add(
-                    (file, MODEL_CAT_AREA, NO_ATTACHMENT, NO_ATTACHMENT, 0,
-                     NO_MOTION, UNPLACED, SCALE_UNIT))
+                    AttachModel(file, MODEL_CAT_AREA, NO_ATTACHMENT, NO_ATTACHMENT,
+                                0, NO_MOTION, UNPLACED, SCALE_UNIT))
         elif effect_type == EFFECT_TYPE_BARRAGE:
             file = models.barrage_fid.get(effect, 0)
             if file:
                 attach = models.barrage_attach.get(effect, NO_ATTACHMENT)
                 kits.models.setdefault(kit, set()).add(
-                    (file, MODEL_CAT_BARRAGE, attach, NO_ATTACHMENT, 0,
-                     NO_MOTION, UNPLACED, SCALE_UNIT))
+                    AttachModel(file, MODEL_CAT_BARRAGE, attach, NO_ATTACHMENT,
+                                0, NO_MOTION, UNPLACED, SCALE_UNIT))
         elif effect_type == EFFECT_TYPE_SCREEN:
             screen = fx.svse_screen.get(effect, 0)
             if screen in fx.screens:

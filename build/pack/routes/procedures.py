@@ -107,15 +107,15 @@ def read_proc_effects(tables: Tables, models: ModelSources) -> ProcEffects:
         elif type_id == PROC_TYPE_AREAMODEL:
             file = models.area_model_fid.get(to_int_from_float(first), 0)
             if file:
-                procs.models[proc_id] = (file, MODEL_CAT_AREA, NO_ATTACHMENT,
-                                         NO_ATTACHMENT, 0, NO_MOTION, UNPLACED,
-                                         SCALE_UNIT)
+                procs.models[proc_id] = AttachModel(file, MODEL_CAT_AREA, NO_ATTACHMENT,
+                                                    NO_ATTACHMENT, 0, NO_MOTION,
+                                                    UNPLACED, SCALE_UNIT)
         elif type_id == PROC_TYPE_WEAPONTRAIL:
             file = models.weapontrail_fid.get(to_int_from_float(first), 0)
             if file:
-                procs.models[proc_id] = (file, MODEL_CAT_TRAIL, NO_ATTACHMENT,
-                                         NO_ATTACHMENT, 0, NO_MOTION, UNPLACED,
-                                         SCALE_UNIT)
+                procs.models[proc_id] = AttachModel(file, MODEL_CAT_TRAIL, NO_ATTACHMENT,
+                                                    NO_ATTACHMENT, 0, NO_MOTION,
+                                                    UNPLACED, SCALE_UNIT)
         elif type_id == PROC_TYPE_STANDWALK:
             # Paired with the base slot each value overrides, folding into the
             # same replacement group as the animation-replacement aura. A value
