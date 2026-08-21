@@ -12,6 +12,7 @@ from __future__ import annotations
 import gzip
 import struct
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -32,7 +33,7 @@ def _definition() -> dbd.Definition:
 
 
 @pytest.fixture(name="table")
-def _table(definition: dbd.Definition, tmp_path: Path) -> list[dict]:
+def _table(definition: dbd.Definition, tmp_path: Path) -> list[dict[str, Any]]:
     """The vendored dump, decoded."""
     unpacked = tmp_path / "SpellVisualEffectName.dbc"
     with gzip.open(VENDORED, "rb") as packed:
@@ -40,12 +41,12 @@ def _table(definition: dbd.Definition, tmp_path: Path) -> list[dict]:
     return wdbc.read(unpacked, definition, LAYOUT_BUILD)
 
 
-def test_reads_every_record(table: list[dict]) -> None:
+def test_reads_every_record(table: list[dict[str, Any]]) -> None:
     """The row count is the vendored dump's identity, so it is asserted."""
     assert len(table) == 12597
 
 
-def test_carries_both_strings(table: list[dict]) -> None:
+def test_carries_both_strings(table: list[dict[str, Any]]) -> None:
     """The window this file comes from is the one where both strings exist.
 
     A file where the name holds a model path is a later client whose name column
@@ -64,7 +65,7 @@ def test_carries_both_strings(table: list[dict]) -> None:
 
 
 def test_refuses_a_layout_that_does_not_fit(definition: dbd.Definition,
-                                            table: list[dict], tmp_path: Path) -> None:
+                                            table: list[dict[str, Any]], tmp_path: Path) -> None:
     """A layout from the wrong build is an error rather than a silent misread.
 
     Every value would still decode under a wrong layout, and every one would be

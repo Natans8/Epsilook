@@ -1845,6 +1845,191 @@ def check_mypy_strict(rep: Report) -> None:
            f"strict by default, {len(exempt)} {STRICT_EXEMPT_HOME}/ module(s) exempt")
 
 
+DISALLOWED_CALLS = ("eval", "exec")
+"""Builtins that turn data into code. The build reads hostile-ish input."""
+
+
+def check_build_constructs(rep: Report) -> None:
+    """The build refuses in code that survives -O, and evaluates nothing.
+
+    Two constructs, both of which the package once carried and neither of which
+    announces itself when it comes back.
+
+    An `assert` is not a check. It is compiled out under -O, so a line standing
+    between a bad value and the rest of the build is one flag away from not
+    being there -- and the four this package had were all doing exactly that,
+    narrowing a type or validating a file the next line then trusted. A refusal
+    is an `if` and a raise; an `assert` is for a claim whose removal changes
+    nothing, which is a claim not worth writing here.
+
+    And `eval` ran on text assembled from game tables, behind a character
+    filter. The filter was sound and the call was still the wrong shape: the
+    grammar it admitted included calls and juxtapositions the filter had not
+    thought of, which is a parser's job to refuse by construction. It is an
+    `ast` walk now.
+    """
+    home = ROOT / BUILD_PACKAGE
+    if not home.exists():
+        rep.skip("build constructs", f"{BUILD_PACKAGE} not present yet")
+        return
+
+    asserts: list[str] = []
+    calls: list[str] = []
+    for path in sorted(home.rglob("*.py")):
+        where = path.relative_to(ROOT).as_posix()
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+        except SyntaxError as exc:
+            rep.fail("build constructs", f"{where} does not parse: {exc}")
+            return
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Assert):
+                asserts.append(f"{where}:{node.lineno}")
+            if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                    and node.func.id in DISALLOWED_CALLS):
+                calls.append(f"{where}:{node.lineno} {node.func.id}")
+
+    if asserts:
+        rep.fail("build constructs",
+                 f"{asserts[0]} is an assert; -O removes it, so anything the "
+                 f"next line depends on has to be an if and a raise "
+                 f"({len(asserts)} in all)")
+        return
+    if calls:
+        rep.fail("build constructs",
+                 f"{calls[0]} turns build data into code; parse it instead "
+                 f"({len(calls)} in all)")
+        return
+    rep.ok("build constructs",
+           f"no assert and no {'/'.join(DISALLOWED_CALLS)} across {BUILD_PACKAGE}")
+
+
+def check_test_collection(rep: Report) -> None:
+    """Every Python test file on disk is one pytest actually runs.
+
+    This is the invariant a green run cannot demonstrate. Collection failing to
+    reach a directory is not an error anywhere: pytest walks what it walks,
+    reports what it found, and passes. The tests in the directory it never
+    entered are not failures, they are absences, and nothing counts absences.
+
+    It has already happened once, and the cause was ordinary. The tests are
+    grouped by subject and one group is called `build`, which is in pytest's
+    own default `norecursedirs` because for most projects it holds artifacts.
+    That default silently took the group out of the run: 117 tests collected
+    where there were 1,083, exit status zero. `norecursedirs` is declared in
+    pyproject.toml without that entry, and this guard is what makes deleting
+    the declaration fail instead of shrinking the suite.
+
+    Asking pytest rather than reasoning about the config, because the ways to
+    lose a file are open-ended -- an excluded directory, a narrowed
+    `testpaths`, a rename that stops matching `python_files`, an import error
+    that drops one file -- and only one of them is a thing this check could
+    have thought of in advance.
+    """
+    home = ROOT / PYTHON_TESTS
+    if not home.exists():
+        rep.skip("test collection", f"{PYTHON_TESTS} not present yet")
+        return
+    on_disk = {path.relative_to(ROOT).as_posix()
+               for path in home.rglob("*_test.py")}
+
+    exe = shutil.which("uv")
+    if exe is None:
+        rep.skip("test collection", "uv not on PATH")
+        return
+    proc = subprocess.run([exe, "run", "pytest", "--collect-only", "-q"],
+                          cwd=ROOT, capture_output=True, encoding="utf-8",
+                          errors="replace", check=False)
+    if proc.returncode != 0:
+        rep.fail("test collection",
+                 f"pytest could not collect: {proc.stdout.strip()[-300:]}")
+        return
+    collected = {match.group(1).replace("\\", "/")
+                 for match in re.finditer(r"^(\S+_test\.py):\s*\d+\s*$",
+                                          proc.stdout, re.MULTILINE)}
+
+    missed = sorted(on_disk - collected)
+    if missed:
+        rep.fail("test collection",
+                 f"{len(missed)} test file(s) on disk that pytest never ran, "
+                 f"starting with {missed[0]}; the run is green and short")
+        return
+    rep.ok("test collection", f"all {len(on_disk)} test files collected")
+
+
+def check_test_layout(rep: Report) -> None:
+    """The test groups are safe to name, and no test knows where it lives.
+
+    Two ways the grouping breaks, both of which report something other than
+    what is wrong:
+
+    A group directory that shares a name with an importable module shadows it,
+    because the test root is on the import path. `test/py/pack/` was tried and
+    hides `build/pack`; what that produces is a dozen file-not-found errors
+    naming a Lua file, which points nowhere near the collision.
+
+    And a test that walks up from `__file__` to find the repository has its own
+    location built into it, so regrouping moves the root it computes. `ROOT`
+    comes from `support.py`, which is the one module at a fixed depth.
+    """
+    home = ROOT / PYTHON_TESTS
+    if not home.exists():
+        rep.skip("test layout", f"{PYTHON_TESTS} not present yet")
+        return
+
+    roots = [ROOT / part for part in ("build", "tools")]
+    groups = [path for path in home.iterdir()
+              if path.is_dir() and not path.name.startswith((".", "__"))]
+    shadowed = [group.name for group in groups for root in roots
+                if (root / group.name).is_dir()
+                or (root / f"{group.name}.py").exists()]
+    if shadowed:
+        rep.fail("test layout",
+                 f"{PYTHON_TESTS}/{shadowed[0]}/ shadows an importable module "
+                 f"of the same name; a group may not be named for one")
+        return
+
+    walkers = sorted(path.relative_to(ROOT).as_posix()
+                     for path in home.rglob("*_test.py")
+                     if "__file__" in path.read_text(encoding="utf-8"))
+    if walkers:
+        rep.fail("test layout",
+                 f"{walkers[0]} derives a path from __file__; take ROOT from "
+                 f"support.py, or the file's own location becomes load-bearing")
+        return
+    rep.ok("test layout",
+           f"{len(groups)} group(s), none shadowing a module, none self-locating")
+
+
+def check_python_path(rep: Report) -> None:
+    """The checker and the runner resolve a module the same way.
+
+    `pythonpath` is what pytest imports through and `mypy_path` is what mypy
+    resolves through, and they are two declarations of one fact. When they
+    disagree the tests still run, so the failure lands entirely on the checker:
+    a tree checked on its own cannot find the package it is testing and answers
+    with an import error per import -- a hundred and fifty of them at the time
+    this was found, every one reading as a broken test rather than as a
+    checker that was told nothing.
+    """
+    config = tomllib.loads(PYPROJECT.read_text(encoding="utf-8"))
+    tool = config.get("tool", {})
+    runner = tool.get("pytest", {}).get("ini_options", {}).get("pythonpath")
+    checker = tool.get("mypy", {}).get("mypy_path")
+    if runner is None or checker is None:
+        rep.fail("import path",
+                 f"pyproject.toml declares pythonpath={runner!r} and "
+                 f"mypy_path={checker!r}; both are needed")
+        return
+    if sorted(runner) != sorted(checker):
+        rep.fail("import path",
+                 f"pytest imports through {sorted(runner)} and mypy resolves "
+                 f"through {sorted(checker)}; a tree checked alone will not "
+                 f"find what it tests")
+        return
+    rep.ok("import path", f"pytest and mypy share {len(runner)} root(s)")
+
+
 def check_kit_effect_types(rep: Report) -> None:
     """Every value of a polymorphic discriminator must be named, gaps included.
 
@@ -2433,6 +2618,10 @@ def main() -> int:
     check_delivery_declaration(rep)
     check_range_declaration(rep)
     check_mypy_strict(rep)
+    check_python_path(rep)
+    check_test_layout(rep)
+    check_test_collection(rep)
+    check_build_constructs(rep)
     check_kit_effect_types(rep)
     check_soundkit_declaration(rep)
     check_supplement(rep)

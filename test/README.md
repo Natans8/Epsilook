@@ -203,7 +203,9 @@ location load-bearing, which is how a regrouping turns into a dozen file-not-fou
 
 ⚠ **`norecursedirs` is declared in `pyproject.toml`, and it has to be.** `build` is in pytest's own default list of
 directories not to walk, because for most projects it holds artifacts. Left at the default, that whole group is skipped
-in silence: collection succeeds, the run is green, and it reports a fraction of the tests.
+in silence: collection succeeds, the run is green, and it reports a fraction of the tests. **`check_test_collection`
+is what makes that fail** — it asks pytest what it collected and names every file on disk that pytest never ran. It is
+the tier-1 answer to a question no test can ask about itself, because a test that is not collected cannot fail.
 
 `pyproject.toml` puts `build`, `test/py` and `tools` on the import path — for mypy as well as pytest, through
 `mypy_path`, or a tree checked on its own cannot resolve `pack` and answers with a hundred and fifty import errors that
@@ -213,6 +215,8 @@ pytest and needs no import, but its type does, and importing a name out of `conf
 
 ⛔ **A group directory may not be named for a package that is importable.** `test/py/pack/` was tried and shadows the
 real `pack` on the import path, which fails twelve tests in a way that names a file rather than the collision.
+`check_test_layout` refuses it, and refuses a test that walks up from `__file__` in the same pass. `check_python_path`
+holds `pythonpath` and `mypy_path` to each other.
 
 **No framework beyond `node:test` and `pytest`.** A suite with nothing on top cannot rot when the thing on top does, and
 this app is maintained solo: the tests are the handover.
