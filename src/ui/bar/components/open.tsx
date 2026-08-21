@@ -14,14 +14,14 @@
 import type {KeyboardEvent, ReactElement, ReactNode} from "react";
 import {useLayoutEffect, useRef} from "react";
 import {useTranslation} from "react-i18next";
-import {GRAMMAR, NEGATION} from "../../search/index";
-import type {Assist} from "./assist";
+import {GRAMMAR, NEGATION} from "../../../search/index";
+import type {Assist} from "../hooks/assist";
 import {headCase} from "./chip";
-import type {BarPlan, Keystroke} from "./plan";
+import type {BarPlan, Keystroke} from "../utils/plan";
 import {
     backspaceAtStart, deleteAtEnd, keywordBehind, negatesBefore, pairDelimiter, slotStart, writeSlot,
-} from "./plan";
-import type {CaretRequest} from "./session";
+} from "../utils/plan";
+import type {CaretRequest} from "../hooks/session";
 import styles from "./bar.module.css";
 
 /**

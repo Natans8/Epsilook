@@ -11,7 +11,7 @@ import {
     negatesBefore, openHead, pairDelimiter, planAt, removeSegment, removeSelection, removeTerm, replaceSelection,
     scopedForm, scopeGesture, segmentAt, segmentsOf, selectionOver, selectionStep, shiftScope, slotStart,
     termStarts, toggleSort,
-} from "../../../../src/ui/bar/plan";
+} from "../../../../src/ui/bar/utils/plan";
 
 test("a door's arrow turns that door alone, respelled through the formatter", () => {
     assert.deepEqual(toggleSort("model:fire sort:cast", 12, 0),

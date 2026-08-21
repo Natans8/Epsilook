@@ -5,8 +5,8 @@
  * can rewrite the very segment being acted on — trimming a scope's interior shifts every span inside it. The
  * index survives, because a commit never adds or removes a term.
  */
-import type {Span} from "../../search/index";
-import {describe, parse} from "../../search/index";
+import type {Span} from "../../../search/index";
+import {describe, parse} from "../../../search/index";
 
 /**
  * One lane item of a settled segment, re-read from that segment's own text.

@@ -14,10 +14,10 @@
 import type {MouseEvent as ReactMouseEvent, ReactElement, ReactNode} from "react";
 import {createContext, Fragment, useContext, useMemo} from "react";
 import {useTranslation} from "react-i18next";
-import type {ChipView, ClauseView, LaneView, Piece, Run, Span} from "../../search/index";
-import {describe, GRAMMAR, NEGATION, paint, parse, runsWithin} from "../../search/index";
+import type {ChipView, ClauseView, LaneView, Piece, Run, Span} from "../../../search/index";
+import {describe, GRAMMAR, NEGATION, paint, parse, runsWithin} from "../../../search/index";
 import {Classed, Pattern} from "./classed";
-import type {SegmentActions} from "./session";
+import type {SegmentActions} from "../hooks/session";
 import {toneOf} from "./tone";
 import styles from "./bar.module.css";
 

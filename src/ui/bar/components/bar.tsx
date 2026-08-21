@@ -14,20 +14,20 @@
  */
 import type {ReactElement, Ref} from "react";
 import {Fragment, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState} from "react";
-import type {Run} from "../../search/index";
-import {paint, runsWithin} from "../../search/index";
-import type {BarSegment} from "./plan";
-import {segmentsOf, slotStart} from "./plan";
+import type {Run} from "../../../search/index";
+import {paint, runsWithin} from "../../../search/index";
+import type {BarSegment} from "../utils/plan";
+import {segmentsOf, slotStart} from "../utils/plan";
 import {OpenSegment} from "./open";
 import {ChipArt, SettledSegment} from "./chip";
 import {Classed} from "./classed";
-import type {Vocabulary} from "./offers";
-import {NO_VOCABULARY} from "./offers";
+import type {Vocabulary} from "../utils/offers";
+import {NO_VOCABULARY} from "../utils/offers";
 import {Surface} from "./surface";
-import {useEditingSession} from "./session";
-import {useBarSelection} from "./selection";
-import {useBarAssist} from "./assist";
-import {recentQueries, rememberQuery} from "../history";
+import {useEditingSession} from "../hooks/session";
+import {useBarSelection} from "../hooks/selection";
+import {useBarAssist} from "../hooks/assist";
+import {recentQueries, rememberQuery} from "../../history";
 import styles from "./bar.module.css";
 
 /** One frozen empty map, so a bar with no art does not hand the context a fresh object each render. */

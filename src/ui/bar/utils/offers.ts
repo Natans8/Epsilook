@@ -12,12 +12,12 @@
  */
 import type {BarPlan} from "./plan";
 import {negatesBefore, structure, termStarts} from "./plan";
-import type {Column, Kind, Prop, Rung} from "../../search/index";
+import type {Column, Kind, Prop, Rung} from "../../../search/index";
 import {
     bitmask, COUNT_PROP, enumeration, flag, fold, GRAMMAR, HEADS, headWord, hintOf, kindIn, kindsOf, operatorsOf,
     ordinal, propIn, propNameOf, spokenProp, TARGET_ROLES, wordOf,
-} from "../../search/index";
-import {i18n} from "../../i18n";
+} from "../../../search/index";
+import {i18n} from "../../../i18n";
 
 /**
  * How an offer reads and what it does.

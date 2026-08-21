@@ -9,9 +9,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import {flatOffers, NO_OFFERS, offerGhost, offerSlot, offersAt} from "../../../../src/ui/bar/offers";
-import type {Offer, Offers, Vocabulary} from "../../../../src/ui/bar/offers";
-import {planAt, slotStart, writeSlot} from "../../../../src/ui/bar/plan";
+import {flatOffers, NO_OFFERS, offerGhost, offerSlot, offersAt} from "../../../../src/ui/bar/utils/offers";
+import type {Offer, Offers, Vocabulary} from "../../../../src/ui/bar/utils/offers";
+import {planAt, slotStart, writeSlot} from "../../../../src/ui/bar/utils/plan";
 import type {Rung} from "../../../../src/search/index";
 import {parse} from "../../../../src/search/index";
 

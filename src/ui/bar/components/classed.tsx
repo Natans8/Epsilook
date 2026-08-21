@@ -6,10 +6,10 @@
  */
 import type {ReactElement, ReactNode} from "react";
 import {useMemo} from "react";
-import type {Run, Span} from "../../search/index";
-import {classify, paint} from "../../search/index";
-import type {PatternKind} from "./pattern";
-import {patternRuns} from "./pattern";
+import type {Run, Span} from "../../../search/index";
+import {classify, paint} from "../../../search/index";
+import type {PatternKind} from "../utils/pattern";
+import {patternRuns} from "../utils/pattern";
 import {runToneOf} from "./tone";
 import styles from "./bar.module.css";
 

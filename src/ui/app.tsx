@@ -15,10 +15,8 @@ import {formatQuery, parse, simplify} from "../search/index";
 import type {Diagnostic} from "../search/index";
 import {recentQueries} from "./history";
 import {BASE} from "./pack";
-import type {BarHandle} from "./bar/bar";
-import {Bar} from "./bar/bar";
-import {PlainBar} from "./bar/plain";
-import {settledQuery} from "./bar/plan";
+import type {BarHandle} from "./bar/index";
+import {Bar, PlainBar, settledQuery} from "./bar/index";
 import styles from "./app.module.css";
 
 /** The query the URL carries, or nothing. */

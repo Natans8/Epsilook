@@ -16,11 +16,11 @@
 import type {ReactElement} from "react";
 import {useLayoutEffect, useRef} from "react";
 import {useTranslation} from "react-i18next";
-import type {Offer, Offers} from "./offers";
+import type {Offer, Offers} from "../utils/offers";
 import {Classed} from "./classed";
-import {optionId} from "./panel";
+import {optionId} from "../hooks/panel";
 import {toneOf} from "./tone";
-import {NEGATION} from "../../search/index";
+import {NEGATION} from "../../../search/index";
 import bar from "./bar.module.css";
 import styles from "./surface.module.css";
 

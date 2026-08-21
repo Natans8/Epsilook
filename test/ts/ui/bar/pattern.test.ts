@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import {patternRuns} from "../../../../src/ui/bar/pattern";
+import {patternRuns} from "../../../../src/ui/bar/utils/pattern";
 
 /** The invariant every case shares: ranges abut from zero and rebuild the pattern verbatim. */
 function covers(pattern: string): void {

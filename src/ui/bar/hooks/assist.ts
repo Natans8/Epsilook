@@ -10,10 +10,10 @@
  * Split out of the bar because it reaches the session through four calls and nothing reaches back into it.
  */
 import {useMemo, useState} from "react";
-import type {Offer, Offers, Vocabulary} from "./offers";
-import {NO_OFFERS, offerSlot, offersAt} from "./offers";
+import type {Offer, Offers, Vocabulary} from "../utils/offers";
+import {NO_OFFERS, offerSlot, offersAt} from "../utils/offers";
 import {optionId, useOfferPanel} from "./panel";
-import {slotStart, writeSlot} from "./plan";
+import {slotStart, writeSlot} from "../utils/plan";
 import type {EditingSession} from "./session";
 
 /**

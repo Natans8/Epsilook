@@ -10,11 +10,11 @@
  * a head cell plus a value slot, the bind consumed as a gesture. The text underneath never changes — a plan
  * reconstructs it verbatim, which the tests pin — so the round trip is unconditional.
  */
-import type {Span} from "../../search/index";
+import type {Span} from "../../../search/index";
 import {
     classify, convergeDisplay, describe, directiveTexts, equivalent, escapedAt, fold, formatQuery, GRAMMAR, HEADS,
     parse, PREFIX_OPERATORS, spellingsOf,
-} from "../../search/index";
+} from "../../../search/index";
 
 /** The transformed head of the open segment, when it has one. */
 export interface OpenHead {

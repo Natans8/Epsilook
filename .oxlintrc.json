@@ -87,6 +87,47 @@
         "typescript/no-unsafe-return": "off",
         "typescript/no-unsafe-type-assertion": "off"
       }
+    },
+    {
+      "files": [
+        "src/ui/bar/utils/**"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "../components/*",
+                  "../hooks/*"
+                ],
+                "message": "The bar's model is React-free and knows nothing of what draws it: utils/ may import neither hooks/ nor components/. A contract belongs to whoever hands it out."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "src/ui/bar/hooks/**"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "../components/*"
+                ],
+                "message": "The bar's state layer may not reach into the view: hooks/ may not import components/. A component asks the hook for the shape it must satisfy, never the other way round."
+              }
+            ]
+          }
+        ]
+      }
     }
   ],
   "ignorePatterns": [

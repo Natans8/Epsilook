@@ -13,10 +13,10 @@
  */
 import type {ChangeEvent, KeyboardEvent, ReactElement} from "react";
 import {useLayoutEffect, useMemo, useRef, useState} from "react";
-import {pairDelimiter, planAt, slotStart, writeSlot} from "./plan";
-import type {Offer, Vocabulary} from "./offers";
-import {NO_VOCABULARY, offerSlot, offersAt} from "./offers";
-import {optionId, useOfferPanel} from "./panel";
+import {pairDelimiter, planAt, slotStart, writeSlot} from "../utils/plan";
+import type {Offer, Vocabulary} from "../utils/offers";
+import {NO_VOCABULARY, offerSlot, offersAt} from "../utils/offers";
+import {optionId, useOfferPanel} from "../hooks/panel";
 import {Surface} from "./surface";
 import {Classed} from "./classed";
 // Two sheets, two jobs: the bar's own frame is shared with the chip view, the rest is this view's alone.

@@ -11,8 +11,8 @@
  * the other not — and neither divergence was declared anywhere.
  */
 import {useId, useState} from "react";
-import type {Offer, Offers} from "./offers";
-import {flatOffers, offerGhost} from "./offers";
+import type {Offer, Offers} from "../utils/offers";
+import {flatOffers, offerGhost} from "../utils/offers";
 
 /** The id one option answers to, so the input can point at it without moving the focus. */
 export const optionId = (list: string, index: number): string => `${list}-opt-${String(index)}`;

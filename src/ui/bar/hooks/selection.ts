@@ -13,10 +13,10 @@ import type {
     ClipboardEvent as ReactClipboardEvent, KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent,
 } from "react";
 import {useRef, useState} from "react";
-import type {BarSelection} from "./plan";
-import {removeSelection, replaceSelection, segmentAt, selectionOver, selectionStep, slotStart} from "./plan";
-import type {Aim} from "./aim";
-import {groundAim, offsetAtPoint} from "./aim";
+import type {BarSelection} from "../utils/plan";
+import {removeSelection, replaceSelection, segmentAt, selectionOver, selectionStep, slotStart} from "../utils/plan";
+import type {Aim} from "../utils/aim";
+import {groundAim, offsetAtPoint} from "../utils/aim";
 import type {EditingSession} from "./session";
 
 /** The bar's selection and every gesture that moves it. */

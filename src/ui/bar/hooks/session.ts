@@ -10,12 +10,12 @@
  * both CALL into it, and the renderer only reads what it returns.
  */
 import {useMemo, useRef, useState} from "react";
-import type {BarPlan, Commit, Keystroke} from "./plan";
+import type {BarPlan, Commit, Keystroke} from "../utils/plan";
 import {
     commitSegment, firstDiff, grownSegment, insertAtGap, planAt, removeSegment, removeTerm, scopedForm, shiftScope,
     scopeGesture, segmentAt, slotStart, toggleNegation, toggleSort,
-} from "./plan";
-import {laneItemAt} from "./lane";
+} from "../utils/plan";
+import {laneItemAt} from "../utils/lane";
 
 /** Where the caret starts this session, in slot coordinates; an anchor makes it a selection. */
 export interface CaretRequest {

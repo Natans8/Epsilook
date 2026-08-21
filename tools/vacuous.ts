@@ -16,8 +16,8 @@ import {ordinalRungs, parse, run} from "../src/search/index";
 import type {Dataset} from "../src/search/index";
 import {enumWords} from "../src/dataset";
 import {loadPack, packDataset} from "./dataset";
-import {offersAt} from "../src/ui/bar/offers";
-import {planAt, scopeGesture, slotStart, writeSlot} from "../src/ui/bar/plan";
+import {offersAt} from "../src/ui/bar/utils/offers";
+import {planAt, scopeGesture, slotStart, writeSlot} from "../src/ui/bar/utils/plan";
 
 const out = (line: string): void => void process.stdout.write(line + "\n");
 const toStderr = (...args: unknown[]): void =>
