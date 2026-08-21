@@ -173,15 +173,6 @@ local function operatorAlone(text)
 	return nil
 end
 
---- Whether a text is a list of whole numbers joined by the list character.
-local function isNumberList(text)
-	local list = Schema.grammar.numberList
-	local escaped = list:gsub("%p", "%%%0")
-	return text:match("^%d+" .. escaped .. "%d+[%d" .. escaped .. "]*$") ~= nil
-		and not text:find(list .. list, 1, true)
-		and sub(text, -1) ~= list
-end
-
 --- Whether a property reads any value as a word rather than a numeral.
 local function worded(prop)
 	for _, typeName in ipairs(prop.types) do
@@ -619,24 +610,6 @@ local function alternative(text, ctx, alone)
 	if ctx.wordStar and Text.fold(text) == grammar.anyWord then
 		return ctx.star()
 	end
-	-- A number token ending in a dangling list separator reads as its numbers:
-	-- `id:{133, 134}` arrives as the token `133,` beside `134`, and the comma
-	-- separates nothing within its own token.
-	if
-		sub(text, -1) == grammar.numberList
-		and text:match("^[%d" .. grammar.numberList:gsub("%p", "%%%0") .. "]+$")
-		and not text:find(grammar.numberList .. grammar.numberList, 1, true)
-		and text:match("^%d")
-	then
-		text = sub(text, 1, -1 - #grammar.numberList)
-	end
-	if isNumberList(text) then
-		local parts = {}
-		for number in text:gmatch("%d+") do
-			parts[#parts + 1] = ctx.bare(number, false)
-		end
-		return combineAlternatives(parts)
-	end
 	local op, operand = prefixed(text)
 	if op then
 		if operand == "" then
@@ -878,7 +851,7 @@ end
 
 --- The value token at `from`: its segments and where it ends.
 -- A segment is bare text or a phrase; a token ends at whitespace.
-function Parser:token(from, limit)
+function Parser:token(from, limit, glue)
 	local phrase = Schema.grammar.phrase
 	local segs = {}
 	local cur = {}
@@ -901,6 +874,11 @@ function Parser:token(from, limit)
 			cur[#cur + 1] = self:char(i + 1)
 			i = i + 2
 		elseif isWs(c) then
+			break
+		-- A piece of a glued run ends at the glue, exactly as any value ends at
+		-- whitespace. A phrase, a pattern and a group each consume their own
+		-- interior below, so a comma inside a value stays a character.
+		elseif glue and c == Schema.grammar.glue then
 			break
 		elseif c == phrase then
 			flush(i)
@@ -1142,6 +1120,17 @@ function Parser:innerItem(head, negated, i, bodyEnd, run, problems)
 		end
 		if ctx then
 			local vpos = sep == grammar.bind and sepAt + 1 or sepAt
+			-- A property refuses a scope of its own, so the glue is the only
+			-- spelling that says several values of one property: each piece is
+			-- read against that property and they join the row's other terms.
+			local glued, gluedStop = self:gluedPieces(vpos, bodyEnd)
+			if #glued > 1 then
+				for _, piece in ipairs(glued) do
+					local one = self:interpretSegs(piece.segs, ctx, problems)
+					self:pushScopeTerm(run, negated, one, problems, word)
+				end
+				return gluedStop
+			end
 			local segs, stop = self:valueToken(vpos, bodyEnd)
 			if #segs == 0 then
 				problems[#problems + 1] =
@@ -1174,7 +1163,7 @@ function Parser:innerItem(head, negated, i, bodyEnd, run, problems)
 			return stop
 		end
 	end
-	local segs, stop = self:token(i, bodyEnd)
+	local segs, stop = self:token(i, bodyEnd, true)
 	if #segs == 0 then
 		return i + 1
 	end
@@ -1259,7 +1248,7 @@ local function statesBareValue(term)
 		end
 	end
 	local op = ask.value.op
-	return op == "contains" or op == "anyOf"
+	return op == "exact" or op == "contains"
 end
 
 --- On a kind a spell has at most one row of, several bare values in one run
@@ -1364,7 +1353,10 @@ function Parser:scope(start, negated, head, brace, limit)
 	i = brace + 1
 	while i <= bodyEnd do
 		local c = self:char(i)
-		if isWs(c) then
+		-- The glue separates terms inside the braces as well as outside them: a
+		-- reader who opens a scope and then writes a list is saying the one
+		-- thing the spelling exists for, so it passes over exactly as space does.
+		if isWs(c) or c == grammar.glue then
 			i = i + 1
 		elseif c == grammar["or"] then
 			runs[#runs + 1] = run
@@ -1440,6 +1432,28 @@ function Parser:scope(start, negated, head, brace, limit)
 end
 
 --- `head:` and whatever follows the colon.
+--- Split a bound value into the pieces the glue separates.
+-- A trailing glue yields no piece of its own, which is the lenient reading a
+-- reader mid-run depends on.
+-- @return the pieces, each with its segments and bounds, and where the run ended
+function Parser:gluedPieces(vpos, limit)
+	local pieces = {}
+	local i, stop = vpos, vpos
+	while true do
+		local segs, next = self:token(i, limit, true)
+		if #segs > 0 then
+			pieces[#pieces + 1] = { segs = segs, start = i, stop = next - 1 }
+		end
+		stop = next
+		if next > limit or self:char(next) ~= Schema.grammar.glue then
+			break
+		end
+		i = next + 1
+		stop = i
+	end
+	return pieces, stop
+end
+
 function Parser:bound(start, negated, head, vpos, limit)
 	local c = vpos <= limit and self:char(vpos) or ""
 	if c == "" or isWs(c) then
@@ -1480,8 +1494,37 @@ function Parser:bound(start, negated, head, vpos, limit)
 			return glued
 		end
 	end
-	local segs, stop = self:token(vpos, limit)
+	local pieces, stop = self:gluedPieces(vpos, limit)
 	local problems = {}
+	if #pieces > 1 then
+		-- The glue is the scope's own separator written where the braces are
+		-- not, so a run lands on the structure the braced spelling lands on and
+		-- the two cannot answer differently. What the run MEANS is decided by
+		-- the rule that reads a braced scope, never by the comma.
+		local run = {}
+		local scoped = head
+		if head.role == "prop" then
+			scoped = { role = "kind", kind = head.kind }
+		end
+		for _, piece in ipairs(pieces) do
+			if head.role == "prop" then
+				local main = self:interpretSegs(piece.segs, ctxFor(head), problems)
+				self:pushScopeTerm(run, false, main, problems, Schema.HeadWord(head))
+			else
+				self:innerItem(scoped, false, piece.start, piece.stop, run, problems)
+			end
+		end
+		local runs = alternateWhereSingle(scoped, { run })
+		local ask
+		if scoped.role == "column" then
+			ask = { on = "column", column = scoped.column, test = { is = "scope", terms = runs } }
+		else
+			ask = { on = "kind", kind = scoped.kind, test = { is = "scope", terms = runs } }
+		end
+		self:push({ start = start, stop = stop - 1 }, negated, "ok", ask, problems)
+		return stop
+	end
+	local segs = pieces[1] and pieces[1].segs or {}
 	local main, extras, last = self:interpretSegs(segs, ctxFor(head), problems)
 	self:pushInterp({ start = start, stop = last or stop - 1 }, negated, head, main, problems)
 	self:emitExtras(extras)
