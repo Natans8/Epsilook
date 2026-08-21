@@ -20,6 +20,12 @@ The corollary is the one that gets broken: a question you cannot afford to answe
 fifteen judged defects were all reachable by a browser tier that did not exist yet, and the cost of not having it was
 paid by the user, one defect at a time.
 
+**A Python test is held to `mypy --strict` like everything else it covers.** Annotate the test, its helpers and its
+fixtures — a fixture's parameters are typed like any other function's, and `-> None` on a test is not a formality but
+what makes the checker read the body at all. `request.param` is `Any` to every checker because only the decorator
+knows what the fixture was parametrised with, so `cast` is what states it. The rest of how a test READS, once you have
+decided to write one, is `docs/CODE_STYLE.md`; this file is which test to write and when.
+
 ## The five tiers
 
 | tier                | instrument               | the question only it answers               | never ask it                                |
