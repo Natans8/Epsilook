@@ -39,9 +39,11 @@ const SAMPLE: Readonly<Record<string, readonly [string, string]>> = {
     percentChange: ["+50", "-30"],
     length: ["40", "100"],
     angle: ["27", "60"],
+    multiplier: ["x1.5", "x0.5"],
     colour: ["#ff00aa", "#00aaff"],
     bitmask: ["caster", "target"],
     offset: ["z=3", "x=1"],
+    rotation: ["pitch=90", "yaw=180"],
 };
 
 /**
