@@ -11,7 +11,8 @@ import {classify, paint} from "../../../search/index";
 import type {PatternKind} from "../utils/pattern";
 import {patternRuns} from "../utils/pattern";
 import {runToneOf} from "./tone";
-import styles from "./bar.module.css";
+import frame from "./bar.module.css";
+import styles from "./classed.module.css";
 
 /** The colour class per run kind; a plain word paints nothing and inherits the text colour. */
 const RUN_CLASS: Record<string, string | undefined> = {
@@ -149,7 +150,7 @@ export function Classed({text, rich, runs: given, mirrored, selected}: {
                 const inSel = from >= selected.start && to <= selected.end;
                 out.push(
                     <span key={`${String(i)}-${String(from)}`} title={piece.note}
-                          className={inSel ? `${piece.cls ?? ""} ${styles.selected}` : piece.cls}>
+                          className={inSel ? `${piece.cls ?? ""} ${frame.selected}` : piece.cls}>
                         {text.slice(from, to)}
                     </span>,
                 );

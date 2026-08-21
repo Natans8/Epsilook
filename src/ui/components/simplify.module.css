@@ -1,0 +1,72 @@
+/**
+ * The simplify button and the preview it opens, at the bar's right shoulder.
+ *
+ * Beside its component rather than in the page's sheet, because nothing else wears these: the button always
+ * stands so the bar never resizes as typing moves it in and out of having something to offer, and the preview
+ * is what makes an unseen rewrite something a reader can accept rather than gamble on.
+ */
+
+.simplify {
+    position: relative;
+    flex: none;
+    display: inline-flex;
+    align-self: stretch;
+}
+
+.simplifyButton {
+    font: inherit;
+    font-size: 0.85rem;
+    height: 100%;
+    padding: 0 0.8rem;
+    color: var(--text);
+    background: var(--bg-panel);
+    border: 1px solid var(--border-ctrl);
+    border-radius: 10px;
+    cursor: pointer;
+}
+
+.simplifyButton:hover:enabled {
+    border-color: var(--gold-dim);
+    color: var(--text-strong);
+}
+
+.simplifyButton:focus-visible {
+    outline: none;
+    border-color: var(--gold-dim);
+    box-shadow: 0 0 0 3px rgba(var(--gold-rgb), 0.12);
+}
+
+.simplifyButton:disabled {
+    color: var(--text-dim);
+    cursor: default;
+}
+
+/* The preview: what the press will write, shown before it is taken — or the word that nothing will change.
+ * Anchored under the button's right edge so it never covers the bar. */
+.simplifyPreview {
+    display: none;
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    z-index: 30;
+    max-width: 32rem;
+    width: max-content;
+    padding: 0.45rem 0.7rem;
+    font-size: 0.85rem;
+    color: var(--text);
+    background: var(--bg-panel);
+    border: 1px solid var(--border-ctrl);
+    border-radius: 8px;
+    box-shadow: 0 6px 18px rgba(var(--shadow-rgb), 0.35);
+}
+
+.simplify:hover .simplifyPreview,
+.simplify:focus-within .simplifyPreview {
+    display: block;
+}
+
+.simplifyNote {
+    display: block;
+    margin-top: 0.3rem;
+    color: var(--text-dim);
+}

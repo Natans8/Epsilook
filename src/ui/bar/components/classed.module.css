@@ -1,0 +1,137 @@
+/**
+ * The painting language: one class per run the lexer and the parse can tell apart, and one per part of an
+ * embedded pattern.
+ *
+ * Its own sheet because every class here is worn by `classed.tsx` and by nothing else, which is the test the
+ * split was made on. A column's ink is reached through `tone.ts`, so adding a column lights this sheet and the
+ * chip's together. `--vocab-mark` is deliberately NOT declared here: three sheets wear it, so it stays a token
+ * of the shared frame.
+ */
+
+.runHead {
+    color: var(--gold);
+}
+
+/* Delimiters and operators recede but stay readable: --gold-dim measures 3.5:1 on a light palette's panel,
+ * under AA, and the gold belongs to the head anyway — a brace is not an axis. --text-dim is the quiet-text
+ * token and clears AA in every palette (4.69 dark, 8.73 moonwell, 8.71 vellum). */
+.runOp {
+    color: var(--text-dim);
+}
+
+/* The same tokens under a FIELD. Two things forced this apart from .runOp: a delimiter being placed is not
+ * chrome, it is the thing the reader is aiming at; and --text-dim is where the GHOST lands on the dark palette,
+ * so a quote already typed and a completion not yet accepted were drawn in one colour. The colour says both on
+ * its own — it clears AA against the panel in every palette, and no other run in this surface is gold. A fill
+ * behind a character is a band the height of the line, which is the weight of a selection and reads as one.
+ * Colour only — a mirror may not move a glyph, so no weight and no size either. */
+.runLive {
+    color: var(--gold);
+}
+
+/* A word ABOUT the query rather than one of the data — the any-word, a property standing in a value. The chip
+ * draws it loud, so the raw text does too: one language, two surfaces. */
+.runMeta {
+    font-weight: 700;
+}
+
+/* The same word under a field, where weight is not available: a rule beneath it says the same thing and moves
+ * no glyph. Solid, so it reads apart from the dotted mark a closed vocabulary carries. */
+.runDoor {
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
+}
+
+/* what a clause or a term EXCLUDES: the minus and the word it binds to, in one colour */
+.runNeg {
+    color: rgb(var(--danger-rgb));
+}
+
+/* the rich painting: a head wears the tone of the column it reaches, so raw text and chips speak one language */
+.runModel {
+    color: rgb(var(--model-rgb));
+}
+
+.runSound {
+    color: rgb(var(--sound-rgb));
+}
+
+.runAnim {
+    color: rgb(var(--anim-rgb));
+}
+
+.runFx {
+    color: rgb(var(--fx-rgb));
+}
+
+.runMech {
+    color: rgb(var(--mech-rgb));
+}
+
+.runSpell {
+    color: var(--gold);
+}
+
+/* ------------------------------------------------------------- a pattern's own syntax
+ * Between the slashes the query embeds a second language, so the characters are coloured by what REGEX says
+ * they mean rather than by the column the clause reaches. Which part is which is `regex-colorizer`'s reading;
+ * these are only the tones. Four of them, each an already-measured token rather than a new colour:
+ *
+ *   gold    the pattern talking about itself   anchors, quantifiers, metasequences, a class's brackets and hyphen
+ *   orange  the part that NESTS                a group, and the alternation inside one
+ *   teal    a character class's contents       the set of characters it stands for
+ *   dim     a literal said with an escape      it matches the character, so it recedes toward one
+ *
+ * Literal text takes no class at all and keeps the value's own colour, which is what makes the marked parts
+ * read as the marked ones. Colour only: these paint under a field as well as on a chip, and a mirror may not
+ * move a glyph. */
+
+.rxMeta {
+    color: var(--gold);
+}
+
+.rxGroup {
+    color: rgb(var(--mech-rgb));
+}
+
+.rxClass {
+    color: rgb(var(--fx-rgb));
+}
+
+.rxEscaped {
+    color: var(--tag-btn);
+}
+
+.rxBackref {
+    color: rgb(var(--anim-rgb));
+}
+
+/* What the pattern language itself refuses. The clause carries the parser's own squiggle already; this says
+ * WHICH character stopped it, and its title carries the library's reason. */
+.rxError {
+    color: rgb(var(--danger-rgb));
+    text-decoration: underline wavy rgba(var(--danger-rgb), 0.9);
+    text-underline-offset: 3px;
+}
+
+/* A closed-vocabulary word is marked, not tinted. A schema word answers in one role and asks in another —
+ * `model:{attach}` names the kind, `model:{attach:chest}` opens it — and a hue that changed between them made
+ * one word look like two things a keystroke apart. The tone says which column the word belongs to and the dot
+ * says its value came from a closed set, so the role can change without the colour moving. Dotted in
+ * currentColor so it follows whatever tone the word wears, dimmed because a mark must not outweigh the word it
+ * sits under. The chip's vWord keeps the gold: a chip body has no tone of its own to carry this. */
+.runVocab {
+    border-bottom: var(--vocab-mark);
+}
+
+/* what the parse could not read, and what it read with a reservation */
+.runError {
+    text-decoration: underline wavy rgba(var(--danger-rgb), 0.9);
+    text-underline-offset: 3px;
+}
+
+.runWarn {
+    text-decoration: underline wavy var(--gold-dim);
+    text-underline-offset: 3px;
+}

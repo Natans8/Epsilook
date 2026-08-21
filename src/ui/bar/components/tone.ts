@@ -9,7 +9,8 @@
  * Written as three tables it had already spread that far, and a column added to one of them would have shown two
  * colours for one axis with nothing declaring the disagreement.
  */
-import styles from "./bar.module.css";
+import chips from "./chip.module.css";
+import runs from "./classed.module.css";
 
 /** The two classes one column's tone is spent as: an enclosure's fill, and raw text's ink. */
 interface Tone {
@@ -26,13 +27,13 @@ interface Tone {
  * colour of its own would say the two were different axes.
  */
 const TONES: Record<string, Tone | undefined> = {
-    model: {chip: styles.toneModel, run: styles.runModel},
-    sound: {chip: styles.toneSound, run: styles.runSound},
-    anim: {chip: styles.toneAnim, run: styles.runAnim},
-    fx: {chip: styles.toneFx, run: styles.runFx},
-    mech: {chip: styles.toneMech, run: styles.runMech},
-    spell: {chip: styles.toneSpell, run: styles.runSpell},
-    id: {chip: styles.toneSpell, run: styles.runSpell},
+    model: {chip: chips.toneModel, run: runs.runModel},
+    sound: {chip: chips.toneSound, run: runs.runSound},
+    anim: {chip: chips.toneAnim, run: runs.runAnim},
+    fx: {chip: chips.toneFx, run: runs.runFx},
+    mech: {chip: chips.toneMech, run: runs.runMech},
+    spell: {chip: chips.toneSpell, run: runs.runSpell},
+    id: {chip: chips.toneSpell, run: runs.runSpell},
 };
 
 /**

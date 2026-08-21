@@ -7,32 +7,20 @@
  * search can be shared or reloaded.
  */
 import type {ReactElement} from "react";
-import {useDeferredValue, useEffect, useId, useMemo, useRef, useState} from "react";
+import {useEffect, useMemo, useRef, useState} from "react";
 import {useTranslation} from "react-i18next";
 import type {PackInfo, Searcher} from "./searcher";
 import {expansionArt} from "./art";
-import {formatQuery, parse, simplify} from "../search/index";
+import {parse} from "../search/index";
 import type {Diagnostic} from "../search/index";
 import {recentQueries} from "./history";
 import {BASE} from "./pack";
 import type {BarHandle} from "./bar/index";
-import {Bar, PlainBar, settledQuery} from "./bar/index";
+import {Bar, PlainBar} from "./bar/index";
+import {Simplify} from "./components/simplify";
+import {carriedQuery, reloadWith, urlPlain, urlQuery} from "./utils/query";
 import styles from "./app.module.css";
 
-/** The query the URL carries, or nothing. */
-const urlQuery = (): string => new URLSearchParams(location.search).get("q") ?? "";
-
-/** Whether the URL asks for the plaintext view — a view choice worth surviving a reload. A bare flag. */
-const urlPlain = (): boolean => new URLSearchParams(location.search).has("plain");
-
-/** Rewrites one URL parameter and reloads — the knob transitions that need a refetch. */
-function reloadWith(param: string, value: string): void {
-    const url = new URL(location.href);
-    url.searchParams.set(param, value);
-    location.href = url.toString();
-}
-
-/** The interface languages a catalog is bundled for. */
 const APP_LANGUAGES = ["en", "ru"];
 
 /**
@@ -57,51 +45,6 @@ function useSettled(line: string, after = 700): string {
         };
     }, [line, after]);
     return held;
-}
-
-/**
- * The query the page considers written, as against the one the bar is holding mid-edit.
- *
- * Two things ask this and they must not answer differently: what the URL carries, and what the simplify button
- * compares against. In the chip view an open chip's editing braces and a commit's trailing separator are
- * editing state rather than query content, so the settled spelling is the query. The plain view settles
- * nothing — a reader who asked to see their own text is shown exactly it — so there the query is what stands.
- *
- * @param text The bar's text, editing structure and all.
- * @param plain Whether the plaintext view is the one standing.
- * @returns The query, trimmed.
- */
-function carriedQuery(text: string, plain: boolean): string {
-    return (plain ? text : settledQuery(text)).trim();
-}
-
-/** What one query simplifies to: the written-tier respell, whether it differs, and the rules that fired. */
-interface Simpler {
-    readonly spelled: string;
-    readonly changed: boolean;
-    readonly notes: readonly string[];
-}
-
-/** Nothing to offer: an empty bar, or one whose query the parser refuses. */
-const NO_SIMPLER: Simpler = {spelled: "", changed: false, notes: []};
-
-/**
- * The simpler spelling of one query, if it has one.
- *
- * @param text The query text as it stands.
- * @param plain Whether the plaintext view is the one standing.
- * @returns The respell and whether it differs from what is written.
- */
-function simplerOf(text: string, plain: boolean): Simpler {
-    if (text.trim() === "") return NO_SIMPLER;
-    const parsed = parse(text, {mode: "final"});
-    // A broken query has nothing to respell — the bar is already saying what is wrong.
-    if (parsed.diagnostics.some((d) => d.severity === "error")) return NO_SIMPLER;
-    const result = simplify(parsed);
-    const spelled = formatQuery(result.parsed, "written");
-    // The offer compares against the query as WRITTEN, so an open chip's editing braces — which the commit
-    // converges on its own — never light the button, while a real difference lights it wherever the caret is.
-    return {spelled, changed: spelled !== carriedQuery(text, plain), notes: result.notes};
 }
 
 /**
@@ -139,59 +82,6 @@ function Knob({caption, param, value, options, disabled, hint}: {
                 {options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
         </label>
-    );
-}
-
-/**
- * The simplify button, to the bar's right, with its preview.
- *
- * Simplification is explicit-only, so the button is the one door — but a rewrite the reader cannot see before
- * taking it is a gamble, so hovering or focusing the button previews the simpler spelling (the WRITTEN tier,
- * as the law requires of every surface handing a simplified query back) and the press applies exactly what the
- * preview showed. A query already in its simplest form says so and the press does nothing.
- */
-function Simplify({text, plain, apply}: {
-    readonly text: string;
-    /** Whether the plain view stands — there no commit converges anything, so any respell is an offer. */
-    readonly plain: boolean;
-    /** Applies the rewrite — through the bar's own undo machinery, so Ctrl+Z takes it back. */
-    readonly apply: (next: string) => void;
-}): ReactElement {
-    const {t} = useTranslation();
-    const previewId = useId();
-    // Deferred, because this is the most expensive read in the bar — a parse, a simplification, a format and a
-    // whole-query settle — and nothing depends on the answer until the reader looks at the button. React keeps
-    // the last answer on screen and recomputes when typing pauses, so a keystroke never waits on it.
-    const settling = useDeferredValue(text);
-    // The button ALWAYS stands, so the bar never resizes as typing moves it in and out of having something
-    // to offer — only its enabled state and its preview change.
-    const after = useMemo(() => simplerOf(settling, plain), [settling, plain]);
-    return (
-        <span className={styles.simplify}>
-            <button
-                type="button"
-                className={styles.simplifyButton}
-                disabled={!after.changed}
-                // The preview says what the press would write, so it is the button's DESCRIPTION: without the
-                // association it reaches a reader who can see the hover and nobody else.
-                aria-describedby={previewId}
-                onClick={() => {
-                    // Read afresh from the text as it stands, never from the deferred value the preview was
-                    // drawn against: a press is rare enough to pay for, and applying a respell of older text
-                    // would drop whatever was typed after it.
-                    const now = simplerOf(text, plain);
-                    if (now.changed) apply(now.spelled);
-                }}
-            >
-                {t("bar.simplify")}
-            </button>
-            <span id={previewId} className={styles.simplifyPreview} role="tooltip">
-                {after.changed
-                    ? t("tray.simplified", {query: after.spelled})
-                    : t("tray.simplifyNone")}
-                {after.notes.map((note) => <span key={note} className={styles.simplifyNote}>{note}</span>)}
-            </span>
-        </span>
     );
 }
 

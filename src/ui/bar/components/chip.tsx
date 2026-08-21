@@ -19,7 +19,7 @@ import {describe, GRAMMAR, NEGATION, paint, parse, runsWithin} from "../../../se
 import {Classed, Pattern} from "./classed";
 import type {SegmentActions} from "../hooks/session";
 import {toneOf} from "./tone";
-import styles from "./bar.module.css";
+import styles from "./chip.module.css";
 
 /**
  * Heads are lowercase everywhere: `scale`, never `Scale`.
@@ -299,8 +299,9 @@ function Sect({head, not, hint, className, onOpen}: {
 }
 
 /** The state classes a chip or lane wears over its tone. */
-function stateClass(base: string, tone: string, not: boolean, warned: boolean): string {
-    const parts = [base, toneOf(tone), not ? styles.chipNegated : "", warned ? styles.chipWarned : ""];
+function stateClass(base: string, tone: string, not: boolean, warned: boolean, wholly: boolean): string {
+    const parts = [base, toneOf(tone), not ? styles.chipNegated : "", warned ? styles.chipWarned : "",
+        wholly ? styles.underBand : ""];
     return parts.filter((part) => part !== "").join(" ");
 }
 
@@ -312,13 +313,22 @@ function stateClass(base: string, tone: string, not: boolean, warned: boolean): 
  * reader is looking at, pressing the head flips exclusion, pressing anywhere else opens the segment, and the
  * mark at the tail removes it.
  */
-function Capsule({base, head, not, tone, warned, notes, what, act, children}: {
+function Capsule({base, head, not, tone, warned, wholly, notes, what, act, children}: {
     /** The enclosure's own shape: compact, or a lane's row of cells. */
     readonly base: string;
     readonly head: string;
     readonly not: boolean;
     readonly tone: string;
     readonly warned: boolean;
+    /**
+     * Whether the bar's selection covers this segment WHOLE.
+     *
+     * The band is the bar's and is drawn on the wrapper; what the chip does underneath it — flattening its own
+     * fills so the band reads as one block — is the chip's, and is stated in this component's own sheet. It
+     * arrives as a prop rather than as an ancestor class because a scoped stylesheet cannot reach across a file
+     * boundary, and reaching in from the bar's sheet is what held every chip class there.
+     */
+    readonly wholly: boolean;
     readonly notes: readonly string[];
     /** The segment's query text, which names the delete mark. */
     readonly what: string;
@@ -328,7 +338,7 @@ function Capsule({base, head, not, tone, warned, notes, what, act, children}: {
     const {t} = useTranslation();
     return (
         <span
-            className={stateClass(base, tone, not, warned)}
+            className={stateClass(base, tone, not, warned, wholly)}
             title={notes.length > 0 ? notes.join("\n") : undefined}
             // At the END, wherever on the chip the press landed. A chip draws its PARSE — a notated number, a
             // desugared count, a display glyph — so aiming at a character means aiming at a rendering, and the
@@ -351,25 +361,27 @@ function Capsule({base, head, not, tone, warned, notes, what, act, children}: {
 }
 
 /** A compact chip. */
-function ChipEl({chip, warned, notes, text, act}: {
+function ChipEl({chip, warned, wholly, notes, text, act}: {
     readonly chip: ChipView;
     readonly warned: boolean;
+    readonly wholly: boolean;
     readonly notes: readonly string[];
     readonly text: string;
     readonly act: SegmentActions;
 }): ReactElement {
     return (
         <Capsule base={styles.chip} head={chip.head} not={chip.not} tone={chip.tone}
-                 warned={warned} notes={notes} what={text} act={act}>
+                 warned={warned} wholly={wholly} notes={notes} what={text} act={act}>
             <span className={styles.chipBody}><Pieces pieces={chip.body} text={text}/></span>
         </Capsule>
     );
 }
 
 /** A lane: the scope's toned enclosure, terms as text, inner binds as chips of their own. */
-function LaneEl({lane, warned, notes, text, act}: {
+function LaneEl({lane, warned, wholly, notes, text, act}: {
     readonly lane: LaneView;
     readonly warned: boolean;
+    readonly wholly: boolean;
     readonly notes: readonly string[];
     readonly text: string;
     readonly act: SegmentActions;
@@ -378,7 +390,7 @@ function LaneEl({lane, warned, notes, text, act}: {
     const {t} = useTranslation();
     return (
         <Capsule base={styles.lane} head={lane.head} not={lane.not} tone={lane.tone}
-                 warned={warned} notes={notes} what={text} act={act}>
+                 warned={warned} wholly={wholly} notes={notes} what={text} act={act}>
             {lane.items.map((item, i) => {
                 if (item.is === "or") return <Or key={i}/>;
                 const openItem = press((e) => {
@@ -447,8 +459,9 @@ function LaneEl({lane, warned, notes, text, act}: {
  * per door, each with its own arrow that turns that door round; anywhere else on the capsule edits. Neither a
  * brace nor a minus renders: the capsule draws its parse, and the direction IS the arrow.
  */
-function DirectiveEl({view, text, act}: {
+function DirectiveEl({view, wholly, text, act}: {
     readonly view: Extract<ClauseView, { form: "directive" }>;
+    readonly wholly: boolean;
     readonly text: string;
     readonly act: SegmentActions;
 }): ReactElement {
@@ -457,7 +470,8 @@ function DirectiveEl({view, text, act}: {
     return (
         <span
             // A sequence needs the lane's row of cells; one door, or a count, sits in the compact shape.
-            className={`${doors !== undefined && doors.length > 1 ? styles.lane : styles.chip} ${styles.directive}`}
+            className={[doors !== undefined && doors.length > 1 ? styles.lane : styles.chip, styles.directive,
+                wholly ? styles.underBand : ""].filter((held) => held !== "").join(" ")}
             onClick={press(() => {
                 act.open("end");
             })}
@@ -525,13 +539,15 @@ function Raw({text, span, at, erred, selected}: {
  * A settled segment at rest: its clauses as chips, lanes and raw text, in written order, covering the segment's
  * text exactly.
  */
-export function SettledSegment({text, at, act, selected}: {
+export function SettledSegment({text, at, act, selected, wholly = false}: {
     readonly text: string;
     /** Where the segment starts in the query — what its raw runs stamp themselves with. */
     readonly at: number;
     readonly act: SegmentActions;
     /** The stretch of this segment the bar's selection covers, in the segment's own coordinates. */
     readonly selected?: Span;
+    /** Whether that selection covers the segment WHOLE, which is the only state a chip draws for itself. */
+    readonly wholly?: boolean;
 }): ReactElement {
     const views = useMemo(() => describe(parse(text)), [text]);
     // Painted once for the whole segment: a chip's raw fragments are cut out of it, and a cut cannot be
@@ -553,13 +569,13 @@ export function SettledSegment({text, at, act, selected}: {
     views.forEach((view, i) => {
         if (view.span.start > drawn) parts.push(raw(drawn, view.span.start, false));
         if (view.form === "chip") {
-            parts.push(<ChipEl key={i} chip={view.chip} warned={view.warned} notes={view.notes}
-                               text={text} act={act}/>);
+            parts.push(<ChipEl key={i} chip={view.chip} warned={view.warned} wholly={wholly}
+                               notes={view.notes} text={text} act={act}/>);
         } else if (view.form === "lane") {
-            parts.push(<LaneEl key={i} lane={view.lane} warned={view.warned} notes={view.notes}
-                               text={text} act={act}/>);
+            parts.push(<LaneEl key={i} lane={view.lane} warned={view.warned} wholly={wholly}
+                               notes={view.notes} text={text} act={act}/>);
         } else if (view.form === "directive") {
-            parts.push(<DirectiveEl key={i} view={view} text={text} act={act}/>);
+            parts.push(<DirectiveEl key={i} view={view} wholly={wholly} text={text} act={act}/>);
         } else {
             parts.push(
                 <span key={i} title={view.notes.length > 0 ? view.notes.join("\n") : undefined}>

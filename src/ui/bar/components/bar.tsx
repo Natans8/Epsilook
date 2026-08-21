@@ -220,6 +220,7 @@ export function Bar({text, onText, placeholder, vocab = NO_VOCABULARY, handle}: 
                     at={seg.start}
                     act={actionsFor(seg.start)}
                     selected={inside}
+                    wholly={covered && !seg.plain}
                 />
             </span>
         );

@@ -1,0 +1,416 @@
+/**
+ * The committed chip: the anatomy, the lane, the directive, the marks, and the fill a column wears.
+ *
+ * Its own sheet because every class here is worn by `chip.tsx` alone — including, now, what a whole-chip
+ * selection looks like. The bar says a segment is selected by handing down `wholly`; what that LOOKS like is
+ * the chip's own business, so the rule lives here beside the classes it flattens rather than reaching in from
+ * the frame's sheet. That reach is what a scoped stylesheet cannot express across a file boundary, and it is
+ * what kept every chip class in the bar's sheet.
+ */
+
+/* ------------------------------------------------------------- the committed chip
+ * The at-rest visual mode: smaller and cooler than the editing form, same sectioned anatomy, so a commit reads
+ * as the same object changing state. One accent per chip — its column tone — carried as a triple so the wash
+ * scales with the theme; spacing sits on the 4/8 scale. */
+
+.chip,
+.lane {
+    --chip-rgb: var(--overlay-rgb);
+    /* The EDGE is its own colour: a chip's border says what state it is in — its column tone at rest, danger
+     * when it excludes, gold when it carries a reservation — and hover deepens whatever that is rather than
+     * replacing it. A hover that repainted the edge in the tone would erase the very thing the edge says. */
+    --edge-rgb: var(--chip-rgb);
+    --chip-border-a: 0.5;
+    --chip-hover-a: 0.85;
+    --chip-wash-a: 0.1;
+    display: inline-flex;
+    align-items: stretch;
+    /* Every chip stands EXACTLY the band's height, whatever it holds — a lane with an inner bind included. Not
+     * a minimum: a chip whose content pushed it half a pixel past the band left the separator beside it
+     * reading as a dip, which is invisible at one zoom and obvious at another. */
+    height: var(--band-h);
+    max-width: 100%;
+    border: 1px solid rgba(var(--edge-rgb), var(--chip-border-a));
+    border-radius: 999px;
+    background: rgba(var(--chip-rgb), calc(var(--chip-wash-a) * var(--wash-strength)));
+    overflow: hidden;
+    /* close to the editing form's 1.1rem rather than a size down from it: the two modes are told apart by
+     * shape and colour, and a committed chip still has to be read at a glance */
+    font-size: 1rem;
+    line-height: 1.3;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.chip:hover,
+.lane:hover {
+    border-color: rgba(var(--edge-rgb), var(--chip-hover-a));
+}
+
+.toneModel {
+    --chip-rgb: var(--model-rgb);
+}
+
+.toneSound {
+    --chip-rgb: var(--sound-rgb);
+}
+
+.toneAnim {
+    --chip-rgb: var(--anim-rgb);
+}
+
+.toneFx {
+    --chip-rgb: var(--fx-rgb);
+}
+
+.toneMech {
+    --chip-rgb: var(--mech-rgb);
+}
+
+/* gold is bright: the spell family wears it a step fainter, as the pills do */
+.toneSpell {
+    --chip-rgb: var(--gold-rgb);
+    --chip-border-a: 0.45;
+    --chip-wash-a: 0.07;
+}
+
+/* negation and warning are states over the tone: the border says it, the head's red unit carries the minus */
+.chipNegated {
+    --edge-rgb: var(--danger-rgb);
+    --chip-border-a: 0.6;
+}
+
+.chipWarned {
+    --edge-rgb: var(--gold-rgb);
+    --chip-border-a: 0.75;
+    box-shadow: 0 0 0 1px rgba(var(--gold-rgb), 0.15);
+}
+
+/* the sectioned head cell: `[× −Head |` — the darker inset the open chip already wears, divider by structure */
+.chipSect {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0.2rem 0.5rem;
+    background: rgba(var(--shadow-rgb), 0.08);
+    border-right: 1px solid var(--border-ctrl);
+    /* --text, not --text-dim: measured 4.4:1 over the inset, under AA. The head still reads quieter than the
+     * value through its smaller size and the cell's own recession. */
+    color: var(--text);
+    font-size: 0.9rem;
+    white-space: nowrap;
+}
+
+.negHead {
+    color: rgb(var(--danger-rgb));
+}
+
+/* Every part of a chip that does something answers the pointer, and each says which thing: the head flips
+ * exclusion, so it lights as a control; the body opens the chip for editing, so it takes the text cursor. A
+ * chip whose frame was the only thing to react read as a picture with a live border. */
+.chipSect:hover,
+.bindSect:hover {
+    background: rgba(var(--shadow-rgb), 0.2);
+    color: var(--text-strong);
+}
+
+.chipBody,
+.bindBody,
+.laneTerm {
+    cursor: text;
+}
+
+.chipBody:hover,
+.bindBody:hover,
+.laneTerm:hover {
+    background: rgba(var(--overlay-rgb), calc(0.12 * var(--wash-strength)));
+}
+
+.chipBody {
+    display: inline-block;
+    padding: 0.2rem 0.55rem;
+    max-width: 24rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--text-strong);
+}
+
+/* The × lives at the chip's tail, past the value it removes.
+ *
+ * A mark is a glyph, not text, so it is centred rather than sat on the baseline — 1.0's own rule. What is new
+ * here is that the cell is TALLER than the text it holds, so centring it in the CELL no longer centres it on
+ * the word beside it: the eye reads a lowercase word from its x-height, and a mark on the box's middle floats
+ * above that. Each mark therefore sits in a slot carrying the neighbouring text's own line box, where
+ * `vertical-align: middle` means exactly what is wanted — the baseline plus half an x-height, measured by the
+ * font itself, with no metric guessed and nothing to re-tune when the size or the face changes. */
+.markSlot {
+    display: inline-block;
+    align-self: center;
+    line-height: normal;
+    /* the mark sits past the value, with the chip's own breathing room around it */
+    margin: 0 0.4rem 0 0.1rem;
+}
+
+/* Every mark a chip carries is one box; what a particular mark DOES shows in its hover alone, below.
+ * --text over the chip wash: --text-muted measured 4.0:1 there, under AA for a control glyph. */
+.chipX,
+.sortArrow {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    vertical-align: middle;
+    width: 15px;
+    height: 15px;
+    background: none;
+    border: none;
+    border-radius: 50%;
+    padding: 0;
+    font: inherit;
+    line-height: 1;
+    color: var(--text);
+    cursor: pointer;
+}
+
+/* The mark stays small — a chip is a compact thing — while the target it answers to is not: the overlay
+ * carries the box out to 25px square, past the 24px minimum, without moving a pixel of the layout. */
+.chipX::after,
+.sortArrow::after {
+    content: "";
+    position: absolute;
+    inset: -5px;
+}
+
+/* A removal, so the wash is the danger one. */
+.chipX:hover {
+    color: rgb(var(--danger-rgb));
+    background: rgba(var(--danger-rgb), calc(0.12 * var(--wash-strength)));
+}
+
+/* The sort capsule's direction arrow: an action rather than a removal, so its hover stays in the text's own
+ * colour. Same wash strength as every other, and through the same token, so the theme's knob reaches it. */
+.sortArrow:hover {
+    color: var(--text-strong);
+    background: rgba(var(--overlay-rgb), calc(0.12 * var(--wash-strength)));
+}
+
+/* the marks: two lines crossing at the centre of a square box, so they are centred by construction rather
+ * than by a font's vertical metrics — see the Mark component for what that dependency cost twice */
+.mark {
+    display: block;
+    width: 60%;
+    height: 60%;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.6;
+    stroke-linecap: round;
+}
+
+/* The conjunction a lane leaves implicit, drawn as the same rule that divides the head from the body — no
+ * glyph, so nothing on screen can be mistaken for a character of the query. It takes no selection of its own. */
+.joint {
+    align-self: stretch;
+    width: 1px;
+    margin: 0.25rem 0;
+    background: var(--border-ctrl);
+    opacity: 0.55;
+    user-select: none;
+}
+
+/* The lane: real terms inside the toned enclosure. The CELLS own the spacing — padding, not a container gap —
+ * so a cell's hover wash tiles exactly to the joints and edges beside it: a highlight that stopped short of
+ * its own segment read as a box floating between the dividers. */
+.lane {
+    gap: 0;
+}
+
+.lane .chipSect {
+    align-self: stretch;
+}
+
+.laneTerm {
+    align-self: center;
+    color: var(--text-strong);
+    padding: 0.2rem 0.35rem;
+}
+
+/* An inner bind is a chip of its own, neutral-surfaced so the lane's tone stays the one accent — and
+ * TRANSLUCENT, because the selection band runs behind the lane and an opaque pill would hide the stretch of it
+ * that crosses this term. */
+.laneBind {
+    display: inline-flex;
+    align-items: stretch;
+    align-self: center;
+    margin: 0 0.35rem;
+    border: 1px solid var(--border-ctrl);
+    border-radius: 999px;
+    background: rgba(var(--shadow-rgb), 0.12);
+    overflow: hidden;
+}
+
+.bindSect {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 0.1rem 0.4rem;
+    background: rgba(var(--shadow-rgb), 0.08);
+    border-right: 1px solid var(--border-ctrl);
+    color: var(--text);
+    font-size: 0.85rem;
+}
+
+.bindBody {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.1rem 0.5rem;
+    color: var(--text-strong);
+}
+
+/* ------------------------------------------------- the three text classes inside a chip
+ * Corpus text is plain, a vocabulary word wears the dotted mark, a meta word is bold — all on one line metric. */
+
+/* A word from a closed vocabulary wears the head run's own gold — the colour `mount:` gets the moment it takes
+ * a bind — so a word WITH meaning reads apart from corpus text at a glance; the dotted line survives as the
+ * tooltip's affordance, in the same hue. */
+.vWord {
+    color: var(--gold);
+    border-bottom: var(--vocab-mark);
+}
+
+.vMeta {
+    font-weight: 700;
+}
+
+/* the operator glyph carries meaning, so it meets AA like any value text; the value's weight tells them apart */
+.vOp {
+    color: var(--text);
+}
+
+.vOr {
+    font-style: italic;
+    color: var(--text);
+    font-size: 0.85em;
+    align-self: center;
+    padding: 0 0.35rem;
+}
+
+/* a phrase's quotes display at rest, styled as the delimiters they are, glued to their literal */
+.vQuote {
+    color: var(--gold);
+    font-weight: 600;
+}
+
+/* Every marked subject answers the pointer itself. Without this only the chip's border responded, which reads
+ * as the frame being the live thing and the word inside it being inert — and the word is what carries the
+ * explanation a hover is reaching for. The wash is 1.0's own token-hover value. */
+.vWord:hover,
+.vGroup:hover,
+.deadFrag:hover,
+.erred:hover {
+    background: rgba(var(--overlay-rgb), calc(0.16 * var(--wash-strength)));
+    border-radius: 3px;
+}
+
+/* a vocabulary word and a marked fragment both have something to say, so the pointer says so */
+.vWord,
+.deadFrag,
+.erred {
+    cursor: help;
+}
+
+/* a value group — a swatch and its word — reads as one object under one vocabulary mark */
+.vGroup {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    border-bottom: var(--vocab-mark);
+    padding-bottom: 1px;
+}
+
+.swatch {
+    display: inline-block;
+    width: 11px;
+    height: 11px;
+    border-radius: 3px;
+    border: 1px solid var(--border-ctrl);
+}
+
+/* the negated unit is ONE colour, its vocabulary mark included */
+.vNot,
+.vNot .vWord {
+    color: rgb(var(--danger-rgb));
+    border-bottom-color: rgba(var(--danger-rgb), 0.6);
+}
+
+/* a dead fragment and an erred clause stay raw, wearing the state where it lives */
+.deadFrag,
+.erred {
+    text-decoration: underline wavy rgba(var(--danger-rgb), 0.9);
+    text-underline-offset: 3px;
+}
+
+.deadFrag {
+    align-self: center;
+    cursor: text;
+}
+
+/* A vocabulary's picture inside a chip. Sized on the LINE here rather than on a shared width: a chip carries one
+ * badge at a time, so what it has to agree with is the text beside it, not eleven siblings in a column. */
+.chipArt {
+    height: 1.05em;
+    width: auto;
+    max-width: 4.5em;
+    object-fit: contain;
+    vertical-align: middle;
+    margin-right: 0.25em;
+}
+
+/* A DIRECTIVE's capsule — sort, first. The same chip anatomy as every ask, in the neutral tone the tone-less
+   chip already wears: what tells it apart is what it holds — arrows, a count — not a decorated edge. */
+.directive {
+    border-style: solid;
+}
+
+/* A door cell of the sort chip: the word and its arrow read as ONE control, so they sit tight, and the
+   arrow's slot is stripped of the tail margin it carries when it is the delete mark at a chip's end. The
+   single-door chip has no gaps, so the cell carries a body cell's own padding; in the lane shape the 6px
+   gaps and the joints are the spacing, exactly as they are for every other lane cell. */
+.directiveDoor {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 0.2rem 0.3rem 0.2rem 0.55rem;
+}
+
+.lane .directiveDoor {
+    padding: 0.2rem 0.35rem;
+}
+
+/* The door's arrow centres GEOMETRICALLY in the cell: the slot's x-height alignment serves a mark sitting in
+ * an inline run of text, and here the mark is a flex sibling of one word — the line-box strut read as sitting
+ * low. The slot spans the cell and centres its button, so the arrow's centre is the cell's. */
+.directiveDoor .markSlot {
+    margin: 0;
+    display: flex;
+    align-items: center;
+    align-self: stretch;
+}
+
+/* A segment selected WHOLE reads as one band, so the chip's own colours step aside: the interior flattens and
+ * its words take the strong ink. The band itself is the bar's, drawn on the wrapper; this is only what the
+ * chip does underneath it. */
+.underBand,
+.underBand .chipSect,
+.underBand .bindSect,
+.underBand .laneBind {
+    background: none;
+}
+
+.underBand .negHead,
+.underBand .vOr,
+.underBand .vNot,
+.underBand .vWord,
+.underBand .vNot .vWord {
+    color: var(--text-strong);
+    border-bottom-color: var(--text-strong);
+}

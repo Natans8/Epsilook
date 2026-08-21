@@ -22,7 +22,8 @@ import {
     backspaceAtStart, deleteAtEnd, keywordBehind, negatesBefore, pairDelimiter, slotStart, writeSlot,
 } from "../utils/plan";
 import type {CaretRequest} from "../hooks/session";
-import styles from "./bar.module.css";
+import frame from "./bar.module.css";
+import styles from "./open.module.css";
 
 /**
  * The open segment. Remounted per session — the mount is what seeds the input and places the caret.
@@ -361,7 +362,7 @@ export function OpenSegment({
             {at.head !== null && (
                 <span
                     key="cell"
-                    className={`${styles.headCell} ${at.head.negated ? styles.neg : ""}`}
+                    className={`${frame.headCell} ${at.head.negated ? frame.neg : ""}`}
                     onMouseDown={(e) => {
                         // The head means the same thing in both forms: it is the exclusion toggle, as it is on
                         // a settled chip and as the field label was in 1.0. Pressing it keeps the session alive
@@ -380,7 +381,7 @@ export function OpenSegment({
                     {highlight}
                     {/* The ghost is APPENDED, never inserted: it lives past the last character the field holds,
                         so it can shift nothing the caret has to line up with. */}
-                    {assist.ghost !== "" && <span className={styles.ghost}>{assist.ghost}</span>}
+                    {assist.ghost !== "" && <span className={frame.ghost}>{assist.ghost}</span>}
                 </span>
                 <input
                     ref={input}

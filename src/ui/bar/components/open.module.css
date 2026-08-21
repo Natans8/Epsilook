@@ -1,0 +1,164 @@
+/**
+ * The editing slot: how the open segment sits, and the field riding over its own coloured backdrop.
+ *
+ * Its own sheet because every class here is worn by `open.tsx` alone. Two things it draws are NOT here, because
+ * a second surface draws them too: the head cell, which an offer row also wears, and the ghost, which the
+ * plaintext field also draws. Both stay in the frame, and this component takes them from there.
+ */
+
+/* the headless open segment as the true tail: fills the bar like 1.0's own input */
+.tail {
+    display: inline-flex;
+    flex: 1;
+    min-width: 6rem;
+    max-width: 100%;
+}
+
+/* the hugging open segment: the backdrop sits in flow and sets the width, the input rides above it, so the
+ * slot grows with every typed character. Layout only — a bare word or a gap hugs with NO chrome, because
+ * freeform terms are text by ruling and a gap is nothing but a caret rest. */
+.hug {
+    display: inline-flex;
+    align-items: stretch;
+    max-width: 100%;
+}
+
+/* the GAP between chips: a caret rest that displaces NOTHING — the sliver is swallowed by its own negative
+ * margins, so the separator either side of it keeps the width it has when no caret rests there. The interior
+ * needs no rules of its own: the hug slot's min-width-0 mirror shrinks into the sliver, and the input rides
+ * absolute over the full 3px, which is caret enough. */
+.gapRest {
+    width: 3px;
+    min-width: 3px;
+    margin: 0 -1.5px;
+}
+
+/* the enclosure a HEAD earns: the editing look — a quiet ring, never the page's hard focus outline */
+.openChip {
+    border: 1px solid var(--gold-dim);
+    border-radius: 6px;
+    box-shadow: 0 0 0 2px rgba(var(--gold-rgb), 0.12);
+    overflow: hidden;
+}
+
+/* the slot: a transparent input riding over its own coloured backdrop */
+.editwrap {
+    position: relative;
+    display: inline-flex;
+    align-items: baseline;
+    flex: 1;
+    min-width: 6rem;
+    max-width: 100%;
+}
+
+.hug .editwrap {
+    flex: 0 1 auto;
+    min-width: 0;
+}
+
+.openChip .editwrap {
+    padding: 0 0.55rem;
+}
+
+.qhl {
+    /* Decoration only: the input above owns the selection, and a backdrop that could take it would paint one
+     * rectangle per classed run — a gap at every space, because a run boundary is not a character. */
+    user-select: none;
+    /* Measured like the input beside it: see the plaintext sheet for why neither may kern or ligate. */
+    font-kerning: none;
+    font-variant-ligatures: none;
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    overflow: hidden;
+    white-space: pre;
+    font-size: 1.1rem;
+    line-height: normal;
+    padding: 0.15rem 0;
+    color: var(--text);
+}
+
+/* hug mode: the backdrop leaves the overlay and SIZES the slot; the input becomes the overlay instead. The
+ * padding split keeps both texts at the same x: the wrap pads the in-flow backdrop, the absolute input pads
+ * itself by the same amount. Three-class selectors on purpose: `.q.hl` sets position on the input too, and at
+ * equal specificity the file order decides — which is exactly how the first version shipped an in-flow
+ * "absolute" input beside a squeezed mirror. */
+.hug .editwrap .qhl {
+    position: static;
+    flex: 0 0 auto;
+    min-width: 1ch;
+}
+
+/* an empty mirror still holds one full text line, or the caret shrinks to the collapsed box's height — the
+ * zero-width space has the line's height and none of its width */
+.hug .editwrap .qhl::after {
+    content: "\200b";
+}
+
+.hug .editwrap .q {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    flex: none;
+    min-width: 0;
+    padding: 0.15rem 0;
+}
+
+/* the head's enclosure pads its slot; the input pads itself by the same amount so the texts stay at one x */
+.openChip .editwrap .q {
+    padding: 0.15rem 0.55rem;
+}
+
+.q {
+    flex: 1;
+    min-width: 2rem;
+    max-width: 100%;
+    font-family: inherit;
+    font-size: 1.1rem;
+    font-kerning: none;
+    font-variant-ligatures: none;
+    /* `normal` on input and backdrop alike: Firefox clamps an input's line-height up to the font's normal. */
+    line-height: normal;
+    padding: 0.15rem 0;
+    color: var(--text);
+    background: none;
+    border: none;
+    outline: none;
+}
+
+.q::placeholder {
+    color: var(--text-dim);
+}
+
+/* the site stylesheet's Tab-navigation outline is exempted exactly as 1.0 exempts its own #q */
+.q:focus-visible {
+    outline: none;
+}
+
+.q.hl {
+    position: relative;
+    z-index: 1;
+    color: transparent;
+    caret-color: var(--text);
+}
+
+/* selection wears the app's own selection tokens — the browser default is nearly invisible over the backdrop */
+.q::selection {
+    background: rgba(var(--select-rgb), 0.85);
+    color: var(--text-strong);
+}
+
+.q.hl::selection {
+    background: rgba(var(--select-rgb), 0.85);
+    color: var(--text-strong);
+}
+
+/* the resting bar's input: out of sight, still in the tab order, so focus can come back to the caret's place */
+.hiddenOpen {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+}
