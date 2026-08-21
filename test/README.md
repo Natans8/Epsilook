@@ -176,22 +176,43 @@ module-level, so a test that deliberately corrupts one to prove a guard fires mu
 
 ## The Python suite, `test/py`
 
-One flat directory of `<module>_test.py`, importing the package absolutely:
+`<module>_test.py`, grouped by what it covers, importing the package absolutely:
+
+```text
+test/py/
+  conftest.py     the fixtures
+  support.py      the types those fixtures have, and ROOT
+  build/          the data build — everything under build/pack
+  tools/          the repository's own scripts
+```
 
 ```python
 from pack.routes.effects import read_spell_effect_rows
 from support import BuildTables
 ```
 
-**Flat, and deliberately not mirroring `build/pack`.** The package is being reorganised into layers, and modules move
-between them; a mirrored test tree would have to move in lockstep, which makes the test layout a hostage to a live
-design decision. Flat, a module moving between layers costs one import line and no file move. Every test basename is
-unique, so nothing collides.
+**Two groups, and deliberately no deeper.** The split is by SUBJECT — which program a test is about — and not by that
+program's internal shape. `build/` does not mirror `build/pack`'s layers: the package is reorganised into layers and
+modules move between them, so a mirrored tree would have to move in lockstep, making the test layout a hostage to a
+live design decision. A module moving between layers still costs one import line and no file move. The Lua tests are
+not here at all: `addon/test/` is the addon's own tree, kept separable.
 
-`pyproject.toml` puts `build` and `test/py` on the import path and selects pytest's `importlib` import mode, so nothing
-is installed and `sys.path` is not rewritten. `conftest.py` holds the fixtures, and `support.py` the types they share:
-a fixture reaches a test through pytest and needs no import, but its type does, and importing a name out of `conftest`
-is not something pytest supports.
+Every test basename is unique across both groups, and a test never derives a path from its own location — `ROOT` comes
+from `support.py`, which is the one module at a fixed depth. A test that counted its own parents would make its
+location load-bearing, which is how a regrouping turns into a dozen file-not-found errors instead of a rename.
+
+⚠ **`norecursedirs` is declared in `pyproject.toml`, and it has to be.** `build` is in pytest's own default list of
+directories not to walk, because for most projects it holds artifacts. Left at the default, that whole group is skipped
+in silence: collection succeeds, the run is green, and it reports a fraction of the tests.
+
+`pyproject.toml` puts `build`, `test/py` and `tools` on the import path — for mypy as well as pytest, through
+`mypy_path`, or a tree checked on its own cannot resolve `pack` and answers with a hundred and fifty import errors that
+look like broken tests. It selects pytest's `importlib` import mode, so nothing is installed and `sys.path` is not
+rewritten. `conftest.py` holds the fixtures, and `support.py` the types they share: a fixture reaches a test through
+pytest and needs no import, but its type does, and importing a name out of `conftest` is not something pytest supports.
+
+⛔ **A group directory may not be named for a package that is importable.** `test/py/pack/` was tried and shadows the
+real `pack` on the import path, which fails twelve tests in a way that names a file rather than the collision.
 
 **No framework beyond `node:test` and `pytest`.** A suite with nothing on top cannot rot when the thing on top does, and
 this app is maintained solo: the tests are the handover.

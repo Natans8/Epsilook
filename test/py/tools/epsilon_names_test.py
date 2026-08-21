@@ -8,6 +8,7 @@ while a hundred rows are wrong.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from pathlib import Path
 
 import pytest
@@ -198,7 +199,8 @@ class CatalogueStorage:
     def __init__(self, raw: bytes | None) -> None:
         self.raw = raw
 
-    def encoding_keys(self, file_ids):
+    def encoding_keys(self, file_ids: Iterable[int]) -> dict[int, bytes]:
+        del file_ids  # this fake answers from one catalogue file
         return {}
 
     def read(self, file_id: int, *, local_only: bool = False) -> bytes | None:

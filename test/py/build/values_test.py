@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pack.routes.values import read_spell_values
+from pack.routes.values import DescriptionValues, read_spell_values
 from support import BuildTables
 
 SPELL_EFFECT = """\
@@ -31,7 +31,7 @@ SpellID,DifficultyID,MaxTargets,MaxTargetLevel
 """
 
 
-def build(tables: BuildTables):
+def build(tables: BuildTables) -> DescriptionValues:
     return read_spell_values(tables(
         SpellEffect=SPELL_EFFECT, SpellRadius=SPELL_RADIUS,
         SpellDuration=SPELL_DURATION, SpellRange=SPELL_RANGE,

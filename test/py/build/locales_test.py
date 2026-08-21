@@ -8,6 +8,7 @@ source stood up.
 from __future__ import annotations
 
 from dataclasses import replace
+from pathlib import Path
 
 import pytest
 
@@ -53,7 +54,7 @@ entry,locale,Name
 
 
 @pytest.fixture(name="build")
-def _build(tmp_path):
+def _build(tmp_path: Path) -> Path:
     """A build's own tables, as acquisition would leave them."""
     directory = tmp_path / "9.2.7.45745"
     directory.mkdir()
@@ -63,7 +64,7 @@ def _build(tmp_path):
 
 
 @pytest.fixture(name="translated")
-def _translated(build):
+def _translated(build: Path) -> Path:
     """The same build's translated tables, in their own directory."""
     directory = build / "locale-ruRU"
     directory.mkdir()
@@ -195,13 +196,13 @@ def test_the_two_declarations_of_the_translation_overlay_agree() -> None:
 # The compositions: a second export restating a table, and a keyed translation
 # revising one. Both go through the merge that already served the hotfixes.
 
-def restated(build, translated, *tables: str):
+def restated(build: Path, translated: Path, *tables: str) -> OverlaidTables:
     """The build's tables with a second export restating the named ones."""
     return OverlaidTables(base=CsvTables(build),
                           overlays=translated_exports(tables),
                           source=CsvTables(translated))
 
-def test_a_translated_table_stands_in_for_the_build_s_own(build, translated) -> None:
+def test_a_translated_table_stands_in_for_the_build_s_own(build: Path, translated: Path) -> None:
     """A reader asks for a table and never learns which of the two answered.
 
     A row nobody has translated comes back empty, and the untranslated name is
@@ -212,7 +213,7 @@ def test_a_translated_table_stands_in_for_the_build_s_own(build, translated) -> 
         ("10", "Огненный шар"), ("11", "Frostbolt")]
 
 
-def test_a_column_the_language_never_touches_is_the_build_s(build, translated) -> None:
+def test_a_column_the_language_never_touches_is_the_build_s(build: Path, translated: Path) -> None:
     """Both exports carry it and both agree, so the fallback is what keeps a
     column outside the language from depending on which of the two answered.
     """
@@ -220,7 +221,7 @@ def test_a_column_the_language_never_touches_is_the_build_s(build, translated) -
     assert list(tables.rows("SpellName", ["ID", "Rank"])) == [("10", "3"), ("11", "2")]
 
 
-def test_the_build_decides_which_rows_the_table_has(build, translated) -> None:
+def test_the_build_decides_which_rows_the_table_has(build: Path, translated: Path) -> None:
     """The two exports do not agree on that -- a string can exist in one
     language and not in another -- and adding to the row set here would make one
     section a different length in two languages.
@@ -233,7 +234,7 @@ def test_the_build_decides_which_rows_the_table_has(build, translated) -> None:
 
 
 def test_a_row_the_translation_has_never_seen_comes_back_as_the_build_has_it(
-        build, translated) -> None:
+        build: Path, translated: Path) -> None:
     """Not row-aligned, so the join is what carries it: a row missing from the
     middle of one export must not shift every row after it.
     """
@@ -245,7 +246,7 @@ def test_a_row_the_translation_has_never_seen_comes_back_as_the_build_has_it(
 
 
 def test_a_column_the_caller_did_not_ask_the_key_for_still_joins(
-        build, translated) -> None:
+        build: Path, translated: Path) -> None:
     """The key is read whether or not it was asked for, and dropped again, so a
     route reading one column gets the same answer as one reading two.
     """
@@ -254,8 +255,8 @@ def test_a_column_the_caller_did_not_ask_the_key_for_still_joins(
         ("Огненный шар",), ("Frostbolt",)]
 
 
-def test_a_table_the_substitute_does_not_cover_comes_from_the_build(build,
-                                                                   translated) -> None:
+def test_a_table_the_substitute_does_not_cover_comes_from_the_build(
+        build: Path, translated: Path) -> None:
     """Which tables it may answer for is named rather than taken from whatever
     it happens to hold: a stray file would otherwise replace a table nobody
     meant to substitute.
@@ -266,8 +267,8 @@ def test_a_table_the_substitute_does_not_cover_comes_from_the_build(build,
     assert tables.header("SpellName") == ["ID", "Name_lang", "Rank"]
 
 
-def test_a_substitution_cannot_introduce_a_table_the_build_lacks(build,
-                                                                 translated) -> None:
+def test_a_substitution_cannot_introduce_a_table_the_build_lacks(
+        build: Path, translated: Path) -> None:
     """What tables a build has is a fact about that build, and a source
     standing in for one of them does not change it.
     """
@@ -276,7 +277,7 @@ def test_a_substitution_cannot_introduce_a_table_the_build_lacks(build,
     assert not tables.available("Mount")
 
 
-def test_a_translated_name_revises_the_server_s_own(build) -> None:
+def test_a_translated_name_revises_the_server_s_own(build: Path) -> None:
     """The creature and object names are the server's alone, so the language
     they are read in is the server's too.
 
@@ -296,7 +297,7 @@ def test_a_translated_name_revises_the_server_s_own(build) -> None:
         ("2", "Bear")]
 
 
-def test_a_patch_still_adds_the_rows_it_carries(build) -> None:
+def test_a_patch_still_adds_the_rows_it_carries(build: Path) -> None:
     """The other half of the same field: a hotfix row the client has not is a
     row the server is adding, and that must keep working.
     """
@@ -310,7 +311,7 @@ def test_a_patch_still_adds_the_rows_it_carries(build) -> None:
            ["1", "2", "3"]
 
 
-def test_another_language_s_rows_are_refused(build) -> None:
+def test_another_language_s_rows_are_refused(build: Path) -> None:
     (build / "creature_template_locale.csv").write_text(CREATURE_NAMES,
                                                         encoding="utf-8")
     world = CsvTables(build)
@@ -319,7 +320,7 @@ def test_another_language_s_rows_are_refused(build) -> None:
         ("1", "Wolf"), ("2", "Bear")]
 
 
-def test_a_release_with_no_translations_leaves_every_name_alone(build) -> None:
+def test_a_release_with_no_translations_leaves_every_name_alone(build: Path) -> None:
     """A world dump may predate the `*_locale` tables, and the names then stay
     in the language the dump's own tables are written in.
     """

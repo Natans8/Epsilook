@@ -58,6 +58,15 @@ dev = [
 # without an editable install; `importlib` keeps pytest from rewriting sys.path.
 testpaths = ["test/py"]
 pythonpath = ["build", "test/py", "tools"]
+
+# The tests are grouped by what they cover, and one of those groups is called
+# `build` -- which is in pytest's own default list of directories not to walk,
+# because for most projects it holds artifacts. Left at the default the whole
+# group is skipped in silence: collection succeeds, the run is green, and it
+# reports a fraction of the tests. Restated here without that entry. Collection
+# is scoped by `testpaths` regardless, so this list only has to keep the walk
+# out of the things a stray `pytest <path>` could otherwise reach.
+norecursedirs = ["*.egg", ".*", "_darcs", "CVS", "dist", "node_modules", "venv"]
 addopts = "--quiet --no-header --import-mode=importlib"
 cache_dir = ".pytest_cache"
 
@@ -68,40 +77,53 @@ cache_dir = ".pytest_cache"
 [tool.mypy]
 cache_dir = ".mypy_cache"
 
+# The same three roots pytest puts on the import path, so the checker and the
+# runner resolve a module the same way. Without it a tree checked on its own
+# cannot see `pack`, and the 150-odd import errors that follow read as if the
+# tests were broken rather than as if mypy had been told nothing.
+mypy_path = ["build", "test/py", "tools"]
+
 # The floor the package supports, not the interpreter that happens to run the
 # checker, so a feature newer than 3.12 is reported here rather than on
 # whichever machine is oldest.
 python_version = "3.12"
 
-# Global-only in mypy, so it cannot be scoped to the build the way the rest of
-# strict is below. Turning it on found one cast in the addon tests that restated
-# its own helper's return type; a cast this reports is redundant by proof rather
-# than by opinion, so the other trees carry it too.
-warn_redundant_casts = true
+# Strict is the default for every Python tree in this repository. The data
+# build and both test trees pass it; what does not yet is named below, and that
+# list is meant to shrink.
+strict = true
 
-# The data build is held to `mypy --strict`. It decides what every pack
-# contains, and a wrong type there does not crash -- it ships, as a search
-# answering wrongly, on an artifact nobody re-derives.
-#
-# Strict is spelled out rather than inherited because mypy accepts `strict`
-# only at the top level, and the rest of the repository is not there yet.
-# `check_mypy_strict` in tools/check.py reconciles this list against what
-# `mypy --strict` actually turns on, so a flag mypy adds later fails the
-# repository checks instead of quietly never reaching the build.
-[[tool.mypy.overrides]]
-module = "pack.*"
-check_untyped_defs = true
-disallow_any_generics = true
-disallow_incomplete_defs = true
-disallow_subclassing_any = true
-disallow_untyped_calls = true
-disallow_untyped_decorators = true
-disallow_untyped_defs = true
-extra_checks = true
-no_implicit_reexport = true
-strict_equality = true
-warn_return_any = true
-warn_unused_ignores = true
-# Not part of strict. A build full of per-version fallbacks is exactly where a
-# branch stops being reachable without anyone noticing.
+# Not implied by strict. A build full of per-version fallbacks is exactly where
+# a branch stops being reachable without anyone noticing.
 warn_unreachable = true
+
+# The repository's own scripts, which are not strict yet. Held to mypy's
+# defaults, which is where they stood before strict was turned on -- so this
+# relaxes nothing that was passing. Every name here is a file in `tools/`, and
+# `check_mypy_strict` is what keeps it that way: a build or test module quietly
+# added to this list to silence an error would otherwise look exactly like a
+# tools module.
+[[tool.mypy.overrides]]
+module = [
+    "addon", "arcanum", "builddb", "bump", "check", "docker_smoke", "dossier",
+    "epsilon_names", "epsilon_storage", "epsilon_tables", "epsilon_walks",
+    "expansions", "listfile", "mermaid", "packdb", "packfile", "packs",
+    "rebuild", "repo", "spellings", "supplement", "verify_live",
+]
+check_untyped_defs = false
+disallow_any_generics = false
+disallow_incomplete_defs = false
+disallow_subclassing_any = false
+disallow_untyped_calls = false
+disallow_untyped_decorators = false
+disallow_untyped_defs = false
+extra_checks = false
+no_implicit_reexport = false
+strict_equality = false
+warn_return_any = false
+warn_unreachable = false
+# Five `type: ignore` comments in these files are dead -- duckdb became a
+# declared dependency, so the import it suppressed now resolves. Removing them
+# is a tools change rather than a test one; until then this keeps the tree at
+# the behaviour it had before strict was turned on.
+warn_unused_ignores = false

@@ -5,7 +5,7 @@ from __future__ import annotations
 from pack.routes.attachments import NO_ATTACHMENT, NO_MOTION
 from pack.routes.models import (MODEL_CAT_AREA, MODEL_CAT_TRAIL, SCALE_UNIT, UNPLACED,
                                 ModelSources)
-from pack.routes.procedures import read_proc_effects
+from pack.routes.procedures import ProcEffects, read_proc_effects
 from support import BuildTables
 
 # One row per handler, plus the say-nothing cases each handler drops.
@@ -35,7 +35,7 @@ ID,Type,Value_0,Value_1,Value_2,Value_3
 MODELS = ModelSources(area_model_fid={200: 8300}, weapontrail_fid={500: 8400})
 
 
-def procs(tables: BuildTables):
+def procs(tables: BuildTables) -> ProcEffects:
     return read_proc_effects(
         tables(SpellProceduralEffect=SPELL_PROCEDURAL_EFFECT), MODELS)
 

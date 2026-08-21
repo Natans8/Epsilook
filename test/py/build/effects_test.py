@@ -16,6 +16,7 @@ from pack.routes.effects import (AURA_ANIM_REPLACEMENT_SET, AURA_KEYBOUND_OVERRI
                                  EFFECT_APPLY_AURA, EFFECT_PLAY_SOUND, EFFECT_SUMMON,
                                  EFFECT_SPAWN_OBJECT, MISC_PAYLOADS, EffectRow,
                                  read_spell_effect_rows)
+from pack.routes.effects import SpellEffectRows
 from pack.targets import TARGET_AREA, TARGET_CASTER, TARGET_TARGET
 from support import BuildTables
 
@@ -49,7 +50,7 @@ ROSTERS = {"screens": frozenset({50}), "keybounds": frozenset({60})}
 
 
 def read(tables: BuildTables, spell_effect: str, version: str = MODERN,
-         **rosters: frozenset[int]):
+         **rosters: frozenset[int]) -> SpellEffectRows:
     """Read one `SpellEffect` fixture, overriding any roster by name."""
     return read_spell_effect_rows(
         tables(SpellEffect=spell_effect, SummonProperties=SUMMON_PROPERTIES),

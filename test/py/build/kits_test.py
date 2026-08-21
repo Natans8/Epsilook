@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pack.routes.attachments import NO_ATTACHMENT, NO_MOTION
 from pack.routes.fx import ChainEffect, FxPayloads, ScreenRow
-from pack.routes.kits import read_kit_effects
+from pack.routes.kits import KitEffects, read_kit_effects
 from pack.routes.models import (MODEL_CAT_AREA, MODEL_CAT_BARRAGE, MODEL_CAT_TRAIL, SCALE_UNIT,
                                 UNPLACED, ModelSources)
 from pack.routes.procedures import ProcEffects
@@ -68,7 +68,7 @@ SoundKitID,FileDataID
 """
 
 
-def kits(tables: BuildTables):
+def kits(tables: BuildTables) -> KitEffects:
     return read_kit_effects(
         tables(SpellVisualAnim=SPELL_VISUAL_ANIM,
                SpellVisualKitEffect=SPELL_VISUAL_KIT_EFFECT),

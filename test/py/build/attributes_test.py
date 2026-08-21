@@ -64,7 +64,8 @@ def test_a_flag_that_requires_another_is_an_intersection() -> None:
     assert grouped[str(meta["handler"])] == [200]
 
 
-def test_two_bits_sharing_a_handler_are_refused(monkeypatch) -> None:
+def test_two_bits_sharing_a_handler_are_refused(
+        monkeypatch: pytest.MonkeyPatch) -> None:
     """The handler keys the output, so a duplicate would leave one bit's spells
     standing in for another's, with the section present and plausible."""
     import pack.routes.attributes as attributes

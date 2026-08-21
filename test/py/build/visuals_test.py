@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pack.routes.visuals import expand_redirects, read_visual_graph
+from pack.routes.visuals import VisualGraph, expand_redirects, read_visual_graph
 from pack.targets import NO_TARGET, TARGET_CASTER, TARGET_MISSILE_DEST, TARGET_TARGET
 from support import BuildTables
 
@@ -33,7 +33,7 @@ SpellVisualID,SpellVisualKitID,TargetType,StartEvent
 """
 
 
-def graph(tables: BuildTables):
+def graph(tables: BuildTables) -> VisualGraph:
     return read_visual_graph(tables(SpellXSpellVisual=SPELL_X_SPELL_VISUAL,
                                     SpellVisual=SPELL_VISUAL,
                                     SpellVisualEvent=SPELL_VISUAL_EVENT))

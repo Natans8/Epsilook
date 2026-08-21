@@ -16,7 +16,7 @@ from __future__ import annotations
 import struct
 import urllib.error
 import urllib.request
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
 import pytest
@@ -48,7 +48,7 @@ def refuses(url: str) -> str:
     raise AssertionError(f"asked for {url}")
 
 
-def canned(**bodies: str):
+def canned(**bodies: str) -> Callable[[str], str]:
     """A reader answering the given addresses and nothing else."""
 
     def read(url: str) -> str:

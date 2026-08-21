@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 
 from pack.emit.manifest import carry_forward, manifest, rendered
-from pack.emit.module import absent_sections, assemble
+from pack.emit.module import Module, absent_sections, assemble
 from pack.model.section import Section
 
 
@@ -21,13 +21,13 @@ def a_spoken_section(name: str) -> Section:
     return a_section(name, "core", columns=("ids", "names"), localizable=("names",))
 
 
-def a_pack(locale: str = "enUS", name: str = "Steed") -> list:
+def a_pack(locale: str = "enUS", name: str = "Steed") -> list[Module]:
     """One build's modules: a structure module and one language's names."""
     return assemble([a_spoken_section("mounts")],
                     {"mounts": {"ids": [1], "names": [name]}}, locale=locale)
 
 
-def spoken_only(locale: str, name: str) -> list:
+def spoken_only(locale: str, name: str) -> list[Module]:
     """The same build read in another language: its names alone."""
     return [module for module in a_pack(locale, name) if module.locale]
 

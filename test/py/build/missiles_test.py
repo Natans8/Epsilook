@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pack.routes.attachments import DEFAULT_MISSILE_SOURCE
-from pack.routes.missiles import (MissileMotion, read_missile_motions,
+from pack.routes.missiles import (MissileMotion, VisualMissiles, read_missile_motions,
                                   read_missiles)
 from pack.routes.models import WEAPON_FID_RANGED, ModelSources
 from support import BuildTables
@@ -40,7 +40,7 @@ MODELS = ModelSources(effect_name_fid={1: 8000, 2: 0},
                       effect_name_type={1: 0, 2: 5})
 
 
-def missiles(tables: BuildTables):
+def missiles(tables: BuildTables) -> dict[int, VisualMissiles]:
     return read_missiles(tables(SpellVisual=SPELL_VISUAL,
                                 SpellVisualMissile=SPELL_VISUAL_MISSILE), MODELS)
 

@@ -10,9 +10,9 @@ from __future__ import annotations
 
 import json
 import os
-from pathlib import Path
 
 import pytest
+import support
 
 from pack import pipeline
 from pack.derive import CONTEXT_FIELDS
@@ -69,7 +69,7 @@ def test_text_reads_far_less_than_the_whole_pack() -> None:
 
 
 PACK = "9.2.7.45745"
-MANIFEST = Path(__file__).resolve().parents[2] / "site" / "data" / PACK / "manifest.json"
+MANIFEST = support.ROOT / "site" / "data" / PACK / "manifest.json"
 
 
 @pytest.mark.skipif(

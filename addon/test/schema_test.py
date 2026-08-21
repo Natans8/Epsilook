@@ -68,8 +68,8 @@ def test_a_kit_and_a_sound_type_are_reachable_only_inside_their_column(engine: L
     props = cast(LuaTable, cast(LuaTable, kinds[b"sound.sound"])[b"props"])
     plain = {}
     for row in as_list(props):
-        prop = cast(dict, row)
-        plain[str(prop["name"])] = len(cast(list, prop.get("plain") or []))
+        prop = cast(dict[str, object], row)
+        plain[str(prop["name"])] = len(cast(list[object], prop.get("plain") or []))
     # The file and the kit are read by a bare word; what the kit is FOR is not.
     assert plain["type"] == 0, plain
     assert plain["file"] > 0 and plain["kit"] > 0, plain

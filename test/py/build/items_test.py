@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pack.routes.items import read_item_models
+from pack.routes.items import ItemModels, read_item_models
 from support import BuildTables
 
 # Item 10 is named; item 11 is one of the unnamed props.
@@ -45,7 +45,7 @@ ItemID,ItemAppearanceID
 """
 
 
-def items(tables: BuildTables):
+def items(tables: BuildTables) -> ItemModels:
     return read_item_models(tables(ItemSearchName=ITEM_SEARCH_NAME,
                                    ModelFileData=MODEL_FILE_DATA,
                                    ItemDisplayInfo=ITEM_DISPLAY_INFO,

@@ -114,8 +114,8 @@ def same_huge_float(left: str, right: str) -> bool:
     comparison noticing a rounding rule that is simply wrong.
     """
     try:
-        pair = [struct.unpack("<f", struct.pack("<f", float(text)))[0]
-                for text in (left, right)]
+        pair: list[float] = [struct.unpack("<f", struct.pack("<f", float(text)))[0]
+                             for text in (left, right)]
     except (ValueError, OverflowError):
         return False
     return pair[0] == pair[1] and abs(pair[0]) >= 1e15

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -56,7 +56,9 @@ def _make(request: pytest.FixtureRequest, source: Path) -> Factory:
     their own declarations in, and every implementation owes those too.
     """
     def build(**drift: Any) -> Tables:
-        return request.param(source, **drift)
+        # What the fixture was parametrised with is known to the decorator and
+        # invisible to the checker, which types `param` as Any for everyone.
+        return cast(Tables, request.param(source, **drift))
 
     return build
 

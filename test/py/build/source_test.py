@@ -18,6 +18,7 @@ import urllib.request
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import cast
 
 import pytest
 
@@ -145,7 +146,7 @@ SOURCES: list[tuple[str, Callable[[Path, bool], Built]]] = [
 @pytest.fixture(name="build", params=[f for _, f in SOURCES],
                 ids=[n for n, _ in SOURCES])
 def _build(request: pytest.FixtureRequest) -> Callable[[Path, bool], Built]:
-    return request.param
+    return cast(Callable[[Path, bool], Built], request.param)
 
 
 def test_acquiring_yields_a_path_that_is_there(
@@ -348,7 +349,7 @@ POLICIES: list[tuple[str, Callable[[Path, Network], Wired]]] = [
                 ids=[n for n, _ in POLICIES])
 def _policy(request: pytest.FixtureRequest, tmp_path: Path,
             network: Network) -> Wired:
-    return request.param(tmp_path, network)
+    return cast(Wired, request.param(tmp_path, network))
 
 
 def test_getting_puts_the_bytes_where_the_source_will_be_read(

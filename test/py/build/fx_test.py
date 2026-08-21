@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from pack.routes.fx import TEX_MASK, TEX_OVERLAY, expand_chain, read_blend_sets, read_fx_payloads
+from pack.routes.fx import (TEX_MASK, TEX_OVERLAY, FxPayloads, expand_chain,
+                            read_blend_sets, read_fx_payloads)
 from support import BuildTables
 
 TEXTURE_BLEND_SET = """\
@@ -63,7 +64,7 @@ ID,BeamID,SourceAttachID,DestAttachID
 """
 
 
-def payloads(tables: BuildTables):
+def payloads(tables: BuildTables) -> FxPayloads:
     return read_fx_payloads(tables(
         TextureBlendSet=TEXTURE_BLEND_SET, DissolveEffect=DISSOLVE_EFFECT,
         FullScreenEffect=FULL_SCREEN_EFFECT, ScreenEffect=SCREEN_EFFECT,

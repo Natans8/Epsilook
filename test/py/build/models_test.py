@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from pack.routes.attachments import NO_ATTACHMENT, NO_MOTION
 from pack.routes.creatures import CreatureModels
 from pack.routes.items import ItemModels
 from pack.routes.models import (MODEL_CAT_ATTACH, MODEL_CAT_DISPLAY, MODEL_CAT_ITEM, SCALE_UNIT, UNPLACED,
-                                WEAPON_FID_MAIN, WEAPON_FID_OFF, Placement, read_effect_names,
-                                read_model_sources)
+                                WEAPON_FID_MAIN, WEAPON_FID_OFF, ModelSources, Placement,
+                                read_effect_names, read_model_sources)
 from support import BuildTables
 from pack.sources.gobs import read_gob_displays
 
@@ -88,7 +90,8 @@ def none_named(files: set[int]) -> set[int]:
     return {file for file in files if file != 6666}
 
 
-def sources(tables: BuildTables, named=none_named):
+def sources(tables: BuildTables,
+            named: Callable[[set[int]], set[int]] = none_named) -> ModelSources:
     return read_model_sources(
         tables(SpellVisualEffectName=SPELL_VISUAL_EFFECT_NAME,
                SpellVisualKitModelAttach=SPELL_VISUAL_KIT_MODEL_ATTACH,

@@ -1010,8 +1010,9 @@ def check_row_vocabularies(rep: Report) -> None:
     never sees it -- and a broken link is silent in the worst way: the lookup
     misses, the property keeps the raw number a name was meant to replace, and
     every query on it answers nothing forever. The registry-side half of this
-    guard is `test/py/sections_test.py`; this one reads the built artifact, so
-    it also catches a pack out of step with the tree that would rebuild it.
+    guard is `test/py/build/sections_test.py`; this one reads the built
+    artifact, so it also catches a pack out of step with the tree that would
+    rebuild it.
     """
     sections, why = pack_sections()
     if sections is None:
@@ -1800,91 +1801,48 @@ def check_listfile_declaration(rep: Report) -> None:
     rep.ok("listfile declaration", f"build and tools agree on {theirs}")
 
 
-BUILD_STRICT_MODULE = "pack.*"
-"""The mypy override that holds the data build to strict."""
-
-
-def mypy_strict_flags() -> list[str] | None:
-    """What `mypy --strict` turns on, as config-file option names.
-
-    Read from mypy's own help rather than copied: the set grows between
-    releases, and the point of the guard is to notice when it does.
-
-    Returns:
-        The option names, or None when mypy cannot be asked.
-    """
-    exe = shutil.which("uv")
-    if exe is None:
-        return None
-    proc = subprocess.run([exe, "run", "mypy", "--help"], cwd=ROOT,
-                          capture_output=True, encoding="utf-8",
-                          errors="replace", check=False)
-    if proc.returncode != 0:
-        return None
-    lines = proc.stdout.splitlines()
-    for i, line in enumerate(lines):
-        if "enables the following flags" not in line:
-            continue
-        block = [line.split("enables the following flags:", 1)[1]]
-        for following in lines[i + 1:]:
-            # Continuation lines sit at the help's description indent; the next
-            # option starts back at the left. Flag names carry no spaces, so
-            # stripping all whitespace also repairs the mid-word wrapping.
-            if not re.match(r"^\s{20,}\S", following):
-                break
-            block.append(following)
-        joined = re.sub(r"\s+", "", "".join(block))
-        return [flag.removeprefix("--").replace("-", "_")
-                for flag in joined.split(",") if flag.startswith("--")]
-    return None
+STRICT_EXEMPT_HOME = "tools"
+"""The one directory whose modules may still be exempted from strict."""
 
 
 def check_mypy_strict(rep: Report) -> None:
-    """The build's mypy settings must still add up to strict.
+    """Strict is on for everything, and only tools/ is let out of it.
 
-    mypy accepts `strict` only at the top level, and this repository is strict
-    for the data build alone -- so the build's settings spell the flags out one
-    by one. A list written once drifts silently in one direction: mypy adds a
-    flag to strict, the spelled-out list does not have it, and the build quietly
-    stops being checked for whatever the new flag catches. Nothing fails, and
-    the config still says strict in its comment.
+    The data build and both test trees pass `mypy --strict`, so strict is the
+    top-level default rather than a per-module opt-in -- which means the way it
+    gets lost is no longer a flag going missing, it is a module being added to
+    the exemption list. That reads as ordinary configuration and silences every
+    strict error in the file it names, permanently and without a diff anywhere
+    near the code it stops checking.
 
-    A flag counts as enabled whether it is set for the build or globally, and
-    either as `no_x = true` or as `x = false`, because mypy takes both spellings
-    for the inverted ones.
+    So two things are checked. Strict is still declared. And every exempted
+    module is a file in tools/ -- which also means a name left behind by a
+    renamed or deleted tool fails here rather than sitting in the list
+    exempting nothing.
     """
-    strict = mypy_strict_flags()
-    if strict is None:
-        rep.skip("mypy strict", "mypy could not be asked what --strict enables")
-        return
-
     config = tomllib.loads(PYPROJECT.read_text(encoding="utf-8"))
     settings = config.get("tool", {}).get("mypy", {})
-    overrides = [o for o in settings.get("overrides", [])
-                 if BUILD_STRICT_MODULE in
-                 ([o.get("module")] if isinstance(o.get("module"), str)
-                  else o.get("module", []))]
-    if not overrides:
+    if settings.get("strict") is not True:
         rep.fail("mypy strict",
-                 f"pyproject.toml has no [[tool.mypy.overrides]] for "
-                 f"{BUILD_STRICT_MODULE}; the data build is not held to strict")
+                 "pyproject.toml no longer sets strict = true for [tool.mypy]; "
+                 "nothing is held to strict by default")
         return
 
-    def enabled(option: str) -> bool:
-        inverse = (option.removeprefix("no_") if option.startswith("no_")
-                   else "no_" + option)
-        for table in (*overrides, settings):
-            if table.get(option) is True or table.get(inverse) is False:
-                return True
-        return False
+    exempt: list[str] = []
+    for override in settings.get("overrides", []):
+        named = override.get("module", [])
+        exempt.extend([named] if isinstance(named, str) else named)
 
-    missing = [option for option in strict if not enabled(option)]
-    if missing:
+    home = ROOT / STRICT_EXEMPT_HOME
+    stray = [name for name in exempt if not (home / f"{name}.py").exists()]
+    if stray:
         rep.fail("mypy strict",
-                 f"{BUILD_STRICT_MODULE} is missing {', '.join(missing)}; "
-                 f"mypy --strict enables it and the build does not")
+                 f"{', '.join(sorted(stray))} is exempted from strict but is "
+                 f"no module in {STRICT_EXEMPT_HOME}/; only that directory is "
+                 f"still allowed out of it")
         return
-    rep.ok("mypy strict", f"{len(strict)} flags, all set for {BUILD_STRICT_MODULE}")
+    rep.ok("mypy strict",
+           f"strict by default, {len(exempt)} {STRICT_EXEMPT_HOME}/ module(s) exempt")
 
 
 def check_soundkit_declaration(rep: Report) -> None:
@@ -2367,7 +2325,8 @@ def check_toolchain(rep: Report) -> None:
              "errors only; style findings are advisory (.pylintrc)")
     run_tool(rep, "pylint addon", ["uv", "run", "pylint", "--errors-only", "--score=n",
                                    "--recursive=y", ADDON_TESTS])
-    run_tool(rep, "pytest", ["uv", "run", "pytest"], "test/py/*_test.py")
+    run_tool(rep, "pytest", ["uv", "run", "pytest"],
+             "test/py/{build,tools}/*_test.py")
     run_tool(rep, "pytest addon", ["uv", "run", "pytest", ADDON_TESTS], "addon/test/*_test.py, under lupa")
     check_browser_matrix(rep)
     check_mermaid(rep)

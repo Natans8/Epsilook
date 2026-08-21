@@ -13,10 +13,10 @@ built from is a better reference than a reimplementation of the writer.
 from __future__ import annotations
 
 import os
-from pathlib import Path
 from typing import Any
 
 import pytest
+import support
 from pack.emit.addon import (ADDON_FORMAT, AXES, AXIS_OF, DIGITS,
                              LINE_LIMIT,
                              SUPPLIED_BY, Blob, Variation, chunks,
@@ -27,7 +27,7 @@ from pack.model.section import Layout
 
 lua51 = pytest.importorskip("lupa.lua51")
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = support.ROOT
 
 SCHEMA: dict[str, Any] = {
     "format": 1,

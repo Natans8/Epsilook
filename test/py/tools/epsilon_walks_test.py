@@ -10,6 +10,7 @@ plausible and matches no file.
 from __future__ import annotations
 
 import struct
+from collections.abc import Iterable
 
 import pytest
 
@@ -18,7 +19,7 @@ import epsilon_walks
 from epsilon_storage import chunks
 from epsilon_tables import Table
 from epsilon_walks import (MODEL_CHILDREN, NEIGHBOUR_CAP, TILE_SLOTS,
-                           WORLD_MODEL_CHILDREN, _model_children,
+                           WORLD_MODEL_CHILDREN, Walk, _model_children,
                            _world_model_children, customization_names,
                            ground_texture_names, model_name, model_self_names,
                            neighbour_names, placement_names, reskin_names,
@@ -90,7 +91,7 @@ class FakeStorage:
     def __init__(self, files: dict[int, bytes]) -> None:
         self.files = files
 
-    def encoding_keys(self, file_ids):
+    def encoding_keys(self, file_ids: Iterable[int]) -> dict[int, bytes]:
         return {fid: b"" for fid in file_ids if fid in self.files}
 
     def holds_locally(self, file_id: int) -> bool:
@@ -103,7 +104,8 @@ class FakeStorage:
         """Nothing to prepare: every file here is already to hand."""
 
 
-def model_walk(files: dict[int, bytes], known: dict[int, str], unnamed: set[int]):
+def model_walk(files: dict[int, bytes], known: dict[int, str],
+               unnamed: set[int]) -> Walk:
     return walk_parents(FakeStorage(files), known, unnamed, suffix=".m2",
                         reader=_model_children, kinds=MODEL_CHILDREN,
                         local_only=True, label="models")
@@ -401,7 +403,7 @@ def test_the_name_keeps_the_casing_it_was_written_with() -> None:
 class HeadStorage(FakeStorage):
     """A storage whose network reads arrive capped, as a ranged fetch does."""
 
-    def __init__(self, files, cap: int = 32) -> None:
+    def __init__(self, files: dict[int, bytes], cap: int = 32) -> None:
         super().__init__(files)
         self.cap = cap
         self.heads = 0
@@ -410,10 +412,10 @@ class HeadStorage(FakeStorage):
         """Nothing here is on disk; that is what makes the read a fetch."""
         return False
 
-    def read(self, file_id: int, *, local_only: bool = False):
+    def read(self, file_id: int, *, local_only: bool = False) -> bytes | None:
         return None if local_only else self.files.get(file_id)
 
-    def read_head(self, file_id: int):
+    def read_head(self, file_id: int) -> bytes | None:
         self.heads += 1
         raw = self.files.get(file_id)
         return None if raw is None else raw[:self.cap]
@@ -524,7 +526,7 @@ def test_a_missing_origin_is_found_by_bracketing_rather_than_by_sweeping() -> No
         def holds_locally(self, file_id: int) -> bool:
             return file_id in (10, 30)
 
-        def read(self, file_id: int, *, local_only: bool = False):
+        def read(self, file_id: int, *, local_only: bool = False) -> bytes | None:
             if local_only and file_id not in (10, 30):
                 return None
             return self.files.get(file_id)
@@ -613,7 +615,8 @@ ORPHAN = FLOOR + 500
 """An id nothing refers to, which is what the last route is for."""
 
 
-def neighbour_walk(files: dict[int, bytes], known: dict[int, str]):
+def neighbour_walk(files: dict[int, bytes],
+                   known: dict[int, str]) -> dict[int, str]:
     """The adjacency route over a handful of files, naming ORPHAN or nothing."""
     return neighbour_names(FakeStorage(files), known, {ORPHAN})
 

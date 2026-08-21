@@ -15,8 +15,19 @@ import urllib.request
 from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from pack.tables import CsvTables
+
+ROOT = Path(__file__).resolve().parents[2]
+"""The repository root.
+
+Derived here and nowhere else: this module sits at a fixed depth and the test
+modules do not -- they are grouped by what they cover, and a group can be
+added or a file moved between them. A test that counts its own parents is one
+whose location is load-bearing, which is how a move turns into a dozen
+file-not-found errors instead of a rename.
+"""
 
 BuildTables = Callable[..., CsvTables]
 """The `tables` fixture: keyword arguments naming tables, a provider back."""
