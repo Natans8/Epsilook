@@ -2049,16 +2049,35 @@ def check_kit_effect_types(rep: Report) -> None:
     if not path.exists():
         rep.skip("kit effect types", "build/enums not present yet")
         return
-    declared = {int(key) for key in
-                json.loads(path.read_text(encoding="utf-8"))["values"]}
+    values = json.loads(path.read_text(encoding="utf-8"))["values"]
+    declared = {int(key) for key in values}
     holes = sorted(set(range(min(declared), max(declared) + 1)) - declared)
     if holes:
         rep.fail("kit effect types",
                  f"EffectType {', '.join(str(hole) for hole in holes)} "
                  f"undeclared, so the build would skip those rows in silence")
         return
+    # The two values whose payload is not a row in another table: an empty row,
+    # and one whose number is a type rather than an id. Naming them is what
+    # makes a third missing pointer an omission rather than another case.
+    names_no_table = {"None", "UnitSoundType"}
+    wrong = {"names a table but does not say which":
+             sorted(int(key) for key, payload in values.items()
+                    if payload["name"] not in names_no_table
+                    and not payload.get("points_at")),
+             "points at a table it cannot have one of":
+             sorted(int(key) for key, payload in values.items()
+                    if payload["name"] in names_no_table
+                    and payload.get("points_at"))}
+    for complaint, offenders in wrong.items():
+        if offenders:
+            rep.fail("kit effect types",
+                     f"EffectType {', '.join(str(one) for one in offenders)} "
+                     f"{complaint}")
+            return
     rep.ok("kit effect types",
-           f"{len(declared)} values declared, {min(declared)} to {max(declared)}, no gaps")
+           f"{len(declared)} values declared, {min(declared)} to {max(declared)}, "
+           f"no gaps, {len(declared) - len(names_no_table)} pointing at a table")
 
 
 def check_soundkit_declaration(rep: Report) -> None:

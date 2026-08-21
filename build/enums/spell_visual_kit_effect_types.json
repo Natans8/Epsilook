@@ -9,7 +9,7 @@
   "values": {
     "0":  {"name": "None", "note": "an empty row: Effect is 0 too. 5 rows on 1.15.9, none on 9.2.7"},
     "1":  {"name": "SpellProceduralEffect", "handler": "proc",     "points_at": "SpellProceduralEffect.ID"},
-    "2":  {"name": "SpellVisualKitModelAttach", "note": "redundant with the ParentSpellVisualKitID walk"},
+    "2":  {"name": "SpellVisualKitModelAttach", "points_at": "SpellVisualKitModelAttach.ID", "note": "reached directly from the kit by the walk, so reading it here would be redundant rather than new"},
     "3":  {"name": "CameraEffect",          "points_at": "CameraEffect.ID", "note": "2,550 rows over 2,544 kits on 9.2.7, the most common unrouted type; table not downloaded"},
     "4":  {"name": "CameraEffect2",         "points_at": "CameraEffect.ID", "note": "a second camera slot; 12 rows on 9.2.7"},
     "5":  {"name": "Sound",                 "handler": "sound",    "points_at": "SoundKitID"},
