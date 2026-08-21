@@ -677,7 +677,7 @@ export function composite(spec: {
         name: spec.name,
         // Taken from the members rather than fixed: a composite stores whatever they store, and both the shipped
         // ones are fixed-point integers.
-        storage: Object.values(spec.members).every((type) => type.storage === "int") ? "int" : "float",
+        storage: Object.values(spec.members).every((member) => member.storage === "int") ? "int" : "float",
         parse: (s) => {
             const parts = s.split(",");
             if (parts.length > members.length) return null;
