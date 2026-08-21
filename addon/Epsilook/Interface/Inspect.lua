@@ -231,7 +231,7 @@ function Inspect.Values(part)
 				path = prop.types[1] == "path",
 				number = Epsilook.Schema.IsIdentity(prop.types[1]) and type(value) ~= "table",
 				colour = prop.types[1] == "colour" and value or nil,
-				stored = Epsilook.Data.GetStored(part.axis, part.kind, part.slot, prop.name),
+				stored = Epsilook.Schema.Stored(part.axis, part.kind, part.slot, prop),
 				vocab = Epsilook.Data.GetVocabName(part.axis, part.kind, prop.name),
 			}
 		end

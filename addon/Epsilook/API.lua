@@ -319,7 +319,7 @@ function Epsilook:GetPartDataByIndex(spellID, axis, n, target)
 	local values = {}
 	out.values = values
 	for _, prop in ipairs(kind.props) do
-		local stored = Data.GetStored(axis, kindWord, slot, prop.name)
+		local stored = Schema.Stored(axis, kindWord, slot, prop)
 		if stored ~= nil then
 			local vocab = Data.GetVocabName(axis, kindWord, prop.name)
 			local resolved = vocab and Data.ResolveVocab(vocab, stored)
@@ -506,7 +506,7 @@ function Epsilook:GetPartDisplays(part)
 	for _, prop in ipairs(kind and kind.props or {}) do
 		-- The stored number, whichever way the value resolved: a vocabulary
 		-- of text hands the part the word alone.
-		local stored = Data.GetStored(part.axis, part.kind, part.slot, prop.name)
+		local stored = Schema.Stored(part.axis, part.kind, part.slot, prop)
 		local vocab = Data.GetVocabName(part.axis, part.kind, prop.name)
 		if stored ~= nil and stored ~= 0 then
 			if self.DISPLAY_SOURCES.creatures[vocab] then

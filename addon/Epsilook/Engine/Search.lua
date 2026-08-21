@@ -384,7 +384,7 @@ local function poolPropTest(cache, axis, kind, prop, expr, notations)
 	end
 	-- A handful of columns carry a float and spell it as text; the rest are
 	-- numbers, read by the cheaper call.
-	local read = node.kind == "int" and Reader.number or Reader.value
+	local read = Schema.ReaderFor(node, prop)
 	return function(slot)
 		local stored = read(blob, node, slot)
 		return stored ~= absent and test(stored)
@@ -1190,7 +1190,7 @@ local function pooledValue(kind, prop, descending)
 	local named = Schema.IsNamed(prop)
 	local textual_ = vocab ~= nil and (named or not Schema.IsIdentity(prop.types[1]))
 	local refs, refsBlob = table_.refs, table_.refsBlob
-	local read = node.kind == "int" and Reader.number or Reader.value
+	local read = Schema.ReaderFor(node, prop)
 	return function(spell)
 		local at, count = Data.GetRowRange(axis, spell)
 		if not at then

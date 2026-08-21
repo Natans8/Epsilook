@@ -24,7 +24,7 @@ export type {Affordance, AxisType, Rung, Storage, Value} from "./vocabulary/valu
 export {
     angle, animKitId, bitmask, channelId, colour, composite, count, creatureId, defineType, displayId, enumeration,
     fileId, flag, isIdentity, itemId, length, objectId, offset, ordinal, ordinalRungs, path, percent, percentChange,
-    seconds, setOrdinalLadder, soundKitId, spellId, TARGET_ROLES, text, TYPES,
+    membersOf, seconds, setOrdinalLadder, soundKitId, spellId, TARGET_ROLES, text, TYPES,
 } from "./vocabulary/value-types";
 
 export {COLOUR_NAMES} from "./vocabulary/colour-names";

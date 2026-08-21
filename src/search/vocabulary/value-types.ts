@@ -673,7 +673,7 @@ export function composite(spec: {
         return {name, parse: type.parse, format: type.format};
     });
 
-    return defineType<string>({
+    const type = defineType<string>({
         name: spec.name,
         // Taken from the members rather than fixed: a composite stores whatever they store, and both the shipped
         // ones are fixed-point integers.
@@ -725,6 +725,29 @@ export function composite(spec: {
         hint: spec.hint,
         ui: "fields",
     });
+    COMPOSITES.set(type, members.map((member) => member.name));
+    return type;
+}
+
+/**
+ * Every composite's components, in the order they are written.
+ *
+ * A registry rather than a declared field, for the reason {@link IDENTITIES} is one: the question is asked about a
+ * type the caller already holds, and a field would let a type with no components claim some.
+ */
+const COMPOSITES = new Map<AxisType, readonly string[]>();
+
+/**
+ * A composite type's components, in the order its values spell them.
+ *
+ * The order is the whole answer. Several columns are one value only while something says which column is which, and
+ * a reader that recovers the components in any other order gets a different point.
+ *
+ * @param type The type to ask, or nothing.
+ * @returns Its components in written order, or empty where the type has none.
+ */
+export function membersOf(type: AxisType | undefined): readonly string[] {
+    return (type === undefined ? undefined : COMPOSITES.get(type)) ?? [];
 }
 
 /**

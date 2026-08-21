@@ -98,6 +98,16 @@ function Reader.value(blob, node, row)
 			out[#out + 1] = Reader.value(blob, values, at)
 		end
 		return out
+	elseif kind == "group" then
+		-- Several columns are one value. They come back KEYED, because which
+		-- column is which is a fact about the language and this layer holds
+		-- none: the order the components are spelled in belongs to the
+		-- composite type, and the engine joins them by it.
+		local out = {}
+		for name, sub_node in pairs(node.columns) do
+			out[name] = Reader.value(blob, sub_node, row)
+		end
+		return out
 	end
 	error("no reader for a " .. tostring(kind) .. " column")
 end

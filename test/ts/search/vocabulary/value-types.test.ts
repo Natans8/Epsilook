@@ -13,7 +13,8 @@ import {exact, ORDERING, present} from "../../../../src/search/vocabulary/operat
 import type {Rung} from "../../../../src/search/vocabulary/value-types";
 import {
     angle, animKitId, bitmask, channelId, colour, composite, count, creatureId, defineType, displayId, enumeration,
-    fileId, flag, isIdentity, itemId, length, multiplier, objectId, offset, ordinal, path, percent, percentChange,
+    fileId, flag, isIdentity, itemId, length, membersOf, multiplier, objectId, offset, ordinal, path, percent,
+    percentChange,
     rotation, seconds, setOrdinalLadder, soundKitId, spellId, TARGET_ROLES, text, TYPES,
 } from "../../../../src/search/vocabulary/value-types";
 
@@ -307,6 +308,20 @@ describe("the operator table", () => {
             assert.equal(isIdentity(type), false, type.name);
         }
         assert.equal(isIdentity(undefined), false);
+    });
+
+    it("knows a composite's components in the order its values spell them", () => {
+        // The order IS the answer: several columns are one value only while something says which column is which,
+        // and a reader that recovers x,y,z in any other order has a different point.
+        assert.deepEqual(membersOf(offset), ["x", "y", "z"]);
+        assert.deepEqual(membersOf(rotation), ["yaw", "pitch", "roll"]);
+    });
+
+    it("gives no components to a type that has none, and none to nothing", () => {
+        for (const type of [spellId, text, count, colour, angle, flag]) {
+            assert.deepEqual(membersOf(type), [], type.name);
+        }
+        assert.deepEqual(membersOf(undefined), []);
     });
 
     it("registers every identity under its own name, so no two share a declaration", () => {

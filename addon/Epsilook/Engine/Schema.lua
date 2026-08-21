@@ -28,7 +28,7 @@ local Text = Epsilook.Text
 local floor, abs = math.floor, math.abs
 
 --- The shape of declarations this file reads. Another is refused at load.
-Schema.FORMAT = 4
+Schema.FORMAT = 5
 
 --- The synthetic property behind the count word, so a cardinality reads its
 -- operands like any numeric axis. Its word is read off the grammar at load.
@@ -256,6 +256,62 @@ end
 function Schema.IsIdentity(typeName)
 	local declaredType = Schema.types[typeName]
 	return declaredType ~= nil and declaredType.identity == true
+end
+
+--- A composite type's components, in the order its values spell them. The
+-- order is the whole answer: several columns are one value only while
+-- something says which column is which.
+function Schema.MembersOf(typeName)
+	local declaredType = Schema.types[typeName]
+	return declaredType and declaredType.members or nil
+end
+
+--- Several stored columns as the one value their composite type spells, or
+-- nil where every component is nought -- which is the neutral placement,
+-- sitting exactly where it was put and turned no way at all, and no answer
+-- rather than a value.
+function Schema.JoinComposite(typeName, held)
+	local members = Schema.MembersOf(typeName)
+	if members == nil or #members == 0 then
+		return nil
+	end
+	local parts, any = {}, false
+	for i = 1, #members do
+		local part = held[members[i]] or 0
+		if part ~= 0 then
+			any = true
+		end
+		parts[i] = tostring(part)
+	end
+	return any and table.concat(parts, ",") or nil
+end
+
+--- One property's stored value, with a spanning property joined the way its
+-- composite type spells it. The one door that reads a stored value whole, so
+-- no caller has to know whether the property it asked for spans columns.
+function Schema.Stored(axis, kind, slot, prop)
+	local held = Epsilook.Data.GetStored(axis, kind, slot, prop.name)
+	if type(held) ~= "table" then
+		return held
+	end
+	return Schema.JoinComposite(prop.types[1], held)
+end
+
+--- How one property's column is read a row at a time: the cheaper call for a
+-- plain number, and for a spanning property the components joined the way its
+-- composite type spells them, so a stored value is one comparable thing
+-- wherever it is read.
+function Schema.ReaderFor(node, prop)
+	if node.kind == "int" then
+		return Epsilook.Reader.number
+	end
+	if node.kind ~= "group" then
+		return Epsilook.Reader.value
+	end
+	local typeName = prop.types[1]
+	return function(blob, groupNode, row)
+		return Schema.JoinComposite(typeName, Epsilook.Reader.value(blob, groupNode, row))
+	end
 end
 
 --- Whether a property names a thing with both an id and a name, so a row
