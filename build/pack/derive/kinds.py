@@ -53,7 +53,16 @@ way.
 """
 
 RowValues = tuple[RowValue, ...]
-"""One row's values: its declared properties, then whatever it carries."""
+"""One row's values: its declared properties, then whatever it carries.
+
+Flat, including a property that spans several columns: its components sit where
+the property sits, in the order the family declares them. So a family yields the
+tuple it always did, and which columns belong to which property is read from the
+declaration rather than from the shape of the row.
+"""
+
+PropColumns = list[RowValue] | Mapping[str, list[RowValue]]
+"""One property's shipped column, or its components' columns by name."""
 
 SpellRow = tuple[int, RowValues]
 """One row and the spell that has it."""
@@ -122,6 +131,22 @@ class Family:
     absent: Mapping[str, int] = field(default_factory=dict)
     """Per property, the stored value meaning it has none. Defaults to nought."""
 
+    spans: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
+    """Per property that is more than one number, its components in order.
+
+    One property, several columns. A position and a rotation are each ONE thing
+    to a reader and three numbers to the machine, so they are declared as one
+    property here and ship as a column per component. A property absent from
+    this is a single column, which is what almost all of them are.
+
+    The components arrive in `rows` flattened in this order, immediately where
+    the property sits among the props -- so a family yields the same flat tuple
+    it always did and only the reading of it changes.
+
+    It is for a value that is one thing to a reader and several numbers to the
+    machine. It is NOT a way to group unrelated properties under one word.
+    """
+
     carried: tuple[str, ...] = ()
     """Columns the row ships that no property of the kind declares.
 
@@ -135,6 +160,10 @@ class Family:
     They are still part of the row KEY, which is what keeps a pooled row and a
     legacy row one-to-one: two dissolves that look alike stay two rows.
     """
+
+    def width(self, prop: str) -> int:
+        """How many columns one property occupies."""
+        return len(self.spans[prop]) if prop in self.spans else 1
 
 
 @dataclass(frozen=True)
@@ -159,18 +188,39 @@ class KindPool:
     one every spell that has it refers to.
     """
 
+    spans: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
+    """The family's spanning properties and their components. See `Family`."""
+
     carried: tuple[str, ...] = ()
     """The family's carried column names, in the order they follow the props."""
 
     @property
-    def values(self) -> Mapping[str, list[RowValue]]:
-        """The declared properties' columns, by property name."""
-        return dict(zip(self.props, self.columns))
+    def values(self) -> Mapping[str, PropColumns]:
+        """The declared properties' columns, by property name.
+
+        A property spanning several columns answers with its components by
+        name; a single-column property answers with its column. That is the
+        split the encoder already writes, a group against a plain column, so
+        the two shapes here need no spelling of their own.
+        """
+        held: dict[str, PropColumns] = {}
+        at = 0
+        for prop in self.props:
+            parts = self.spans.get(prop)
+            if parts is None:
+                held[prop] = self.columns[at]
+                at += 1
+            else:
+                held[prop] = {name: self.columns[at + which]
+                              for which, name in enumerate(parts)}
+                at += len(parts)
+        return held
 
     @property
     def extras(self) -> Mapping[str, list[RowValue]]:
         """The carried columns, by name. Empty for most kinds."""
-        return dict(zip(self.carried, self.columns[len(self.props):]))
+        return dict(zip(self.carried, self.columns[len(self.columns)
+                                                   - len(self.carried):]))
 
 
 @dataclass(frozen=True)
@@ -200,8 +250,8 @@ def _pool(family: Family, rows: Iterable[SpellRow],
     for spell, values in rows:
         slot = slots.setdefault(values, len(slots))
         into.setdefault(spell, []).append(base + slot)
-    columns = tuple([values[at] for values in slots]
-                    for at in range(len(family.props) + len(family.carried)))
+    width = sum(family.width(prop) for prop in family.props) + len(family.carried)
+    columns = tuple([values[at] for values in slots] for at in range(width))
     # Only this kind's own properties: a shared helper hands every kind it
     # builds one vocabulary map, so without the cut a kind ships entries for
     # properties it does not have.
@@ -211,7 +261,10 @@ def _pool(family: Family, rows: Iterable[SpellRow],
                            if prop in own},
                     absent={prop: gap for prop, gap in family.absent.items()
                             if prop in own},
-                    rows=len(slots), carried=family.carried)
+                    rows=len(slots),
+                    spans={prop: parts for prop, parts in family.spans.items()
+                           if prop in own},
+                    carried=family.carried)
 
 
 def build_column(families: Sequence[Family], reads: Reads,
@@ -236,6 +289,12 @@ def build_column(families: Sequence[Family], reads: Reads,
             raise ValueError(
                 f"{family.kind} resolves {', '.join(unknown)}, which no "
                 f"vocabulary declares")
+        keyed = sorted(set(family.spans) & set(family.vocab))
+        if keyed:
+            raise ValueError(
+                f"{family.kind} spans {', '.join(keyed)} and resolves them "
+                f"through a vocabulary; a vocabulary keys ONE stored number "
+                f"and a spanning property has none to key")
         pools[family.kind] = _pool(family, family.rows(reads), per_spell, base)
         base += pools[family.kind].rows
 
@@ -256,6 +315,45 @@ def build_column(families: Sequence[Family], reads: Reads,
 
 
 # The model column.
+
+PLACEMENT_PROPS = ("scale", "built", "offset", "rotation", "anim", "animkit")
+"""The placement properties, in the order `placed` flattens them.
+
+Only the kinds reached through `SpellVisualKitModelAttach` declare these; the
+rest carry the neutral placement and would ship a column of it saying nothing.
+"""
+
+PLACEMENT_SPANS = {"offset": ("x", "y", "z"),
+                   "rotation": ("yaw", "pitch", "roll")}
+"""The placement properties that are one thing over several columns.
+
+A position and a rotation are each one value a reader means as a whole. Nothing
+else here is: the three animations a row can name are three answers to one
+question rather than one answer in three parts, and grouping those under one
+word is what a span is NOT for.
+
+A spanning property resolves through no vocabulary, which follows from the same
+rule -- what a vocabulary keys is a single stored number, and a value that is
+one thing in several numbers has none to key.
+"""
+
+
+def placed(row: ModelRow) -> RowValues:
+    """A row's placement, flattened in the order `PLACEMENT_PROPS` declares.
+
+    The animation is the one the model holds while it is worn. The two either
+    side of it -- what it plays arriving and what it plays going -- reach the
+    anim column already, where they answer what a spell plays; what this adds
+    is which of a spell's models is the one playing it, and the held animation
+    is what that question means.
+
+    TODO: give the arriving and departing animations their own properties once
+    a reader has a way to ask about a moment rather than about a model.
+    """
+    return (row.placement.scale, row.built,
+            *row.placement.offset, *row.placement.rotation,
+            row.placement.held, row.placement.animkit)
+
 
 def _models(kind: str, cat: int, props: tuple[str, ...],
             pick: Callable[[ModelRow], RowValues],
@@ -289,8 +387,9 @@ def _models(kind: str, cat: int, props: tuple[str, ...],
         vocab={"file": "files", "slot": "slots", "where": "attachments",
                "from": "attachments", "to": "attachments",
                "motion": "motions", "projectiles": "motionProjectiles",
-               "name": "items"},
-        absent={"where": ABSENT, "from": ABSENT, "to": ABSENT})
+               "name": "items", "anim": "anims"},
+        absent={"where": ABSENT, "from": ABSENT, "to": ABSENT},
+        spans=PLACEMENT_SPANS)
 
 
 def _mounts(reads: Reads) -> Iterable[SpellRow]:
@@ -317,16 +416,23 @@ MODEL_FAMILIES: tuple[Family, ...] = (
             lambda row: (row.file, row.source, row.mask)),
     _models("ground", MODEL_CAT_AREA, ("file", "target"),
             lambda row: (row.file, row.mask)),
-    _models("attach", MODEL_CAT_ATTACH, ("file", "where", "target"),
-            lambda row: (row.file, row.source, row.mask), carried=False),
+    _models("attach", MODEL_CAT_ATTACH,
+            ("file", "where", "target", *PLACEMENT_PROPS),
+            lambda row: (row.file, row.source, row.mask, *placed(row)),
+            carried=False),
     _models("trail", MODEL_CAT_TRAIL, ("file", "target"),
             lambda row: (row.file, row.mask)),
-    _models("display", MODEL_CAT_DISPLAY, ("id", "file", "where", "target"),
-            lambda row: (row.ref, row.file, row.source, row.mask)),
-    _models("item", MODEL_CAT_ITEM, ("file", "id", "name", "where", "target"),
-            lambda row: (row.file, row.ref, row.ref, row.source, row.mask)),
-    _models("equipped", MODEL_CAT_ATTACH, ("slot", "where", "target"),
-            lambda row: (row.file, row.source, row.mask), carried=True),
+    _models("display", MODEL_CAT_DISPLAY,
+            ("id", "file", "where", "target", *PLACEMENT_PROPS),
+            lambda row: (row.ref, row.file, row.source, row.mask, *placed(row))),
+    _models("item", MODEL_CAT_ITEM,
+            ("file", "id", "name", "where", "target", *PLACEMENT_PROPS),
+            lambda row: (row.file, row.ref, row.ref, row.source, row.mask,
+                         *placed(row))),
+    _models("equipped", MODEL_CAT_ATTACH,
+            ("slot", "where", "target", *PLACEMENT_PROPS),
+            lambda row: (row.file, row.source, row.mask, *placed(row)),
+            carried=True),
     Family(kind="mount", props=("name", "file"), rows=_mounts,
            vocab={"name": "mounts", "file": "files"}),
 )

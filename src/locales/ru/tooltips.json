@@ -40,7 +40,9 @@
     "colour": "",
     "offset": "",
     "bitmask": "",
-    "flag": ""
+    "flag": "",
+    "multiplier": "",
+    "rotation": ""
   },
   "target": "",
   "kind": {

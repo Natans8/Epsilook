@@ -816,6 +816,7 @@ def declared_kinds() -> dict[str, set[str]]:
     source = (ROOT / "src" / "search" / "schema" / "catalogue.ts").read_text(
         encoding="utf-8")
     kinds: dict[str, set[str]] = {}
+    helpers = spread_helpers(source)
     for call in re.finditer(r"defineKind\(\{(.*?)\n\}\);", source, re.DOTALL):
         body = call.group(1)
         word = re.search(r'\bword:\s*"([^"]+)"', body)
@@ -823,8 +824,35 @@ def declared_kinds() -> dict[str, set[str]]:
         if not column:
             continue
         name = word.group(1) if word else column.group(1)
-        kinds[name] = top_level_keys(body, "props")
+        kinds[name] = spread_into(body, "props", helpers)
     return kinds
+
+
+def spread_helpers(source: str) -> dict[str, set[str]]:
+    """Each `const name = (...) => ({...})` factory in one file, and its keys.
+
+    A declaration shared by several kinds is written once as a factory and
+    spread into each of them, which is the house style and what keeps four
+    kinds from carrying four copies of one thing. A reader that only sees
+    literal keys reports every spread property as undeclared, so the factories
+    are resolved here and their keys stand in wherever one is spread.
+    """
+    found: dict[str, set[str]] = {}
+    for call in re.finditer(r"const (\w+) = \([^)]*\)[^=]*=> \(\{", source):
+        keys = keys_from(source, source.index("{", call.end() - 2))
+        if keys:
+            found[call.group(1)] = keys
+    return found
+
+
+def spread_into(body: str, field: str, helpers: dict[str, set[str]]) -> set[str]:
+    """One object literal's own keys, plus the keys of every factory spread in."""
+    keys = top_level_keys(body, field)
+    start = body.find(f"{field}: {{")
+    if start >= 0:
+        for name in re.findall(r"\.\.\.(\w+)\(\)", body[start:]):
+            keys |= helpers.get(name, set())
+    return keys
 
 
 def top_level_keys(body: str, field: str) -> set[str]:
@@ -839,7 +867,11 @@ def top_level_keys(body: str, field: str) -> set[str]:
     start = body.find(f"{field}: {{")
     if start < 0:
         return set()
-    at = body.index("{", start)
+    return keys_from(body, body.index("{", start))
+
+
+def keys_from(body: str, at: int) -> set[str]:
+    """The keys of the object literal opening at `at`, its own level only."""
     keys: set[str] = set()
     depth, key_start = 0, at + 1
     for position in range(at, len(body)):
@@ -902,6 +934,69 @@ def check_row_schema(rep: Report) -> None:
         rep.fail("row schema", "; ".join(problems))
     else:
         rep.ok("row schema", f"{shipped} shipped kinds declared in the catalogue")
+
+
+def check_span_components(rep: Report) -> None:
+    """A spanning property's components must arrive in the order its type reads.
+
+    A property shipped as several columns is joined back into one value by
+    POSITION: the reader takes the columns in the order the pack wrote them and
+    hands the composite type its components in that order. Both sides NAME the
+    components -- the build in `Family.spans`, the catalogue in the composite's
+    `members` -- and until this nothing reconciled the two, so a rename or a
+    reorder on either side permuted them silently. `offset` would answer about x
+    where the reader wrote z; `rotation` would trade yaw for roll. Nothing
+    fails, no count moves, and every query on that axis quietly answers about a
+    different one.
+
+    Matched on the SET of component names rather than on the property's name, so
+    a property whose word differs from its type's is still reconciled, and a
+    shipped span no composite can read at all is caught too.
+    """
+    sections, why = pack_sections()
+    if sections is None:
+        rep.skip("span components", why)
+        return
+
+    source = (ROOT / "src" / "search" / "vocabulary" / "value-types.ts").read_text(
+        encoding="utf-8")
+    composites: dict[frozenset[str], tuple[str, list[str]]] = {}
+    for call in re.finditer(r"composite\(\{(.*?)\n\}\);", source, re.DOTALL):
+        body = call.group(1)
+        named = re.search(r'\bname:\s*"([^"]+)"', body)
+        members = re.search(r"\bmembers:\s*\{([^}]*)\}", body)
+        if not named or not members:
+            continue
+        order = re.findall(r"(\w+)\s*:", members.group(1))
+        composites[frozenset(order)] = (named.group(1), order)
+
+    problems: list[str] = []
+    spans = 0
+    for table, block in sorted(sections.items()):
+        if not table.endswith("Rows") or not isinstance(block, dict):
+            continue
+        for kind, props in sorted(block.get("values", {}).items()):
+            for prop, column in sorted(props.items()):
+                if not isinstance(column, dict):
+                    continue
+                spans += 1
+                shipped = list(column)
+                held = composites.get(frozenset(shipped))
+                if held is None:
+                    problems.append(
+                        f"{kind}.{prop} ships components {', '.join(shipped)}, "
+                        f"which no composite type declares")
+                elif held[1] != shipped:
+                    problems.append(
+                        f"{kind}.{prop} ships {', '.join(shipped)} but "
+                        f"{held[0]} reads {', '.join(held[1])}")
+    if problems:
+        rep.fail("span components", "; ".join(problems))
+    elif spans == 0:
+        rep.ok("span components", "the pack ships no spanning property")
+    else:
+        rep.ok("span components",
+               f"{spans} spanning columns arrive in the order their type reads")
 
 
 def check_row_vocabularies(rep: Report) -> None:
@@ -2215,6 +2310,7 @@ def main() -> int:
     check_format_declaration(rep)
     check_pack_sections(rep)
     check_row_schema(rep)
+    check_span_components(rep)
     check_row_vocabularies(rep)
     check_gzip_flavour(rep)
     check_layers(rep)

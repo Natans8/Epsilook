@@ -20,8 +20,22 @@ from ..derive import DeriveContext
 from ..model import SECTIONS, CountFamily, Section, SectionColumns
 from ..progress import detail
 
-PACK_FORMAT = 59
+PACK_FORMAT = 60
 """What shape the artifact is in.
+
+60 gives every attached model its placement: how big it is drawn, where it sits
+against its point, how it is turned there, and what it animates. The four kinds
+reached through the attached-model table -- `attach`, `display`, `item` and
+`equipped` -- each gain `scale`, `built`, `offset`, `rotation`, `anim` and
+`animkit`. `scale` is the size the attachment asks for and `built` the size the
+model itself is; they are apart because how the client combines them is not a
+fact this data holds, and a fifth of rows ask for no scale while naming a model
+whose own is not one.
+`offset` and `rotation` are the first properties to ship as more than one
+column: each is one value to a reader and three numbers here, so a reader of 59
+finds a property where it expected a column. The numbers are fixed-point --
+thousandths of a factor, thousandths of a yard, tenths of a degree -- because a
+whole-number column is what both readers are fastest at.
 
 59 renames the body-point vocabulary the other way round: the worn-model kind
 ships as `attach` and every attachment-point property -- the five model kinds'

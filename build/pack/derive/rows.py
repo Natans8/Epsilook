@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from typing import NamedTuple
 
 from ..routes import MaskedIds, SpellEffectRows, VehicleSeats
-from ..routes.models import MODEL_CAT_ITEM
+from ..routes.models import MODEL_CAT_ITEM, Placement
 from .links import link_kind_word
 from .walk import Bucket, SpellVisuals
 
@@ -28,8 +28,8 @@ class ModelRow(NamedTuple):
     """One model a spell reaches, flattened for the row tables.
 
     A tuple, so it sorts, hashes and dedupes exactly as the anonymous shape it
-    replaces; the names are what let a reader three layers away say which of
-    eight small integers it is holding.
+    replaces; the names are what let a reader three layers away say which small
+    integer it is holding.
     """
 
     spell: int
@@ -44,6 +44,14 @@ class ModelRow(NamedTuple):
     """What the category says this row refers to: an item, a creature display."""
     motion: int
     """The flight path a missile follows, or zero."""
+    placement: Placement
+    """How it sits against its attachment, and what it animates.
+
+    Only the attached categories reach a table that says; the rest carry
+    `UNPLACED`, which is the same neutral answer their model gets drawn with.
+    """
+    built: int
+    """The size the model itself is, apart from what placed it."""
 
 
 class MechanicRow(NamedTuple):
@@ -199,9 +207,10 @@ def build_rows(visuals: SpellVisuals, effects: SpellEffectRows,
                bonesets: Mapping[int, Mapping[int, list[str]]]) -> PackRows:
     """Flatten everything at least two sections read, once."""
     models = sorted(
-        ModelRow(spell, file, category, mask, source, destination, ref, motion)
+        ModelRow(spell, file, category, mask, source, destination, ref, motion,
+                 placement, built)
         for spell, payloads in visuals.models.items()
-        for (file, category, source, destination, ref, motion), mask
+        for (file, category, source, destination, ref, motion, placement, built), mask
         in payloads.items())
     vehicles = sorted((spell, vehicle)
                       for spell, ids in effects.vehicles.ids.items()

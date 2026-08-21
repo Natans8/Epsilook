@@ -12,8 +12,8 @@ import {describe, it} from "node:test";
 import {exact, ORDERING, present} from "../../../../src/search/vocabulary/operators";
 import type {Rung} from "../../../../src/search/vocabulary/value-types";
 import {
-    angle, bitmask, colour, composite, count, defineType, enumeration, flag, id, length, offset,
-    ordinal, path, percent, percentChange, seconds, setOrdinalLadder, TARGET_ROLES, text, TYPES,
+    angle, bitmask, colour, composite, count, defineType, enumeration, flag, id, length, multiplier, offset,
+    ordinal, path, percent, percentChange, rotation, seconds, setOrdinalLadder, TARGET_ROLES, text, TYPES,
 } from "../../../../src/search/vocabulary/value-types";
 
 /** Four rungs of a real ladder, synonyms and all — enough for every reading rule to have a case that separates it. */
@@ -59,13 +59,15 @@ const CANONICAL: [string, string[]][] = [
     ["angle", ["60deg", "27.5deg"]],
     ["colour", ["#ff00aa", "#000000"]],
     ["offset", ["0yd,0yd,1yd", "1.5yd,-2yd,0yd", ",,3yd"]],
+    ["rotation", ["90deg,0deg,0deg", ",90deg,", "0deg,0deg,0deg"]],
+    ["multiplier", ["x1.5", "x1", "x0.5"]],
 ];
 
 describe("the type registry", () => {
     it("holds exactly the catalogue", () => {
         assert.deepEqual([...TYPES.keys()].toSorted(), [
-            "angle", "bitmask", "colour", "coordinate", "count", "enum", "flag", "id", "length", "offset",
-            "ordinal", "path", "percent", "percentChange", "seconds", "text",
+            "angle", "bitmask", "colour", "coordinate", "count", "enum", "flag", "id", "length", "multiplier",
+            "offset", "ordinal", "path", "percent", "percentChange", "rotation", "seconds", "text",
         ]);
     });
 
@@ -74,8 +76,20 @@ describe("the type registry", () => {
         // operators, same meaning. Declaring one type per notation made a property list three that never differed.
         assert.equal(TYPES.has("scale"), false);
         assert.equal(TYPES.has("proportion"), false);
-        assert.equal(TYPES.has("multiplier"), false);
         assert.equal(percentChange.notations?.length, 3);
+    });
+
+    it("keeps an absolute size apart from a change, which is a different quantity and not a spelling", () => {
+        // `multiplier` is not the factor NOTATION of a change under another name -- the rule above still holds. A
+        // size aura stores the CHANGE and composes by addition, because two of them at +50% leave a character at
+        // +100%. An attached model's scale is the size it is drawn at and stacks with nothing, so unchanged is one
+        // and not nought. Storing them alike is what would make `x1` mean two things.
+        assert.equal(percentChange.parse!("x1"), 0, "no change");
+        assert.equal(multiplier.parse!("x1"), 1000, "native size, in thousandths");
+        assert.equal(multiplier.parse!("150%"), 1500, "a proportion says the same thing");
+        assert.equal(multiplier.parse!("2"), 2000, "a bare number in command range is a factor");
+        assert.equal(multiplier.parse!("150"), 1500, "above ten it is a proportion");
+        assert.equal(multiplier.parse!("-2"), null, "a size has no direction");
     });
 
     it("spells one size or speed change three ways, all reaching the same stored value", () => {
@@ -297,18 +311,18 @@ describe("the operator table", () => {
     it("builds a composite from its members, so their units work inside it", () => {
         // A member's own type parses and formats it, which is what makes a composite a combination of types rather
         // than a second numeric notation.
-        assert.equal(offset.parse!("1yd,2yd,3yd"), "1,2,3");
-        assert.equal(offset.format!("1,2,3"), "1yd,2yd,3yd");
+        assert.equal(offset.parse!("1yd,2yd,3yd"), "1000,2000,3000");
+        assert.equal(offset.format!("1000,2000,3000"), "1yd,2yd,3yd");
     });
 
     it("lets a composite be constrained by naming one member", () => {
-        assert.equal(offset.parse!("z=3"), ",,3");
+        assert.equal(offset.parse!("z=3"), ",,3000");
         assert.equal(offset.parse!("z=3"), offset.parse!(",,3"));
     });
 
     it("shows a component it has no member for rather than failing to render", () => {
         // Stored values come from the game data, where a later version adding a component should degrade visibly.
-        assert.equal(offset.format!("1,2,3,4"), "1yd,2yd,3yd,4");
+        assert.equal(offset.format!("1000,2000,3000,4"), "1yd,2yd,3yd,4");
     });
 
     it("refuses to build a composite from a member that carries no value", () => {
@@ -366,7 +380,22 @@ describe("what each type refuses to parse", () => {
     it("makes a composite reject a positional member after a named one", () => {
         // The same rule as a function call: once naming starts there is no position left for a bare value to mean.
         assert.equal(offset.parse!("z=3,5"), null);
-        assert.equal(offset.parse!("5,z=3"), "5,,3");
+        // Stored in thousandths of a yard, the way a duration is stored in milliseconds: a component parses through
+        // its own type, so the composite carries whatever scale that type declares.
+        assert.equal(offset.parse!("5,z=3"), "5000,,3000");
+    });
+
+    it("stores a position and a rotation as the fixed-point their types declare", () => {
+        // Thousandths of a yard and tenths of a degree, so both ship as whole numbers. The scale is the type's, not
+        // the composite's -- a composite parses each component through the type that member names.
+        assert.equal(offset.parse!("0.035,-5,3"), "35,-5000,3000");
+        assert.equal(rotation.parse!("90,0,0"), "900,0,0");
+        assert.equal(rotation.parse!("pitch=90"), ",900,");
+    });
+
+    it("writes a position and a rotation back in the units they were written in", () => {
+        assert.equal(offset.format!("35,-5000,3000"), "0.035yd,-5yd,3yd");
+        assert.equal(rotation.format!("900,0,0"), "90deg,0deg,0deg");
     });
 
     it("makes every string type accept everything, which is what text is", () => {

@@ -73,6 +73,18 @@ def produce(column: str) -> Callable[[Reads], SectionColumns]:
     return run
 
 
+def _single(held: Mapping[str, object]) -> dict[str, Sequence[RowValue]]:
+    """One kind's single-column properties, by name.
+
+    A property shipped as several columns is left out: the walk answers with
+    one value per name, and nothing it feeds -- the counts and the numeric
+    domains -- asks about a position or a rotation. Naming the components here
+    would invent a spelling for a reader that does not exist.
+    """
+    return {name: cast(Sequence[RowValue], column) for name, column in held.items()
+            if not isinstance(column, Mapping)}
+
+
 def walk(columns: SectionColumns) -> Iterator[Triple]:
     """Every (spell, kind, values) triple the produced table encodes.
 
@@ -86,10 +98,11 @@ def walk(columns: SectionColumns) -> Iterator[Triple]:
     """
     kinds = cast(Sequence[str], columns["kinds"])
     sizes = cast(Sequence[int], columns["sizes"])
-    values = cast(Mapping[str, Mapping[str, Sequence[RowValue]]], columns["values"])
-    carried = cast(Mapping[str, Mapping[str, Sequence[RowValue]]], columns["carried"])
+    values = cast(Mapping[str, Mapping[str, object]], columns["values"])
+    carried = cast(Mapping[str, Mapping[str, object]], columns["carried"])
     refs = cast(Sequence[int], columns["refs"])
-    read = {kind: {**values[kind], **carried.get(kind, {})} for kind in kinds}
+    read = {kind: _single({**values[kind], **carried.get(kind, {})})
+            for kind in kinds}
 
     # Reference to kind by position: the pools are numbered end to end, so one
     # array as long as the pools answers it without a search per reference.

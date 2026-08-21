@@ -511,6 +511,11 @@ export function kindCtx(kind: Kind, countFallback: boolean, pend: Pending[]): Va
     const word = wordOf(kind);
     const refs = Object.keys(kind.props).map((prop): PropRef => ({kind, prop}));
     const subject = refs.length > 0 ? propOf(refs[0]) : COUNT_PROP;
+    // A qualifier refines a row rather than naming a subject of its own, so a comparison written on the KIND's word
+    // was never about it: `attach>2` asks how many models a spell attaches, not how big one of them is drawn. It
+    // stays reachable by name, which is where a reader who meant it says so. Without this a kind's count meaning
+    // would be taken by whichever qualifier happened to be declared first and happened to accept the operator.
+    const comparable = refs.filter((ref) => propOf(ref).qualifier !== true);
     const countValue = (op: Operator, operand: string): Interp | null => {
         if (!countFallback || !COMPARABLE.has(op.name)) return null;
         const value = countType.parse?.(operand);
@@ -521,7 +526,7 @@ export function kindCtx(kind: Kind, countFallback: boolean, pend: Pending[]): Va
         wordStar: true,
         operator: (op, operand, opts): Interp => {
             let claimed = false;
-            for (const ref of refs) {
+            for (const ref of comparable) {
                 const pv = parseValue(propOf(ref), operand);
                 if (pv === null) continue;
                 claimed = true;
@@ -536,7 +541,7 @@ export function kindCtx(kind: Kind, countFallback: boolean, pend: Pending[]): Va
             return illTyped(word, subject);
         },
         range: (t): Interp | null => {
-            for (const ref of refs) {
+            for (const ref of comparable) {
                 const ranged = propCtx([ref], word, pend).range(t);
                 if (ranged !== null) return ranged;
             }
@@ -544,7 +549,7 @@ export function kindCtx(kind: Kind, countFallback: boolean, pend: Pending[]): Va
             return null;
         },
         rangeParts: (lo, hi): Interp | null => {
-            for (const ref of refs) {
+            for (const ref of comparable) {
                 const ranged = propCtx([ref], word, pend).rangeParts(lo, hi);
                 if (ranged !== null) return ranged;
             }

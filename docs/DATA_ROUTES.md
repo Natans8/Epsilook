@@ -402,12 +402,20 @@ erDiagram
         int StartAnimID
         int EndAnimID
         int AnimKitID
+        float Scale"1 is the model's native size"
+        float Offset_0"yards from the attachment, forward"
+        float Offset_1"left"
+        float Offset_2"up"
+        float Yaw"radians, authored in whole degrees"
+        float Pitch
+        float Roll
     }
     SpellVisualEffectName {
         int ID PK
         int ModelFileDataID
         int Type"decides which asset chain applies"
         int GenericID"an item or a creature display, per Type"
+        float Scale"the size the model itself is, apart from what places it"
     }
     SpellVisualMissile {
         int SpellVisualMissileSetID FK

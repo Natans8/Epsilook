@@ -56,7 +56,7 @@ export interface KindPool {
 export interface RowTable {
     readonly kinds: readonly string[];
     readonly sizes: readonly number[];
-    readonly values: Readonly<Record<string, Readonly<Record<string, readonly number[]>>>>;
+    readonly values: Readonly<Record<string, Readonly<Record<string, PropColumns>>>>;
     readonly carried?: Readonly<Record<string, Readonly<Record<string, readonly number[]>>>>;
     readonly vocab: Readonly<Record<string, Readonly<Record<string, string>>>>;
     readonly absent: Readonly<Record<string, Readonly<Record<string, number>>>>;
@@ -135,12 +135,28 @@ export function rowsAt(index: RowIndex, spell: number): RowAt[] {
  * @param prop The property name.
  * @returns The stored number, or `undefined` when the property is absent from this kind or unset on this row.
  */
-export function storedAt(table: RowTable, row: RowAt, prop: string): number | undefined {
+export function storedAt(table: RowTable, row: RowAt, prop: string): number | string | undefined {
     const column = table.values[row.kind]?.[prop];
     if (column === undefined) return undefined;
+    if (!Array.isArray(column)) {
+        // Several columns are one value: the components in the order they ship, joined the way the composite type
+        // that reads this property spells them. All noughts is the neutral one -- sitting exactly where the
+        // attachment puts it, turned no way at all -- and that is no answer rather than a value.
+        const parts = Object.values(column as Readonly<Record<string, readonly number[]>>)
+            .map((held) => held[row.slot] ?? 0);
+        return parts.some((part) => part !== 0) ? parts.join(",") : undefined;
+    }
     const value = column[row.slot];
     return value === (table.absent[row.kind]?.[prop] ?? 0) ? undefined : value;
 }
+
+/**
+ * One property's shipped column, or its components' columns by name.
+ *
+ * A position and a rotation are one value a reader means as a whole and several numbers here, so they ship as a
+ * column per component. Every other property is a single column, which is what almost all of them are.
+ */
+export type PropColumns = readonly number[] | Readonly<Record<string, readonly number[]>>;
 
 /**
  * What a loaded pack looks like to the row reader.

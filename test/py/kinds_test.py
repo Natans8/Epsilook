@@ -117,6 +117,33 @@ def test_the_pool_keeps_one_column_per_property(props: tuple[str, ...]) -> None:
     assert rows.pools["k"].props == props
 
 
+def test_a_spanning_property_ships_a_column_per_component() -> None:
+    """One property, several columns: what a reader means as one value and the
+    artifact holds as three."""
+    rows = build_column(
+        [family("attach", ("file", "offset"),
+                [(1, (7, 0, 0, 1000)), (2, (7, 0, 0, 2000))],
+                spans={"offset": ("x", "y", "z")})],
+        reads=NO_READS, spell_ids=[1, 2])
+    pool = rows.pools["attach"]
+    assert pool.rows == 2, "the components are part of the row key"
+    assert pool.values["file"] == [7, 7]
+    assert pool.values["offset"] == {"x": [0, 0], "y": [0, 0], "z": [1000, 2000]}
+
+
+def test_a_spanning_property_may_not_resolve_through_a_vocabulary() -> None:
+    """A vocabulary keys ONE stored number and a spanning property has none to
+    key, so declaring both is refused where it is written rather than shipping
+    a column whose lookup silently misses.
+    """
+    with pytest.raises(ValueError, match="has none to key"):
+        build_column(
+            [family("attach", ("anim",), [(1, (0, 0, 0))],
+                    spans={"anim": ("start", "hold", "end")},
+                    vocab={"anim": "anims"})],
+            reads=NO_READS, spell_ids=[1])
+
+
 def test_a_carried_column_is_not_one_of_the_properties() -> None:
     """The whole point of the split: what the evaluator reads is exactly what
     the catalogue declares, and a bridge column cannot pass for a property."""

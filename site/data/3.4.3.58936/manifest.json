@@ -1,7 +1,7 @@
 {
   "pack": "3.4.3.58936",
   "meta": {
-    "format": 59,
+    "format": 60,
     "version": "3.4.3.58936",
     "label": "WotLK Classic 3.4.3",
     "built": "2026-08-21",
@@ -13,7 +13,7 @@
       "screenTextures": ["FullScreenEffect"],
       "spellText": ["JournalEncounterSection", "SpellScaling"]
     },
-    "counts": {"animKitAnims": 17, "animKitAnimBoneset": 4, "animEmotes": 1730, "icons": 2448, "files": 5104, "gobModels": 2406, "morphs": 548, "creatureDisplays": 3608, "displaySkins": 2190, "mounts": 283, "shapeshiftDisplays": 20, "summons": 2282, "objects": 467, "expansion.vanilla": 9998, "expansion.tbc": 17545, "expansion.wotlk": 21116, "expansion.cata": 13, "expansion.mop": 0, "expansion.wod": 5, "expansion.legion": 2, "expansion.bfa": 0, "expansion.shadowlands": 1, "expansion.dragonflight": 0, "expansion.tww": 0, "expansion.midnight": 0, "expansion.unknown": 714, "fxChains": 755, "ghostMats": 0, "tints": 311, "spellAttrs.actionsduringchannel": 133, "spellAttrs.auraisdebuff": 1330, "spellAttrs.preventsanim": 233, "spellAttrs.tracktargetinchannel": 611, "spellAttrs.unbreakablechannel": 0, "spellDelivery": 12819, "delivery.casttime": 11097, "delivery.channelled": 1921, "delivery.both": 199, "delivery.breaksOnMove": 1178, "delivery.instant": 36575, "spellRanges": 21455, "range.bands": 48, "range.unlimited": 4706, "range.minimum": 457, "range.melee": 2499, "range.weapon": 163, "range.self": 27939, "areas": 364, "linkKinds": 43, "implicitTargets": 98, "missileMotions": 174, "items": 0, "namedItems": 0, "spellModels": 74825, "spellDisplayModels": 0, "spellItemModels": 0, "spellWeaponModels": 140, "spellMissileMotions": 1247, "spellMounts": 304, "spellSounds": 75184, "spellAnimKits": 446, "spellVisualAnims": 39253, "spellReplaceAnims": 300, "spellPassengerAnims": 34, "spellFx": 2589, "spellDissolves": 0, "spellScreens": 49, "spellGlows": 0, "spellShadowies": 0, "spellGhostMats": 0, "spellTints": 2590, "spellDesaturates": 0, "spellTransparencies": 407, "spellFreezes": 216, "spellCamos": 0, "spellMorphs": 674, "spellShapeshifts": 69, "spellScales": 511, "spellSummons": 2677, "spellObjects": 525, "spellMechanics": 65743, "spellLinks": 6300, "spellAreas": 1420, "spellInvis": 160, "invisChannels": 11, "spellDetects": 175, "spellVehicles": 4, "spellSpeeds": 1361, "spellKeybinds": 0, "screens": 33, "soundKitNames": 928, "soundTypes": 32, "spells": 49394, "spellDescriptions": 30925, "descriptionTexts": 23433, "spellEncounterNotes": 0, "spellAuraTexts": 13643, "auraTexts": 8428, "encounterTexts": 0, "vehicles": 4, "vehicleSeats": 6, "spellVehicleAnims": 7, "spellVehicleAnimKits": 0},
+    "counts": {"animKitAnims": 17, "animKitAnimBoneset": 4, "animEmotes": 1730, "icons": 2448, "files": 5104, "gobModels": 2406, "morphs": 548, "creatureDisplays": 3608, "displaySkins": 2190, "mounts": 283, "shapeshiftDisplays": 20, "summons": 2282, "objects": 467, "expansion.vanilla": 9998, "expansion.tbc": 17545, "expansion.wotlk": 21116, "expansion.cata": 13, "expansion.mop": 0, "expansion.wod": 5, "expansion.legion": 2, "expansion.bfa": 0, "expansion.shadowlands": 1, "expansion.dragonflight": 0, "expansion.tww": 0, "expansion.midnight": 0, "expansion.unknown": 714, "fxChains": 755, "ghostMats": 0, "tints": 311, "spellAttrs.actionsduringchannel": 133, "spellAttrs.auraisdebuff": 1330, "spellAttrs.preventsanim": 233, "spellAttrs.tracktargetinchannel": 611, "spellAttrs.unbreakablechannel": 0, "spellDelivery": 12819, "delivery.casttime": 11097, "delivery.channelled": 1921, "delivery.both": 199, "delivery.breaksOnMove": 1178, "delivery.instant": 36575, "spellRanges": 21455, "range.bands": 48, "range.unlimited": 4706, "range.minimum": 457, "range.melee": 2499, "range.weapon": 163, "range.self": 27939, "areas": 364, "linkKinds": 43, "implicitTargets": 98, "missileMotions": 174, "items": 0, "namedItems": 0, "spellModels": 75067, "spellDisplayModels": 0, "spellItemModels": 0, "spellWeaponModels": 140, "spellMissileMotions": 1247, "spellMounts": 304, "spellSounds": 75184, "spellAnimKits": 446, "spellVisualAnims": 39253, "spellReplaceAnims": 300, "spellPassengerAnims": 34, "spellFx": 2589, "spellDissolves": 0, "spellScreens": 49, "spellGlows": 0, "spellShadowies": 0, "spellGhostMats": 0, "spellTints": 2590, "spellDesaturates": 0, "spellTransparencies": 407, "spellFreezes": 216, "spellCamos": 0, "spellMorphs": 674, "spellShapeshifts": 69, "spellScales": 511, "spellSummons": 2677, "spellObjects": 525, "spellMechanics": 65743, "spellLinks": 6300, "spellAreas": 1420, "spellInvis": 160, "invisChannels": 11, "spellDetects": 175, "spellVehicles": 4, "spellSpeeds": 1361, "spellKeybinds": 0, "screens": 33, "soundKitNames": 928, "soundTypes": 32, "spells": 49394, "spellDescriptions": 30925, "descriptionTexts": 23433, "spellEncounterNotes": 0, "spellAuraTexts": 13643, "auraTexts": 8428, "encounterTexts": 0, "vehicles": 4, "vehicleSeats": 6, "spellVehicleAnims": 7, "spellVehicleAnimKits": 0},
     "domains": {
       "casttime": {"n": 11097, "min": 100, "max": 300000, "distinct": 51, "mean": 7361.3722, "median": 3000, "p1": 200, "p99": 50000, "clipped": true, "step": 50, "mode": 3000, "modeShare": 0.1948, "signed": false, "sentinels": 0, "ui": "range", "unit": "ms"},
       "channel": {"n": 1250, "min": 1, "max": 43200000, "distinct": 47, "mean": 87661.7608, "median": 6000, "p1": 1000, "p99": 600000, "clipped": true, "step": 99, "mode": 5000, "modeShare": 0.1736, "signed": false, "sentinels": 555, "ui": "range", "unit": "ms"},
@@ -23,14 +23,14 @@
         "min": 1,
         "max": 14,
         "distinct": 13,
-        "mean": 2.8074,
+        "mean": 2.8165,
         "median": 2,
         "p1": 1,
         "p99": 7,
         "clipped": true,
         "step": 1,
         "mode": 1,
-        "modeShare": 0.3214,
+        "modeShare": 0.3197,
         "signed": false,
         "sentinels": 0,
         "ui": "picker",
@@ -168,7 +168,7 @@
     }
   },
   "modules": {
-    "core": {"file": "data/modules/core-c489035d6d7f.json.gz", "bytes": 943732},
+    "core": {"file": "data/modules/core-202886cd8bb0.json.gz", "bytes": 952864},
     "universal": {"file": "data/modules/universal-8786c54c00b0.json.gz", "bytes": 25216}
   },
   "locales": {

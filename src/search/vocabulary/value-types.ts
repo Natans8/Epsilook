@@ -501,18 +501,49 @@ export const length = numeric({
  */
 export const coordinate = numeric({
     name: "coordinate",
-    storage: "float",
-    display: {unit: "yd", factor: 1},
+    storage: "int",
+    display: {unit: "yd", factor: 1000},
     hint: t("tooltips:type.coordinate"),
 });
 
-/** An angle in degrees, edited with a dial rather than a slider because it wraps. */
+/**
+ * An angle in degrees, edited with a dial rather than a slider because it wraps.
+ *
+ * Stored in tenths of a degree, the way {@link seconds} is stored in milliseconds: the game data holds radians, and a
+ * right angle round-trips through float32 as 90.000207, so a whole number of tenths is both what an artist wrote and
+ * what drops the noise.
+ */
 export const angle = numeric({
     name: "angle",
-    storage: "float",
-    display: {unit: "deg", factor: 1, aliases: ["°"]},
+    storage: "int",
+    display: {unit: "deg", factor: 10, aliases: ["°"]},
     hint: t("tooltips:type.angle"),
     ui: "dial",
+});
+
+/**
+ * How much bigger or smaller something is drawn than the model it was made from.
+ *
+ * Distinct from {@link percentChange}, which stores a CHANGE and composes by addition because those auras stack. This
+ * is absolute and stacks with nothing: it is the size the thing is drawn at, so the value is the factor itself and
+ * `x1` is unchanged rather than nought.
+ *
+ * Written as a factor first, because that is the form the game's own commands take and the form the object mover
+ * shows. A proportion reads too, since the two say the same thing: `x1.5` and `150%` are one value.
+ *
+ * A bare number splits at ten exactly as {@link percentChange} splits one, and for the same reason: up to ten it is a
+ * factor, so a number in the range the game's own scale command takes means what that command means, and above ten it
+ * is a proportion. The two readings would otherwise both accept a bare number, which the type refuses to guess at.
+ */
+export const multiplier = numeric({
+    name: "multiplier",
+    storage: "int",
+    display: {
+        unit: "x", aliases: ["×"], glyph: "×", position: "before", factor: 1000, sign: "refused",
+        bare: {atMost: 10},
+    },
+    accepts: [{unit: "%", factor: 10, sign: "refused", bare: {above: 10}}],
+    hint: t("tooltips:type.multiplier"),
 });
 
 /* -------------------------------------------------------------------------- others */
@@ -573,7 +604,9 @@ export function composite(spec: {
 
     return defineType<string>({
         name: spec.name,
-        storage: "float",
+        // Taken from the members rather than fixed: a composite stores whatever they store, and both the shipped
+        // ones are fixed-point integers.
+        storage: Object.values(spec.members).every((type) => type.storage === "int") ? "int" : "float",
         parse: (s) => {
             const parts = s.split(",");
             if (parts.length > members.length) return null;
@@ -627,13 +660,32 @@ export function composite(spec: {
  * A point relative to whatever the value belongs to: where a missile launches or lands, where an attached model sits
  * against its attachment point.
  *
- * TODO: attach to the missile kind's cast and impact offsets and the attached kind's offset once the build ships
- * those columns; each is three separate fields in the game data and none reaches the pack today.
+ * Written the way the game's own object mover shows a position, which is the form the people who edit these already
+ * know: three numbers, forward, left and up. The frame is the attachment's own, so the components are named for the
+ * axes rather than for directions — only a model's base position is in the model's own frame, and a word like `up`
+ * would be a claim the other attachments cannot keep.
+ *
+ * TODO: attach to the missile kind's cast and impact offsets once the build ships those columns; they are three
+ * separate fields in the game data and neither reaches the pack today.
  */
 export const offset = composite({
     name: "offset",
     members: {x: coordinate, y: coordinate, z: coordinate},
     hint: t("tooltips:type.offset"),
+});
+
+/**
+ * How something is turned where it sits: yaw, pitch and roll, in degrees.
+ *
+ * The same three-number form {@link offset} takes, and the words are the ones the object mover uses. Yaw is not a peer
+ * of the other two — it leaves a model standing as it was built and only changes which way it faces, where pitch and
+ * roll are what lay it down or turn it over — but naming that in the type would be inventing a vocabulary for people
+ * who already have one.
+ */
+export const rotation = composite({
+    name: "rotation",
+    members: {yaw: angle, pitch: angle, roll: angle},
+    hint: t("tooltips:type.rotation"),
 });
 
 /**

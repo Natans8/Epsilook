@@ -22,7 +22,7 @@ from typing import Any
 
 from ..routes import (FxPayloads, KitEffects, SpellEffectRows, VisualGraph,
                       VisualMissiles)
-from ..routes.models import MODEL_CAT_MISSILE
+from ..routes.models import MODEL_CAT_MISSILE, SCALE_UNIT, UNPLACED
 from ..targets import merge_masked, resolve_target_mask
 
 Bucket = defaultdict[int, dict[Any, int]]
@@ -204,7 +204,8 @@ def _walk_missiles(vis: SpellVisuals, spell: int,
     if launched is None:
         return
     merge_masked(vis.models[spell],
-                 ((file, MODEL_CAT_MISSILE, source, destination, 0, motion)
+                 ((file, MODEL_CAT_MISSILE, source, destination, 0, motion,
+                   UNPLACED, SCALE_UNIT)
                   for file, motion, source, destination in launched.models), mask)
     merge_masked(vis.animkits[spell], launched.animkits, mask)
     for soundkit in launched.soundkits:

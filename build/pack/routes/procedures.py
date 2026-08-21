@@ -16,7 +16,8 @@ from ..tables import Tables
 from .attachments import NO_ATTACHMENT, NO_MOTION
 from .colors import RGB_MASK
 from .columns import to_float, to_int, to_int_from_float
-from .models import MODEL_CAT_AREA, MODEL_CAT_TRAIL, AttachModel, ModelSources
+from .models import (MODEL_CAT_AREA, MODEL_CAT_TRAIL, SCALE_UNIT, UNPLACED,
+                     AttachModel, ModelSources)
 
 _PROC_TYPES = load_local_enum("spell_procedural_effect_types")
 PROC_TYPES_CHAIN = enum_ids_where(_PROC_TYPES, "chain")
@@ -107,12 +108,14 @@ def read_proc_effects(tables: Tables, models: ModelSources) -> ProcEffects:
             file = models.area_model_fid.get(to_int_from_float(first), 0)
             if file:
                 procs.models[proc_id] = (file, MODEL_CAT_AREA, NO_ATTACHMENT,
-                                         NO_ATTACHMENT, 0, NO_MOTION)
+                                         NO_ATTACHMENT, 0, NO_MOTION, UNPLACED,
+                                         SCALE_UNIT)
         elif type_id == PROC_TYPE_WEAPONTRAIL:
             file = models.weapontrail_fid.get(to_int_from_float(first), 0)
             if file:
                 procs.models[proc_id] = (file, MODEL_CAT_TRAIL, NO_ATTACHMENT,
-                                         NO_ATTACHMENT, 0, NO_MOTION)
+                                         NO_ATTACHMENT, 0, NO_MOTION, UNPLACED,
+                                         SCALE_UNIT)
         elif type_id == PROC_TYPE_STANDWALK:
             # Paired with the base slot each value overrides, folding into the
             # same replacement group as the animation-replacement aura. A value

@@ -303,6 +303,12 @@ export class PackRowSource implements RowSource {
         for (const [name, prop] of Object.entries(kind.props)) {
             const stored = storedAt(this.table, at, name);
             if (stored === undefined) continue;
+            // A spanning property arrives already joined, as the value its composite type reads, and resolves
+            // through no vocabulary -- what a vocabulary keys is one stored number, and it has none to key.
+            if (typeof stored !== "number") {
+                props[name] = stored;
+                continue;
+            }
             const lookup = this.vocabs[this.table.vocab[at.kind]?.[name] ?? ""];
             const resolved = lookup?.(stored);
             if (prop.types[0] === idType && prop.types[1] === textType) {
@@ -619,7 +625,8 @@ export function enumWords(l: LoadedPack): Record<string, readonly string[]> {
                 if (!prop.types.includes(enumeration)) continue;
                 const stored = table.values[kindWord]?.[name];
                 const lookup = vocabularies[table.vocab[kindWord]?.[name] ?? ""];
-                if (stored === undefined || lookup === undefined) continue;
+                // A property shipped as several columns resolves through no vocabulary, so it never seeds one.
+                if (!Array.isArray(stored) || lookup === undefined) continue;
                 const absent = table.absent[kindWord]?.[name] ?? 0;
                 const seen = new Set<number>();
                 const words = new Set<string>();

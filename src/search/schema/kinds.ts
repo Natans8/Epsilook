@@ -119,9 +119,16 @@ export interface Prop {
     /**
      * Whether this property only refines another predicate rather than naming a subject of its own.
      *
-     * A target is the first: "plays on the caster" says nothing about what kind of row is doing the playing. A scope
-     * whose only positive constraint is a qualifier is legal but weak, so the parser warns on it instead of refusing
-     * it.
+     * A target is the first: "plays on the caster" says nothing about what kind of row is doing the playing. An
+     * attached model's scale and offset are the same shape — how big it is drawn and where it sits say nothing about
+     * what it is. A scope whose only positive constraint is a qualifier is legal but weak, so the parser warns on it
+     * instead of refusing it.
+     *
+     * It also decides what a comparison on the KIND's own word means. A kind offers its properties an operand in
+     * declaration order and falls back to counting its rows; a qualifier is left out of that offer, because
+     * `attach>2` asks how many models a spell attaches and not how big one of them is drawn. Without the exclusion
+     * the count meaning would go to whichever qualifier was declared first and happened to accept the operator, so
+     * adding one to a kind would silently change what its word already meant.
      */
     readonly qualifier?: boolean;
 }

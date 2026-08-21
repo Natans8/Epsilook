@@ -40,7 +40,9 @@
     "colour": "a colour as #rrggbb or a name such as red; a bare colour matches nearby shades too",
     "offset": "a point as x,y,z in yards; name one member such as z=3, or leave a component blank to ignore it",
     "bitmask": "who it plays on: caster, target, both, area or others",
-    "flag": "either the spell has it or it does not"
+    "flag": "either the spell has it or it does not",
+    "multiplier": "how big it is drawn against the model it came from, such as x1.5 or 150%",
+    "rotation": "how it is turned, as yaw,pitch,roll in degrees; name one such as pitch=90, or leave a component blank to ignore it"
   },
   "target": "who it plays on",
   "kind": {

@@ -46,7 +46,8 @@ import type {Prop} from "./kinds";
 import {defineKind, TIER} from "./kinds";
 import type {AxisType} from "../vocabulary/value-types";
 import {
-    bitmask, colour, count, enumeration, flag, id, length, ordinal, path, percent, percentChange, seconds, text,
+    bitmask, colour, count, enumeration, flag, id, length, multiplier, offset, ordinal, path, percent, percentChange,
+    rotation, seconds, text,
 } from "../vocabulary/value-types";
 
 /** A property with no role in chipless search. */
@@ -89,6 +90,25 @@ const target = (): Prop => ({
  * ends keep their own names — `from` and `to` say which end, which `point` cannot.
  */
 const attachPoint = (hint: string, word?: string): Prop => ({types: [enumeration], hint, word});
+
+/**
+ * How a model sits against the point it hangs from, and what it animates there.
+ *
+ * Every kind reached through the attached-model table carries these, and they differ in what is attached — a file, a
+ * creature display, an item, a weapon the caster already holds — never in how it is placed. So the placement is one
+ * declaration rather than four, and adding to it reaches all of them.
+ *
+ * They come last in each kind, because none of them is what the kind is ABOUT: a reader means the model first and how
+ * it was nudged afterwards.
+ */
+const placement = (): Record<string, Prop> => ({
+    scale: {types: [multiplier], qualifier: true},
+    built: {types: [multiplier], qualifier: true},
+    offset: {types: [offset], qualifier: true},
+    rotation: {types: [rotation], qualifier: true},
+    anim: {types: [enumeration], qualifier: true},
+    animkit: {types: [id], qualifier: true},
+});
 
 /* The spell itself: what it is called, says and shows, and how it goes off. Name, desc and icon are top-level words. */
 
@@ -245,6 +265,7 @@ export const attach = defineKind({
         file: corpus(TIER.asset, path),
         where: attachPoint(t("tooltips:kind.attach.props.where"), "point"),
         target: target(),
+        ...placement(),
     },
 });
 
@@ -263,6 +284,7 @@ export const display = defineKind({
         file: corpus(TIER.asset, path),
         where: attachPoint(t("tooltips:kind.display.props.where"), "point"),
         target: target(),
+        ...placement(),
     },
 });
 
@@ -279,6 +301,7 @@ export const item = defineKind({
         file: corpus(TIER.asset, path),
         where: attachPoint(t("tooltips:kind.item.props.where"), "point"),
         target: target(),
+        ...placement(),
     },
 });
 
@@ -290,6 +313,7 @@ export const equipped = defineKind({
         slot: {types: [enumeration], hint: t("tooltips:kind.equipped.props.slot")},
         where: attachPoint(t("tooltips:kind.equipped.props.where"), "point"),
         target: target(),
+        ...placement(),
     },
 });
 
