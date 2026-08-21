@@ -960,6 +960,15 @@ class Dossier:
             out["attachments"].append({
                 "attach_point": self._attach(a.get("AttachmentID")),
                 "scale": a.get("Scale"),
+                # How the model sits at the point it hangs from, and what it
+                # animates there. The pack carries all of this per attached
+                # model, so a dossier that stopped at the scale described a
+                # placement the pack knows more about than it does.
+                "offset": self._vector(a, ("Offset_0", "Offset_1", "Offset_2")),
+                "rotation": self._vector(a, ("Yaw", "Pitch", "Roll")),
+                "anims": {"start": self._anim(a.get("StartAnimID")),
+                          "loop": self._anim(a.get("AnimID")),
+                          "end": self._anim(a.get("EndAnimID"))},
                 "positioner_id": a.get("PositionerID") or None,
                 "anim_kit": self.animkit(a.get("AnimKitID")),
                 "effect_name_id": a.get("SpellVisualEffectNameID"),
@@ -1064,6 +1073,27 @@ class Dossier:
             return {}
         data = json.loads(path.read_text(encoding="utf-8"))
         return {int(a): pair for a, pair in data["values"].items()}
+
+    @staticmethod
+    def _vector(row: dict[str, Any], columns: tuple[str, str, str]) -> list[Any] | None:
+        """Three columns that mean one thing, or None where they mean nothing.
+
+        A placement all of whose components are nought is not a placement at
+        zero, it is the absence of one -- the same reading the pack applies, so
+        the dossier does not imply a nudge where the row states none.
+
+        Emptiness is read as a NUMBER rather than by truthiness: the mirror
+        holds these columns as text, where the string "0" is true and an all-
+        zero placement would have printed itself as one.
+        """
+        def nought(value: Any) -> bool:
+            try:
+                return float(value) == 0.0
+            except (TypeError, ValueError):
+                return not value
+
+        held = [row.get(name) for name in columns]
+        return None if all(nought(value) for value in held) else held
 
     def _anim(self, a: Any) -> dict[str, Any] | None:
         if not a or int(a) < 0:
