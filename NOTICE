@@ -34,10 +34,18 @@ part of it is not ours to license at all.
 3. NOT LICENSED BY US — redistributed, not owned
 
    site/data/**
-       Game data packs derived from World of Warcraft client tables (via wago.tools), the community
-       listfile, and TrinityCore's TDB releases. World of Warcraft and its data are the property of
-       Blizzard Entertainment. No copyright is claimed over this material and none is granted by the
-       AGPL above; it is redistributed here for non-commercial fan use only.
+       Game data packs derived from World of Warcraft client tables (via wago.tools and the vendored
+       client dumps below), the community listfile, and TrinityCore's TDB releases. World of Warcraft
+       and its data are the property of Blizzard Entertainment. No copyright is claimed over this
+       material and none is granted by the AGPL above; it is redistributed here for non-commercial fan
+       use only.
+
+   build/sources/**
+       Client tables from World of Warcraft clients old enough to still carry columns that later builds
+       dropped, kept so the artifacts derived from them can be rebuilt rather than only trusted. Same
+       footing as the packs above: the property of Blizzard Entertainment, no copyright claimed, none
+       granted by the AGPL, redistributed for non-commercial fan use only. Recorded here because the
+       AGPL header would otherwise claim a directory it has no right to.
 
    site/img/expansions/** — except badges/, recorded separately below
        Expansion marks taken from Warcraft Wiki <https://warcraft.wiki.gg>, whose content is licensed
