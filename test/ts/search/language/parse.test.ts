@@ -157,9 +157,13 @@ describe("binds and their values", () => {
             {op: "contains", operand: {type: "text", value: "Blood Pool", written: "Blood Pool", verbatim: true}});
     });
 
-    it("a comma list of numbers is alternation", () => {
-        const value = valueOf(ok("id:133,134"));
-        assert.equal(value.op, "anyOf");
+    it("a glued run is the scope it spells, and nothing else", () => {
+        // The glue is the scope's own separator written where the braces are not, so the two spellings must
+        // converge on one canonical form. What the run MEANS is therefore never decided by the comma: an id is
+        // read whole and one spell holds one, so these bare values alternate exactly as the braced form's do.
+        assert.equal(
+            formatQuery(parse("id:133,134"), "canonical"),
+            formatQuery(parse("id:{133 134}"), "canonical"));
     });
 
     it("an ordinal compares on its ladder", () => {
@@ -398,7 +402,7 @@ describe("the quote law: a phrase is one literal string value", () => {
     it("on a name-or-id property, digits are the id and quoted digits are the name", () => {
         const [byId] = termsOf(ok("sound:{kit:150}"));
         assert.ok(byId.ask !== null && byId.ask.on === "props");
-        assert.deepEqual(byId.ask.value, {op: "exact", operand: {type: "id", value: 150, written: "150"}});
+        assert.deepEqual(byId.ask.value, {op: "exact", operand: {type: "soundKitId", value: 150, written: "150"}});
         const [byName] = termsOf(ok('sound:{kit:"150"}'));
         assert.ok(byName.ask !== null && byName.ask.on === "props");
         assert.deepEqual(byName.ask.value, {

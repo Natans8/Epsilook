@@ -21,12 +21,12 @@ import {GRAMMAR, spelling} from "./grammar";
 import {doorOf, spokenProp, wordOf} from "../schema/kinds";
 import {headWord} from "../schema/schema";
 import type {Kind, Prop} from "../schema/kinds";
-import {operandQuoted, operandText} from "./format";
+import {operandQuoted, operandText, sharesDoor} from "./format";
 import type {Operator} from "../vocabulary/operators";
 import {COMPARISONS, exact, not as notOp, range} from "../vocabulary/operators";
 import {notationOf, writeNotation} from "../vocabulary/units";
 import type {AxisType} from "../vocabulary/value-types";
-import {bitmask, colour, enumeration, id, ordinal, TYPES} from "../vocabulary/value-types";
+import {bitmask, colour, enumeration, isIdentity, ordinal, TYPES} from "../vocabulary/value-types";
 
 /**
  * One styled piece of a chip's contents. Pieces render in order, separated by single spaces; a renderer keeps a
@@ -276,7 +276,7 @@ function listText(alt: ValueExpr): string | null {
     if (alt.op !== "exact" && alt.op !== "contains") return null;
     const operand = alt.operand;
     if ("text" in operand) return /^\d+$/.test(operand.text) ? operand.text : null;
-    if (TYPES.get(operand.type) !== id) return null;
+    if (!isIdentity(TYPES.get(operand.type))) return null;
     return operand.written ?? String(operand.value);
 }
 
@@ -391,12 +391,55 @@ function soleKind(terms: ReadonlyArray<readonly ScopeTerm[]>): Kind | null {
  */
 function scopeItems(terms: ReadonlyArray<readonly ScopeTerm[]>, under: Kind | null): LaneItem[] {
     const items: LaneItem[] = [];
+    // A glued run is ONE condition however many values it names, so it draws as one item: the reader wrote
+    // `target:caster,area` in a single breath and a control offering a multiple choice produces exactly that.
+    // Drawn as separate items it would come back as a repeated door, which is not what they typed. The fold
+    // crosses run boundaries deliberately -- values that cannot co-hold are read as alternatives, so a glued
+    // run on an id arrives already split into runs, and it is still one thing the reader wrote.
+    let previous: ScopeTerm | null = null;
     for (const run of terms) {
         if (run.length === 0) continue;
-        if (items.length > 0) items.push({is: "or"});
-        for (const term of run) items.push(termItem(term, run.length === 1, under));
+        for (const [index, term] of run.entries()) {
+            const item = termItem(term, run.length === 1, under);
+            const last = items[items.length - 1];
+            const folded = term.glued === true && previous !== null && last !== undefined
+            && sharesDoor(previous, term)
+                ? foldGlued(last, item)
+                : null;
+            if (folded !== null) {
+                items[items.length - 1] = folded;
+                previous = term;
+                continue;
+            }
+            if (index === 0 && items.length > 0) items.push({is: "or"});
+            items.push(item);
+            previous = term;
+        }
     }
     return items;
+}
+
+/**
+ * Folds a glued term's item into the one before it, or refuses where the pair has no single spelling.
+ *
+ * Only plain values fold: the run draws as one list, and a piece carrying an operator, a pattern or a gate of
+ * its own says something the list's commas cannot. Refusing leaves the terms drawn apart, which is honest --
+ * the formatter refuses the same pairs and writes them with braces.
+ *
+ * @param into The item already drawn.
+ * @param next The glued item to fold into it.
+ * @returns The folded item, or null where the pair does not fold.
+ */
+function foldGlued(into: LaneItem, next: LaneItem): LaneItem | null {
+    if (into.is !== "term" && into.is !== "bind") return null;
+    if (next.is !== "term" && next.is !== "bind") return null;
+    const held = into.body;
+    const added = next.body;
+    if (held.length !== 1 || added.length !== 1) return null;
+    const [a] = held;
+    const [b] = added;
+    if (a.is !== "value" || b.is !== "value") return null;
+    return {...into, body: [{is: "value", text: `${a.text}, ${b.text}`}]};
 }
 
 /** A lone lane item folded into a compact chip's body — the `{x} ≡ x` law drawn. */
@@ -465,6 +508,9 @@ function askView(ask: Ask, not: boolean): AskView | null {
     // promoting it is also what lets the subject stop naming itself.
     const promoted = kind === null ? soleKind(test.terms) : null;
     const items = scopeItems(test.terms, kind ?? promoted);
+    // A run that folded named more values than it drew items, which is what makes its + append a VALUE rather
+    // than another condition -- the same gesture an identity list has always offered.
+    const listed = test.terms.flat().length > items.filter((item) => item.is !== "or").length;
     if (items.length === 0) return chip([{is: "meta", text: GRAMMAR.anyWord}]);
     if (items.length === 1) {
         const word = promoted === null ? head : wordOf(promoted);
@@ -490,7 +536,7 @@ function askView(ask: Ask, not: boolean): AskView | null {
                 ...(anchored ? [{is: "op" as const, text: glyphOf(exact)}] : []),
                 ...bound.body,
             ];
-        return {as: "chip", chip: {head: word, tone: column.key, not, body, grow: "term"}};
+        return {as: "chip", chip: {head: word, tone: column.key, not, body, grow: listed ? "alternative" : "term"}};
     }
     return {as: "lane", lane: {head, tone: column.key, not, items}};
 }

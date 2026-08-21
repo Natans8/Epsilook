@@ -50,8 +50,15 @@ export const GRAMMAR = {
     /** Escapes a quote inside a phrase. */
     escape: "\\",
 
-    /** Separates numbers in a pasted id list: `id:133,134`. Only a run of numbers reads as a list. */
-    numberList: ",",
+    /**
+     * Glues several values under one head: `target:caster,area` asks what `target:{caster area}` asks.
+     *
+     * The scope's own glue, written where the braces are not. A space cannot do the job in bind position because
+     * a space ends the clause, so the run needs a character of its own — and it is a separator rather than an
+     * operator, because what the glued values MEAN is already decided per axis by the rule that reads a braced
+     * scope. A trailing one separates nothing and is read as absent, which is what lets a reader keep picking.
+     */
+    glue: ",",
 
     /** The cardinality axis. It has no top-level door; a scope is the only place the word exists. */
     countWord: "count",

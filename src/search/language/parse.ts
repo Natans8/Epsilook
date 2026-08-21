@@ -62,13 +62,6 @@ const HEAD_ENDS = new Set<string>([
     GRAMMAR.group.open, GRAMMAR.group.close, GRAMMAR.or,
 ]);
 
-/** A run of numbers separated by the list character: the one shape a comma is structural in. */
-const NUMBER_LIST = new RegExp(String.raw`^\d+(${escapeRegExp(GRAMMAR.numberList)}\d+)+$`);
-
-/** A number list whose last separator dangles — `133,` — which the lenient reading takes as the numbers alone. */
-const NUMBER_LIST_DANGLING =
-    new RegExp(String.raw`^\d+(${escapeRegExp(GRAMMAR.numberList)}\d+)*${escapeRegExp(GRAMMAR.numberList)}$`);
-
 /**
  * What makes a leading minus a SIGN rather than a negation: a digit, or a decimal point before one.
  *
@@ -98,6 +91,16 @@ function statesBareValue(t: ScopeTerm): boolean {
     // row's other properties say. Two of those are satisfiable together, so they conjoin like any other pair.
     if (ask.on === "props" && ask.props.every((ref) => isFlag(propOf(ref)))) return false;
     return ask.value.op === "exact" || ask.value.op === "contains";
+}
+
+/**
+ * Marks the terms a glued piece contributed, so the writer can give the reader their own spelling back.
+ *
+ * @param run The run being built.
+ * @param from The length the run had before the piece was read.
+ */
+function markGlued(run: ScopeTerm[], from: number): void {
+    for (let k = from; k < run.length; k++) run[k] = {...run[k], glued: true};
 }
 
 /** A head that can open a row scope: a column or a kind. A property door takes a value, never a scope. */
@@ -464,7 +467,15 @@ class Parser {
             if (glued !== null) return glued;
         }
 
-        const {segs, end} = this.scan.token(vpos, limit, {inScope: false, groups: true});
+        const run = this.gluedPieces(vpos, limit, {inScope: false, groups: true});
+        if (run.pieces.length === 0) {
+            this.emptyBind(start, not, head, vpos);
+            return run.end;
+        }
+        if (run.pieces.length > 1) return this.gluedRun(start, not, head, run.pieces, run.end);
+
+        const {segs} = run.pieces[0];
+        const end = run.end;
         const only = segs.length === 1 ? segs[0] : undefined;
         if (only !== undefined && only.form === "group" && head.role !== "prop" && scopeShaped(only.text)) {
             // Lenient input: a parenthesised scope is accepted and read as one, since the two readings never both
@@ -479,6 +490,91 @@ class Parser {
         this.pushInterp({start, end: segs.length > 0 ? segs[segs.length - 1 - extras.length].end : end}, not, head,
             main, pend, segs[0]);
         this.emitExtras(extras);
+        return end;
+    }
+
+    /**
+     * Splits a bound value into the pieces the glue separates: `caster,area` into two, `caster` into one.
+     *
+     * A piece ends at the glue only at depth zero — a phrase, a pattern and a group each consume their own
+     * interior — so a comma inside a value stays a character and the quotes remain its escape. A trailing glue
+     * yields no piece of its own, which is the lenient reading a reader mid-run depends on.
+     *
+     * @param vpos Where the value begins.
+     * @param limit The end of the text.
+     * @returns The non-empty pieces and where the whole run ended.
+     */
+    private gluedPieces(vpos: number, limit: number, opts: { inScope: boolean; groups: boolean }):
+        { pieces: { segs: Seg[]; start: number; end: number }[]; end: number } {
+        const pieces: { segs: Seg[]; start: number; end: number }[] = [];
+        let i = vpos;
+        let end = vpos;
+        let guard = limit - vpos + 1;
+        while (guard-- > 0) {
+            const piece = this.scan.token(i, limit, {...opts, glue: true});
+            if (piece.segs.length > 0) pieces.push({segs: piece.segs, start: i, end: piece.end});
+            end = piece.end;
+            if (piece.end >= limit || this.text[piece.end] !== GRAMMAR.glue) break;
+            i = piece.end + 1;
+            end = i;
+        }
+        return {pieces, end};
+    }
+
+    /**
+     * A glued run of values under one head: `name:fire,ball` asks what `name:{fire ball}` asks.
+     *
+     * The glue is the scope's own separator written where the braces are not, so the run lands on the very
+     * structure the braced spelling parses to — the same rule {@link innerGlue} follows for the operator shape,
+     * and the reason neither spelling can drift from the other. What a run MEANS is therefore not decided here:
+     * {@link alternateWhereSingle} reads it exactly as it reads a braced scope, so a value glued onto an axis
+     * whose row can hold only one of them alternates, and one whose row can hold several conjoins.
+     *
+     * A piece carries a value and never a head of its own, so no piece is negated and none opens a scope.
+     *
+     * @param start Where the clause's text began.
+     * @param not Whether the clause was negated.
+     * @param head The head the whole run binds to.
+     * @param pieces The glued pieces, in written order.
+     * @param end Where the run ended.
+     * @returns The position to continue from.
+     */
+    private gluedRun(start: number, not: boolean, head: Head,
+                     pieces: readonly { segs: Seg[]; start: number; end: number }[], end: number): number {
+        const pend: Pending[] = [];
+        // A property's row arity is its kind's, so the run asks the kind the same question a braced scope would.
+        const scoped: ScopeHead = head.role === "prop" ? {role: "kind", kind: head.kind} : head;
+        const run: ScopeTerm[] = [];
+        for (const [index, piece] of pieces.entries()) {
+            const before = run.length;
+            // What a piece IS depends on what the head already named. A column or kind door leaves the subject
+            // open, so its pieces are the scope's own terms and are read by the scope's own item reader -- a
+            // term of `model:fire,dragon` matches what a term of `model:{fire dragon}` matches, which is the
+            // whole point of the spelling. A PROPERTY door has already named the subject, so its pieces are
+            // values of that property and nothing else; read as free terms they would match the kind's other
+            // properties too, and `cast:1s,2s` would answer for the channel as well as the cast.
+            if (head.role === "prop") {
+                const {main, extras} = this.interpretSegs(piece.segs, ctxFor(head, pend), pend);
+                const last = piece.segs[piece.segs.length - 1 - extras.length] ?? piece.segs[0];
+                this.pushScopeTerm(run, {start: piece.start, end: last.end}, false, main, pend, headWord(head));
+                this.emitExtras(extras);
+                if (index > 0) markGlued(run, before);
+                continue;
+            }
+            this.innerItem(scoped, piece.start, false, piece.start, piece.end, run, pend);
+            if (index > 0) markGlued(run, before);
+        }
+        const terms = this.applyAnchorRule(this.alternateWhereSingle(scoped, [run]), pend);
+        if (terms === null) {
+            this.push({start, end}, not, "invalid", this.incompleteAsk(head), pend);
+            return end;
+        }
+        this.scopeWarnings(terms, pend);
+        const test: RowTest = {is: "scope", terms};
+        const ask: Ask = scoped.role === "column"
+            ? {on: "column", column: scoped.column, test}
+            : {on: "kind", kind: scoped.kind, test};
+        this.push({start, end}, not, "ok", ask, pend);
         return end;
     }
 
@@ -903,6 +999,23 @@ class Parser {
                     const tokenEnd = this.scan.token(vpos, bodyEnd, {inScope: true, groups: true}).end;
                     return {kind: "foreign", span: {start: termStart, end: tokenEnd}, message: bind.message};
                 }
+                // A glued run on a property inside a scope: `fx:{tint target:caster,area}`. A property refuses
+                // a scope of its own, so this is the only spelling that says several values of one property at
+                // all -- each piece is read against that property and they join the row's other terms as
+                // siblings, which is what makes the run ask about ONE row.
+                const glued = this.gluedPieces(vpos, bodyEnd, {inScope: true, groups: true});
+                if (glued.pieces.length > 1) {
+                    for (const [index, piece] of glued.pieces.entries()) {
+                        const before = run.length;
+                        const read = this.interpretSegs(piece.segs, bind.ctx, pend);
+                        const last = piece.segs[piece.segs.length - 1];
+                        this.pushScopeTerm(run, {start: piece.start, end: last.end}, termNot, read.main, pend,
+                            word);
+                        this.scopeExtras(head, read.extras, run, pend);
+                        if (index > 0) markGlued(run, before);
+                    }
+                    return {kind: "done", next: glued.end};
+                }
                 const {segs, end} = this.valueToken(vpos, bodyEnd, {inScope: true, groups: true});
                 if (segs.length === 0) {
                     // An inner bind with no value: nothing to constrain the row with yet.
@@ -1173,8 +1286,8 @@ class Parser {
     }
 
     /**
-     * Reads one alternative: existence, a number list, a prefixed operator, a range, a pattern, or a plain word —
-     * in that order, so that `<=` is an operator before `<` is and a comma list is numbers before it is text.
+     * Reads one alternative: existence, a prefixed operator, a range, a pattern, or a plain word — in that order,
+     * so that `<=` is an operator before `<` is.
      */
     private alternative(t: string, ctx: ValueCtx, alone: boolean): Interp {
         if (t === "") return {r: "empty", why: i18n.t("diagnostics:why.noValue")};
@@ -1182,12 +1295,6 @@ class Parser {
         // The wildcard's word synonym — the spelling chips display for existence. Only where a bound value is
         // being read: a bare top-level word is plain search content, whatever it spells.
         if (ctx.wordStar && fold(t) === GRAMMAR.anyWord) return ctx.star();
-        // A number token ending in a dangling list separator reads as its numbers — `id:{133, 134}` arrives
-        // as the token `133,` beside `134`, and the comma separates nothing within its own token.
-        if (NUMBER_LIST_DANGLING.test(t)) t = t.slice(0, -GRAMMAR.numberList.length);
-        if (NUMBER_LIST.test(t)) {
-            return combineAlternatives(t.split(GRAMMAR.numberList).map((n) => ctx.bare(n, false)));
-        }
         for (const op of PREFIX_OPERATORS) {
             const sym = spellingsOf(op).find((s) => t.startsWith(s));
             if (sym === undefined) continue;

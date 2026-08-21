@@ -845,7 +845,7 @@ export function commitSegment(text: string, at: number): Commit {
         if (plan.head === null) return {text, caret: plan.before.length + plan.open.length, removed: false};
         const end = plan.open.length > 0 ? plan.open[plan.open.length - 1] : "";
         let open = plan.open;
-        if (end === GRAMMAR.or || end === GRAMMAR.numberList) {
+        if (end === GRAMMAR.or || end === GRAMMAR.glue) {
             const trimmed = plan.open.slice(0, -1);
             if (sameAsk(trimmed, plan.open)) open = trimmed;
         }

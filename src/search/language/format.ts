@@ -16,7 +16,7 @@ import {doorOf, formatValue, sentinelOf, spokenProp, wordOf} from "../schema/kin
 import {headWord} from "../schema/schema";
 import {COMPARISONS, exact} from "../vocabulary/operators";
 import type {Ask, Clause, Parsed, ParsedOperand, PropRef, ScopeTerm, ValueExpr} from "./ast";
-import {propOf} from "./ast";
+import {anyOfExpr, propOf} from "./ast";
 import {escapeRegExp} from "../text/patterns";
 import {scopeShaped} from "./scan";
 import type {AxisType} from "../vocabulary/value-types";
@@ -41,8 +41,8 @@ const OPENS_STRUCTURE = new RegExp(`^[${escapeRegExp([...new Set([
     ...PREFIX_OPERATORS.flatMap((op) => spellingsOf(op).map((s) => s[0])), GRAMMAR.regex, GRAMMAR.negate,
 ])].join(""))}]`);
 
-/** Digit shapes that could re-read as a number, a number list or a range rather than text. */
-const NUMBER_SHAPED = new RegExp(String.raw`^\d[\d.${escapeRegExp(GRAMMAR.numberList + GRAMMAR.range)}]*$`);
+/** Digit shapes that could re-read as a number, a glued run or a range rather than text. */
+const NUMBER_SHAPED = new RegExp(String.raw`^\d[\d.${escapeRegExp(GRAMMAR.glue + GRAMMAR.range)}]*$`);
 
 /** Leading characters that spell a prefix operator, which every reader binds to its head without a colon. */
 const OPENS_OPERATOR = new RegExp(`^[${escapeRegExp([...new Set(
@@ -57,8 +57,8 @@ function bindTo(head: string, text: string): string {
     return OPENS_OPERATOR.test(text) ? `${head}${text}` : `${head}${GRAMMAR.bind}${text}`;
 }
 
-/** Characters mid-value that force the quotes even on a number-shaped text: the list and range separators. */
-const NUMBER_STRUCTURE = new RegExp(`[${escapeRegExp(GRAMMAR.numberList + GRAMMAR.range)}]`);
+/** Characters mid-value that force the quotes even on a number-shaped text: the glue and the range separator. */
+const NUMBER_STRUCTURE = new RegExp(`[${escapeRegExp(GRAMMAR.glue + GRAMMAR.range)}]`);
 
 /**
  * How a written value re-reads, which decides how much quoting keeps it itself:
@@ -241,10 +241,6 @@ function valueText(value: ValueExpr, at?: PropRef, tier: Spelling = "canonical",
             return `${bound(operandText(value.lo, at, tier))}${GRAMMAR.range}${operandText(value.hi, at, tier)}`;
         case "anyOf": {
             const parts = value.alternatives.map((alt) => valueText(alt, at, tier, bareSafe));
-            // Digits alone write the comma list — the id idiom, and the spelling the chip itself displays.
-            if (tier === "written" && bareSafe && parts.every((p) => /^\d+$/.test(p))) {
-                return parts.join(GRAMMAR.numberList);
-            }
             const glued = parts.join(GRAMMAR.or);
             // In bind position the glued spelling re-reads as this same alternation, so the written tier
             // spares the parentheses unless a phrase, a space or an empty spelling would split it. A scope's
@@ -382,6 +378,53 @@ export function unbracedTerm(terms: ReadonlyArray<readonly ScopeTerm[]>): ScopeT
     return null;
 }
 
+/**
+ * The value alone of a term written glued to the one before it, or null where it has no such spelling.
+ *
+ * A glued term's door is already overhead -- the run said it once -- so writing it again would spell a
+ * different query. Only a positive term has this form: a negation is a term of its own.
+ *
+ * @param term The term.
+ * @param tier The output tier.
+ * @returns The value as the run continues it, or null.
+ */
+/**
+ * Whether one term continues another's door, which is what the glue can spell.
+ *
+ * Exported for the display model, which folds a glued run into one chip and must agree with the formatter on
+ * exactly which runs are one: a chip that folds what the written form spells apart, or the reverse, would draw
+ * a query nobody could type back.
+ *
+ * A glued piece is written under the door the run already said, so the two terms have to BE about the same
+ * thing. They need not have started that way: pieces are read independently, so `range:melee,unlimited` lands
+ * on a flag and on another property's sentinel, and writing that back with the glue would re-bind the second
+ * to the first. Where they part company the braced spelling is the only faithful one.
+ *
+ * @param before The term already written.
+ * @param after The term written after it.
+ * @returns Whether the glue spells the pair.
+ */
+export function sharesDoor(before: ScopeTerm, after: ScopeTerm): boolean {
+    const a = before.ask;
+    const b = after.ask;
+    if (a === null || b === null) return false;
+    if (a.on === "content" && b.on === "content") return true;
+    if (a.on !== "props" || b.on !== "props") return false;
+    return a.props.length === b.props.length
+        && a.props.every((ref, index) => ref.kind === b.props[index].kind && ref.prop === b.props[index].prop);
+}
+
+function gluedTail(term: ScopeTerm, tier: Spelling): string | null {
+    if (term.state !== "ok" || term.ask === null || term.not) return null;
+    const ask = term.ask;
+    if (ask.on === "content") return termValueText(ask.value, tier);
+    // Bare-safe, exactly as a bind's own value is: a piece stands in value position, so an anchor it does not
+    // need is an anchor the plain spelling would not have written either.
+    if (ask.on === "props") return valueText(ask.value, ask.props[0], tier, true);
+    if (ask.on === "kindWord") return wordOf(ask.kind);
+    return null;
+}
+
 function askText(ask: Ask, tier: Spelling): string | null {
     if (ask.on === "plain") return valueText(ask.value, undefined, tier, true);
     if (ask.on === "prop") {
@@ -422,7 +465,58 @@ function askText(ask: Ask, tier: Spelling): string | null {
         if (text !== null && lone.ask.on === "props") return bindTo(head, text);
         if (text !== null) return `${head}${GRAMMAR.bind}${text}`;
     }
-    const body = runs.map((run) => run.map((pair) => pair.text).join(" ")).join(` ${GRAMMAR.or} `);
+    // A glued term continues the one before it: the reader wrote one run of values under one door, and writing
+    // it back as repeated doors would hand them a query they did not type. The glue is the scope's own
+    // separator, so this changes the spelling and never the structure.
+    const joinRun = (run: readonly { term: ScopeTerm; text: string }[]): string => run
+        .map((pair, index) => {
+            if (index === 0) return pair.text;
+            const tail = pair.term.glued === true && sharesDoor(run[index - 1].term, pair.term)
+                ? gluedTail(pair.term, tier)
+                : null;
+            return tail === null ? ` ${pair.text}` : `${GRAMMAR.glue}${tail}`;
+        })
+        .join("");
+    // Canonical converges an alternation-only scope onto the value alternation asking the same thing: a row
+    // matching either of two bare values is what both `id:{133 | 134}` and `id:(133|134)` ask, and spelling
+    // them apart would make one question compare unequal to itself. The written tier keeps the reader's own
+    // spelling instead, which is where a glued run stays glued.
+    if (tier !== "written") {
+        const singles = test.terms.map((run) => run.filter((term) => term.state === "ok" && term.ask !== null));
+        const alternatives = singles.every((run) =>
+            run.length === 1 && !run[0].not && run[0].ask?.on === "content")
+            ? singles.map((run) => (run[0].ask as { on: "content"; value: ValueExpr }).value)
+            : null;
+        if (alternatives !== null && alternatives.length > 1) {
+            return bindTo(head, valueText(anyOfExpr(alternatives), undefined, tier, true));
+        }
+    }
+    const flat = runs.flat();
+    // A run that is nothing BUT a glued sequence of values can shed its braces: the head, the colon and the glue
+    // say everything they would. For a PROPERTY door that is not a shortening but the only legal spelling, since
+    // a property refuses a scope -- so it is written in every tier, where the shortening is the written tier's
+    // alone and canonical keeps converging on the braces.
+    if (flat.length > 1 && flat.slice(1).every((pair) => pair.term.glued === true)) {
+        const lead = gluedTail(flat[0].term, tier);
+        const tails = flat.slice(1).map((pair) => gluedTail(pair.term, tier));
+        const refs = flat.map((pair) => (pair.term.ask?.on === "props" ? pair.term.ask.props[0] : null));
+        const first = refs[0];
+        // A kind's SUBJECT is spelled by the KIND's word, never by the schema's property name -- the same rule
+        // {@link termText} follows, so `name:fire,ball` does not come back naming a `text` field nobody typed.
+        const shared = first !== null && refs.every((ref) => ref?.kind === first.kind && ref.prop === first.prop);
+        const door = !shared || first === null
+            ? null
+            : Object.keys(first.kind.props)[0] === first.prop && first.kind.word !== undefined
+                ? first.kind.word
+                : doorOf(first.prop, propOf(first));
+        const throughout = flat.every((pair, index) => index === 0 || sharesDoor(flat[index - 1].term, pair.term));
+        if (lead !== null && tails.every((tail) => tail !== null) && throughout
+            && (door !== null || tier === "written")) {
+            const values = door === null ? [flat[0].text, ...tails] : [lead, ...tails];
+            return `${door ?? head}${GRAMMAR.bind}${values.join(GRAMMAR.glue)}`;
+        }
+    }
+    const body = runs.map(joinRun).join(` ${GRAMMAR.or} `);
     return `${head}${GRAMMAR.bind}${GRAMMAR.scope.open}${body}${GRAMMAR.scope.close}`;
 }
 

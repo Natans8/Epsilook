@@ -179,8 +179,12 @@ export class Scanner {
      *
      * Quotes always open a phrase; parens open a group only where `groups` says a value is expected — in top-level
      * free text they are ordinary characters, which is what keeps every parenthesised spell name searchable.
+     *
+     * `glue` ends the token at a glue character too, for a caller reading one value of a glued run. It is off by
+     * default because the character is ordinary text everywhere a run is not being read — a spell name may carry a
+     * comma — and a phrase, a pattern and a group each consume their own interior, so the escapes come for free.
      */
-    token(from: number, limit: number, opts: { inScope: boolean; groups: boolean }):
+    token(from: number, limit: number, opts: { inScope: boolean; groups: boolean; glue?: boolean }):
         { segs: Seg[]; end: number } {
         const segs: Seg[] = [];
         let cur = "";
@@ -203,6 +207,7 @@ export class Scanner {
                 continue;
             }
             if (isWs(c)) break;
+            if (opts.glue === true && c === GRAMMAR.glue) break;
             if (opts.inScope && (c === GRAMMAR.scope.close || c === GRAMMAR.scope.open)) break;
             // …or straight after a lone operator symbol, so that `=/fire/` parses far enough to be refused
             // as the contradiction it is instead of reading as literal text.

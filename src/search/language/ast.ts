@@ -109,6 +109,17 @@ export interface ScopeTerm {
      * cannot read is foreign, and is refused before it reaches here.
      */
     readonly door?: string;
+
+    /**
+     * Whether this term was written glued to the one before it rather than separated by a space.
+     *
+     * The reading is identical either way -- the glue IS the scope's separator, written where the braces are
+     * not -- so nothing downstream of the parse consults this. What it carries is the spelling, for the one
+     * surface that must give a reader their own words back: a run typed `target:caster,area` is written that
+     * way again instead of exploding into a repeated head, and a property, which refuses a scope of its own,
+     * has no other spelling to be written in at all.
+     */
+    readonly glued?: boolean;
 }
 
 /**

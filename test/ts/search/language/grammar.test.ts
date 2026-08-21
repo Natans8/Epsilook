@@ -10,7 +10,7 @@ describe("the token table", () => {
         assert.deepEqual(GRAMMAR.group, {open: "(", close: ")"});
         assert.equal(GRAMMAR.phrase, '"');
         assert.equal(GRAMMAR.escape, "\\");
-        assert.equal(GRAMMAR.numberList, ",");
+        assert.equal(GRAMMAR.glue, ",");
         assert.equal(GRAMMAR.countWord, "count");
     });
 
