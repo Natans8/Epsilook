@@ -2287,6 +2287,31 @@ def check_toolchain(rep: Report) -> None:
 # ---------------------------------------------------------------------- main
 
 
+def straddle_report(before: str, after: str) -> str | None:
+    """What a run that spanned two trees is worth, which is nothing.
+
+    A check describes the tree it read, and a run whose HEAD moved under it read
+    two of them - so its verdict belongs to neither. A clean answer from two
+    trees is worth no more than a dirty one, and the failure mode is the nasty
+    kind: the numbers look entirely ordinary, because each was true of
+    something. In a checkout several sessions share, that is not a rare race.
+
+    Where git cannot say, this stands down rather than failing a run it has
+    nothing to report about.
+
+    Args:
+        before: HEAD when the run began, or '' where git could not say.
+        after: HEAD as it stands now, or '' likewise.
+
+    Returns:
+        What to report, or None where the tree held still.
+    """
+    if not before or not after or before == after:
+        return None
+    return (f"HEAD moved under this run, {before[:9]} to {after[:9]} - "
+            "nothing above describes a tree that exists; run it again on a still one")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -2298,6 +2323,9 @@ def main() -> int:
     args = ap.parse_args()
 
     rep = Report(quiet=args.quiet)
+    # Read before anything else and read again at the end: a full run takes
+    # minutes, and in a shared checkout a sibling can land a commit inside them.
+    head_before = git("rev-parse", "HEAD").strip()
     # toolchain first: the build must exist before the asset check may
     # insist the bundle does
     if not args.fast:
@@ -2332,6 +2360,12 @@ def main() -> int:
     check_cache(rep)
     check_dependencies(rep)
     check_docs(rep, args.base)
+
+    straddle = straddle_report(head_before, git("rev-parse", "HEAD").strip())
+    if straddle is None:
+        rep.ok("still tree", "HEAD held for the whole run")
+    else:
+        rep.fail("still tree", straddle)
 
     print()
     warned = f", {rep.warned} warning(s)" if rep.warned else ""
