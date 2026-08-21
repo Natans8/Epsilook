@@ -60,6 +60,16 @@ export interface Offer {
      */
     readonly art?: string;
     /**
+     * Whether taking this offer leaves the run open for another value of the same property.
+     *
+     * A vocabulary a row can hold SEVERAL of at once is a multiple choice, and a multiple choice that closed
+     * after one pick would make the reader reopen the same list to say the second thing. Taking one writes the
+     * glue after it, which is the language's own spelling for the next value under one door -- so the panel
+     * that reopens is the same panel, narrowed to the same property, by position alone.
+     */
+    readonly chains?: boolean;
+
+    /**
      * Every spelling this offer answers to, where it answers to more than its own word.
      *
      * A door reads by its full name and its synonyms — `animation` reaches `anim` — so narrowing has to see
@@ -195,8 +205,12 @@ export function offerGhost(offers: Offers, offer: Offer | undefined): string {
  * @returns The slot's new value and the caret's place in it.
  */
 export function offerSlot(plan: BarPlan, offers: Offers, offer: Offer): { value: string; caret: number } {
-    const value = plan.slot.slice(0, offers.stub.start) + offer.insert + plan.slot.slice(offers.stub.end);
-    return {value, caret: offers.stub.start + offer.insert.length - (offer.caretBack ?? 0)};
+    // A chaining offer writes the glue behind it, so the caret lands where the next value goes and the panel
+    // that reopens is the one for this same property. The dangling glue is a legal reading of its own, so the
+    // query stays whole and the count keeps answering while the reader is still choosing.
+    const insert = offer.chains === true ? offer.insert + GRAMMAR.glue : offer.insert;
+    const value = plan.slot.slice(0, offers.stub.start) + insert + plan.slot.slice(offers.stub.end);
+    return {value, caret: offers.stub.start + insert.length - (offer.caretBack ?? 0)};
 }
 
 /**
@@ -433,15 +447,17 @@ function valueOffers(prop: Prop, tone: string, vocab: Vocabulary, key?: string):
     { values: Offer[]; listed: Offer[]; any: Offer[] } {
     // A spelling carrying a space would split into two terms where it lands, so it travels quoted — the phrase
     // is the language's own spelling for exactly this, and a word vocabulary reads a quoted word.
-    const word = (spelling: string, note: string): Offer => ({
+    const word = (spelling: string, note: string, chains = false): Offer => ({
         shape: "word", word: spelling,
         insert: spelling.includes(" ") ? GRAMMAR.phrase + spelling + GRAMMAR.phrase : spelling,
-        note, tone, art: vocab.art?.[spelling],
+        note, tone, art: vocab.art?.[spelling], chains: chains ? true : undefined,
     });
     const sentinels = Object.values(prop.sentinels ?? {})
         .map((spelling) => word(spelling, i18n.t("ui:surface.sentinelNote")));
+    // A row plays on several participants at once, so the roles are the one vocabulary today that is a true
+    // multiple choice -- and the shape the coming flag sets take.
     const roles = prop.types.includes(bitmask)
-        ? TARGET_ROLES.map((role) => word(role, roleNote(role))) : [];
+        ? TARGET_ROLES.map((role) => word(role, roleNote(role), true)) : [];
     const any = operatorsOf(prop).includes("present")
         ? [word(GRAMMAR.anyWord, i18n.t("ui:surface.anyNote"))] : [];
     // An ordered vocabulary is small, closed and carried by the pack, so it lists itself, spelled the way the
@@ -712,6 +728,25 @@ function wordsGroup(composing: Composing | null, flags: readonly Offer[], typed:
 }
 
 /**
+ * Where the value being composed begins: past the last glue of a run already under way, or where it opened.
+ *
+ * Read through {@link ./plan!structure}, so an escape and a phrase interior mean here exactly what they mean
+ * everywhere else -- a comma inside a quoted name is a character, not a separator.
+ *
+ * @param slot The open slot's text.
+ * @param opened Where the value began, just past its bind.
+ * @param at The caret, as an offset into the slot.
+ * @returns The offset the composed value starts at.
+ */
+function lastGlue(slot: string, opened: number, at: number): number {
+    let from = opened;
+    for (const step of structure(slot.slice(opened, at))) {
+        if (step.ch === GRAMMAR.glue && step.depth === 0) from = opened + step.at + 1;
+    }
+    return from;
+}
+
+/**
  * What the surface offers at the caret.
  *
  * @param plan The open position's plan.
@@ -749,7 +784,11 @@ export function offersAt(plan: BarPlan, caret: number, history: readonly string[
     // offer made under one excludes rather than asks, which the rows say for themselves.
     const negated = inner === null && slot.startsWith(GRAMMAR.negate, term.start)
         && negatesBefore(slot.slice(term.start + 1));
-    const from = inner !== null ? term.start + bind + 1 : term.start + (negated ? 1 : 0);
+    // A run already under way starts its stub after the last glue: what the reader is composing is the NEXT
+    // value, not a correction of the ones already chosen. Without this the whole run reads as one typed word --
+    // `caster,` narrows to no role at all -- and the list a chaining pick was meant to reopen comes back empty.
+    const opened = inner !== null ? term.start + bind + 1 : term.start + (negated ? 1 : 0);
+    const from = inner === null ? opened : lastGlue(slot, opened, at);
     const stub = {start: Math.min(from, at), end: Math.max(term.end, at)};
     const typed = slot.slice(stub.start, at);
     // The surface completes what the caret is at the END of. A caret dropped into the middle of a word is a

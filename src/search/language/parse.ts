@@ -1028,6 +1028,10 @@ class Parser {
                 // all -- each piece is read against that property and they join the row's other terms as
                 // siblings, which is what makes the run ask about ONE row.
                 const glued = this.gluedPieces(vpos, bodyEnd, {inScope: true, groups: true});
+                // A DANGLING glue separates nothing, and the value reader would take it as part of the value:
+                // `target:area,` mid-run would read the comma as a role and refuse. Reading the one piece is
+                // what keeps a run legal while the reader is still choosing its next value.
+                const dangling = glued.pieces.length === 1 && glued.end > glued.pieces[0].end;
                 if (glued.pieces.length > 1) {
                     for (const [index, piece] of glued.pieces.entries()) {
                         const before = run.length;
@@ -1040,7 +1044,9 @@ class Parser {
                     }
                     return {kind: "done", next: glued.end};
                 }
-                const {segs, end} = this.valueToken(vpos, bodyEnd, {inScope: true, groups: true});
+                const {segs, end} = dangling
+                    ? {segs: glued.pieces[0].segs, end: glued.end}
+                    : this.valueToken(vpos, bodyEnd, {inScope: true, groups: true});
                 if (segs.length === 0) {
                     // An inner bind with no value: nothing to constrain the row with yet.
                     if (this.mode === "final") {

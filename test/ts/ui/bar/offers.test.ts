@@ -263,6 +263,33 @@ test("a bar at rest offers nothing at all", () => {
     assert.equal(flatOffers(NO_OFFERS).length, 0);
 });
 
+test("a role is taken with the glue behind it, and the same list is offered again", () => {
+    // The multiple choice is the whole reason the roles are a vocabulary a row holds several of, so taking one
+    // leaves the run open: the glue is written behind the word, the caret lands where the next value goes, and
+    // the panel that reopens is the same panel because the offers are read from the POSITION rather than held.
+    const text = "missile:{target:}";
+    const caret = 16;
+    const plan = planAt(text, caret);
+    const offers = offersAt(plan, caret - slotStart(plan), []);
+    const role = flatOffers(offers).find((offer) => offer.word === "caster");
+    assert.ok(role !== undefined, "the roles are offered where a target takes its value");
+    assert.equal(role.chains, true);
+
+    const {value, caret: within} = offerSlot(plan, offers, role);
+    assert.equal(value, "target:caster,");
+
+    // The dangling glue separates nothing, so what stands is a whole query rather than a broken one.
+    const written = "missile:{" + value + "}";
+    assert.deepEqual(parse(written).diagnostics.filter((d) => d.severity === "error"), []);
+
+    // And the position the caret lands on offers the roles again, which is what makes it a chain.
+    const next = planAt(written, slotStart(plan) + within);
+    const again = offersAt(next, slotStart(plan) + within - slotStart(next), []);
+    assert.deepEqual(
+        flatOffers(again).filter((offer) => offer.chains === true).map((offer) => offer.word).toSorted(),
+        ["area", "both", "caster", "others", "target"]);
+});
+
 test("every offer, taken, writes a query the parser reads without an error", () => {
     // One caret per position the surface can be opened at, covering every branch of the taxonomy.
     const positions: [string, number][] = [

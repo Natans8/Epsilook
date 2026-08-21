@@ -1124,6 +1124,9 @@ function Parser:innerItem(head, negated, i, bodyEnd, run, problems)
 			-- spelling that says several values of one property: each piece is
 			-- read against that property and they join the row's other terms.
 			local glued, gluedStop = self:gluedPieces(vpos, bodyEnd)
+			-- A DANGLING glue separates nothing, and the value reader would take it as part of the
+			-- value: `target:area,` mid-run would read the comma as a role and refuse.
+			local dangling = #glued == 1 and gluedStop > glued[1].stop + 1
 			if #glued > 1 then
 				for _, piece in ipairs(glued) do
 					local one = self:interpretSegs(piece.segs, ctx, problems)
@@ -1131,7 +1134,12 @@ function Parser:innerItem(head, negated, i, bodyEnd, run, problems)
 				end
 				return gluedStop
 			end
-			local segs, stop = self:valueToken(vpos, bodyEnd)
+			local segs, stop
+			if dangling then
+				segs, stop = glued[1].segs, gluedStop
+			else
+				segs, stop = self:valueToken(vpos, bodyEnd)
+			end
 			if #segs == 0 then
 				problems[#problems + 1] =
 					{ severity = "warning", message = word .. " has no value here and is ignored" }
