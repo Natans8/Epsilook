@@ -12,7 +12,7 @@
  * echo.
  */
 import {GRAMMAR, PREFIX_OPERATORS, spelling, spellingsOf} from "./grammar";
-import {doorOf, formatValue, sentinelOf, spokenProp, wordOf} from "../schema/kinds";
+import {doorOf, formatValue, isFlag, sentinelOf, spokenProp, wordOf} from "../schema/kinds";
 import {headWord} from "../schema/schema";
 import {COMPARISONS, exact} from "../vocabulary/operators";
 import type {Ask, Clause, Parsed, ParsedOperand, PropRef, ScopeTerm, ValueExpr} from "./ast";
@@ -20,7 +20,7 @@ import {anyOfExpr, propOf} from "./ast";
 import {escapeRegExp} from "../text/patterns";
 import {scopeShaped} from "./scan";
 import type {AxisType} from "../vocabulary/value-types";
-import {TYPES} from "../vocabulary/value-types";
+import {bitmask, isIdentity, TYPES} from "../vocabulary/value-types";
 import {notationOf, spellIn, spelledNotation} from "../vocabulary/units";
 
 /**
@@ -290,6 +290,10 @@ function termText(term: ScopeTerm, tier: Spelling, enclosing: PropRef["kind"] | 
     if (ask.on === "kindWord") return `${negate}${wordOf(ask.kind)}`;
     if (ask.on === "count") return `${negate}${bindTo(GRAMMAR.countWord, valueText(ask.value, undefined, tier))}`;
     const ref = ask.props[0];
+    // A flag stores no value: the word IS the ask, so it is written alone. Bound to its own name it spells a
+    // property taking a value it cannot take, and the spelling stops parsing -- `range:{melee unlimited}` came
+    // back as `melee:melee` and could not be read again.
+    if (isFlag(propOf(ref))) return `${negate}${spokenProp(ref.prop, propOf(ref))}`;
     const text = valueText(ask.value, ref, tier);
     // A word SHARED ACROSS KINDS — `file:wolf` reaching every kind's file — keeps that word: the kind-word
     // and subject spellings below fit only refs of one kind, and naming one kind would narrow the ask to it.
@@ -404,6 +408,55 @@ export function unbracedTerm(terms: ReadonlyArray<readonly ScopeTerm[]>): ScopeT
  * @param after The term written after it.
  * @returns Whether the glue spells the pair.
  */
+/**
+ * Whether a term names a value of an identity: a spell, a file, a creature, a kit.
+ *
+ * @param term The term.
+ * @returns Whether every operand it carries is an identity's.
+ */
+function identityTerm(term: ScopeTerm): boolean {
+    const ask = term.ask;
+    if (ask === null || (ask.on !== "content" && ask.on !== "props")) return false;
+    const value = ask.value;
+    if (!("operand" in value)) return false;
+    // Content carries its text raw, because it dispatches over the row's properties at match time rather than
+    // naming one here. Digits alone are what an identity list is written as, which is the same test the
+    // display model applies to decide it is drawing a list.
+    if ("text" in value.operand) return /^\d+$/.test(value.operand.text);
+    return isIdentity(TYPES.get(value.operand.type));
+}
+
+/**
+ * Whether a term asks about a flag: a presence, or one of the several a row carries at once.
+ *
+ * @param term The term.
+ * @returns Whether the property it binds is a flag or a mask of them.
+ */
+function flagTerm(term: ScopeTerm): boolean {
+    const ask = term.ask;
+    if (ask === null || ask.on !== "props") return false;
+    const prop = propOf(ask.props[0]);
+    return isFlag(prop) || prop.types.includes(bitmask);
+}
+
+/**
+ * Whether a run written glued is written glued again, or converges on the braced spelling.
+ *
+ * The glue is a way IN everywhere, but only three things are said with it: an identity list, which is the
+ * idiom people paste; a set of flags, which is the multiple choice the spelling exists for; and anything at a
+ * depth where the braces cannot be opened at all, a property having no scope of its own. Everything else has a
+ * braced spelling that says the same thing, and converging on it is what stops one question having two
+ * canonical forms.
+ *
+ * @param terms The run's terms, in written order.
+ * @param forced Whether the position refuses braces, leaving the glue the only spelling.
+ * @returns Whether to write the glue.
+ */
+function keepsGlue(terms: readonly ScopeTerm[], forced: boolean): boolean {
+    if (forced) return true;
+    return terms.every(identityTerm) || terms.every(flagTerm);
+}
+
 export function sharesDoor(before: ScopeTerm, after: ScopeTerm): boolean {
     const a = before.ask;
     const b = after.ask;
@@ -471,7 +524,12 @@ function askText(ask: Ask, tier: Spelling): string | null {
     const joinRun = (run: readonly { term: ScopeTerm; text: string }[]): string => run
         .map((pair, index) => {
             if (index === 0) return pair.text;
-            const tail = pair.term.glued === true && sharesDoor(run[index - 1].term, pair.term)
+            // A run written under a property's own door is at a depth the braces cannot reach -- a property
+            // has no scope -- so it keeps its glue whatever it carries. A run of bare values under a column
+            // or kind had a braced spelling available and converges on it unless it is a list or a set.
+            const forced = pair.term.glued === "door";
+            const tail = pair.term.glued !== undefined && sharesDoor(run[index - 1].term, pair.term)
+            && keepsGlue([run[index - 1].term, pair.term], forced)
                 ? gluedTail(pair.term, tier)
                 : null;
             return tail === null ? ` ${pair.text}` : `${GRAMMAR.glue}${tail}`;
@@ -496,7 +554,7 @@ function askText(ask: Ask, tier: Spelling): string | null {
     // say everything they would. For a PROPERTY door that is not a shortening but the only legal spelling, since
     // a property refuses a scope -- so it is written in every tier, where the shortening is the written tier's
     // alone and canonical keeps converging on the braces.
-    if (flat.length > 1 && flat.slice(1).every((pair) => pair.term.glued === true)) {
+    if (flat.length > 1 && flat.slice(1).every((pair) => pair.term.glued !== undefined)) {
         const lead = gluedTail(flat[0].term, tier);
         const tails = flat.slice(1).map((pair) => gluedTail(pair.term, tier));
         const refs = flat.map((pair) => (pair.term.ask?.on === "props" ? pair.term.ask.props[0] : null));
@@ -510,7 +568,9 @@ function askText(ask: Ask, tier: Spelling): string | null {
                 ? first.kind.word
                 : doorOf(first.prop, propOf(first));
         const throughout = flat.every((pair, index) => index === 0 || sharesDoor(flat[index - 1].term, pair.term));
+        const propDoor = flat.some((pair) => pair.term.glued === "door");
         if (lead !== null && tails.every((tail) => tail !== null) && throughout
+            && keepsGlue(flat.map((pair) => pair.term), propDoor)
             && (door !== null || tier === "written")) {
             const values = door === null ? [flat[0].text, ...tails] : [lead, ...tails];
             return `${door ?? head}${GRAMMAR.bind}${values.join(GRAMMAR.glue)}`;

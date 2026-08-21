@@ -116,10 +116,11 @@ export interface ScopeTerm {
      * The reading is identical either way -- the glue IS the scope's separator, written where the braces are
      * not -- so nothing downstream of the parse consults this. What it carries is the spelling, for the one
      * surface that must give a reader their own words back: a run typed `target:caster,area` is written that
-     * way again instead of exploding into a repeated head, and a property, which refuses a scope of its own,
-     * has no other spelling to be written in at all.
+     * way again instead of exploding into a repeated head. It also says WHICH run this is: `door` means the
+     * values were written under a property's own door, which has no braced spelling to converge on, where
+     * `bare` means they stood under a column or kind that could have opened a scope instead.
      */
-    readonly glued?: boolean;
+    readonly glued?: "bare" | "door";
 }
 
 /**

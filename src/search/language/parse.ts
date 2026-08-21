@@ -98,9 +98,11 @@ function statesBareValue(t: ScopeTerm): boolean {
  *
  * @param run The run being built.
  * @param from The length the run had before the piece was read.
+ * @param how Whether the run stood under a property's own door, which has no braced spelling, or under a
+ *   column or kind, which does.
  */
-function markGlued(run: ScopeTerm[], from: number): void {
-    for (let k = from; k < run.length; k++) run[k] = {...run[k], glued: true};
+function markGlued(run: ScopeTerm[], from: number, how: "bare" | "door"): void {
+    for (let k = from; k < run.length; k++) run[k] = {...run[k], glued: how};
 }
 
 /** A head that can open a row scope: a column or a kind. A property door takes a value, never a scope. */
@@ -558,11 +560,11 @@ class Parser {
                 const last = piece.segs[piece.segs.length - 1 - extras.length] ?? piece.segs[0];
                 this.pushScopeTerm(run, {start: piece.start, end: last.end}, false, main, pend, headWord(head));
                 this.emitExtras(extras);
-                if (index > 0) markGlued(run, before);
+                if (index > 0) markGlued(run, before, "door");
                 continue;
             }
             this.innerItem(scoped, piece.start, false, piece.start, piece.end, run, pend);
-            if (index > 0) markGlued(run, before);
+            if (index > 0) markGlued(run, before, "bare");
         }
         const terms = this.applyAnchorRule(this.alternateWhereSingle(scoped, [run]), pend);
         if (terms === null) {
@@ -1012,7 +1014,7 @@ class Parser {
                         this.pushScopeTerm(run, {start: piece.start, end: last.end}, termNot, read.main, pend,
                             word);
                         this.scopeExtras(head, read.extras, run, pend);
-                        if (index > 0) markGlued(run, before);
+                        if (index > 0) markGlued(run, before, "door");
                     }
                     return {kind: "done", next: glued.end};
                 }

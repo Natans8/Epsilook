@@ -402,7 +402,7 @@ function scopeItems(terms: ReadonlyArray<readonly ScopeTerm[]>, under: Kind | nu
         for (const [index, term] of run.entries()) {
             const item = termItem(term, run.length === 1, under);
             const last = items[items.length - 1];
-            const folded = term.glued === true && previous !== null && last !== undefined
+            const folded = term.glued !== undefined && previous !== null && last !== undefined
             && sharesDoor(previous, term)
                 ? foldGlued(last, item)
                 : null;
