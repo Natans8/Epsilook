@@ -11,12 +11,13 @@
  * surfacing much later as a section that is quietly missing.
  */
 
-/** Where the site's files are served from — the packs, and the art an offer may draw beside a word. */
-export const BASE = "/site/";
 import type {PackDomain, VersionEntry} from "../data";
 import type {RowPack} from "../packrows";
 import type {LoadedPack} from "../dataset";
 import {fromPack} from "../dataset";
+
+/** Where the site's files are served from — the packs, and the art an offer may draw beside a word. */
+export const BASE = "/site/";
 
 /** One entry of a pack's manifest: which file holds a module. */
 interface ManifestModule {

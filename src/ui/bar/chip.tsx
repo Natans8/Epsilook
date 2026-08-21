@@ -14,7 +14,7 @@
 import type {MouseEvent as ReactMouseEvent, ReactElement, ReactNode} from "react";
 import {createContext, Fragment, useContext, useMemo} from "react";
 import {useTranslation} from "react-i18next";
-import type {ChipView, LaneView, Piece, Run, Span} from "../../search/index";
+import type {ChipView, ClauseView, LaneView, Piece, Run, Span} from "../../search/index";
 import {describe, GRAMMAR, NEGATION, paint, parse, runsWithin} from "../../search/index";
 import {Classed, Pattern} from "./classed";
 import styles from "./bar.module.css";
@@ -42,7 +42,12 @@ export interface SegmentActions {
      * survives that, because a commit never adds or removes a term.
      */
     readonly removeTerm: (index: number) => void;
-    /** Grows the segment: a fresh term slot, or a fresh value alternative. */
+    /**
+     * Grows the segment: a fresh term slot, or a fresh value alternative.
+     *
+     * TODO: no caller until the control surface lands the `+` affordance that presses it. The rewrite and its
+     *   tests are in place, so what is missing is the button, not the behaviour.
+     */
     readonly grow: (flavour: "term" | "alternative") => void;
     /** Flips the whole segment between asking for and excluding what it names. */
     readonly negate: () => void;
@@ -133,18 +138,22 @@ function Joint(): ReactElement {
 }
 
 /**
- * The delete button: one mark, drawn as geometry rather than typed as a glyph, and never taking the press as
- * an open.
+ * One mark a chip carries: a small button drawn as GEOMETRY rather than typed as a glyph.
  *
  * A font's `×` is not centred on its line box — measured in the shipped face, the cross's ink sits 1.5px low
  * at 12px, a fraction of the font size rather than a fixed amount. Centring the box therefore cannot centre
  * the mark, and a nudge measured for one size and face is wrong at the next: this is the bug that was fixed by
- * hand in 1.0 and came back here. Two lines crossing at the middle of a square viewBox are centred by
- * construction, at any size, in any face.
+ * hand in 1.0 and came back here. Lines drawn inside a square viewBox are centred by construction, at any
+ * size, in any face — so the shape arrives as the path to draw, and every mark shares this frame.
  */
-function Affordance({label, onPress}: {
+function MarkButton({label, className, onPress, children}: {
+    /** What the mark does, said in full: several marks stand in one bar and each removes a different thing. */
     readonly label: string;
+    /** Which mark this is — what its hover says it will do. */
+    readonly className: string;
     readonly onPress: () => void;
+    /** The path or paths to draw inside the square viewBox. */
+    readonly children: ReactNode;
 }): ReactElement {
     return (
         // The slot is a line box of the neighbouring text's own metrics, so the mark inside it can align to
@@ -152,7 +161,7 @@ function Affordance({label, onPress}: {
         <span className={styles.markSlot}>
             <button
                 type="button"
-                className={styles.chipX}
+                className={className}
                 aria-label={label}
                 // Out of the sequential tab order on purpose: a bar of six chips would otherwise put a dozen
                 // affordances between Tab and the query input, which is the one thing a keyboard reaches for.
@@ -168,10 +177,29 @@ function Affordance({label, onPress}: {
                 }}
             >
                 <svg className={styles.mark} viewBox="0 0 12 12" aria-hidden="true" focusable="false">
-                    <path d="M3.6 3.6 8.4 8.4 M8.4 3.6 3.6 8.4"/>
+                    {children}
                 </svg>
             </button>
         </span>
+    );
+}
+
+/**
+ * The delete mark, at the tail of whatever it removes.
+ *
+ * Named by WHAT it removes, not just by the act: a bar of chips draws one of these per chip and per lane term,
+ * and a row of controls all called "Delete" tells a reader who cannot see which is which nothing at all.
+ */
+function Affordance({what, onPress}: {
+    /** The query text of the thing this removes — what a reader would type to ask for it again. */
+    readonly what: string;
+    readonly onPress: () => void;
+}): ReactElement {
+    const {t} = useTranslation();
+    return (
+        <MarkButton label={t("bar.deleteThis", {what})} className={styles.chipX} onPress={onPress}>
+            <path d="M3.6 3.6 8.4 8.4 M8.4 3.6 3.6 8.4"/>
+        </MarkButton>
     );
 }
 
@@ -191,35 +219,14 @@ function SortArrow({descending, label, onPress}: {
     readonly onPress: () => void;
 }): ReactElement {
     return (
-        <span className={styles.markSlot}>
-            <button
-                type="button"
-                className={styles.sortArrow}
-                aria-label={label}
-                tabIndex={-1}
-                onMouseDown={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                }}
-                onClick={(e) => {
-                    e.stopPropagation();
-                    onPress();
-                }}
-            >
-                <svg className={styles.mark} viewBox="0 0 12 12" aria-hidden="true" focusable="false">
-                    {descending
-                        ? <path d="M6 2.8 V9.2 M3.4 6.8 L6 9.4 L8.6 6.8"/>
-                        : <path d="M6 9.2 V2.8 M3.4 5.2 L6 2.6 L8.6 5.2"/>}
-                </svg>
-            </button>
-        </span>
+        <MarkButton label={label} className={styles.sortArrow} onPress={onPress}>
+            {descending
+                ? <path d="M6 2.8 V9.2 M3.4 6.8 L6 9.4 L8.6 6.8"/>
+                : <path d="M6 9.2 V2.8 M3.4 5.2 L6 2.6 L8.6 5.2"/>}
+        </MarkButton>
     );
 }
 
-/**
- * A body's pieces as one continuous inline run: real spaces between pieces, never flex gaps, so the text reads
- * as text. A swatch stays tight against the word that follows it, grouped under one vocabulary mark.
- */
 /**
  * The pictures a vocabulary word may carry, by the word that names it.
  *
@@ -239,6 +246,10 @@ export const ChipArt = createContext<Readonly<Record<string, string>>>({});
  */
 export const ChipRuns = createContext<readonly Run[]>([]);
 
+/**
+ * A body's pieces as one continuous inline run: real spaces between pieces, never flex gaps, so the text reads
+ * as text. A swatch stays tight against the word that follows it, grouped under one vocabulary mark.
+ */
 function Pieces({pieces, text}: { readonly pieces: readonly Piece[]; readonly text: string }): ReactElement {
     const art = useContext(ChipArt);
     const runs = useContext(ChipRuns);
@@ -345,18 +356,31 @@ function stateClass(base: string, tone: string, not: boolean, warned: boolean): 
     return parts.filter((part) => part !== "").join(" ");
 }
 
-/** A compact chip. */
-function ChipEl({chip, warned, notes, text, act}: {
-    readonly chip: ChipView;
+/**
+ * The anatomy every settled ask wears: `[head | body ×]` inside one toned enclosure.
+ *
+ * A chip, a lane and a directive differ only in what stands between the head and the delete mark, so the
+ * frame is stated once. What it fixes in place is the press rule and the two edges: whichever of the three a
+ * reader is looking at, pressing the head flips exclusion, pressing anywhere else opens the segment, and the
+ * mark at the tail removes it.
+ */
+function Capsule({base, head, not, tone, warned, notes, what, act, children}: {
+    /** The enclosure's own shape: compact, or a lane's row of cells. */
+    readonly base: string;
+    readonly head: string;
+    readonly not: boolean;
+    readonly tone: string;
     readonly warned: boolean;
     readonly notes: readonly string[];
-    readonly text: string;
+    /** The segment's query text, which names the delete mark. */
+    readonly what: string;
     readonly act: SegmentActions;
+    readonly children: ReactNode;
 }): ReactElement {
     const {t} = useTranslation();
     return (
         <span
-            className={stateClass(styles.chip, chip.tone, chip.not, warned)}
+            className={stateClass(base, tone, not, warned)}
             title={notes.length > 0 ? notes.join("\n") : undefined}
             // At the END, wherever on the chip the press landed. A chip draws its PARSE — a notated number, a
             // desugared count, a display glyph — so aiming at a character means aiming at a rendering, and the
@@ -366,15 +390,31 @@ function ChipEl({chip, warned, notes, text, act}: {
             })}
         >
             <Sect
-                head={chip.head}
-                not={chip.not}
-                hint={t(chip.not ? "bar.include" : "bar.exclude")}
+                head={head}
+                not={not}
+                hint={t(not ? "bar.include" : "bar.exclude")}
                 className={styles.chipSect}
                 onOpen={act.negate}
             />
-            <span className={styles.chipBody}><Pieces pieces={chip.body} text={text}/></span>
-            <Affordance label={t("bar.delete")} onPress={act.remove}/>
+            {children}
+            <Affordance what={what} onPress={act.remove}/>
         </span>
+    );
+}
+
+/** A compact chip. */
+function ChipEl({chip, warned, notes, text, act}: {
+    readonly chip: ChipView;
+    readonly warned: boolean;
+    readonly notes: readonly string[];
+    readonly text: string;
+    readonly act: SegmentActions;
+}): ReactElement {
+    return (
+        <Capsule base={styles.chip} head={chip.head} not={chip.not} tone={chip.tone}
+                 warned={warned} notes={notes} what={text} act={act}>
+            <span className={styles.chipBody}><Pieces pieces={chip.body} text={text}/></span>
+        </Capsule>
     );
 }
 
@@ -389,23 +429,8 @@ function LaneEl({lane, warned, notes, text, act}: {
     const runs = useContext(ChipRuns);
     const {t} = useTranslation();
     return (
-        <span
-            className={stateClass(styles.lane, lane.tone, lane.not, warned)}
-            title={notes.length > 0 ? notes.join("\n") : undefined}
-            // At the END, wherever on the chip the press landed. A chip draws its PARSE — a notated number, a
-            // desugared count, a display glyph — so aiming at a character means aiming at a rendering, and the
-            // reader who wants to change a chip is almost always continuing it rather than mending its middle.
-            onClick={press(() => {
-                act.open("end");
-            })}
-        >
-            <Sect
-                head={lane.head}
-                not={lane.not}
-                hint={t(lane.not ? "bar.include" : "bar.exclude")}
-                className={styles.chipSect}
-                onOpen={act.negate}
-            />
+        <Capsule base={styles.lane} head={lane.head} not={lane.not} tone={lane.tone}
+                 warned={warned} notes={notes} what={text} act={act}>
             {lane.items.map((item, i) => {
                 if (item.is === "or") return <Or key={i}/>;
                 const openItem = press((e) => {
@@ -452,14 +477,62 @@ function LaneEl({lane, warned, notes, text, act}: {
                                 }}
                             />
                             <span className={styles.bindBody}><Pieces pieces={item.body} text={text}/></span>
-                            <Affordance label={t("bar.delete")} onPress={() => {
-                                act.removeTerm(i);
-                            }}/>
+                            <Affordance
+                                what={text.slice(item.span.start, item.span.end)}
+                                onPress={() => {
+                                    act.removeTerm(i);
+                                }}
+                            />
                         </span>
                     </Fragment>
                 );
             })}
-            <Affordance label={t("bar.delete")} onPress={act.remove}/>
+        </Capsule>
+    );
+}
+
+/**
+ * A directive: sort, or the limit.
+ *
+ * A directive shapes the LIST, not the set, so it wears the same anatomy as every ask in a neutral capsule
+ * with no column tone — what tells it apart is what it holds, never a decorated edge. A sort draws one cell
+ * per door, each with its own arrow that turns that door round; anywhere else on the capsule edits. Neither a
+ * brace nor a minus renders: the capsule draws its parse, and the direction IS the arrow.
+ */
+function DirectiveEl({view, text, act}: {
+    readonly view: Extract<ClauseView, { form: "directive" }>;
+    readonly text: string;
+    readonly act: SegmentActions;
+}): ReactElement {
+    const {t} = useTranslation();
+    const doors = view.doors;
+    return (
+        <span
+            // A sequence needs the lane's row of cells; one door, or a count, sits in the compact shape.
+            className={`${doors !== undefined && doors.length > 1 ? styles.lane : styles.chip} ${styles.directive}`}
+            onClick={press(() => {
+                act.open("end");
+            })}
+        >
+            <span className={styles.chipSect}>{headCase(view.word)}</span>
+            {doors === undefined
+                ? <span className={styles.chipBody}>{view.value}</span>
+                : doors.map((door, d) => (
+                    <Fragment key={d}>
+                        {d > 0 && <Joint/>}
+                        <span className={`${styles.laneTerm} ${styles.directiveDoor}`}>
+                            {door.word}
+                            <SortArrow
+                                descending={door.descending}
+                                label={t(door.descending ? "bar.sortDesc" : "bar.sortAsc")}
+                                onPress={() => {
+                                    act.toggleSort(d);
+                                }}
+                            />
+                        </span>
+                    </Fragment>
+                ))}
+            <Affordance what={text} onPress={act.remove}/>
         </span>
     );
 }
@@ -512,7 +585,6 @@ export function SettledSegment({text, at, act, selected}: {
     /** The stretch of this segment the bar's selection covers, in the segment's own coordinates. */
     readonly selected?: Span;
 }): ReactElement {
-    const {t} = useTranslation();
     const views = useMemo(() => describe(parse(text)), [text]);
     // Painted once for the whole segment: a chip's raw fragments are cut out of it, and a cut cannot be
     // re-classified into the same answer as the query it came from.
@@ -539,40 +611,7 @@ export function SettledSegment({text, at, act, selected}: {
             parts.push(<LaneEl key={i} lane={view.lane} warned={view.warned} notes={view.notes}
                                text={text} act={act}/>);
         } else if (view.form === "directive") {
-            // A directive shapes the list, not the set: the same chip anatomy as every ask — a head cell and
-            // body cells — in a dashed neutral capsule with no column tone. A sort draws one cell per door,
-            // each wearing its own arrow; the arrow turns that door round, anywhere else on the chip edits.
-            // No brace and no minus renders: the chip draws its parse, and the direction IS the arrow.
-            const shape = view.doors !== undefined && view.doors.length > 1 ? styles.lane : styles.chip;
-            parts.push(
-                <span
-                    key={i}
-                    className={`${shape} ${styles.directive}`}
-                    onClick={press(() => {
-                        act.open("end");
-                    })}
-                >
-                    <span className={styles.chipSect}>{headCase(view.word)}</span>
-                    {view.doors !== undefined
-                        ? view.doors.map((door, d) => (
-                            <Fragment key={d}>
-                                {d > 0 && <Joint/>}
-                                <span className={`${styles.laneTerm} ${styles.directiveDoor}`}>
-                                    {door.word}
-                                    <SortArrow
-                                        descending={door.descending}
-                                        label={t(door.descending ? "bar.sortDesc" : "bar.sortAsc")}
-                                        onPress={() => {
-                                            act.toggleSort(d);
-                                        }}
-                                    />
-                                </span>
-                            </Fragment>
-                        ))
-                        : <span className={styles.chipBody}>{view.value}</span>}
-                    <Affordance label={t("bar.delete")} onPress={act.remove}/>
-                </span>,
-            );
+            parts.push(<DirectiveEl key={i} view={view} text={text} act={act}/>);
         } else {
             parts.push(
                 <span key={i} title={view.notes.length > 0 ? view.notes.join("\n") : undefined}>

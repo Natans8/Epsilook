@@ -1,17 +1,19 @@
 /**
  * @file The control surface's state: what the caret can be handed, and what taking it does.
  *
- * The offers themselves are a pure read of the open position ({@link ./offers!offersAt}); what lives here is
- * the state around them — where the caret sits inside the slot, which row is lit, whether the panel has been
- * put away, and the searches this browser remembers. Taking an offer is TYPING it, so every path below ends in
- * the session's own rewrite rather than in an edit of its own.
+ * The offers themselves are a pure read of the open position ({@link ./offers!offersAt}), and the panel's own
+ * state — the lit row, the dismissal, the ghost — is {@link ./panel!useOfferPanel}, which the plaintext view
+ * shares. What lives here is the chip bar's half: where the caret sits inside the slot, and what taking an
+ * offer DOES. Taking one is TYPING it, so every path below ends in the session's own rewrite rather than in an
+ * edit of its own.
  *
  * Split out of the bar because it reaches the session through four calls and nothing reaches back into it.
  */
-import {useId, useMemo, useState} from "react";
+import {useMemo, useState} from "react";
 import type {Assist} from "./open";
 import type {Offer, Offers, Vocabulary} from "./offers";
-import {flatOffers, NO_OFFERS, offerGhost, offerSlot, offersAt} from "./offers";
+import {NO_OFFERS, offerSlot, offersAt} from "./offers";
+import {useOfferPanel} from "./panel";
 import {slotStart, writeSlot} from "./plan";
 import {optionId} from "./surface";
 import type {EditingSession} from "./session";
@@ -57,36 +59,15 @@ export function useBarAssist(
     const {at, clamped, gapAt, pushUndo, openTail, applyStep, writeAtGap} = editing;
     // Where the caret sits inside the slot, as the input reports it — what the surface can offer depends on it.
     const [caretInSlot, setCaretInSlot] = useState(0);
-    // The lit offer, and the surface put away, each stamped with the situation they were decided in: both are
-    // answers about one arrangement of query, position and caret, and they lapse the moment that arrangement
-    // changes. Stamping is what keeps them out of the effects that would otherwise have to clear them.
-    const [litAt, setLitAt] = useState({stamp: "", index: -1});
-    const [dismissed, setDismissed] = useState("");
-    const listId = useId();
-
 
     // What the caret can be handed. A bar at rest holds no caret, so there is nothing to offer and nothing to
     // compute; everywhere else the offers are a pure read of the open position.
     const offers = useMemo(
         () => (rest ? NO_OFFERS : offersAt(at, caretInSlot, history, vocab)),
         [rest, at, caretInSlot, history, vocab]);
-    const flat = useMemo(() => flatOffers(offers), [offers]);
-    // One arrangement of query, position and caret — what the light and the dismissal were decided about.
-    //
-    // NUMBERED, because an arrangement returned to is not the arrangement that was left. A light steered
-    // to at `xpac:6` was decided about those characters under that caret; type them again later and a
-    // plain comparison hands back the light that was already spent, so Enter applies an offer the reader
-    // never chose instead of running their query. The count only has to DIFFER between visits, never to
-    // be sequential, so a render thrown away costs nothing.
-    const arrangement = JSON.stringify([text, clamped, gapAt ?? -1, caretInSlot]);
-    // Counted in STATE, adjusted during render: React re-runs this component before it renders any child, so
-    // the pass that reads the stale count is discarded rather than drawn.
-    const [visit, setVisit] = useState({arrangement: "", count: 0});
-    if (visit.arrangement !== arrangement) setVisit({arrangement, count: visit.count + 1});
-    const stamp = `${arrangement}#${String(visit.count)}`;
-    // Counted by ROWS, not groups: a group narrowed down to nothing must not hold an empty panel open.
-    const shown = (flat.length > 0 || offers.takes !== null) && dismissed !== stamp;
-    const lit = shown && litAt.stamp === stamp ? litAt.index : -1;
+    // One arrangement of query, position and caret — what the light and the dismissal are decided about.
+    const {flat, shown, lit, ghost, ghosted, listId, move, close, light} =
+        useOfferPanel(offers, JSON.stringify([text, clamped, gapAt ?? -1, caretInSlot]));
 
     /**
      * Takes one offer into the query, exactly as the keystrokes that would have written it: the stub the offers
@@ -108,24 +89,14 @@ export function useBarAssist(
         count: flat.length,
         open: shown,
         lit,
-        // While the reader types, the ghost is the best completion; once they steer the list — arrows or the
-        // pointer — the lit row previews instead, so what Enter would write is visible before it is taken.
-        ghost: shown ? (lit < 0 ? offers.ghost : offerGhost(offers, flat[lit])) : "",
+        ghost,
         listId,
         activeId: lit >= 0 ? optionId(listId, lit) : undefined,
-        move: (dir): void => {
-            if (flat.length === 0) return;
-            const next = lit < 0 ? (dir === 1 ? 0 : flat.length - 1) : (lit + dir + flat.length) % flat.length;
-            setDismissed("");
-            setLitAt({stamp, index: next});
-        },
+        move,
         pick: (): void => {
             if (lit >= 0) applyOffer(flat[lit]);
         },
-        close: (): void => {
-            setDismissed(stamp);
-            setLitAt({stamp: "", index: -1});
-        },
+        close,
         /**
          * Takes the completion the slot is showing.
          *
@@ -143,22 +114,11 @@ export function useBarAssist(
                 }, true, value);
                 return;
             }
-            // Unsteered, this takes exactly what the slot drew: the ghost names its own offer, so the word
-            // previewed and the word delivered cannot come apart. Reading the first row instead handed back
-            // whatever headed the list, which is only the ghost's offer when nothing further down completes
-            // the typed characters better.
-            const best = lit >= 0 ? flat[lit] : flat[offers.ghostAt];
-            if (best !== undefined) applyOffer(best);
+            // Whatever the slot DREW: the ghost names its own offer, so the word previewed and the word
+            // delivered cannot come apart.
+            if (ghosted !== undefined) applyOffer(ghosted);
         },
     };
 
-
-    return {
-        assist, offers, shown, lit, listId, setCaretInSlot,
-        onPick: applyOffer,
-        onLight: (index): void => {
-            // The pointer reports every move over a row; only a move to another row is news.
-            setLitAt((was) => (was.index === index && was.stamp === stamp ? was : {stamp, index}));
-        },
-    };
+    return {assist, offers, shown, lit, listId, setCaretInSlot, onPick: applyOffer, onLight: light};
 }

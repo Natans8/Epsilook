@@ -2,8 +2,8 @@
  * @file The bar: the query's segments in a row, one position open — a segment being edited, or a GAP between
  * segments where the caret can rest and type a new term.
  *
- * The frame for everything here, the user's own: think in terms of what is actually typed and how it is
- * evaluated on commit. The query text is the single source of truth; each gesture is a REWRITE of it, and the
+ * The frame for everything here: think in terms of what is actually typed and how it is evaluated on
+ * commit. The query text is the single source of truth; each gesture is a REWRITE of it, and the
  * bar's own state is only WHICH position is open plus the operation stacks. Arrows walk the full line:
  * chip — gap — chip — gap — tail, committing whatever they leave. Undo and redo land the caret where the change
  * happened, not at the end.
@@ -14,6 +14,7 @@
  */
 import type {ReactElement, Ref} from "react";
 import {Fragment, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState} from "react";
+import type {Run} from "../../search/index";
 import {paint, runsWithin} from "../../search/index";
 import type {BarSegment} from "./plan";
 import {segmentsOf, slotStart} from "./plan";
@@ -29,11 +30,22 @@ import {useBarAssist} from "./assist";
 import {recentQueries, rememberQuery} from "../history";
 import styles from "./bar.module.css";
 
-/**
- * The bar.
- */
 /** One frozen empty map, so a bar with no art does not hand the context a fresh object each render. */
 const EMPTY_ART: Readonly<Record<string, string>> = Object.freeze({});
+
+/**
+ * One painted run with its diagnostic state dropped.
+ *
+ * A value half typed is not a value that failed: `scale:x` on its way to `scale:x5` was being squiggled as
+ * though the reader had finished and got it wrong. Diagnostics belong to a committed query, which is the
+ * silent-while-typing half of the law, drawn.
+ *
+ * @param run The run as painted.
+ * @returns The run without its state, or the run itself where it carried none.
+ */
+function quieted(run: Run): Run {
+    return run.state === undefined ? run : {...run, state: undefined};
+}
 
 /**
  * What the panel around the bar may ask of it. A control outside the bar that rewrites the query — the
@@ -45,6 +57,9 @@ export interface BarHandle {
     rewrite(next: string): void;
 }
 
+/**
+ * The bar: every segment of the query in a row, with one position open for editing.
+ */
 export function Bar({text, onText, placeholder, vocab = NO_VOCABULARY, handle}: {
     readonly text: string;
     readonly onText: (text: string) => void;
@@ -102,15 +117,7 @@ export function Bar({text, onText, placeholder, vocab = NO_VOCABULARY, handle}: 
     // takes its own slice, which is what makes an open chip read exactly as the plain view reads.
     const painted = useMemo(() => paint(text), [text]);
     const slotRuns = useMemo(
-        () => runsWithin(painted, {start: slotStart(at), end: slotStart(at) + at.slot.length})
-            // Stripped of their state: a value half typed is not a value that failed, and `scale:x` on its way
-            // to `scale:x5` was being squiggled as though the reader had finished and got it wrong. Diagnostics
-            // belong to a committed query — which is the law's silent-while-typing half, drawn.
-            .map((run) => {
-                if (run.state === undefined) return run;
-                const {state: _dropped, ...quiet} = run;
-                return quiet;
-            }),
+        () => runsWithin(painted, {start: slotStart(at), end: slotStart(at) + at.slot.length}).map(quieted),
         [painted, at]);
     // At rest — no focus, or a bar-wide selection standing — the open position renders settled like every
     // other segment. A selection is a stretch of the settled query, so nothing inside it is in its editing form.
@@ -171,11 +178,11 @@ export function Bar({text, onText, placeholder, vocab = NO_VOCABULARY, handle}: 
      * deleted, and the space a reader sees between two chips is the one they typed. A gap between chips wide
      * enough to read but not made of the query's own characters is what made words look like objects.
      */
-    const between = (from: number, to: number): ReactElement => {
+    const between = (from: number, to: number, row: number): ReactElement => {
         const covered = sel !== null && sel.from <= from && sel.to >= to;
         return (
             <span
-                key={`sep-${String(from)}`}
+                key={`sep-${String(row)}`}
                 className={covered ? `${styles.sep} ${styles.selected}` : styles.sep}
                 data-at={from}
                 data-plain=""
@@ -186,7 +193,7 @@ export function Bar({text, onText, placeholder, vocab = NO_VOCABULARY, handle}: 
     };
 
     /** One settled segment: a chip, or a stretch of the query's own text. */
-    const settled = (seg: BarSegment): ReactElement => {
+    const settled = (seg: BarSegment, row: number): ReactElement => {
         const covered = sel !== null && sel.from <= seg.start && sel.to >= seg.end;
         // Text paints its own selection character by character; a chip is atomic, so the whole of it paints.
         const inside = sel === null || !seg.plain ? undefined
@@ -195,7 +202,7 @@ export function Bar({text, onText, placeholder, vocab = NO_VOCABULARY, handle}: 
             covered && !seg.plain ? styles.selected : ""].filter((held) => held !== "").join(" ");
         return (
             <span
-                key={seg.start}
+                key={`seg-${String(row)}`}
                 className={cls}
                 data-at={seg.start}
                 data-end={seg.end}
@@ -222,10 +229,14 @@ export function Bar({text, onText, placeholder, vocab = NO_VOCABULARY, handle}: 
     // inside a per-segment fragment made a gap's first keystroke a REMOUNT (the subtree changed parents, the
     // key could not save it), which killed the input's caret mid-session. Together the children cover the
     // query text exactly once, which is what lets a point resolve to an offset and back.
+    //
+    // Keyed by POSITION IN THE ROW rather than by text offset. A segment's offset moves whenever anything
+    // before it changes length, so an offset key remounted every chip after the caret on every keystroke —
+    // rebuilding subtrees whose text had not changed. The row's shape is what a key is for.
     const children: ReactElement[] = [];
     let drawn = 0;
-    for (const seg of segments) {
-        if (seg.start > drawn) children.push(between(drawn, seg.start));
+    for (const [row, seg] of segments.entries()) {
+        if (seg.start > drawn) children.push(between(drawn, seg.start, row));
         drawn = seg.end;
         if (!rest && (gapAt === seg.start || (gapAt === null && seg.start === openStart))) {
             children.push(<Fragment key="open">{open}</Fragment>);
@@ -233,13 +244,12 @@ export function Bar({text, onText, placeholder, vocab = NO_VOCABULARY, handle}: 
         }
         // An empty settled segment — a doubled separator's residue — draws nothing and takes no press:
         // opening a zero-width nothing is how phantom chiplets appear.
-        if (seg.start !== seg.end) children.push(settled(seg));
+        if (seg.start !== seg.end) children.push(settled(seg, row));
     }
-    if (drawn < text.length) children.push(between(drawn, text.length));
+    if (drawn < text.length) children.push(between(drawn, text.length, segments.length));
     // At rest the input stays mounted out of sight — same keyed sibling, so waking never remounts it —
     // holding the bar's place in the tab order until focus brings the editing form back.
     if (rest) children.push(<Fragment key="open">{open}</Fragment>);
-
 
     return (
         <ChipArt value={vocab.art ?? EMPTY_ART}>

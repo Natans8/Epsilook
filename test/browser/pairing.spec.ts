@@ -127,3 +127,29 @@ test("an unclosed phrase's scope keeps one closer however many times it is reope
         expect(await barInput(page).inputValue(), `round ${String(round)}`).toBe('"');
     }
 });
+
+test("a modified keystroke types nothing, so it pairs nothing", async () => {
+    // A modifier means the keystroke is a COMMAND, not a character. The pairing was reached with the raw key
+    // whenever the modifier guard had already emptied the typed character, so every modified delimiter key
+    // wrote its pair: Ctrl+Shift+[ turned `model:fire` into `model:fire{}`.
+    await clearBar(page);
+    await page.keyboard.type("model:fire", {delay: 5});
+    await expectQuery(page, "model:{fire}");
+    for (const chord of ["Control+Shift+BracketLeft", "Control+Shift+Quote", "Control+Shift+9"]) {
+        await page.keyboard.press(chord);
+        await expectQuery(page, "model:{fire}");
+    }
+    // The same for Backspace: the empty-pair delete is PLAIN Backspace's, and only plain Backspace's. What
+    // Ctrl+Backspace does instead is the platform's own word delete, whose exact reach is the platform's
+    // business — so what is pinned here is our rule, that the pair is not taken whole.
+    await clearBar(page);
+    await page.keyboard.type('name:"', {delay: 5});
+    await expectQuery(page, 'name:{""}');
+    await page.keyboard.press("Control+Backspace");
+    expect((await slot(page)).value).not.toBe("");
+    // Plain Backspace in the same place does take both halves, which is the rule this one must not reach.
+    await clearBar(page);
+    await page.keyboard.type('name:"', {delay: 5});
+    await page.keyboard.press("Backspace");
+    expect((await slot(page)).value).toBe("");
+});

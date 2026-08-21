@@ -30,6 +30,7 @@
     "simplify": "Simplify",
     "help": "Help",
     "delete": "Delete",
+    "deleteThis": "Delete {{what}}",
     "add": "Add a condition",
     "editHint": "Enter commits, Esc closes",
     "exclude": "Exclude what this asks for",

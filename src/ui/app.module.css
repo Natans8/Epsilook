@@ -1,5 +1,5 @@
-/* Increment 1 — the bar shell. The bar's metrics are 1.0's own (#qbar / #q in site/css/app.css): same padding,
- * radius, focus ring and type size, so the polish baseline is met by construction before anything is added. */
+/* The page around the bar. The bar's own metrics are the shipped app's (#qbar / #q in site/css/app.css): same
+ * padding, radius, focus ring and type size, so the polish baseline is met by construction. */
 
 .page {
     max-width: 1200px;
@@ -61,17 +61,25 @@
     position: relative;
 }
 
+/* Carried to assistive technology and not to the eye: the status line beside it is drawn, and this says the
+ * same thing on a cadence a listener can follow. Kept in the accessibility tree, so neither `display: none`
+ * nor `visibility: hidden` will do. */
+.announce {
+    position: absolute;
+    clip-path: inset(50%);
+    overflow: hidden;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    border: 0;
+    white-space: nowrap;
+}
+
 .barRow {
     display: flex;
     gap: 0.5rem;
     align-items: center;
-}
-
-/* The bar's focus scope: what "editing" means to the panel's settled-query controls. Layout-neutral. */
-.barHost {
-    flex: 1;
-    min-width: 0;
-    display: flex;
 }
 
 .statusRow {

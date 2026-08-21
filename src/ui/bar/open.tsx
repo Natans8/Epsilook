@@ -1,8 +1,8 @@
 /**
  * @file The open segment — the EDITING form of a chip, one of the design's two visual modes.
  *
- * The committed chip is a different component with a different look, arriving with its own increment; this one
- * is the segment under the caret: a head cell once the bind lands, and the value slot — the bar's only input —
+ * The committed chip ({@link ./chip!SettledSegment}) is the other mode and a different component; this one is
+ * the segment under the caret: a head cell once the bind lands, and the value slot — the bar's only input —
  * with the highlight backdrop under it.
  *
  * The input is UNCONTROLLED within one editing session, so the browser's own undo works natively inside the
@@ -14,10 +14,12 @@
 import type {KeyboardEvent, ReactElement, ReactNode} from "react";
 import {useLayoutEffect, useRef} from "react";
 import {useTranslation} from "react-i18next";
-import {GRAMMAR} from "../../search/index";
+import {GRAMMAR, NEGATION} from "../../search/index";
 import {headCase} from "./chip";
 import type {BarPlan, Keystroke} from "./plan";
-import {backspaceAtStart, deleteAtEnd, keywordBehind, pairDelimiter, slotStart, writeSlot} from "./plan";
+import {
+    backspaceAtStart, deleteAtEnd, keywordBehind, negatesBefore, pairDelimiter, slotStart, writeSlot,
+} from "./plan";
 import styles from "./bar.module.css";
 
 /** Where the caret starts this session, in slot coordinates; an anchor makes it a selection. */
@@ -290,10 +292,10 @@ export function OpenSegment({
             return;
         }
         // The keyboard's own path to the head's toggle. A minus before the value flips the whole segment, which
-        // is what the same character means before a head in the query's text — except before a DIGIT, where the
-        // ruled reading is a SIGN and `scale:{-50%}` has to keep agreeing with `scale:-50%`.
+        // is what the same character means before a head in the query's text — except before a DIGIT, where
+        // the ruled reading is a sign, which {@link negatesBefore} is the one statement of.
         if (typed === GRAMMAR.negate && collapsed && a === 0 && at.head !== null
-            && !/^[\d.]/.test(el.value)) {
+            && negatesBefore(el.value)) {
             e.preventDefault();
             onFlip();
             return;
@@ -317,11 +319,13 @@ export function OpenSegment({
                 return;
             }
         }
-        // Every other pairing is the shared rule, delivered as one undoable operation.
+        // Every other pairing is the shared rule, delivered as one undoable operation. `typed` and not the raw
+        // key: a modified keystroke types nothing, so it pairs nothing either — Ctrl+Shift+[ is not a brace to
+        // spawn one from, and Ctrl+Backspace is the platform's word delete rather than a pair delete.
+        //
         // The head cell holds characters the field does not, and they are what say whether a slash here opens a
         // pattern or is one more character of a path.
-        const paired = pairDelimiter(el.value, a, b, typed === "" ? e.key : typed,
-            at.open.slice(0, at.head?.consumed ?? 0));
+        const paired = pairDelimiter(el.value, a, b, typed, at.open.slice(0, at.head?.consumed ?? 0));
         if (paired !== null) {
             e.preventDefault();
             if (paired.value === el.value) el.setSelectionRange(paired.caret, paired.caret);
@@ -401,7 +405,7 @@ export function OpenSegment({
                     }}
                     title={t(at.head.negated ? "bar.include" : "bar.exclude")}
                 >
-                    {at.head.negated ? "−" : ""}{headCase(at.head.word)}
+                    {at.head.negated ? NEGATION : ""}{headCase(at.head.word)}
                 </span>
             )}
             <span key="slot" className={styles.editwrap}>

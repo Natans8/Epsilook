@@ -36,9 +36,6 @@ export interface EditingSession {
     readonly setFocused: (held: boolean) => void;
 
     readonly pushUndo: (before: string) => void;
-    readonly openSession: (
-        next: string, where: number, caretAt: number, gap: number | null, restore: string,
-    ) => void;
     readonly openSegment: (next: string, start: number, side: "start" | "end" | number) => void;
     readonly openGap: (next: string, start: number) => void;
     readonly openTail: (next: string) => void;
@@ -101,13 +98,8 @@ export function useEditingSession(
     const redos = useRef<string[]>([]);
 
     // Whether the bar holds the focus. At rest every segment renders committed — the editing form exists only
-    // under the caret — while the input stays mounted, hidden, so the bar keeps its place in the tab order and
-
+    // under the caret — while the input stays mounted, hidden, so the bar keeps its place in the tab order.
     const [focused, setFocused] = useState(false);
-
-    // The bar-wide selection, kept as the two OFFSETS the gesture moves: an anchor that stays put and a focus
-    // that walks. Offsets, because text selects by the character and the space between two words is a
-    // character of the query like any other; `selectionOver` is what snaps the range over the chips it
 
     const clamped = Math.min(openAt, text.length);
     const at: BarPlan = useMemo(() => {
@@ -192,14 +184,14 @@ export function useEditingSession(
     const onKeystroke = (step: Keystroke, reset: boolean, held: string): void => {
         if (gapAt !== null && !reset) {
             if (held === "") return;
-            const step2 = insertAtGap(text, gapAt, held);
-            if (step2 === null) {
+            const written = insertAtGap(text, gapAt, held);
+            if (written === null) {
                 // Nothing was written; the remount clears the swallowed separator back out of the input.
                 setSession((s) => s + 1);
                 return;
             }
             setGapAt(null);
-            applyStep(step2, false, held);
+            applyStep(written, false, held);
             return;
         }
         setGapAt(null);
@@ -427,7 +419,7 @@ export function useEditingSession(
     });
     return {
         at, clamped, gapAt, caret, session, focused, setFocused,
-        pushUndo, openSession, openSegment, openGap, openTail, openEnd,
+        pushUndo, openSegment, openGap, openTail, openEnd,
         applyStep, onKeystroke, commitOpen, writeAtGap, onArrow, onScopeShift, onCommit, onCancel, onEdge, onUndo,
         onRedo,
         restAfter, restAt, pressCommit, actionsFor,

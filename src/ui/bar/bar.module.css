@@ -122,7 +122,7 @@
     color: rgb(var(--danger-rgb));
 }
 
-/* the slot: the same transparent-input-over-backdrop pair the whole bar was in increment 2 */
+/* the slot: a transparent input riding over its own coloured backdrop */
 .editwrap {
     position: relative;
     display: inline-flex;
@@ -522,40 +522,9 @@
     margin: 0 0.4rem 0 0.1rem;
 }
 
-.chipX {
-    position: relative;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    vertical-align: middle;
-    width: 15px;
-    height: 15px;
-    background: none;
-    border: none;
-    border-radius: 50%;
-    padding: 0;
-    font: inherit;
-    line-height: 1;
-    /* --text over the chip wash: --text-muted measured 4.0:1 there, under AA for a control glyph. */
-    color: var(--text);
-    cursor: pointer;
-}
-
-/* The mark stays small — a chip is a compact thing — while the target it answers to is not: the overlay
- * carries the box out to 25px square, past the 24px minimum, without moving a pixel of the layout. */
-.chipX::after {
-    content: "";
-    position: absolute;
-    inset: -5px;
-}
-
-.chipX:hover {
-    color: rgb(var(--danger-rgb));
-    background: rgba(var(--danger-rgb), calc(0.12 * var(--wash-strength)));
-}
-
-/* The sort capsule's direction arrow: the same box as the delete mark, but its press is an action rather than
- * a removal, so its hover stays in the text's own colour instead of the danger wash. */
+/* Every mark a chip carries is one box; what a particular mark DOES shows in its hover alone, below.
+ * --text over the chip wash: --text-muted measured 4.0:1 there, under AA for a control glyph. */
+.chipX,
 .sortArrow {
     position: relative;
     display: inline-flex;
@@ -574,15 +543,26 @@
     cursor: pointer;
 }
 
+/* The mark stays small — a chip is a compact thing — while the target it answers to is not: the overlay
+ * carries the box out to 25px square, past the 24px minimum, without moving a pixel of the layout. */
+.chipX::after,
 .sortArrow::after {
     content: "";
     position: absolute;
     inset: -5px;
 }
 
+/* A removal, so the wash is the danger one. */
+.chipX:hover {
+    color: rgb(var(--danger-rgb));
+    background: rgba(var(--danger-rgb), calc(0.12 * var(--wash-strength)));
+}
+
+/* The sort capsule's direction arrow: an action rather than a removal, so its hover stays in the text's own
+ * colour. Same wash strength as every other, and through the same token, so the theme's knob reaches it. */
 .sortArrow:hover {
     color: var(--text-strong);
-    background: color-mix(in srgb, var(--text) 12%, transparent);
+    background: rgba(var(--overlay-rgb), calc(0.12 * var(--wash-strength)));
 }
 
 /* the marks: two lines crossing at the centre of a square box, so they are centred by construction rather
@@ -803,9 +783,6 @@
     color: color-mix(in srgb, var(--text) 42%, var(--bg-panel));
 }
 
-/* The property a compact chip's value binds, drawn as its own cell. Same recession and same rule as the head it
- * follows, so `attach | chest` reads as one thing saying what another is — which is what the lane's inner bind
- * already looked like before the compact form flattened it to two words. */
 /* A vocabulary's picture inside a chip. Sized on the LINE here rather than on a shared width: a chip carries one
  * badge at a time, so what it has to agree with is the text beside it, not eleven siblings in a column. */
 .chipArt {

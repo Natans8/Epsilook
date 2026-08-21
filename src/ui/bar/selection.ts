@@ -27,8 +27,6 @@ export interface BarSelectionState {
     readonly clear: () => void;
     /** The selected text: the query those segments spell, which is what a copy puts on the clipboard. */
     readonly selectedText: () => string;
-    /** Removes the selection as one operation, resting the caret where it stood. */
-    readonly deleteSelection: () => void;
     /** Ctrl+A past the slot: the whole query, in the bar's own selection. */
     readonly onSelectAll: () => void;
     /** Extends past the slot's own edge — one character through text, one whole chip past a chip. */
@@ -60,17 +58,14 @@ export function useBarSelection(
     onText: (next: string) => void,
     session: EditingSession,
 ): BarSelectionState {
-    // The bar-wide selection, kept as the two OFFSETS the gesture moves: an anchor that stays put and a focus
-    // that walks. Offsets, because text selects by the character and the space between two words is a
-    // character of the query like any other; `selectionOver` is what snaps the range over the chips it
-    // touches, which are the only things in the bar that cannot be half-selected.
+    // The gesture's two ends: an anchor that stays put and a focus that walks. The file header says why they
+    // are offsets rather than segments.
     const [range, setRange] = useState<{ anchor: number; focus: number } | null>(null);
     // Where a drag began, while the button is down, and whether it has moved off that offset yet.
     const dragFrom = useRef<number | null>(null);
     const dragged = useRef(false);
 
     const sel: BarSelection | null = range === null ? null : selectionOver(text, range.anchor, range.focus);
-
 
     /**
      * Ctrl+A past the slot: the whole query selected, in the bar's own selection.
@@ -89,7 +84,6 @@ export function useBarSelection(
         if (step.text !== text) onText(step.text);
         setRange({anchor: 0, focus: step.text.trimEnd().length});
     };
-
 
     /** The selected segments' own text — the query they spell, which is what a copy puts on the clipboard. */
     const selectedText = (): string => (sel === null ? "" : text.slice(sel.from, sel.to));
@@ -117,7 +111,6 @@ export function useBarSelection(
         const edge = Math.min(slotStart(session.at) + (dir === -1 ? 0 : session.at.slot.length), step.text.length);
         setRange({anchor, focus: selectionStep(step.text, range?.focus ?? edge, dir)});
     };
-
 
     /**
      * Where a press landed in the query.
@@ -208,7 +201,6 @@ export function useBarSelection(
         else session.openGap(text, seg.start);
     };
 
-
     /**
      * The selection's own keys, taken in CAPTURE so they never reach the input underneath: while a stretch of
      * the query is selected, Escape, Delete and the clipboard belong to the bar rather than to any one slot.
@@ -269,20 +261,19 @@ export function useBarSelection(
             else session.restAfter(text, sel.to);
             return;
         }
-        // A printable character replaces the selection, exactly as typing over selected text does. One
+        // A printable character replaces the selection, exactly as typing over selected text does — through
+        // the same rewrite a paste takes, so the separator rule has one statement rather than two. One
         // operation: the removal and the character land together, so one undo takes both back.
         if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
             e.preventDefault();
             e.stopPropagation();
             session.pushUndo(text);
-            const gone = removeSelection(text, sel);
+            const step = replaceSelection(text, sel, e.key);
             setRange(null);
-            // The character lands where the selection stood, keeping the separator that a following segment
-            // needs — and growing none at the query's end, where the word is still being typed.
-            const after = gone.text.slice(gone.caret);
-            const glue = after.trim() === "" ? "" : " ";
-            const typed = gone.text.slice(0, gone.caret) + e.key + glue + after;
-            session.openSegment(typed, gone.caret + e.key.length, e.key.length);
+            // A separator typed over a selection writes nothing, so what lands is the removal alone and the
+            // caret rests where it stood. Anything else keeps the slot open on what was just typed.
+            if (step.caret === sel.from) session.restAt(step);
+            else session.openSegment(step.text, step.caret, e.key.length);
         }
     };
 
@@ -318,7 +309,7 @@ export function useBarSelection(
     };
 
     return {
-        sel, clear, selectedText, deleteSelection, onSelectAll, onSelectPast,
+        sel, clear, selectedText, onSelectAll, onSelectPast,
         onBarDown, onBarMove, onBarUp, onBarClick, onBarKeys, onBarPaste,
     };
 }

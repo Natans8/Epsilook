@@ -7,10 +7,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-    backspaceAtStart, commitSegment, deleteAtEnd, firstDiff, grownSegment, insertAtGap, keywordBehind, openHead,
-    pairDelimiter, planAt, removeSegment, removeSelection, removeTerm, replaceSelection, scopedForm, scopeGesture,
-    segmentAt, shiftScope,
-    segmentsOf, selectionOver, selectionStep, slotStart, termStarts, toggleSort,
+    backspaceAtStart, commitSegment, deleteAtEnd, firstDiff, grownSegment, insertAtGap, keywordBehind,
+    negatesBefore, openHead, pairDelimiter, planAt, removeSegment, removeSelection, removeTerm, replaceSelection,
+    scopedForm, scopeGesture, segmentAt, segmentsOf, selectionOver, selectionStep, shiftScope, slotStart,
+    termStarts, toggleSort,
 } from "../../../../src/ui/bar/plan";
 
 test("a door's arrow turns that door alone, respelled through the formatter", () => {
@@ -527,6 +527,37 @@ test("replacing a selection lands the new text where it stood, the caret after i
     // Nothing pasteable is the removal alone.
     assert.deepEqual(replaceSelection(text, {from: 0, to: 10}, "  \n "),
         {text: "sound:bell cast:2s", caret: 0, removed: true});
+});
+
+test("a separator typed over a selection writes nothing, so no doubled separator is left behind", () => {
+    // The symptom: selecting the first chip and pressing the space bar wrote the space on top of the one the
+    // removal had already left, and the query opened with two — which the term split reads as an empty term.
+    const text = "model:fire sound:bell";
+    assert.deepEqual(replaceSelection(text, {from: 0, to: 10}, " "),
+        {text: "sound:bell", caret: 0, removed: true});
+    // The same rule a separator typed into a gap answers to: nothing to separate, so nothing is written.
+    assert.equal(insertAtGap(text, 11, " "), null);
+});
+
+test("an escape shields the next character, but never whitespace: `a\\ b` is two terms, not one", () => {
+    // The lexer's own limit (scan.ts, classify.ts): a shielded space would draw one segment across two clauses,
+    // and an edit inside that segment would then cross a clause boundary.
+    assert.deepEqual(termStarts("a\\ b"), [0, 3]);
+    assert.deepEqual(segmentsOf("model:fire\\ sound:bell").map((seg) => seg.start), [0, 12]);
+    // A shielded NON-space still shields, everywhere — inside a phrase and outside one alike.
+    assert.deepEqual(termStarts("a\\:b c"), [0, 5]);
+    assert.deepEqual(termStarts('name:"a\\" b'), [0]);
+    // A trailing escape shields nothing, because there is no next character for it to shield.
+    assert.deepEqual(termStarts("a\\"), [0]);
+});
+
+test("a minus before a digit is a sign, and before anything else it excludes", () => {
+    // One statement of the rule, so the keyboard's flip and the offers' exclusion mark cannot read the same
+    // character two ways: `scale:{-50%}` has to keep agreeing with `scale:-50%`.
+    assert.equal(negatesBefore("50%"), false);
+    assert.equal(negatesBefore(".5"), false);
+    assert.equal(negatesBefore("fire"), true);
+    assert.equal(negatesBefore(""), true);
 });
 
 test("the delimiter pairing is one rule: enclose, spawn, step over, and take both halves back", () => {

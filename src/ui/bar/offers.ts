@@ -11,7 +11,7 @@
  * the bar feeds the insertion through the same keystroke path a typed character takes.
  */
 import type {BarPlan} from "./plan";
-import {termStarts} from "./plan";
+import {negatesBefore, structure, termStarts} from "./plan";
 import type {Column, Kind, Prop, Rung} from "../../search/index";
 import {
     bitmask, COUNT_PROP, enumeration, flag, fold, GRAMMAR, HEADS, headWord, hintOf, kindIn, kindsOf, operatorsOf,
@@ -239,29 +239,35 @@ function termAt(text: string, caret: number): { start: number; end: number } {
 
 /** Where a term's own bind sits, or -1 — the depth-zero colon that makes the rest of it a value. */
 function bindIn(term: string): number {
-    let quote = false;
-    let depth = 0;
-    for (let at = 0; at < term.length; at++) {
-        const ch = term[at];
-        // The escape shields the next character everywhere outside a regex, not only inside a phrase.
-        if (ch === GRAMMAR.escape) {
-            at += 1;
-            continue;
-        }
-        if (ch === GRAMMAR.phrase) {
-            quote = !quote;
-            continue;
-        }
-        if (quote) continue;
-        if (ch === GRAMMAR.scope.open || ch === GRAMMAR.group.open) depth += 1;
-        else if (ch === GRAMMAR.scope.close || ch === GRAMMAR.group.close) depth -= 1;
-        else if (ch === GRAMMAR.bind && depth <= 0) return at;
+    for (const {ch, at, depth} of structure(term)) {
+        if (ch === GRAMMAR.bind && depth <= 0) return at;
     }
     return -1;
 }
 
-/** Every door of the language, by the spelling it writes — the head index folded back onto the words it offers. */
-function doorOffers(): Offer[] {
+/** One door written as the sort scope takes it: the bare word, since a sort names an axis rather than binding it. */
+const takenBare = (offer: Offer): Offer => ({...offer, insert: offer.word});
+
+/** The door menu, built on first ask. See {@link doorOffers} for why holding it is safe. */
+let doorMenu: readonly Offer[] | null = null;
+
+/**
+ * Every door of the language, by the spelling it writes — the head index folded back onto the words it offers.
+ *
+ * Held after the first build. Everything it reads is a declaration that cannot change while the page stands:
+ * the head index is a module-level registry, and the interface language is fixed for a page's lifetime because
+ * switching it is a reload. Nothing mutates the offers afterwards either — every caller copies before it
+ * changes one — so one array serves every keystroke.
+ *
+ * @returns The doors, in menu order.
+ */
+function doorOffers(): readonly Offer[] {
+    doorMenu ??= buildDoorOffers();
+    return doorMenu;
+}
+
+/** Builds the door menu from the declarations. */
+function buildDoorOffers(): Offer[] {
     const held = new Map<string, Offer & { reads: string[] }>();
     for (const [spelling, head] of HEADS) {
         const word = headWord(head);
@@ -471,9 +477,16 @@ const offerSpellings = (offer: Offer): string[] => [offer.word, ...(offer.reads 
 function narrow(offers: readonly Offer[], typed: string): Offer[] {
     const held = fold(typed);
     if (held === "") return [...offers];
-    const opens = (offer: Offer): boolean => offerSpellings(offer).some((word) => word.startsWith(held));
-    const holds = (offer: Offer): boolean => offerSpellings(offer).some((word) => word.includes(held));
-    return [...offers.filter(opens), ...offers.filter((offer) => !opens(offer) && holds(offer))];
+    // One pass into two buckets. Each offer's spellings are folded once: a closed pack vocabulary runs to the
+    // hundreds, and asking the same question of the same word three times is three times the work for one answer.
+    const opening: Offer[] = [];
+    const holding: Offer[] = [];
+    for (const offer of offers) {
+        const spellings = offerSpellings(offer);
+        if (spellings.some((word) => word.startsWith(held))) opening.push(offer);
+        else if (spellings.some((word) => word.includes(held))) holding.push(offer);
+    }
+    return [...opening, ...holding];
 }
 
 /**
@@ -615,20 +628,13 @@ function takesOf(prop: Prop, name: string, what?: string): Takes {
 function closerGhost(value: string): string {
     const want: string[] = [];
     let quote = false;
-    for (let at = 0; at < value.length; at++) {
-        const ch = value[at];
-        // The escape shields the next character everywhere outside a regex, not only inside a phrase.
-        if (ch === GRAMMAR.escape) {
-            at += 1;
-            continue;
-        }
+    for (const {ch} of structure(value)) {
         if (ch === GRAMMAR.phrase) {
             quote = !quote;
             if (quote) want.push(GRAMMAR.phrase);
             else want.pop();
             continue;
         }
-        if (quote) continue;
         if (ch === GRAMMAR.scope.open) want.push(GRAMMAR.scope.close);
         else if (ch === GRAMMAR.group.open) want.push(GRAMMAR.group.close);
         else if (ch === GRAMMAR.scope.close || ch === GRAMMAR.group.close) want.pop();
@@ -717,18 +723,14 @@ function wordsGroup(composing: Composing | null, flags: readonly Offer[], typed:
 export function offersAt(plan: BarPlan, caret: number, history: readonly string[], vocab = NO_VOCABULARY): Offers {
     const slot = plan.slot;
     const at = Math.min(Math.max(caret, 0), slot.length);
-    // An empty bar is the one position with nothing typed to narrow by: it offers the whole menu.
+    // An empty bar is the one position with nothing typed to narrow by: it offers the whole menu. Spread from
+    // NO_OFFERS, here and in the sort scope below, so a field added to Offers cannot be forgotten by a branch.
     if ((plan.before + plan.open + plan.after).trim() === "") {
         return {
+            ...NO_OFFERS,
             groups: [...historyGroup(history), ...group("axes", doorOffers(), "")],
-            typed: "",
             atEnd: true,
-            takes: null,
             stub: {start: at, end: at},
-            ghost: "",
-            ghostIs: null,
-            ghostAt: -1,
-            negated: false,
         };
     }
 
@@ -745,7 +747,8 @@ export function offersAt(plan: BarPlan, caret: number, history: readonly string[
     const inner = bound && context !== null ? innerProp(context, boundWord) : null;
     // A leading minus negates whatever follows it, so it is not part of the word an offer replaces — and every
     // offer made under one excludes rather than asks, which the rows say for themselves.
-    const negated = inner === null && slot.startsWith(GRAMMAR.negate, term.start);
+    const negated = inner === null && slot.startsWith(GRAMMAR.negate, term.start)
+        && negatesBefore(slot.slice(term.start + 1));
     const from = inner !== null ? term.start + bind + 1 : term.start + (negated ? 1 : 0);
     const stub = {start: Math.min(from, at), end: Math.max(term.end, at)};
     const typed = slot.slice(stub.start, at);
@@ -760,17 +763,17 @@ export function offersAt(plan: BarPlan, caret: number, history: readonly string[
         // The directives themselves are not doors a sort can take.
         const doors = doorOffers()
             .filter((offer) => offer.word !== GRAMMAR.sortWord && offer.word !== GRAMMAR.limitWord)
-            .map((offer) => Object.assign({}, offer, {insert: offer.word}));
+            .map(takenBare);
         const groups = group("doors", doors, typed);
         const best = groups[0]?.offers[0];
         const completes = best !== undefined && typed !== "" && at === slot.length
             && fold(best.insert).startsWith(fold(typed));
         return {
-            groups, typed, atEnd: at === slot.length, takes: null, stub,
+            ...NO_OFFERS,
+            groups, typed, atEnd: at === slot.length, stub, negated,
             ghost: completes ? best.insert.slice(typed.length) : "",
             ghostIs: completes ? "offer" : null,
             ghostAt: completes ? 0 : -1,
-            negated,
         };
     }
 
@@ -824,17 +827,18 @@ export function offersAt(plan: BarPlan, caret: number, history: readonly string[
         // next — `mou` completes to `mount`, a complete ask, and only then does `mount` offer `mount:`.
         doors = doors.map((offer) => (
             !offer.insert.endsWith(GRAMMAR.bind) && fold(offer.word) === fold(typed)
-                ? Object.assign({}, offer, {insert: offer.word + GRAMMAR.bind})
+                ? {...offer, insert: offer.word + GRAMMAR.bind}
                 : offer));
         // An UNSCOPED bound head — the plain view's standing state, where no gesture spawns the braces —
         // takes a BIND-carrying door WITH the scope it needs: gluing `kit:` straight to `sound:` spells a
         // second colon no value has a meaning for. A bare word needs no scope, so it goes in as it is.
         if (plan.head !== null && plan.head.bound && !plan.head.scoped) {
             doors = doors.map((offer) => (offer.insert.endsWith(GRAMMAR.bind)
-                ? Object.assign({}, offer, {
+                ? {
+                    ...offer,
                     insert: `${GRAMMAR.scope.open}${offer.insert}${GRAMMAR.scope.close}`,
                     caretBack: 1,
-                })
+                }
                 : offer));
         }
         // The word before the bind is unknown here, so the scope's whole offer stands unnarrowed.

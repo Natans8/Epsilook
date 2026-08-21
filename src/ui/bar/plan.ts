@@ -46,6 +46,53 @@ export interface BarPlan {
     readonly suffix: string;
 }
 
+/** One character of a query that the language reads as structure, with the enclosure depth it stands at. */
+export interface Step {
+    readonly ch: string;
+    readonly at: number;
+    /** The depth before this character applies, so an opener stands at the depth it opens from. */
+    readonly depth: number;
+}
+
+/**
+ * Every character of a query that stands outside a phrase, with the enclosure depth it stands at.
+ *
+ * The two readings that turn raw text into a query are applied once, here, rather than restated by each thing
+ * that walks it: an escape shields the character after it — everywhere, not only inside a phrase, and never
+ * whitespace, which is what the lexer itself reads — and everything between an unescaped pair of quotes is
+ * literal. The quote characters themselves are yielded, so a caller that has to know whether a phrase was left
+ * open can count them.
+ *
+ * The depth counts both enclosures, which is the question a term boundary and a bind ask. A caller asking a
+ * narrower one — which brace closes a particular scope — counts what it cares about over the same steps.
+ *
+ * @param text The text to walk.
+ * @yields Each structural character, in order.
+ */
+export function* structure(text: string): Generator<Step> {
+    let quote = false;
+    let depth = 0;
+    for (let at = 0; at < text.length; at++) {
+        const ch = text[at];
+        // The escape shields the next character, but never whitespace, and never at the text's end: those are
+        // the lexer's own limits. Shielding a space here would draw `a\ b` as one segment where the parser
+        // reads two clauses, and an edit inside that segment would cross a clause boundary.
+        if (ch === GRAMMAR.escape && at + 1 < text.length && !/\s/.test(text[at + 1])) {
+            at += 1;
+            continue;
+        }
+        if (ch === GRAMMAR.phrase) {
+            yield {ch, at, depth};
+            quote = !quote;
+            continue;
+        }
+        if (quote) continue;
+        yield {ch, at, depth};
+        if (ch === GRAMMAR.scope.open || ch === GRAMMAR.group.open) depth += 1;
+        else if (ch === GRAMMAR.scope.close || ch === GRAMMAR.group.close) depth -= 1;
+    }
+}
+
 /**
  * The start offset of every TERM: zero, then after each space at balanced depth.
  *
@@ -61,23 +108,8 @@ export interface BarPlan {
  */
 export function termStarts(text: string): number[] {
     const starts = [0];
-    let quote = false;
-    let depth = 0;
-    for (let at = 0; at < text.length; at++) {
-        const ch = text[at];
-        // The escape shields the next character everywhere outside a regex, not only inside a phrase.
-        if (ch === GRAMMAR.escape) {
-            at += 1;
-            continue;
-        }
-        if (ch === GRAMMAR.phrase) {
-            quote = !quote;
-            continue;
-        }
-        if (quote) continue;
-        if (ch === GRAMMAR.scope.open || ch === GRAMMAR.group.open) depth += 1;
-        else if (ch === GRAMMAR.scope.close || ch === GRAMMAR.group.close) depth -= 1;
-        else if (ch === " " && depth <= 0) starts.push(at + 1);
+    for (const {ch, at, depth} of structure(text)) {
+        if (ch === " " && depth <= 0) starts.push(at + 1);
     }
     return starts;
 }
@@ -330,19 +362,13 @@ function closesAtEnd(interior: string): boolean {
  */
 function closerAt(interior: string): number {
     let quote = false;
+    // Scope braces only, and from one rather than zero: the interior is already inside the brace being closed.
     let depth = 1;
-    for (let at = 0; at < interior.length; at++) {
-        const ch = interior[at];
-        // The escape shields the next character everywhere outside a regex, not only inside a phrase.
-        if (ch === GRAMMAR.escape) {
-            at += 1;
-            continue;
-        }
+    for (const {ch, at} of structure(interior)) {
         if (ch === GRAMMAR.phrase) {
             quote = !quote;
             continue;
         }
-        if (quote) continue;
         if (ch === GRAMMAR.scope.open) depth += 1;
         else if (ch === GRAMMAR.scope.close) {
             depth -= 1;
@@ -360,6 +386,21 @@ function closerAt(interior: string): number {
     // the scope.
     if (quote) return interior.lastIndexOf(GRAMMAR.scope.close);
     return -1;
+}
+
+/**
+ * Whether a minus standing before `after` excludes it, rather than signing it.
+ *
+ * The same character does both jobs and only what follows tells them apart: before a digit it is a SIGN, which
+ * is what keeps `scale:{-50%}` agreeing with `scale:-50%`; before anything else it excludes what it opens. Both
+ * surfaces that draw or write a minus ask here, so the keyboard's flip and the offers' exclusion mark cannot
+ * read the same character two ways.
+ *
+ * @param after The text the minus would stand before.
+ * @returns Whether the minus negates.
+ */
+export function negatesBefore(after: string): boolean {
+    return !/^[\d.]/.test(after);
 }
 
 /** Where a plan's slot begins in text coordinates — what turns an input caret into a text offset and back. */
@@ -965,10 +1006,14 @@ export function removeSelection(text: string, sel: BarSelection): Commit {
  * the separator a following segment needs — and growing none at the query's end, where the reader may keep
  * typing. Newlines in the insertion become the separator they stand for, because a query is one line.
  *
+ * What is left after that flattening may be nothing — a pasted blank, or a separator typed over the selection —
+ * and then the removal alone is what lands. That is the same rule {@link insertAtGap} answers to: a bare
+ * separator has no term to separate, so it writes nothing rather than doubling the one already there.
+ *
  * @param text The query text.
  * @param sel The selection.
  * @param inserted The replacement text, as typed or pasted.
- * @returns The new text with the caret after the insertion.
+ * @returns The new text with the caret after the insertion, or at the removal where nothing was written.
  */
 export function replaceSelection(text: string, sel: BarSelection, inserted: string): Commit {
     const flat = inserted.replaceAll(/\s*\n\s*/g, " ").trim();
@@ -982,7 +1027,6 @@ export function replaceSelection(text: string, sel: BarSelection, inserted: stri
         removed: true,
     };
 }
-
 
 /**
  * Flips exclusion at one offset: the `-` a clause or a scope term carries before its head.

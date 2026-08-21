@@ -12,10 +12,11 @@
  * looking at it.
  */
 import type {ChangeEvent, KeyboardEvent, ReactElement} from "react";
-import {useId, useLayoutEffect, useMemo, useRef, useState} from "react";
+import {useLayoutEffect, useMemo, useRef, useState} from "react";
 import {pairDelimiter, planAt, slotStart, writeSlot} from "./plan";
 import type {Offer, Vocabulary} from "./offers";
-import {flatOffers, NO_VOCABULARY, offerGhost, offerSlot, offersAt} from "./offers";
+import {NO_VOCABULARY, offerSlot, offersAt} from "./offers";
+import {useOfferPanel} from "./panel";
 import {optionId, Surface} from "./surface";
 import {Classed} from "./classed";
 // Two sheets, two jobs: the bar's own frame is shared with the chip view, the rest is this view's alone.
@@ -40,25 +41,19 @@ export function PlainBar({text, onText, placeholder, label, history = NO_HISTORY
     readonly vocab?: Vocabulary;
 }): ReactElement {
     const field = useRef<HTMLTextAreaElement>(null);
-    // The same offers the chip view gets, read from the same plan: this view shows the query differently, it
-    // does not know less about it. What it does NOT take is the chip view's conveniences — no commit, no scope
-    // gesture, no rewrap — so a picked offer lands as the characters it spells and nothing else moves.
+    // The same offers the chip view gets, read from the same plan, and the same panel state around them: this
+    // view shows the query differently, it does not know less about it. What it does NOT take is the chip
+    // view's conveniences — no commit, no scope gesture, no rewrap — so a picked offer lands as the characters
+    // it spells and nothing else moves.
     const [caret, setCaret] = useState(0);
-    const [lit, setLit] = useState(-1);
-    const [dismissed, setDismissed] = useState("");
-    const listId = useId();
     const at = Math.min(caret, text.length);
     const plan = useMemo(() => planAt(text, at), [text, at]);
     const offers = useMemo(
         () => offersAt(plan, at - slotStart(plan), history, vocab), [plan, at, history, vocab]);
-    const stamp = `${text} ${String(at)}`;
-    const shown = (offers.groups.length > 0 || offers.takes !== null) && dismissed !== stamp;
-    const flat = useMemo(() => flatOffers(offers), [offers]);
-    const here = shown && lit >= 0 && lit < flat.length ? lit : -1;
+    const {flat, shown, lit: here, ghost, ghosted, listId, move, close, light, reset} =
+        useOfferPanel(offers, `${text} ${String(at)}`);
     // The ghost may only be APPENDED, or it would shift the mirrored text out from under the field's caret --
-    // so it draws only with the caret at the very end of the text. While the reader types it is the best
-    // completion; once they steer the list, the lit row previews instead.
-    const ghost = here < 0 ? offers.ghost : offerGhost(offers, flat[here]);
+    // so it draws only with the caret at the very end of the text.
     const ghosting = shown && ghost !== "" && at === text.length;
 
     /**
@@ -71,7 +66,7 @@ export function PlainBar({text, onText, placeholder, label, history = NO_HISTORY
     const track = (el: HTMLTextAreaElement): void => {
         const now = el.selectionStart;
         setCaret(now);
-        if (now !== at) setLit(-1);
+        if (now !== at) reset();
     };
 
     /**
@@ -91,7 +86,7 @@ export function PlainBar({text, onText, placeholder, label, history = NO_HISTORY
         onText(next);
         el.setSelectionRange(to, to);
         setCaret(to);
-        setLit(-1);
+        reset();
     };
 
     /** Writes one offer into the text, leaving the caret after what it spelled. */
@@ -103,7 +98,7 @@ export function PlainBar({text, onText, placeholder, label, history = NO_HISTORY
             onText(offer.insert);
             el.setSelectionRange(offer.insert.length, offer.insert.length);
             setCaret(offer.insert.length);
-            setLit(-1);
+            reset();
             return;
         }
         const written = offerSlot(plan, offers, offer);
@@ -111,14 +106,14 @@ export function PlainBar({text, onText, placeholder, label, history = NO_HISTORY
         // axis and the value follows it immediately. The chip view gets this from its commit; this view has no
         // commit, so the separator is written here or not at all.
         const ends = offer.shape === "word" && !plan.slot.slice(offers.stub.end).startsWith(" ");
-        const written2 = ends ? {value: `${written.value} `, caret: written.caret + 1} : written;
-        const next = writeSlot(plan, written2.value);
-        const to = slotStart(plan) + written2.caret;
+        const landed = ends ? {value: `${written.value} `, caret: written.caret + 1} : written;
+        const next = writeSlot(plan, landed.value);
+        const to = slotStart(plan) + landed.caret;
         el.value = next;
         onText(next);
         el.setSelectionRange(to, to);
         setCaret(to);
-        setLit(-1);
+        reset();
     };
 
     useLayoutEffect(() => {
@@ -143,8 +138,7 @@ export function PlainBar({text, onText, placeholder, label, history = NO_HISTORY
         if (flat.length > 0 && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
             e.preventDefault();
             const step = e.key === "ArrowDown" ? 1 : -1;
-            setDismissed("");
-            setLit(here < 0 ? (step === 1 ? 0 : flat.length - 1) : (here + step + flat.length) % flat.length);
+            move(step);
             return;
         }
         if (shown && here >= 0 && (e.key === "Enter" || e.key === "Tab")) {
@@ -158,14 +152,15 @@ export function PlainBar({text, onText, placeholder, label, history = NO_HISTORY
         // written straight in.
         if (shown && e.key === "Tab" && ghosting) {
             e.preventDefault();
-            if (offers.ghostIs === "offer" && flat.length > 0) apply(flat[0]);
+            // Whatever the field DREW: the ghost names its own offer, so the word previewed and the word
+            // delivered cannot come apart.
+            if (offers.ghostIs === "offer" && ghosted !== undefined) apply(ghosted);
             else writeGhost();
             return;
         }
         if (shown && e.key === "Escape") {
             e.preventDefault();
-            setDismissed(stamp);
-            setLit(-1);
+            close();
             return;
         }
         // The search is live, so Enter has nothing to submit; it must not open a second line either.
@@ -214,7 +209,7 @@ export function PlainBar({text, onText, placeholder, label, history = NO_HISTORY
                     identically and the text can never reach past the bar it is drawn in. */}
                 <span className={styles.plainInk} aria-hidden="true">
                     <Classed text={text} rich mirrored/>
-                    {ghosting && <span className={styles.ghost}>{ghost}</span>}
+                    {ghosting && <span className={frame.ghost}>{ghost}</span>}
                     {/* A trailing newline keeps a text ending in a space from collapsing the last line. */}
                     {"\n"}
                 </span>
@@ -235,7 +230,7 @@ export function PlainBar({text, onText, placeholder, label, history = NO_HISTORY
                         track(e.currentTarget);
                     }}
                     onBlur={() => {
-                        setLit(-1);
+                        reset();
                     }}
                     // A drawn ghost stands where the placeholder would, so the two may never draw together.
                     placeholder={text === "" && !ghosting ? placeholder : undefined}
@@ -255,7 +250,7 @@ export function PlainBar({text, onText, placeholder, label, history = NO_HISTORY
                     lit={here}
                     listId={listId}
                     onPick={apply}
-                    onLight={setLit}
+                    onLight={light}
                 />
             )}
         </div>
