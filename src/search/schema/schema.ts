@@ -28,7 +28,7 @@ import type {Kind, Prop} from "./kinds";
 import {doorOf, KINDS, operatorsOf, spokenProp, wordOf} from "./kinds";
 import {fold} from "../text/normalize";
 import {localeColumnWords, localeKindWords, localePropWords} from "../vocabulary/locale-words";
-import {TYPES} from "../vocabulary/value-types";
+import {setDoorWords, TYPES} from "../vocabulary/value-types";
 
 /**
  * What a top-level word before a colon resolves to.
@@ -306,6 +306,10 @@ export function buildSchema(): void {
             }
         }
     }
+    // The door type's vocabulary IS this registry, and the registry is built out of the types, so it is handed
+    // over once assembly finishes rather than read from inside the type -- the arrangement the ordinal ladder
+    // already uses. A directive taking a door then reads it through the same machinery as any other value.
+    setDoorWords([...HEADS.keys()]);
 }
 
 /**

@@ -234,15 +234,19 @@ describe("the shipped schema", () => {
         // produce an axis that silently answers nothing. Listing them here makes adding a type without attaching it a
         // deliberate act rather than an accident.
         //
-        // The two left are reached as MEMBERS rather than directly: `offset` is three coordinates and `rotation` is
-        // three angles, and a composite parses each component through the type its member names. So they are in use,
-        // and no property declares one on its own because neither answers a question by itself -- a lone coordinate
-        // is half a position.
+        // Two of the three left are reached as MEMBERS rather than directly: `offset` is three coordinates and
+        // `rotation` is three angles, and a composite parses each component through the type its member names. So
+        // they are in use, and no property declares one on its own because neither answers a question by itself --
+        // a lone coordinate is half a position.
+        //
+        // `door` is the third and is unattached by its nature: it types what a DIRECTIVE takes rather than what a
+        // spell has. `sort:cast` names an axis instead of describing a spell, so no property could ever declare it
+        // and its absence here is the declaration that it is meant to be missing.
         const used = new Set([...KINDS.values()]
             .flatMap((kind) => Object.values(kind.props))
             .flatMap((prop) => prop.types.map((type) => type.name)));
         assert.deepEqual([...TYPES.keys()].filter((name) => !used.has(name)).toSorted(),
-            ["angle", "coordinate"]);
+            ["angle", "coordinate", "door"]);
     });
 
     it("keeps the mech column out of plain search", () => {

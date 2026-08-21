@@ -31,7 +31,7 @@ import {propOf} from "./ast";
 import {COMPARISON_STARTS, GRAMMAR, PREFIX_OPERATORS, spellingsOf} from "./grammar";
 import type {Kind as KindDecl} from "../schema/kinds";
 import {isFlag, wordOf} from "../schema/kinds";
-import {path as pathType, text as textType} from "../vocabulary/value-types";
+import {door, path as pathType, text as textType} from "../vocabulary/value-types";
 import type {Interp, Pending, ValueCtx} from "./operand";
 import {combineAlternatives, countCtx, ctxFor, kindCtx, propCtx, topCtx} from "./operand";
 import type {Seg} from "./scan";
@@ -110,11 +110,19 @@ type ScopeHead = Exclude<Head, { role: "prop" }>;
 
 /* ------------------------------------------------------------------ the parser */
 
-/** One sort door resolved: the head its word names, and whether its own minus reads as descending. */
+/**
+ * One sort door resolved: the head its word names, and whether its own minus reads as descending.
+ *
+ * The minus is stripped HERE rather than by the door type, because a direction is not part of what a door is:
+ * `SortDirective` already carries `descending`, and a door that swallowed a sign would be a value meaning two
+ * things at once the moment a second directive took one. What is left is an ordinary value, read through the
+ * type that declares the vocabulary.
+ */
 function sortMember(text: string): { head: Head; minus: boolean } | null {
     const minus = text.startsWith(GRAMMAR.negate);
-    const word = minus ? text.slice(GRAMMAR.negate.length) : text;
-    const head = word !== "" ? HEADS.get(fold(word)) : undefined;
+    const spelling = minus ? text.slice(GRAMMAR.negate.length) : text;
+    const word = spelling === "" ? null : door.parse?.(spelling) ?? null;
+    const head = word === null ? undefined : HEADS.get(word);
     return head === undefined ? null : {head, minus};
 }
 

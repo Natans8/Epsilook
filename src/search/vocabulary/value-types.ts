@@ -786,6 +786,58 @@ export const bitmask = defineType<string>({
     ui: "glyphs",
 });
 
+/* ---------------------------------------------------------------------------- doors */
+
+/** Every door word, folded, as the schema registered them. */
+let doors: readonly string[] = [];
+
+/**
+ * Sets the vocabulary of doors: every word a query may open a clause with.
+ *
+ * The doors are the SCHEMA's own registry, and the schema is assembled out of these types, so the vocabulary
+ * arrives after the type is declared rather than being read from it -- the arrangement {@link setOrdinalLadder}
+ * already uses, for the same reason.
+ *
+ * @param words Every spelling that opens a clause, in any order.
+ */
+export function setDoorWords(words: readonly string[]): void {
+    doors = words.map(fold);
+}
+
+/** The registered door vocabulary, folded. Empty until the schema registers it. */
+export function doorWords(): readonly string[] {
+    return doors;
+}
+
+/**
+ * A door: the word a clause opens with, read as a VALUE so that a directive can take one.
+ *
+ * `sort:cast` names an axis rather than describing a spell, which is why a door is a type rather than a second
+ * kind of head resolution. Declared, it reads through the machinery every other value reads through, and one
+ * declaration is what help, autocomplete and the addon all read the vocabulary from.
+ *
+ * It is `named` because a door has ONE name however many spellings reach it -- `animation` and `anim` are one
+ * declaration, called `anim` -- so a surface writes the name rather than echoing whichever spelling was typed.
+ * That is also what keeps the quote law off it: `sort:"cast"` is the door, not a string nothing answers.
+ */
+export const door = defineType<string>({
+    name: "door",
+    storage: "string",
+    parse: (s) => {
+        const word = fold(s.trim());
+        if (word === "") return null;
+        // An unregistered vocabulary accepts anything, exactly as an unloaded ordinal ladder does: the words
+        // arrive with the schema, and a type that refused everything before then would make the order in which
+        // modules happen to load part of what a query means.
+        return doors.length === 0 || doors.includes(word) ? word : null;
+    },
+    format: (s) => s,
+    accepts: [exact],
+    named: true,
+    hint: t("tooltips:type.door"),
+    ui: "picker",
+});
+
 /**
  * A bit on a spell, carrying no value of its own.
  *

@@ -50,6 +50,8 @@ const CANONICAL: [string, string[]][] = [
     ["enum", ["UNIT_TARGET_ENEMY", "JUMP_DEST"]],
     ["ordinal", ["Legion", "Wrath of the Lich King"]],
     ["bitmask", ["caster", "both"]],
+    // A door is spelled by the word it opens, folded to the one name it has however many spellings reach it.
+    ["door", ["name", "cast", "id"]],
     ["spellId", ["133", "0", "9007199254740991"]],
     ["soundKitId", ["1234"]],
     ["creatureId", ["299"]],
@@ -76,7 +78,7 @@ describe("the type registry", () => {
     it("holds exactly the catalogue", () => {
         assert.deepEqual([...TYPES.keys()].toSorted(), [
             "angle", "animKitId", "bitmask", "channelId", "colour", "coordinate",
-            "count", "creatureId", "displayId", "enum", "fileId", "flag",
+            "count", "creatureId", "displayId", "door", "enum", "fileId", "flag",
             "itemId", "length", "multiplier", "objectId", "offset", "ordinal",
             "path", "percent", "percentChange", "rotation", "seconds", "soundKitId",
             "spellId", "text",

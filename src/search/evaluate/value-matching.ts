@@ -131,6 +131,13 @@ function globToRegExp(pattern: string): RegExp {
 // `exact` folds only, so `Fire Ball` and `Fireball` stay distinct: a reader who anchors a match is asking for the
 // whole value as written. `contains` and `glob` squash, so punctuation a reader may not remember does not have to be
 // reproduced.
+// A DOOR is never matched against a spell: it types what a directive takes, and a directive selects nothing. The
+// implementation exists because the coverage guard is right to insist every accepted operator has one -- a type
+// whose operator silently answered nothing would be indistinguishable from a bug -- and comparing two door words
+// is what `exact` means here.
+define(["exact"], ["door"], (stored, operand) =>
+    typeof operand !== "object" && fold(String(stored)) === fold(String(operand)));
+
 define(["exact"], TEXTUAL, (stored, operand) => {
     const wanted = asText(operand);
     return wanted !== null && fold(String(stored)) === fold(wanted);
