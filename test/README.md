@@ -23,8 +23,7 @@ paid by the user, one defect at a time.
 **A Python test is held to `mypy --strict` like everything else it covers.** Annotate the test, its helpers and its
 fixtures — a fixture's parameters are typed like any other function's, and `-> None` on a test is not a formality but
 what makes the checker read the body at all. `request.param` is `Any` to every checker because only the decorator
-knows what the fixture was parametrised with, so `cast` is what states it. The rest of how a test READS, once you have
-decided to write one, is `docs/CODE_STYLE.md`; this file is which test to write and when.
+knows what the fixture was parametrised with, so `cast` is what states it.
 
 ## The five tiers
 
@@ -300,4 +299,4 @@ fixture here.**
 
 The canonical counts need a real pack, take seconds per sorted query, and are a diff instrument rather than a pass gate:
 every number that moves must be explained and intended, which is a judgement a test cannot make. They run through
-`npm run battery` and the recorded baselines in `.claude/docs/OPERATIONS.md` §6.
+`npm run battery`, against baselines recorded outside this repository.
