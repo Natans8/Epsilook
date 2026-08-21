@@ -163,12 +163,46 @@ def test_the_self_test_passes(engine: LuaRuntime) -> None:
     assert method(api, b"SelfTest")(api) is True
 
 
+def _head() -> str | None:
+    """The commit the repository is on, or None where git cannot say -- which is
+    not a failure, since the check it feeds can only ever be advisory."""
+    try:
+        done = subprocess.run(["git", "rev-parse", "HEAD"], cwd=REPO,
+                              check=True, capture_output=True, text=True)
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    return done.stdout.strip()
+
+
+def straddle_report(started_on: str | None, ended_on: str | None, found: int) -> str | None:
+    """Why a comparison that straddled a commit is not a verdict, or None where
+    it did not straddle one.
+
+    Apart from the run so it can be watched failing without spending the run.
+    A guard nobody has seen fire is not known to work, and this one costs
+    minutes to provoke for real.
+    """
+    if started_on is None or started_on == ended_on:
+        return None
+    return (f"the tree moved from {started_on[:8]} to {str(ended_on)[:8]} while the probes ran, so this compares "
+            f"an addon built from one tree against a web engine read from another. It is not a verdict either "
+            f"way, whatever it found: {found} disagreement(s). Run it again on a still tree.")
+
+
 @pytest.mark.skipif(not os.environ.get("EPSILOOK_ADDON_ORACLE"),
                     reason="set EPSILOOK_ADDON_ORACLE=1; runs the probe list through Node as well")
 def test_both_engines_answer_every_probe_alike(engine: LuaRuntime) -> None:
     """Counts and the first fifty ids, both, because two engines can agree on a
-    count while disagreeing on which spells make it up."""
+    count while disagreeing on which spells make it up.
+
+    The Lua side is the addon built before the run and the web side is invoked
+    per probe, so the two halves are read minutes apart. In a checkout several
+    people work in, that gap is long enough for one of them to land a commit
+    between the halves, and then the comparison is of two different trees while
+    every number in it still looks entirely plausible. So the commit is read at
+    both ends and a run that straddled one reports that instead of a verdict."""
     subprocess.run(["node", "tools/build.mjs", "--cli"], cwd=REPO, check=True)
+    started_on = _head()
     pack = str(unwrap(engine.eval(b"Epsilook.index.pack")))
     disagreements = []
     for probe in PROBES:
@@ -180,6 +214,9 @@ def test_both_engines_answer_every_probe_alike(engine: LuaRuntime) -> None:
         our_count, our_ids = count(engine, probe), first(engine, probe, 50)
         if our_count != web_count or our_ids != web_ids:
             disagreements.append(f"{probe!r}: lua {our_count} {our_ids[:5]} / web {web_count} {web_ids[:5]}")
+    straddled = straddle_report(started_on, _head(), len(disagreements))
+    if straddled is not None:
+        pytest.fail(straddled)
     assert not disagreements, "\n".join(disagreements)
 
 
@@ -210,3 +247,18 @@ def test_a_sort_orders_the_answer_over_a_named_door(engine: LuaRuntime) -> None:
     down_id = first(engine, "morph:* sort:-id", 30)
     assert down_id == sorted(down_id, reverse=True)
     assert down_id[0] > by_id[-1]
+
+
+def test_a_comparison_that_straddled_a_commit_is_not_a_verdict() -> None:
+    """The guard above, watched failing. A run whose tree moved is refused
+    whatever it found, because a clean result from two different trees is no
+    more trustworthy than a dirty one."""
+    moved = straddle_report("1ff15bd0" + "a" * 32, "9dd5f3a0" + "b" * 32, 0)
+    assert moved is not None
+    assert "1ff15bd0" in moved and "9dd5f3a0" in moved
+    assert "not a verdict" in moved
+
+    assert straddle_report("1ff15bd0", "1ff15bd0", 3) is None
+    # Where git cannot say, the check stands down rather than failing a run it
+    # has nothing to say about.
+    assert straddle_report(None, "9dd5f3a0", 0) is None
