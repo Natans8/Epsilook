@@ -471,9 +471,21 @@ function gluedTail(term: ScopeTerm, tier: Spelling): string | null {
     if (term.state !== "ok" || term.ask === null || term.not) return null;
     const ask = term.ask;
     if (ask.on === "content") return termValueText(ask.value, tier);
-    // Bare-safe, exactly as a bind's own value is: a piece stands in value position, so an anchor it does not
-    // need is an anchor the plain spelling would not have written either.
-    if (ask.on === "props") return valueText(ask.value, ask.props[0], tier, true);
+    if (ask.on === "props") {
+        const ref = ask.props[0];
+        const value = ask.value;
+        // A piece stands in value position under a door, so it is read against that property alone. Where the
+        // property's type cannot be CONTAINED -- a closed vocabulary, a role, an enum -- its bare spelling
+        // already is the exact ask, and the anchor the formatter would otherwise write is one no reader typed.
+        if (value.op === "exact" && !("text" in value.operand)) {
+            const type = TYPES.get(value.operand.type);
+            if (type !== undefined && !type.accepts.some((op) => op.name === "contains")) {
+                return bareOrPhrase(operandText(value.operand, ref, tier), readingOf(value.operand),
+                    verbatimOf(value.operand));
+            }
+        }
+        return valueText(value, ref, tier, true);
+    }
     if (ask.on === "kindWord") return wordOf(ask.kind);
     return null;
 }
@@ -521,31 +533,51 @@ function askText(ask: Ask, tier: Spelling): string | null {
     // A glued term continues the one before it: the reader wrote one run of values under one door, and writing
     // it back as repeated doors would hand them a query they did not type. The glue is the scope's own
     // separator, so this changes the spelling and never the structure.
-    const joinRun = (run: readonly { term: ScopeTerm; text: string }[]): string => run
-        .map((pair, index) => {
-            if (index === 0) return pair.text;
-            // A run written under a property's own door is at a depth the braces cannot reach -- a property
-            // has no scope -- so it keeps its glue whatever it carries. A run of bare values under a column
-            // or kind had a braced spelling available and converges on it unless it is a list or a set.
-            const forced = pair.term.glued === "door";
-            const tail = pair.term.glued !== undefined && sharesDoor(run[index - 1].term, pair.term)
-            && keepsGlue([run[index - 1].term, pair.term], forced)
-                ? gluedTail(pair.term, tier)
-                : null;
-            return tail === null ? ` ${pair.text}` : `${GRAMMAR.glue}${tail}`;
-        })
-        .join("");
+    // A glued run is written as ONE door and its values: the door said once, then the list. Written a term at
+    // a time it came out as `target=caster,=area` -- the lead wearing an anchor and the tail wearing another --
+    // which is not a spelling anybody would type, and reads as though the comma joined two conditions rather
+    // than two values of one.
+    const joinRun = (run: readonly { term: ScopeTerm; text: string }[]): string => {
+        const out: string[] = [];
+        let i = 0;
+        while (i < run.length) {
+            let j = i + 1;
+            while (j < run.length && run[j].term.glued !== undefined && sharesDoor(run[j - 1].term, run[j].term)
+            && keepsGlue([run[j - 1].term, run[j].term], run[j].term.glued === "door")) j++;
+            const values = run.slice(i, j).map((pair) => gluedTail(pair.term, tier));
+            if (j - i > 1 && values.every((value) => value !== null)) {
+                const leading = run[i].term.ask;
+                const ref = leading !== null && leading.on === "props" ? leading.props[0] : null;
+                // A subject speaking bare inside its own kind's scope writes no door, and naming one here
+                // would spell a property the reader never typed.
+                const bare = run[i].text === values[0];
+                const door = bare || ref === null ? "" : `${spokenProp(ref.prop, propOf(ref))}${GRAMMAR.bind}`;
+                out.push(`${door}${values.join(GRAMMAR.glue)}`);
+                i = j;
+                continue;
+            }
+            out.push(run[i].text);
+            i++;
+        }
+        return out.join(" ");
+    };
     // Canonical converges an alternation-only scope onto the value alternation asking the same thing: a row
     // matching either of two bare values is what both `id:{133 | 134}` and `id:(133|134)` ask, and spelling
     // them apart would make one question compare unequal to itself. The written tier keeps the reader's own
     // spelling instead, which is where a glued run stays glued.
     if (tier !== "written") {
         const singles = test.terms.map((run) => run.filter((term) => term.state === "ok" && term.ask !== null));
-        const alternatives = singles.every((run) =>
-            run.length === 1 && !run[0].not && run[0].ask?.on === "content")
-            ? singles.map((run) => (run[0].ask as { on: "content"; value: ValueExpr }).value)
-            : null;
-        if (alternatives !== null && alternatives.length > 1) {
+        const alternatives: ValueExpr[] = [];
+        let alternationOnly = singles.length > 1;
+        for (const run of singles) {
+            const only = run.length === 1 && !run[0].not ? run[0].ask : null;
+            if (only === null || only.on !== "content") {
+                alternationOnly = false;
+                break;
+            }
+            alternatives.push(only.value);
+        }
+        if (alternationOnly && alternatives.length > 1) {
             return bindTo(head, valueText(anyOfExpr(alternatives), undefined, tier, true));
         }
     }

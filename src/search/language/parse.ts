@@ -34,7 +34,6 @@ import {isFlag, wordOf} from "../schema/kinds";
 import {path as pathType, text as textType} from "../vocabulary/value-types";
 import type {Interp, Pending, ValueCtx} from "./operand";
 import {combineAlternatives, countCtx, ctxFor, kindCtx, propCtx, topCtx} from "./operand";
-import {escapeRegExp} from "../text/patterns";
 import type {Seg} from "./scan";
 import {isWs, scanPhrase, Scanner, scopeShaped, splitAlternatives, splitBare} from "./scan";
 import type {Head} from "../schema/schema";
@@ -755,15 +754,25 @@ class Parser {
 
         let i = bodyStart;
         let guard = bodyEnd - bodyStart + 1;
+        // The glue separates terms inside the braces as well as outside them. It has to: a reader who opens a
+        // scope and then writes a list is saying the one thing the spelling exists for, and `id:{133,134}` read
+        // as a single literal would silently answer nothing.
+        let gluedNext = false;
         while (i < bodyEnd && guard-- > 0) {
             const c = this.text[i];
             if (isWs(c)) {
                 i++;
                 continue;
             }
+            if (c === GRAMMAR.glue) {
+                gluedNext = true;
+                i++;
+                continue;
+            }
             if (c === GRAMMAR.or) {
                 scopeRuns.push(run);
                 run = [];
+                gluedNext = false;
                 i++;
                 continue;
             }
@@ -788,7 +797,12 @@ class Parser {
                 i++;
             }
 
+            const before = run.length;
             const resolved = this.innerItem(head, termStart, termNot, i, bodyEnd, run, pend);
+            if (gluedNext) {
+                markGlued(run, before, "bare");
+                gluedNext = false;
+            }
             items++;
             if (resolved.kind === "foreign") {
                 if (closed) {
@@ -1059,7 +1073,7 @@ class Parser {
             // An unknown word before a colon is ordinary text inside a scope too.
         }
 
-        const {segs, end} = this.scan.token(i, bodyEnd, {inScope: true, groups: false});
+        const {segs, end} = this.scan.token(i, bodyEnd, {inScope: true, groups: false, glue: true});
         if (segs.length === 0) return {kind: "done", next: i + 1};
         const {main, extras} = this.interpretSegs(segs, ctxFor(head, pend), pend);
         this.pushScopeTerm(run, {start: termStart, end: segs[segs.length - 1].end}, termNot, main, pend,
