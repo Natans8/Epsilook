@@ -56,6 +56,42 @@ class ResolvedDisplays:
     """
 
 
+def totem_displays(effects: SpellEffectRows,
+                   creatures: CreatureModels) -> dict[int, tuple[int, ...]]:
+    """The per-race displays each summoned totem gains, keyed by its creature.
+
+    The table keys on the spell and the pack keys a display row on the
+    creature, so the summon edge is what carries one to the other. A spell
+    summoning several creatures gives its displays to each, which no shipped
+    totem spell does.
+    """
+    gained: dict[int, list[int]] = {}
+    for spell, displays in creatures.totem_displays.items():
+        for creature, _control in effects.summons.get(spell, ()):
+            gained.setdefault(creature, []).extend(displays)
+    return {creature: tuple(dict.fromkeys(displays))
+            for creature, displays in gained.items()}
+
+
+def _reached_displays(creature: int, creatures: CreatureModels,
+                      extra: dict[int, tuple[int, ...]]) -> list[int]:
+    """A creature's own displays in slot order, then the totem ones it gained.
+
+    Slot order first keeps the display the pill already showed in front, so
+    adding the others changes what a row carries and not what it leads with.
+
+    The creature's own list is passed through untouched, duplicates included: a
+    display named in two slots has always been two rows, and collapsing it here
+    would silently move a count in every pack for a reason that has nothing to
+    do with totems. Only the gained displays are filtered, against what the
+    creature already wears.
+    """
+    own = [display for _slot, display in creatures.displays.get(creature, ())]
+    seen = set(own)
+    return [*own, *(display for display in extra.get(creature, ())
+                    if display not in seen)]
+
+
 def resolve_displays(effects: SpellEffectRows, creatures: CreatureModels,
                      forms: ShapeshiftForms) -> ResolvedDisplays:
     """Flatten both display routes to rows, dropping what cannot be named.
@@ -77,10 +113,11 @@ def resolve_displays(effects: SpellEffectRows, creatures: CreatureModels,
     used_creatures = {c for reached in effects.morphs.ids.values() for c in reached}
     used_creatures.update(creature for summoned in effects.summons.values()
                           for creature, _control in summoned)
+    extra = totem_displays(effects, creatures)
     resolved.creatures = [
         Display(creature, display, creatures.fid_for_display(display))
         for creature in sorted(used_creatures)
-        for _slot, display in creatures.displays.get(creature, ())]
+        for display in _reached_displays(creature, creatures, extra)]
 
     resolved.known_forms = {
         spell: surviving

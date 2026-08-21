@@ -372,6 +372,25 @@ class Dossier:
             d["displays"] = disp
         return d
 
+    def _add_totem_displays(self, sid: int, creature: dict[str, Any]) -> None:
+        """Append the per-race totem displays this spell's summon also wears.
+
+        Keyed on the spell rather than the creature, so it can only be resolved
+        where the spell is known; the pack does the same join through the summon
+        edge. Displays the creature already carries are not repeated, and a dump
+        without the table adds nothing, since `q` degrades on one it does not
+        carry.
+        """
+        seen = {d["display_id"] for d in creature.get("displays") or []}
+        extra = [x for x, in self.q(
+            'SELECT DISTINCT "DisplayID" FROM {V}."tdb_spell_totem_model" '
+            'WHERE "SpellID"=? ORDER BY "DisplayID"', int(sid))]
+        gained = [d for d in (self.creature_display(i) for i in extra
+                              if int(i) not in seen) if d]
+        if gained:
+            creature.setdefault("displays", []).extend(gained)
+            creature["totem_races"] = len(gained)
+
     def creature_display(self, did: Any) -> dict[str, Any] | None:
         """CreatureDisplayInfo -> CreatureModelData -> the actual .m2."""
         if not did:
@@ -821,6 +840,8 @@ class Dossier:
                 }
                 resolved = by_kind[kind](misc[slot])
                 if resolved:
+                    if kind == "creature":
+                        self._add_totem_displays(sid, resolved)
                     row["entity"] = {"kind": kind, **resolved}
             # a SUMMON's second misc slot is its SummonProperties
             if eff in (28, 56) and misc[1]:

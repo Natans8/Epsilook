@@ -137,3 +137,39 @@ def test_a_dump_carrying_no_display_columns_degrades_rather_than_failing(
                creature_template=CREATURE_TEMPLATE))
     assert creatures.displays == {}
     assert creatures.names == {300: "Sunwell Guardian"}
+
+
+# Several races share a model, and one race names the display the creature
+# already wears; both are what the shipped table looks like.
+SPELL_TOTEM_MODEL = """\
+SpellID,RaceID,DisplayID
+2484,2,52
+2484,3,51
+2484,6,50
+2484,11,52
+"""
+
+
+def test_totem_displays_are_deduplicated_and_ordered(tables: BuildTables) -> None:
+    """Two races sharing a model is one display, and the order is the display's
+    rather than the race's, since no race travels with it."""
+    creatures = read_creature_models(
+        tables(CreatureDisplayInfo=CREATURE_DISPLAY_INFO,
+               CreatureModelData=CREATURE_MODEL_DATA),
+        tables(creature_template=CREATURE_TEMPLATE,
+               creature_template_model=CREATURE_TEMPLATE_MODEL,
+               spell_totem_model=SPELL_TOTEM_MODEL))
+    assert creatures.totem_displays == {2484: (50, 51, 52)}
+
+
+def test_a_release_without_the_totem_table_reads_as_no_totems(
+        tables: BuildTables) -> None:
+    """Declared optional, so a dump lacking it degrades to the one display the
+    summoned creature carries rather than failing the build."""
+    creatures = read_creature_models(
+        tables(CreatureDisplayInfo=CREATURE_DISPLAY_INFO,
+               CreatureModelData=CREATURE_MODEL_DATA),
+        tables(absent={"spell_totem_model": TDB_OPTIONAL_TABLES["spell_totem_model"]},
+               creature_template=CREATURE_TEMPLATE,
+               creature_template_model=CREATURE_TEMPLATE_MODEL))
+    assert creatures.totem_displays == {}

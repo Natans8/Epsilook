@@ -34,6 +34,16 @@ class CreatureModels:
     model_fid: dict[int, int] = field(default_factory=dict)
     """CreatureModelData.ID -> the model's file id."""
 
+    totem_displays: dict[int, tuple[int, ...]] = field(default_factory=dict)
+    """Spell -> the displays its totem wears, one per caster race, deduplicated
+    and in display order. Empty without a server dump.
+
+    Keyed by the SPELL rather than by the creature, unlike `displays`, because
+    that is how the table keys it: the summoned creature carries one display
+    and the race decides which model stands in for it. Several races share a
+    model, so this is shorter than the row count.
+    """
+
     display_skins: dict[int, tuple[int, ...]] = field(default_factory=dict)
     """CreatureDisplayInfo.ID -> the texture files it paints its model with, in
     slot order, for the displays that carry any. A display with none paints
@@ -72,6 +82,24 @@ def read_creature_displays(world: Tables, into: dict[int, list[tuple[int, int]]]
                 into.setdefault(to_int(creature), []).append((position, display_id))
 
 
+def read_totem_displays(world: Tables, into: dict[int, tuple[int, ...]]) -> None:
+    """Fill `into` with each totem spell's per-race displays.
+
+    A release without the table leaves it empty, and every totem spell then
+    shows the single display its summoned creature carries.
+    """
+    if not world.available("spell_totem_model"):
+        log("  TDB: no spell_totem_model in this release -- totems keep one display")
+        return
+    found: dict[int, list[int]] = {}
+    for spell, _race, display in world.rows(
+            "spell_totem_model", ["SpellID", "RaceID", "DisplayID"]):
+        if display_id := to_int(display):
+            found.setdefault(to_int(spell), []).append(display_id)
+    into.update((spell, tuple(sorted(set(displays))))
+                for spell, displays in found.items())
+
+
 SKIN_COLUMN = "TextureVariationFileDataID_"
 """The stem of a display's texture columns, one per slot. How many a client has
 varies by build, so they are read by name off the header rather than declared."""
@@ -100,6 +128,7 @@ def read_creature_models(tables: Tables, world: Tables | None) -> CreatureModels
         read_creature_displays(world, displays)
         creatures.displays = {creature: sorted(rows)
                               for creature, rows in displays.items()}
+        read_totem_displays(world, creatures.totem_displays)
 
     for display_id, model_id, *skins in tables.rows(
             "CreatureDisplayInfo", ["ID", "ModelID", *skin_columns(tables)]):

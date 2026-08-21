@@ -108,6 +108,10 @@ TDB_OPTIONAL_TABLES = {
     # language the dump's own tables are written in.
     "creature_template_locale": "translated creature names",
     "gameobject_template_locale": "translated object names",
+    # Per-race totem displays. A dump without it leaves every totem spell
+    # showing the one display its summoned creature carries, which is what the
+    # pack shipped before the table was read at all.
+    "spell_totem_model": "per-race totem displays",
 }
 TDB_OPTIONAL_COLUMNS = {
     # the legacy spelling, gone once creature_template_model took over

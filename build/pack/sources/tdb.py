@@ -106,6 +106,11 @@ TDB_TABLES = {
         # live only here. `type` is the GAMEOBJECT_TYPE enum (3 CHEST, 5
         # GENERIC, 10 GOOBER, ...), read to gate the Wowhead object link.
         "gameobject_template": ["entry", "name", "displayId", "type"],
+        # A totem spell's summon wears a different model per caster race, and
+        # the client tables carry none of it: the creature's own display list
+        # holds one entry, so the pack would otherwise show a single race's
+        # totem for every shaman.
+        "spell_totem_model": ["SpellID", "RaceID", "DisplayID"],
     },
     "hotfixes": {
         "spell_name": ["ID", "Name"],

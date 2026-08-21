@@ -46,14 +46,14 @@
     "label": "Battle for Azeroth 8.3.7",
     "file": "data/8.3.7.35662/manifest.json",
     "built": "2026-08-21",
-    "hash": "bfb6cc0596"
+    "hash": "d6da7fa3c0"
   },
   {
     "id": "9.2.7-epsilon.45745",
     "label": "Epsilon 9.2.7",
     "file": "data/9.2.7-epsilon.45745/manifest.json",
     "built": "2026-08-21",
-    "hash": "f7637f8cec",
+    "hash": "cab275a8d4",
     "default": true
   },
   {
@@ -61,34 +61,34 @@
     "label": "Shadowlands 9.2.7",
     "file": "data/9.2.7.45745/manifest.json",
     "built": "2026-08-21",
-    "hash": "84360877dd"
+    "hash": "9cf1c86a53"
   },
   {
     "id": "10.2.7.55664",
     "label": "Dragonflight 10.2.7",
     "file": "data/10.2.7.55664/manifest.json",
     "built": "2026-08-21",
-    "hash": "1f8ee1fbaf"
+    "hash": "13543276a7"
   },
   {
     "id": "11.2.7.65299",
     "label": "The War Within 11.2.7",
     "file": "data/11.2.7.65299/manifest.json",
     "built": "2026-08-21",
-    "hash": "68b5c1a449"
+    "hash": "049cb82aaa"
   },
   {
     "id": "12.1.0.69273",
     "label": "Midnight 12.1.0",
     "file": "data/12.1.0.69273/manifest.json",
     "built": "2026-08-21",
-    "hash": "b02c18ab70"
+    "hash": "d3a31d6cbd"
   },
   {
     "id": "12.1.0-ptr.69273",
     "label": "Midnight PTR 12.1.0",
     "file": "data/12.1.0-ptr.69273/manifest.json",
     "built": "2026-08-21",
-    "hash": "fdc7660fca"
+    "hash": "a89c50bc80"
   }
 ]

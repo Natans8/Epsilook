@@ -748,14 +748,15 @@ flowchart LR
     accTitle: The kit effect type dispatch
     accDescr {
       A kit effect row carries a type and a value, and the type decides which table the value
-      is an id in. Twenty types are declared and ten of them a route reads. The largest of the rest
+      is an id in. Twenty-one values are declared, the enum's twenty types plus the empty row, and
+      ten of them a route reads. The largest of the rest
       is the model attach, which is not dropped but reached directly from the kit by the walk. One
       of the ten is a procedure, whose own type dispatches a second time: thirty-five declared, of
       which thirteen carry a payload the build reads.
     }
 
     KE["SpellVisualKitEffect<br/>(kit, EffectType, Effect)"]
-    KE --> T{"EffectType<br/>twenty declared"}
+    KE --> T{"EffectType<br/>twenty-one declared"}
     T -->|"5 sound"| SND["a sound kit"]
     T -->|"6 anim"| ANM["an anim kit and<br/>the animations it plays"]
     T -->|"13 beam"| BEAM["a chain, with an anchor at each end"]
@@ -922,8 +923,17 @@ effect and aura remains searchable and the mechanics column is always the whole 
 | anim-replacement aura  | a replacement set | `animRows` (`replace`)                                                      |
 | override-name aura     | an override name  | folded into the search corpus                                               |
 | summon effect          | a creature        | `fxRows`, `summons`, `creatureDisplays`, `displaySkins`                     |
+| totem summon           | a creature        | the above, plus the per-race displays from `spell_totem_model`              |
 | gameobject effects     | a gameobject      | `fxRows`, `objects`                                                         |
 | play-sound effects     | a sound kit       | folded into `soundRows`                                                     |
+
+**A totem's model depends on who casts it, and only the server dump says so.** `spell_totem_model` keys on the spell
+and the race, while a display row keys on the creature, so the summon edge is what carries one to the other:
+`derive/displays.py` gives a totem spell's displays to the creature that spell summons. The creature's own displays
+stay in front, so the pill still leads with what it led with before and gains the rest behind it. Measured on 9.2.7:
+every one of the 27 totem spells carried exactly one display and the table carries 8 to 13, which is 271 displays the
+pack could not otherwise reach — `Earthbind Totem` shipped only the Tauren totem, because that is creature 2630's
+default. The table is declared optional, so a TDB-less release degrades to the single display rather than failing.
 
 Four do not fit that shape:
 
