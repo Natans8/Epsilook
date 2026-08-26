@@ -88,8 +88,7 @@ class Fetch(Protocol):
     tracked in the repository is never fetched at all.
     """
 
-    def get(self, origin: Origin, dest: Path, refresh: bool,
-            optional: bool = False) -> bool:
+    def get(self, origin: Origin, dest: Path, refresh: bool, optional: bool = False) -> bool:
         """Ensure ``dest`` holds the origin's bytes.
 
         Args:
@@ -105,8 +104,7 @@ class Fetch(Protocol):
         """
         raise NotImplementedError
 
-    def get_many(self, parts: Sequence[Part], into: Path,
-                 refresh: bool) -> list[Path]:
+    def get_many(self, parts: Sequence[Part], into: Path, refresh: bool) -> list[Path]:
         """Get a whole set at once, and say which of them landed.
 
         The set is offered rather than the parts one at a time because that is
@@ -127,8 +125,7 @@ class Fetch(Protocol):
         raise NotImplementedError
 
 
-def each(fetch: Fetch, parts: Sequence[Part], into: Path,
-         refresh: bool) -> list[Path]:
+def each(fetch: Fetch, parts: Sequence[Part], into: Path, refresh: bool) -> list[Path]:
     """Get parts one at a time: what a policy with nothing to share does.
 
     Written once here rather than in each policy, so that the policies which

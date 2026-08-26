@@ -6,8 +6,8 @@ follow from it.
 """
 
 from .registry import SECTIONS, register
-from .section import (Cardinality, Count, CountFamily, Domain, Encoding,
-                      Layout, Scope, Section, SectionColumns)
+from .section import Cardinality, Count, CountFamily, Domain, Encoding, Layout, Scope, Section, SectionColumns
+
 # Last, and for its side effects: importing a section module registers it, so
 # this is what fills SECTIONS. It must follow the two imports above, which are
 # what a section module reaches back for.

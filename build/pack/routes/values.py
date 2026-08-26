@@ -84,15 +84,14 @@ class DescriptionValues:
     """The spell's maximum range, in yards."""
 
 
-def at_effect(into: dict[int, dict[int, float]], spell: int, index: int,
-              value: float) -> None:
+def at_effect(into: dict[int, dict[int, float]], spell: int, index: int, value: float) -> None:
     """Record one per-effect value under the index a template would use."""
     into.setdefault(spell, {})[index] = value
 
 
-def read_spell_values(tables: Tables, *, level: int = 0,
-                      scaling: Mapping[int, Mapping[str, float]] | None = None
-                      ) -> DescriptionValues:
+def read_spell_values(
+    tables: Tables, *, level: int = 0, scaling: Mapping[int, Mapping[str, float]] | None = None
+) -> DescriptionValues:
     """Read every number the description cooker may substitute.
 
     Args:
@@ -110,22 +109,37 @@ def read_spell_values(tables: Tables, *, level: int = 0,
         behind it.
     """
     values = DescriptionValues(level=level)
-    windows = {to_int(spell): (to_int(low), to_int(high)) for spell, low, high
-               in tables.rows("SpellScaling",
-                              ["SpellID", "MinScalingLevel", "MaxScalingLevel"])
-               } if tables.available("SpellScaling") else {}
-    radius = {to_int(row_id): to_amount(size) for row_id, size
-              in tables.rows("SpellRadius", ["ID", "Radius"])}
-    duration = {to_int(row_id): to_int(length) for row_id, length
-                in tables.rows("SpellDuration", ["ID", "Duration"])}
-    reach = {to_int(row_id): to_amount(distance) for row_id, distance
-             in tables.rows("SpellRange", ["ID", "RangeMax_0"])}
+    windows = (
+        {
+            to_int(spell): (to_int(low), to_int(high))
+            for spell, low, high in tables.rows("SpellScaling", ["SpellID", "MinScalingLevel", "MaxScalingLevel"])
+        }
+        if tables.available("SpellScaling")
+        else {}
+    )
+    radius = {to_int(row_id): to_amount(size) for row_id, size in tables.rows("SpellRadius", ["ID", "Radius"])}
+    duration = {to_int(row_id): to_int(length) for row_id, length in tables.rows("SpellDuration", ["ID", "Duration"])}
+    reach = {
+        to_int(row_id): to_amount(distance) for row_id, distance in tables.rows("SpellRange", ["ID", "RangeMax_0"])
+    }
 
-    for row in tables.rows("SpellEffect", [
-            "SpellID", "DifficultyID", "EffectIndex", "EffectBasePoints",
-            "EffectBasePointsF", "EffectAuraPeriod", "EffectRadiusIndex_0",
-            "EffectChainTargets", "EffectMiscValue_0", "Variance",
-            "ScalingClass", "Coefficient"]):
+    for row in tables.rows(
+        "SpellEffect",
+        [
+            "SpellID",
+            "DifficultyID",
+            "EffectIndex",
+            "EffectBasePoints",
+            "EffectBasePointsF",
+            "EffectAuraPeriod",
+            "EffectRadiusIndex_0",
+            "EffectChainTargets",
+            "EffectMiscValue_0",
+            "Variance",
+            "ScalingClass",
+            "Coefficient",
+        ],
+    ):
         if to_int(row[1]) != BASE_DIFFICULTY:
             continue
         spell = to_int(row[0])
@@ -134,10 +148,8 @@ def read_spell_values(tables: Tables, *, level: int = 0,
         # zero. The amount is the game table read at the caster's level, and
         # only where that resolves does it replace them.
         low, high = windows.get(spell, (0, 0))
-        amount = scaled_amount(scaling or {}, to_int(row[10]), to_amount(row[11]),
-                               level, low, high) if level else None
-        at_effect(values.points, spell, index,
-                  amount if amount is not None else to_amount(row[3], row[4]))
+        amount = scaled_amount(scaling or {}, to_int(row[10]), to_amount(row[11]), level, low, high) if level else None
+        at_effect(values.points, spell, index, amount if amount is not None else to_amount(row[3], row[4]))
         if spread := to_amount(row[9]):
             at_effect(values.variance, spell, index, spread)
         if ticks := to_int(row[5]):
@@ -150,8 +162,8 @@ def read_spell_values(tables: Tables, *, level: int = 0,
             at_effect(values.misc_value, spell, index, misc)
 
     for spell_id, difficulty, duration_id, range_id in tables.rows(
-            "SpellMisc",
-            ["SpellID", "DifficultyID", "DurationIndex", "RangeIndex"]):
+        "SpellMisc", ["SpellID", "DifficultyID", "DurationIndex", "RangeIndex"]
+    ):
         if to_int(difficulty) != BASE_DIFFICULTY:
             continue
         spell = to_int(spell_id)
@@ -166,11 +178,11 @@ def read_spell_values(tables: Tables, *, level: int = 0,
     # destinations are one declaration rather than two lists that have to stay
     # index-aligned.
     caps: list[tuple[str, dict[str, dict[int, int]]]] = [
-        ("SpellAuraOptions", {"CumulativeAura": values.max_stacks,
-                              "ProcCharges": values.charges,
-                              "ProcChance": values.proc_chance}),
-        ("SpellTargetRestrictions", {"MaxTargets": values.max_targets,
-                                     "MaxTargetLevel": values.max_target_level}),
+        (
+            "SpellAuraOptions",
+            {"CumulativeAura": values.max_stacks, "ProcCharges": values.charges, "ProcChance": values.proc_chance},
+        ),
+        ("SpellTargetRestrictions", {"MaxTargets": values.max_targets, "MaxTargetLevel": values.max_target_level}),
     ]
     for table, into in caps:
         for row in tables.rows(table, ["SpellID", "DifficultyID", *into]):

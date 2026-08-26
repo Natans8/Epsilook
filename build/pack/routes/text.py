@@ -49,8 +49,7 @@ def read_templates(tables: Tables) -> tuple[dict[int, str], dict[int, str]]:
     """The description and aura-description templates, unfiltered."""
     descriptions: dict[int, str] = {}
     auras: dict[int, str] = {}
-    for spell_id, description, aura in tables.rows(
-            "Spell", ["ID", "Description_lang", "AuraDescription_lang"]):
+    for spell_id, description, aura in tables.rows("Spell", ["ID", "Description_lang", "AuraDescription_lang"]):
         identifier = to_int(spell_id)
         if description:
             descriptions[identifier] = description
@@ -63,15 +62,16 @@ def read_variables(tables: Tables) -> dict[int, dict[str, str]]:
     """Spell -> the named variable bodies its description may interpolate."""
     bodies: dict[int, dict[str, str]] = {}
     for set_id, text in tables.rows("SpellDescriptionVariables", ["ID", "Variables"]):
-        assignments = {match.group(1): match.group(2)
-                       for line in text.splitlines()
-                       if (match := ASSIGNMENT.match(line))}
+        assignments = {
+            match.group(1): match.group(2) for line in text.splitlines() if (match := ASSIGNMENT.match(line))
+        }
         if assignments:
             bodies[to_int(set_id)] = assignments
-    return {to_int(spell_id): body
-            for spell_id, set_id in tables.rows(
-            "SpellXDescriptionVariables", ["SpellID", "SpellDescriptionVariablesID"])
-            if (body := bodies.get(to_int(set_id)))}
+    return {
+        to_int(spell_id): body
+        for spell_id, set_id in tables.rows("SpellXDescriptionVariables", ["SpellID", "SpellDescriptionVariablesID"])
+        if (body := bodies.get(to_int(set_id)))
+    }
 
 
 def read_encounter_notes(tables: Tables) -> dict[int, str]:
@@ -84,8 +84,8 @@ def read_encounter_notes(tables: Tables) -> dict[int, str]:
     """
     sections: dict[str, tuple[str, str, str]] = {}
     for section_id, body, parent, spell in tables.rows(
-            "JournalEncounterSection",
-            ["ID", "BodyText_lang", "ParentSectionID", "SpellID"]):
+        "JournalEncounterSection", ["ID", "BodyText_lang", "ParentSectionID", "SpellID"]
+    ):
         sections[section_id] = (body, parent, spell)
 
     children: dict[str, list[str]] = defaultdict(list)
@@ -115,5 +115,4 @@ def read_encounter_notes(tables: Tables) -> dict[int, str]:
 def read_spell_text(tables: Tables) -> SpellText:
     """Every raw template in one bundle, which is how the cooker takes them."""
     descriptions, auras = read_templates(tables)
-    return SpellText(descriptions, auras,
-                     read_variables(tables), read_encounter_notes(tables))
+    return SpellText(descriptions, auras, read_variables(tables), read_encounter_notes(tables))

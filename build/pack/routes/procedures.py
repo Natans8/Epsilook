@@ -16,8 +16,7 @@ from ..tables import Tables
 from .attachments import NO_ATTACHMENT, NO_MOTION
 from .colors import RGB_MASK
 from .columns import to_float, to_int, to_int_from_float
-from .models import (MODEL_CAT_AREA, MODEL_CAT_TRAIL, SCALE_UNIT, UNPLACED,
-                     AttachModel, ModelSources)
+from .models import MODEL_CAT_AREA, MODEL_CAT_TRAIL, SCALE_UNIT, UNPLACED, AttachModel, ModelSources
 
 _PROC_TYPES = load_local_enum("spell_procedural_effect_types")
 PROC_TYPES_CHAIN = enum_ids_where(_PROC_TYPES, "chain")
@@ -78,8 +77,7 @@ def read_proc_effects(tables: Tables, models: ModelSources) -> ProcEffects:
     is a tint that multiplies the model to darkness.
     """
     procs = ProcEffects()
-    for row in tables.rows("SpellProceduralEffect",
-                           ["ID", "Type", "Value_0", "Value_1", "Value_2", "Value_3"]):
+    for row in tables.rows("SpellProceduralEffect", ["ID", "Type", "Value_0", "Value_1", "Value_2", "Value_3"]):
         proc_id, type_id = to_int(row[0]), to_int(row[1])
         first, second, third, fourth = row[2], row[3], row[4], row[5]
         if type_id in PROC_TYPES_CHAIN:
@@ -107,24 +105,26 @@ def read_proc_effects(tables: Tables, models: ModelSources) -> ProcEffects:
         elif type_id == PROC_TYPE_AREAMODEL:
             file = models.area_model_fid.get(to_int_from_float(first), 0)
             if file:
-                procs.models[proc_id] = AttachModel(file, MODEL_CAT_AREA, NO_ATTACHMENT,
-                                                    NO_ATTACHMENT, 0, NO_MOTION,
-                                                    UNPLACED, SCALE_UNIT)
+                procs.models[proc_id] = AttachModel(
+                    file, MODEL_CAT_AREA, NO_ATTACHMENT, NO_ATTACHMENT, 0, NO_MOTION, UNPLACED, SCALE_UNIT
+                )
         elif type_id == PROC_TYPE_WEAPONTRAIL:
             file = models.weapontrail_fid.get(to_int_from_float(first), 0)
             if file:
-                procs.models[proc_id] = AttachModel(file, MODEL_CAT_TRAIL, NO_ATTACHMENT,
-                                                    NO_ATTACHMENT, 0, NO_MOTION,
-                                                    UNPLACED, SCALE_UNIT)
+                procs.models[proc_id] = AttachModel(
+                    file, MODEL_CAT_TRAIL, NO_ATTACHMENT, NO_ATTACHMENT, 0, NO_MOTION, UNPLACED, SCALE_UNIT
+                )
         elif type_id == PROC_TYPE_STANDWALK:
             # Paired with the base slot each value overrides, folding into the
             # same replacement group as the animation-replacement aura. A value
             # of 0 leaves its slot alone.
             pairs = tuple(
-                (base, replacement) for base, replacement in zip(
-                    PROC_STANDWALK_SLOTS,
-                    (to_int_from_float(value) for value in (first, second, third)))
-                if replacement > 0)
+                (base, replacement)
+                for base, replacement in zip(
+                    PROC_STANDWALK_SLOTS, (to_int_from_float(value) for value in (first, second, third))
+                )
+                if replacement > 0
+            )
             if pairs:
                 procs.anims[proc_id] = pairs
     return procs

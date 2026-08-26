@@ -165,8 +165,7 @@ def test_a_creature_resolves_to_its_displays_in_slot_order(engine: LuaRuntime) -
     assert method(api, b"GetDisplayByCreature")(api, 16372) == 856
     assert method(api, b"GetDisplayByCreature")(api, 0) is None
     # A display's skins are its textures, in slot order, by display id.
-    skins = [cast(dict[str, object], skin)["text"]
-             for skin in as_list(method(api, b"GetDisplaySkins")(api, 856))]
+    skins = [cast(dict[str, object], skin)["text"] for skin in as_list(method(api, b"GetDisplaySkins")(api, 856))]
     assert skins == ["Creature/Sheep2/sheep2_white.blp"]
     assert unwrap(method(api, b"GetDisplaySkins")(api, 0)) == {}
 
@@ -175,14 +174,12 @@ def test_a_part_names_its_displays_through_a_creature_or_outright(engine: LuaRun
     api = lua_table(engine, b"Epsilook")
     # A morph stores the creature, and names every display it wears with its model.
     morph = method(api, b"GetPartDataByIndex")(api, 118, b"fx", 1)
-    named = [cast(dict[str, object], display)
-             for display in as_list(method(api, b"GetPartDisplays")(api, morph))]
+    named = [cast(dict[str, object], display) for display in as_list(method(api, b"GetPartDisplays")(api, morph))]
     assert [display["id"] for display in named] == [856, 857]
     assert all("file" in display for display in named)
     # A mount stores the display itself and carries its own model, so only the skins come back.
     mount = method(api, b"GetPartDataByIndex")(api, 459, b"model", 2)
-    [wolf] = [cast(dict[str, object], display)
-              for display in as_list(method(api, b"GetPartDisplays")(api, mount))]
+    [wolf] = [cast(dict[str, object], display) for display in as_list(method(api, b"GetPartDisplays")(api, mount))]
     assert wolf["id"] == 2320 and "file" not in wolf
     assert len(cast(list[object], wolf["skins"])) == 2
     # A model that is no display names none.
@@ -244,8 +241,10 @@ def test_an_anim_kits_animations_group_under_the_kit(engine: LuaRuntime) -> None
     """The kit's line offers the kit, its animations follow indented with their
     own actions, and a loose animation stands on its own line."""
     printed = dossier(engine, 133)
-    kit_line = ("|cffc77dffkit:|r |cffffffff|Hgarrmission:epsilook:133:group:anim:1|h[13464]|h|r - "
-                "|cff71d5ff|Hgarrmission:epsilook:133:animKit:anim:1|h[Kit]|h|r")
+    kit_line = (
+        "|cffc77dffkit:|r |cffffffff|Hgarrmission:epsilook:133:group:anim:1|h[13464]|h|r - "
+        "|cff71d5ff|Hgarrmission:epsilook:133:animKit:anim:1|h[Kit]|h|r"
+    )
     assert kit_line in printed
     assert "\n    |cffffffff|Hgarrmission:epsilook:133:part:anim:1|h[SpellCastDirected]|h" in printed
     printed = dossier(engine, 5106)
@@ -353,7 +352,10 @@ def test_a_group_tooltip_names_the_group_and_its_value(engine: LuaRuntime) -> No
     # The kit's line and its tooltip both carry what the kit is FOR, which
     # belongs to the kit and not to each file it plays.
     assert cast(bytes, tip(133, b"sound", 1)).decode().split("\n") == [
-        "kit", "SPELL_Fire_Missile_Loop - 3011", "spells"]
+        "kit",
+        "SPELL_Fire_Missile_Loop - 3011",
+        "spells",
+    ]
     assert cast(bytes, tip(133, b"anim", 1)).decode().split("\n") == ["kit", "13464"]
 
 
@@ -425,9 +427,7 @@ def test_a_lone_column_word_prints_its_doors(engine: LuaRuntime) -> None:
     assert "chain" not in text, "fx's kinds stay in fx"
     # A column whose only kind wears the column's own word has no door of its
     # own, so its properties belong to the column directly.
-    sound = " ".join(
-        str(line) for line in as_list(lua_function(engine, b"Epsilook.Shell.ColumnLines")(b"sound"))
-    )
+    sound = " ".join(str(line) for line in as_list(lua_function(engine, b"Epsilook.Shell.ColumnLines")(b"sound")))
     assert "Properties" in sound and "kit" in sound
     # A property cannot stand alone as a value, so its example carries one.
     assert "/elo sound file:<value>" in sound

@@ -62,25 +62,20 @@ def test_only_one_pack_is_ever_the_default(tmp_path: Path) -> None:
     order rather than on anything anyone declared.
     """
     manifest = tmp_path / "versions.json"
-    update(manifest, entry("9.2.7.45745", "Shadowlands", "2026-08-01", b"sl",
-                           default=True))
-    update(manifest, entry("10.2.7.55664", "Dragonflight", "2026-08-01", b"df",
-                           default=True))
+    update(manifest, entry("9.2.7.45745", "Shadowlands", "2026-08-01", b"sl", default=True))
+    update(manifest, entry("10.2.7.55664", "Dragonflight", "2026-08-01", b"df", default=True))
 
     defaults = [one["id"] for one in read(manifest) if one.get("default")]
     assert defaults == ["10.2.7.55664"]
 
 
-def test_a_hidden_pack_stays_hidden_across_a_neighbours_rebuild(
-        tmp_path: Path) -> None:
+def test_a_hidden_pack_stays_hidden_across_a_neighbours_rebuild(tmp_path: Path) -> None:
     """Hidden means nobody downloads it without asking for it by name, which
     stops being true the moment the flag is dropped by something else.
     """
     manifest = tmp_path / "versions.json"
-    update(manifest, entry("12.1.0-ptr.69273", "Midnight PTR", "2026-08-01",
-                           b"ptr", hidden=True))
-    update(manifest, entry("9.2.7.45745", "Shadowlands", "2026-08-01", b"sl",
-                           default=True))
+    update(manifest, entry("12.1.0-ptr.69273", "Midnight PTR", "2026-08-01", b"ptr", hidden=True))
+    update(manifest, entry("9.2.7.45745", "Shadowlands", "2026-08-01", b"sl", default=True))
 
     hidden = [one["id"] for one in read(manifest) if one.get("hidden")]
     assert hidden == ["12.1.0-ptr.69273"]
@@ -98,12 +93,10 @@ def test_a_test_line_sorts_beside_the_build_it_shadows(tmp_path: Path) -> None:
     order would depend on which of the two was rebuilt last.
     """
     manifest = tmp_path / "versions.json"
-    update(manifest, entry("12.1.0-ptr.69273", "Midnight PTR", "2026-08-01",
-                           b"ptr", hidden=True))
+    update(manifest, entry("12.1.0-ptr.69273", "Midnight PTR", "2026-08-01", b"ptr", hidden=True))
     update(manifest, entry("12.1.0.69273", "Midnight", "2026-08-01", b"live"))
 
-    assert [one["id"] for one in read(manifest)] == ["12.1.0.69273",
-                                                     "12.1.0-ptr.69273"]
+    assert [one["id"] for one in read(manifest)] == ["12.1.0.69273", "12.1.0-ptr.69273"]
 
 
 def test_the_first_pack_built_creates_the_manifest(tmp_path: Path) -> None:

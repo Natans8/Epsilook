@@ -29,8 +29,9 @@ class Projection:
     stand_ins: tuple[str, ...]
 
 
-def project(table: str, header: Sequence[str], columns: Sequence[str], *,
-            defaults: Mapping[tuple[str, str], str]) -> Projection:
+def project(
+    table: str, header: Sequence[str], columns: Sequence[str], *, defaults: Mapping[tuple[str, str], str]
+) -> Projection:
     """Resolve `columns` against `header`, or exit naming what is missing.
 
     Args:
@@ -51,11 +52,11 @@ def project(table: str, header: Sequence[str], columns: Sequence[str], *,
         elif (table, column) in defaults:
             sources.append(None)
         else:
-            sys.exit(f"error: {table}.csv is missing column {column!r} and it is "
-                     f"not declared in OPTIONAL_COLUMNS; header = {list(header)}")
-    return Projection(
-        sources=tuple(sources),
-        stand_ins=tuple(defaults.get((table, column), "") for column in columns))
+            sys.exit(
+                f"error: {table}.csv is missing column {column!r} and it is "
+                f"not declared in OPTIONAL_COLUMNS; header = {list(header)}"
+            )
+    return Projection(sources=tuple(sources), stand_ins=tuple(defaults.get((table, column), "") for column in columns))
 
 
 def absent(table: str, absent_tables: Mapping[str, str], where: Path) -> bool:
@@ -67,5 +68,4 @@ def absent(table: str, absent_tables: Mapping[str, str], where: Path) -> bool:
     """
     if table in absent_tables:
         return True
-    sys.exit(f"error: {table}.csv is missing from {where} and it is "
-             f"not declared optional")
+    sys.exit(f"error: {table}.csv is missing from {where} and it is not declared optional")

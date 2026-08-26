@@ -46,6 +46,5 @@ def load_expansions() -> ExpansionLadder:
     with gzip.open(EXPANSIONS_FILE, "rt", encoding="utf-8") as f:
         data = json.load(f)
     rungs: list[dict[str, Any]] = data["ladder"]
-    index = {sid: i for i, rung in enumerate(rungs)
-             for sid in data["ids"][rung["key"]]}
+    index = {sid: i for i, rung in enumerate(rungs) for sid in data["ids"][rung["key"]]}
     return rungs, index

@@ -20,9 +20,13 @@ class CsvTables:
     providers over the same source disagree in a float's low-order digits.
     """
 
-    def __init__(self, directory: Path, *,
-                 absent_tables: dict[str, str] | None = None,
-                 defaults: dict[tuple[str, str], str] | None = None) -> None:
+    def __init__(
+        self,
+        directory: Path,
+        *,
+        absent_tables: dict[str, str] | None = None,
+        defaults: dict[tuple[str, str], str] | None = None,
+    ) -> None:
         """Serve the CSVs in `directory`.
 
         `absent_tables` and `defaults` fall back to the build-wide drift
@@ -62,11 +66,12 @@ class CsvTables:
             reader = csv.reader(handle)
             header = next(reader, None)
             if header is None:
-                sys.exit(f"error: {table}.csv in {self.directory} is empty; it has no "
-                         f"header row, so the cached copy is incomplete")
+                sys.exit(
+                    f"error: {table}.csv in {self.directory} is empty; it has no "
+                    f"header row, so the cached copy is incomplete"
+                )
             plan = project(table, header, columns, defaults=self.defaults)
-            index = [header.index(source) if source is not None else None
-                     for source in plan.sources]
+            index = [header.index(source) if source is not None else None for source in plan.sources]
             stand_ins = plan.stand_ins
             width = len(header)
             for row in reader:
@@ -74,8 +79,9 @@ class CsvTables:
                 # indexing it would raise naming neither the table nor where it
                 # came from. Every other failure here says both.
                 if len(row) < width:
-                    sys.exit(f"error: {table}.csv in {self.directory} has a row "
-                             f"of {len(row)} fields against a {width}-column "
-                             f"header; the cached copy is truncated")
-                yield tuple(row[i] if i is not None else stand_in
-                            for i, stand_in in zip(index, stand_ins))
+                    sys.exit(
+                        f"error: {table}.csv in {self.directory} has a row "
+                        f"of {len(row)} fields against a {width}-column "
+                        f"header; the cached copy is truncated"
+                    )
+                yield tuple(row[i] if i is not None else stand_in for i, stand_in in zip(index, stand_ins))

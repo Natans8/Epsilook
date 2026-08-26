@@ -62,18 +62,16 @@ class Network:
     A reader that fetched a whole archive to reach one file in it appears here
     as nothing at all."""
 
-    def open(self, request: urllib.request.Request, timeout: float | None = None
-             ) -> io.BytesIO:
+    def open(self, request: urllib.request.Request, timeout: float | None = None) -> io.BytesIO:
         """Stand in for `urlopen`: bytes, as a context manager."""
         address = request.full_url
         self.asked[address] += 1
         body = self.bodies.get(address)
         if body is None:
-            raise urllib.error.HTTPError(address, self.missing, "Missing",
-                                         email.message.Message(), None)
+            raise urllib.error.HTTPError(address, self.missing, "Missing", email.message.Message(), None)
         wanted = request.headers.get("Range")
         if wanted:
             self.ranged.append((address, wanted))
             first, last = wanted.removeprefix("bytes=").split("-")
-            body = body[int(first):int(last) + 1]
+            body = body[int(first) : int(last) + 1]
         return io.BytesIO(body)

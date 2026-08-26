@@ -20,37 +20,43 @@ from pack.derive.spelltext import _arithmetic
 BODY_ALPHABET = "-+*/(). 0123456789"
 
 
-@pytest.mark.parametrize(("body", "expected"), [
-    ("1+2", 3),
-    ("10-4", 6),
-    ("3*4", 12),
-    ("7/2", 3.5),
-    ("2*(3+4)", 14),
-    ("-5", -5),
-    ("+5", 5),
-    ("--5", 5),
-    ("1.5+1.5", 3.0),
-    ("0.4", 0.4),
-    ("2**10", 1024),
-    (" 1 + 2 ", 3),
-])
+@pytest.mark.parametrize(
+    ("body", "expected"),
+    [
+        ("1+2", 3),
+        ("10-4", 6),
+        ("3*4", 12),
+        ("7/2", 3.5),
+        ("2*(3+4)", 14),
+        ("-5", -5),
+        ("+5", 5),
+        ("--5", 5),
+        ("1.5+1.5", 3.0),
+        ("0.4", 0.4),
+        ("2**10", 1024),
+        (" 1 + 2 ", 3),
+    ],
+)
 def test_a_sum_evaluates_to_its_value(body: str, expected: float) -> None:
     assert _arithmetic(body) == expected
 
 
-@pytest.mark.parametrize("body", [
-    "",
-    " ",
-    "1 2",          # juxtaposition: two expressions, not one
-    "(1)(2)",       # a call, which the character filter alone would admit
-    "1/0",          # ZeroDivisionError
-    "1.0/0.0",
-    "(1+2",         # unbalanced
-    "1+",
-    "*3",
-    "()",
-    ".",
-])
+@pytest.mark.parametrize(
+    "body",
+    [
+        "",
+        " ",
+        "1 2",  # juxtaposition: two expressions, not one
+        "(1)(2)",  # a call, which the character filter alone would admit
+        "1/0",  # ZeroDivisionError
+        "1.0/0.0",
+        "(1+2",  # unbalanced
+        "1+",
+        "*3",
+        "()",
+        ".",
+    ],
+)
 def test_a_body_that_is_not_a_sum_is_worth_nothing(body: str) -> None:
     assert _arithmetic(body) is None
 
@@ -76,8 +82,7 @@ def test_a_boolean_is_not_a_quantity() -> None:
 def _expression(rng: random.Random, depth: int) -> str:
     """A random arithmetic expression drawn from the cooker's own grammar."""
     if depth <= 0 or rng.random() < 0.3:
-        return rng.choice([str(rng.randint(0, 999)),
-                           f"{rng.uniform(0, 100):.2f}"])
+        return rng.choice([str(rng.randint(0, 999)), f"{rng.uniform(0, 100):.2f}"])
     left = _expression(rng, depth - 1)
     right = _expression(rng, depth - 1)
     body = f"{left} {rng.choice('+-*/')} {right}"
@@ -104,8 +109,7 @@ def test_character_soup_never_evaluates_to_a_wrong_number() -> None:
     number the interpreter would not have produced."""
     rng = random.Random(20260822)
     for _ in range(4000):
-        body = "".join(rng.choice(BODY_ALPHABET)
-                       for _ in range(rng.randint(1, 12)))
+        body = "".join(rng.choice(BODY_ALPHABET) for _ in range(rng.randint(1, 12)))
         if "**" in body:
             continue  # a large exponent is a hang, not a disagreement
         try:

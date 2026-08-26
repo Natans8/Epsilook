@@ -80,10 +80,7 @@ try:
     # check goes red over an optional dependency of a development tool.
     import duckdb  # type: ignore[import-not-found]
 except ImportError:  # pragma: no cover - the one dependency, and it is optional
-    sys.exit(
-        "tools/builddb.py needs DuckDB, which pyproject.toml declares:\n"
-        "    uv run python tools/builddb.py"
-    )
+    sys.exit("tools/builddb.py needs DuckDB, which pyproject.toml declares:\n    uv run python tools/builddb.py")
 
 # Progress bars: a ~2.5 minute build with no output for minutes at a time reads
 # as a hang, and that is all this fixes. Declared in pyproject.toml, so unlike
@@ -232,8 +229,11 @@ ENUM_COLUMNS = {
 
 # Enums always fetched even if the sweep of meta/enums/ fails.
 CORE_ENUMS = [
-    "SpellEffect", "SpellEffectAura", "Target",
-    "SpellVisualEventEvent", "SpellVisualEffectNameType",
+    "SpellEffect",
+    "SpellEffectAura",
+    "Target",
+    "SpellVisualEventEvent",
+    "SpellVisualEffectNameType",
 ]
 
 # ------------------------------------------------- project knowledge as tables
@@ -321,8 +321,9 @@ def log(message: str) -> None:
     tqdm.write(message)
 
 
-def progress(items: "Iterable[Any]", desc: str, unit: str,
-             total: int | None = None, nested: bool = False) -> "Iterable[Any]":
+def progress(
+    items: "Iterable[Any]", desc: str, unit: str, total: int | None = None, nested: bool = False
+) -> "Iterable[Any]":
     """Wrap an iterable in a tqdm bar, or return it untouched.
 
     It declines when stderr is not a TTY, which matters because this script is
@@ -332,12 +333,10 @@ def progress(items: "Iterable[Any]", desc: str, unit: str,
     """
     if not sys.stderr.isatty():
         return items
-    return tqdm(items, desc=desc, unit=unit, total=total,
-                leave=not nested, dynamic_ncols=True)
+    return tqdm(items, desc=desc, unit=unit, total=total, leave=not nested, dynamic_ncols=True)
 
 
-def scalar(con: "duckdb.DuckDBPyConnection", sql: str,
-           params: list | None = None) -> int:
+def scalar(con: "duckdb.DuckDBPyConnection", sql: str, params: list | None = None) -> int:
     """One-cell query. `fetchone()` is Optional, and every caller here is a
     COUNT that cannot legitimately come back empty — so a None is a bug worth
     hearing about rather than a zero worth papering over."""
@@ -367,6 +366,7 @@ def fetch(url: str, dest: Path, refresh: bool = False, timeout: int = 120) -> bo
 
 # --------------------------------------------------------------- schema naming
 
+
 def sql_type(column: dbd.Column | None, width: dbd.BuildColumn | None) -> str | None:
     """Map a WoWDBDefs declaration to a DuckDB type. None = let DuckDB infer."""
     if column is None:
@@ -388,9 +388,9 @@ def sql_type(column: dbd.Column | None, width: dbd.BuildColumn | None) -> str | 
     return None
 
 
-def resolve_column(name: str, definition: dbd.Definition,
-                   widths: dict[str, dbd.BuildColumn]
-                   ) -> tuple[dbd.Column | None, dbd.BuildColumn | None, int | None]:
+def resolve_column(
+    name: str, definition: dbd.Definition, widths: dict[str, dbd.BuildColumn]
+) -> tuple[dbd.Column | None, dbd.BuildColumn | None, int | None]:
     """Match a CSV column back to its `.dbd` declaration.
 
     Three spellings have to be reconciled, and the order matters:
@@ -421,6 +421,7 @@ def resolve_column(name: str, definition: dbd.Definition,
 
 # ------------------------------------------------------------------ ingestion
 
+
 def csv_header(path: Path) -> list[str]:
     with open(path, encoding="utf-8", errors="replace", newline="") as handle:
         try:
@@ -429,8 +430,9 @@ def csv_header(path: Path) -> list[str]:
             return []
 
 
-def load_csv_table(con: "duckdb.DuckDBPyConnection", schema: str, table: str,
-                   path: Path, types: dict[str, str]) -> tuple[int, bool]:
+def load_csv_table(
+    con: "duckdb.DuckDBPyConnection", schema: str, table: str, path: Path, types: dict[str, str]
+) -> tuple[int, bool]:
     """Create `schema.table` from a CSV. Returns (rows, fell_back_to_inference).
 
     A type that does not fit the data drops the WHOLE table to inference rather
@@ -441,21 +443,24 @@ def load_csv_table(con: "duckdb.DuckDBPyConnection", schema: str, table: str,
     literal = str(path).replace("'", "''")
     if types:
         struct = ", ".join(f"'{c}': '{t}'" for c, t in types.items())
-        typed = (f"CREATE OR REPLACE TABLE {qualified} AS SELECT * FROM "
-                 f"read_csv('{literal}', header=true, types={{{struct}}}, sample_size=-1)")
+        typed = (
+            f"CREATE OR REPLACE TABLE {qualified} AS SELECT * FROM "
+            f"read_csv('{literal}', header=true, types={{{struct}}}, sample_size=-1)"
+        )
         try:
             con.execute(typed)
             return scalar(con, f"SELECT count(*) FROM {qualified}"), False
         except duckdb.Error:
             pass
-    con.execute(f"CREATE OR REPLACE TABLE {qualified} AS SELECT * FROM "
-                f"read_csv('{literal}', header=true, sample_size=-1)")
+    con.execute(
+        f"CREATE OR REPLACE TABLE {qualified} AS SELECT * FROM read_csv('{literal}', header=true, sample_size=-1)"
+    )
     return scalar(con, f"SELECT count(*) FROM {qualified}"), bool(types)
 
 
-def build_version(con: "duckdb.DuckDBPyConnection", pack_id: str, build_id: str,
-                  source: Path, catalog: list[tuple],
-                  refresh_dbd: bool) -> tuple[int, int, int]:
+def build_version(
+    con: "duckdb.DuckDBPyConnection", pack_id: str, build_id: str, source: Path, catalog: list[tuple], refresh_dbd: bool
+) -> tuple[int, int, int]:
     """Load every CSV in one table set's cache directory into its own schema.
 
     The schema is the PACK's, the column types are the BUILD's and the files
@@ -491,20 +496,27 @@ def build_version(con: "duckdb.DuckDBPyConnection", pack_id: str, build_id: str,
             duck_type = sql_type(column, width)
             if duck_type:
                 types[name] = duck_type
-            catalog.append((
-                schema, build_id, table, name,
-                column.name if column else None, index,
-                column.type if column else None, duck_type,
-                width.width if width else None,
-                bool(width.unsigned) if width else None,
-                bool(width.is_id) if width else False,
-                bool(width.is_relation) if width else False,
-                bool(column.unverified) if column else None,
-                column.comment if column else None,
-                column.fk_table if column else None,
-                column.fk_column if column else None,
-                ENUM_COLUMNS.get((table, name)),
-            ))
+            catalog.append(
+                (
+                    schema,
+                    build_id,
+                    table,
+                    name,
+                    column.name if column else None,
+                    index,
+                    column.type if column else None,
+                    duck_type,
+                    width.width if width else None,
+                    bool(width.unsigned) if width else None,
+                    bool(width.is_id) if width else False,
+                    bool(width.is_relation) if width else False,
+                    bool(column.unverified) if column else None,
+                    column.comment if column else None,
+                    column.fk_table if column else None,
+                    column.fk_column if column else None,
+                    ENUM_COLUMNS.get((table, name)),
+                )
+            )
 
         count, fell_back = load_csv_table(con, schema, table, path, types)
         tables += 1
@@ -538,8 +550,10 @@ def load_tdb(con: "duckdb.DuckDBPyConnection", build_id: str, tdb_tag: str | Non
         if not csv_header(path):
             continue
         literal = str(path).replace("'", "''")
-        con.execute(f'CREATE OR REPLACE TABLE "{schema}"."tdb_{path.stem}" AS '
-                    f"SELECT * FROM read_csv('{literal}', header=true, sample_size=-1)")
+        con.execute(
+            f'CREATE OR REPLACE TABLE "{schema}"."tdb_{path.stem}" AS '
+            f"SELECT * FROM read_csv('{literal}', header=true, sample_size=-1)"
+        )
         loaded += 1
     return loaded
 
@@ -576,9 +590,7 @@ def fetch_enums(refresh: bool) -> list[str]:
     try:
         request = urllib.request.Request(DBDE_LIST_URL, headers={"User-Agent": USER_AGENT})
         with urllib.request.urlopen(request, timeout=60) as response:
-            names = [entry["name"][: -len(".dbde")]
-                     for entry in json.load(response)
-                     if entry["name"].endswith(".dbde")]
+            names = [entry["name"][: -len(".dbde")] for entry in json.load(response) if entry["name"].endswith(".dbde")]
     except (OSError, ValueError, KeyError):
         log("  ! could not list meta/enums — falling back to the core set")
 
@@ -590,8 +602,7 @@ def fetch_enums(refresh: bool) -> list[str]:
     return sorted(set(names) | set(CORE_ENUMS))
 
 
-def build_reference(con: "duckdb.DuckDBPyConnection", manifest: list[dict],
-                    refresh: bool) -> None:
+def build_reference(con: "duckdb.DuckDBPyConnection", manifest: list[dict], refresh: bool) -> None:
     """The `ref` schema — everything that is the same for every game version."""
     con.execute("CREATE SCHEMA IF NOT EXISTS ref")
 
@@ -629,10 +640,8 @@ def build_reference(con: "duckdb.DuckDBPyConnection", manifest: list[dict],
     if anims.exists():
         text = anims.read_text(encoding="utf-8", errors="replace")
         names = re.findall(r'"((?:[^"\\]|\\.)*)"', text)
-        con.execute("CREATE OR REPLACE TABLE ref.anim_name "
-                    "(anim_id INTEGER PRIMARY KEY, name VARCHAR)")
-        con.executemany("INSERT INTO ref.anim_name VALUES (?, ?)",
-                        list(enumerate(names)))
+        con.execute("CREATE OR REPLACE TABLE ref.anim_name (anim_id INTEGER PRIMARY KEY, name VARCHAR)")
+        con.executemany("INSERT INTO ref.anim_name VALUES (?, ?)", list(enumerate(names)))
         log(f"  ref.anim_name                   {len(names):>9,}")
 
     # -- hardcoded client tables, imported from the build --------------------
@@ -640,26 +649,24 @@ def build_reference(con: "duckdb.DuckDBPyConnection", manifest: list[dict],
     # to drift, and the build package is already where both are maintained.
     try:
         from pack.routes.attachments import (  # pylint: disable=import-outside-toplevel
-            M2_ATTACHMENT_NAMES, VEHICLE_GEO_COMPONENT_LINKS)
+            M2_ATTACHMENT_NAMES,
+            VEHICLE_GEO_COMPONENT_LINKS,
+        )
         from pack.sources import load_local_enum  # pylint: disable=import-outside-toplevel
 
-        con.execute("CREATE OR REPLACE TABLE ref.m2_attachment "
-                    "(attachment_id INTEGER PRIMARY KEY, name VARCHAR)")
-        con.executemany("INSERT INTO ref.m2_attachment VALUES (?, ?)",
-                        sorted(M2_ATTACHMENT_NAMES.items()))
-        log(f"  ref.m2_attachment               "
-            f"{len(M2_ATTACHMENT_NAMES):>9,}")
+        con.execute("CREATE OR REPLACE TABLE ref.m2_attachment (attachment_id INTEGER PRIMARY KEY, name VARCHAR)")
+        con.executemany("INSERT INTO ref.m2_attachment VALUES (?, ?)", sorted(M2_ATTACHMENT_NAMES.items()))
+        log(f"  ref.m2_attachment               {len(M2_ATTACHMENT_NAMES):>9,}")
 
         # VehicleSeat.AttachmentID is an INDEX into a table hardcoded in the
         # client binary, not an M2 attachment id (DATA_ROUTES 3i). Shipping the
         # decode makes that join possible in SQL instead of in prose.
         links = VEHICLE_GEO_COMPONENT_LINKS
-        pairs = (sorted(links.items()) if isinstance(links, dict)
-                 else list(enumerate(links)))
-        con.execute("CREATE OR REPLACE TABLE ref.vehicle_geo_component_link "
-                    "(idx INTEGER PRIMARY KEY, attachment_id INTEGER)")
-        con.executemany("INSERT INTO ref.vehicle_geo_component_link VALUES (?, ?)",
-                        pairs)
+        pairs = sorted(links.items()) if isinstance(links, dict) else list(enumerate(links))
+        con.execute(
+            "CREATE OR REPLACE TABLE ref.vehicle_geo_component_link (idx INTEGER PRIMARY KEY, attachment_id INTEGER)"
+        )
+        con.executemany("INSERT INTO ref.vehicle_geo_component_link VALUES (?, ?)", pairs)
         log(f"  ref.vehicle_geo_component_link  {len(pairs):>9,}")
 
         # The 449 spell attribute bits. They are packed across
@@ -668,16 +675,27 @@ def build_reference(con: "duckdb.DuckDBPyConnection", manifest: list[dict],
         # needs. `handler` marks the bits the pack ships as pills, `requires` the
         # one intersection rule (160 only means anything AND 34).
         attrs = load_local_enum("spell_attributes")
-        con.execute("CREATE OR REPLACE TABLE ref.spell_attribute ("
-                    " bit INTEGER PRIMARY KEY, name VARCHAR, label VARCHAR,"
-                    " attr_column VARCHAR, mask BIGINT,"
-                    " handler VARCHAR, requires INTEGER)")
+        con.execute(
+            "CREATE OR REPLACE TABLE ref.spell_attribute ("
+            " bit INTEGER PRIMARY KEY, name VARCHAR, label VARCHAR,"
+            " attr_column VARCHAR, mask BIGINT,"
+            " handler VARCHAR, requires INTEGER)"
+        )
         con.executemany(
             "INSERT INTO ref.spell_attribute VALUES (?, ?, ?, ?, ?, ?, ?)",
-            [(bit, meta["name"], meta["label"],
-              f"Attributes_{bit // 32}", 1 << (bit % 32),
-              meta.get("handler"), meta.get("requires"))
-             for bit, meta in sorted(attrs.items())])
+            [
+                (
+                    bit,
+                    meta["name"],
+                    meta["label"],
+                    f"Attributes_{bit // 32}",
+                    1 << (bit % 32),
+                    meta.get("handler"),
+                    meta.get("requires"),
+                )
+                for bit, meta in sorted(attrs.items())
+            ],
+        )
         log(f"  ref.spell_attribute             {len(attrs):>9,}")
 
         # The two interrupt-flag enums, in ONE table with the column each
@@ -688,27 +706,29 @@ def build_reference(con: "duckdb.DuckDBPyConnection", manifest: list[dict],
         #   InterruptFlags          -> SpellInterrupts::InterruptFlags, move = 0
         #   AuraInterruptFlags_N    -> SpellInterruptFlags,             move = 3
         #   ChannelInterruptFlags_N -> SpellInterruptFlags,             move = 3
-        con.execute("CREATE OR REPLACE TABLE ref.spell_interrupt_flag ("
-                    " enum VARCHAR, applies_to VARCHAR, bit INTEGER,"
-                    " name VARCHAR, label VARCHAR, mask BIGINT, handler VARCHAR)")
+        con.execute(
+            "CREATE OR REPLACE TABLE ref.spell_interrupt_flag ("
+            " enum VARCHAR, applies_to VARCHAR, bit INTEGER,"
+            " name VARCHAR, label VARCHAR, mask BIGINT, handler VARCHAR)"
+        )
         interrupt_rows = []
-        for enum_file, applies in (("spell_interrupts_interrupt_flags", "InterruptFlags"),
-                                   ("spell_interrupt_flags", "AuraInterruptFlags / ChannelInterruptFlags")):
+        for enum_file, applies in (
+            ("spell_interrupts_interrupt_flags", "InterruptFlags"),
+            ("spell_interrupt_flags", "AuraInterruptFlags / ChannelInterruptFlags"),
+        ):
             enum = load_local_enum(enum_file)
             interrupt_rows += [
-                (enum_file, applies, bit, meta["name"], meta["label"],
-                 1 << (bit % 32), meta.get("handler"))
-                for bit, meta in sorted(enum.items())]
-        con.executemany("INSERT INTO ref.spell_interrupt_flag VALUES (?, ?, ?, ?, ?, ?, ?)",
-                        interrupt_rows)
+                (enum_file, applies, bit, meta["name"], meta["label"], 1 << (bit % 32), meta.get("handler"))
+                for bit, meta in sorted(enum.items())
+            ]
+        con.executemany("INSERT INTO ref.spell_interrupt_flag VALUES (?, ?, ?, ?, ?, ?, ?)", interrupt_rows)
         log(f"  ref.spell_interrupt_flag        {len(interrupt_rows):>9,}")
     except (ImportError, AttributeError) as exc:
         log(f"  ! the build's declared tables are unavailable ({exc})")
 
     # -- enums ----------------------------------------------------------------
     enum_names = fetch_enums(refresh)
-    con.execute("CREATE OR REPLACE TABLE ref.enum_value "
-                "(enum_name VARCHAR, value INTEGER, name VARCHAR)")
+    con.execute("CREATE OR REPLACE TABLE ref.enum_value (enum_name VARCHAR, value INTEGER, name VARCHAR)")
     rows: list[tuple[str, int, str]] = []
     for name in enum_names:
         path = ENUM_CACHE / f"{name}.dbde"
@@ -721,37 +741,51 @@ def build_reference(con: "duckdb.DuckDBPyConnection", manifest: list[dict],
                 rows.append((name, int(value), label))
     if rows:
         con.executemany("INSERT INTO ref.enum_value VALUES (?, ?, ?)", rows)
-    con.execute("CREATE INDEX IF NOT EXISTS enum_value_idx "
-                "ON ref.enum_value(enum_name, value)")
-    log(f"  ref.enum_value                  {len(rows):>9,}  "
-        f"({len({r[0] for r in rows})} enums)")
+    con.execute("CREATE INDEX IF NOT EXISTS enum_value_idx ON ref.enum_value(enum_name, value)")
+    log(f"  ref.enum_value                  {len(rows):>9,}  ({len({r[0] for r in rows})} enums)")
 
     # -- decodes that exist only as prose in docs/DATA_ROUTES.md / CLAUDE.md -------
-    con.execute("CREATE OR REPLACE TABLE ref.kit_effect_type "
-                "(effect_type INTEGER PRIMARY KEY, target_table VARCHAR, note VARCHAR)")
+    con.execute(
+        "CREATE OR REPLACE TABLE ref.kit_effect_type "
+        "(effect_type INTEGER PRIMARY KEY, target_table VARCHAR, note VARCHAR)"
+    )
     con.executemany("INSERT INTO ref.kit_effect_type VALUES (?, ?, ?)", KIT_EFFECT_TYPES)
 
-    con.execute("CREATE OR REPLACE TABLE ref.proc_type "
-                "(type INTEGER PRIMARY KEY, payload_column VARCHAR, "
-                " becomes VARCHAR, note VARCHAR)")
+    con.execute(
+        "CREATE OR REPLACE TABLE ref.proc_type "
+        "(type INTEGER PRIMARY KEY, payload_column VARCHAR, "
+        " becomes VARCHAR, note VARCHAR)"
+    )
     con.executemany("INSERT INTO ref.proc_type VALUES (?, ?, ?, ?)", PROC_TYPES)
 
-    con.execute("CREATE OR REPLACE TABLE ref.target_type "
-                "(target_type INTEGER PRIMARY KEY, bit INTEGER, "
-                " word VARCHAR, meaning VARCHAR)")
+    con.execute(
+        "CREATE OR REPLACE TABLE ref.target_type "
+        "(target_type INTEGER PRIMARY KEY, bit INTEGER, "
+        " word VARCHAR, meaning VARCHAR)"
+    )
     con.executemany("INSERT INTO ref.target_type VALUES (?, ?, ?, ?)", TARGET_TYPES)
     log("  ref.kit_effect_type / proc_type / target_type   (project decodes)")
 
     # -- the version manifest -------------------------------------------------
-    con.execute("CREATE OR REPLACE TABLE ref.game_build ("
-                " schema_name VARCHAR PRIMARY KEY, build_id VARCHAR, label VARCHAR,"
-                " major INTEGER, minor INTEGER, patch INTEGER, build_number INTEGER,"
-                " is_default BOOLEAN, tdb_tag VARCHAR)")
+    con.execute(
+        "CREATE OR REPLACE TABLE ref.game_build ("
+        " schema_name VARCHAR PRIMARY KEY, build_id VARCHAR, label VARCHAR,"
+        " major INTEGER, minor INTEGER, patch INTEGER, build_number INTEGER,"
+        " is_default BOOLEAN, tdb_tag VARCHAR)"
+    )
     for entry in manifest:
         parsed = dbd.parse_build(entry["id"]) or (0, 0, 0, 0)
-        con.execute("INSERT INTO ref.game_build VALUES (?,?,?,?,?,?,?,?,?)",
-                    [schema_name(entry["id"]), entry["id"], entry.get("label"),
-                     *parsed, bool(entry.get("default")), entry.get("tdb_tag")])
+        con.execute(
+            "INSERT INTO ref.game_build VALUES (?,?,?,?,?,?,?,?,?)",
+            [
+                schema_name(entry["id"]),
+                entry["id"],
+                entry.get("label"),
+                *parsed,
+                bool(entry.get("default")),
+                entry.get("tdb_tag"),
+            ],
+        )
 
 
 def build_catalog(con: "duckdb.DuckDBPyConnection", catalog: list[tuple]) -> None:
@@ -774,11 +808,8 @@ def build_catalog(con: "duckdb.DuckDBPyConnection", catalog: list[tuple]) -> Non
             fk_table      VARCHAR,  fk_column     VARCHAR,
             enum_name     VARCHAR)""")
     if catalog:
-        con.executemany(
-            "INSERT INTO ref.column_info VALUES (" + ",".join("?" * 17) + ")",
-            catalog)
-    con.execute("CREATE INDEX IF NOT EXISTS column_info_idx "
-                "ON ref.column_info(schema_name, table_name)")
+        con.executemany("INSERT INTO ref.column_info VALUES (" + ",".join("?" * 17) + ")", catalog)
+    con.execute("CREATE INDEX IF NOT EXISTS column_info_idx ON ref.column_info(schema_name, table_name)")
 
     # The FK graph on its own, flagged by whether the target is a table we hold:
     # a `.dbd` names tables we never download, and a relation you cannot join is
@@ -803,8 +834,7 @@ def build_catalog(con: "duckdb.DuckDBPyConnection", catalog: list[tuple]) -> Non
     total = scalar(con, "SELECT count(*) FROM ref.relation")
     usable = scalar(con, "SELECT count(*) FROM ref.relation WHERE resolvable")
     log(f"  ref.column_info                 {len(catalog):>9,}  columns")
-    log(f"  ref.relation                    {total:>9,}  "
-        f"({usable:,} join to a table we hold)")
+    log(f"  ref.relation                    {total:>9,}  ({usable:,} join to a table we hold)")
 
 
 # ---------------------------------------------------------------------- views
@@ -816,18 +846,19 @@ def build_catalog(con: "duckdb.DuckDBPyConnection", catalog: list[tuple]) -> Non
 # So: getting from a spell to its kits is a view; deciding what a kit MEANS
 # stays in `build/pack`.
 
+
 def has_tables(con: "duckdb.DuckDBPyConnection", schema: str, *tables: str) -> bool:
     placeholders = ",".join("?" * len(tables))
     found = scalar(
         con,
         "SELECT count(DISTINCT lower(table_name)) FROM information_schema.tables "
         f"WHERE table_schema = ? AND lower(table_name) IN ({placeholders})",
-        [schema, *(t.lower() for t in tables)])
+        [schema, *(t.lower() for t in tables)],
+    )
     return found == len(tables)
 
 
-def make_view(con: "duckdb.DuckDBPyConnection", schema: str, name: str,
-              body: str) -> int:
+def make_view(con: "duckdb.DuckDBPyConnection", schema: str, name: str, body: str) -> int:
     """Create one convenience view, refusing to collide with a real table.
 
     NAMING CONVENTION, and it is load-bearing: db2 tables keep their PascalCase
@@ -838,9 +869,9 @@ def make_view(con: "duckdb.DuckDBPyConnection", schema: str, name: str,
     below turns a future one into a warning instead of a stack trace.
     """
     exists = con.execute(
-        "SELECT table_type FROM information_schema.tables "
-        "WHERE table_schema = ? AND lower(table_name) = ?",
-        [schema, name.lower()]).fetchone()
+        "SELECT table_type FROM information_schema.tables WHERE table_schema = ? AND lower(table_name) = ?",
+        [schema, name.lower()],
+    ).fetchone()
     if exists and exists[0] == "BASE TABLE":
         log(f"    ! view {name} skipped: a table of that name already exists")
         return 0
@@ -856,17 +887,19 @@ def build_views(con: "duckdb.DuckDBPyConnection", schema: str) -> int:
     # spells — id + name, resolving the BfA table split so downstream views do
     # not have to care which side of it this build sits on.
     if has_tables(con, schema, "SpellName"):
-        made += make_view(con, schema, "spells",
-                          f'SELECT ID AS spell_id, Name_lang AS name FROM {q}."SpellName"')
+        made += make_view(con, schema, "spells", f'SELECT ID AS spell_id, Name_lang AS name FROM {q}."SpellName"')
     elif has_tables(con, schema, "Spell"):
-        made += make_view(con, schema, "spells",
-                          f'SELECT ID AS spell_id, Name_lang AS name FROM {q}."Spell"')
+        made += make_view(con, schema, "spells", f'SELECT ID AS spell_id, Name_lang AS name FROM {q}."Spell"')
 
     # spell_kit — the spine, flattened. Spell -> visual -> event -> kit, with
     # the event's target mask and phase carried along, because every visual
     # question starts by repeating exactly this join.
     if has_tables(con, schema, "SpellXSpellVisual", "SpellVisualEvent"):
-        made += make_view(con, schema, "spell_kits", f"""
+        made += make_view(
+            con,
+            schema,
+            "spell_kits",
+            f"""
             SELECT x.SpellID          AS spell_id,
                    x.SpellVisualID    AS visual_id,
                    e.SpellVisualKitID AS kit_id,
@@ -879,25 +912,35 @@ def build_views(con: "duckdb.DuckDBPyConnection", schema: str) -> int:
             JOIN {q}."SpellVisualEvent"  e ON e.SpellVisualID = x.SpellVisualID
             LEFT JOIN ref.target_type    t ON t.target_type   = e.TargetType
             LEFT JOIN ref.enum_value    se ON se.enum_name = 'SpellVisualEventEvent'
-                                          AND se.value     = e.StartEvent""")
+                                          AND se.value     = e.StartEvent""",
+        )
 
     # kit_effects — a kit's effect rows with EffectType decoded into the table
     # its Effect column actually points at (DATA_ROUTES 3a).
     if has_tables(con, schema, "SpellVisualKitEffect"):
-        made += make_view(con, schema, "kit_effects", f"""
+        made += make_view(
+            con,
+            schema,
+            "kit_effects",
+            f"""
             SELECT k.ParentSpellVisualKitID AS kit_id,
                    k.EffectType             AS effect_type,
                    r.target_table           AS effect_table,
                    k.Effect                 AS effect_id,
                    r.note
             FROM {q}."SpellVisualKitEffect" k
-            LEFT JOIN ref.kit_effect_type r ON r.effect_type = k.EffectType""")
+            LEFT JOIN ref.kit_effect_type r ON r.effect_type = k.EffectType""",
+        )
 
     # spell_effects — the single highest-traffic exploration query: an effect
     # row with its enums spelled out and the spell named, instead of four
     # integers you have to look up by hand.
     if has_tables(con, schema, "SpellEffect"):
-        made += make_view(con, schema, "spell_effects", f"""
+        made += make_view(
+            con,
+            schema,
+            "spell_effects",
+            f"""
             SELECT e.SpellID            AS spell_id,
                    s.name               AS spell_name,
                    e.EffectIndex        AS effect_index,
@@ -920,7 +963,8 @@ def build_views(con: "duckdb.DuckDBPyConnection", schema: str) -> int:
             LEFT JOIN ref.enum_value t0 ON t0.enum_name = 'Target'
                                        AND t0.value     = e.ImplicitTarget_0
             LEFT JOIN ref.enum_value t1 ON t1.enum_name = 'Target'
-                                       AND t1.value     = e.ImplicitTarget_1""")
+                                       AND t1.value     = e.ImplicitTarget_1""",
+        )
 
     return made
 
@@ -941,14 +985,10 @@ def build_summary(con: "duckdb.DuckDBPyConnection") -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(
-        description="Build the Epsilook exploration database (development tool).")
-    parser.add_argument("version", nargs="*",
-                        help="build id prefix, e.g. 9.2.7 (default: all)")
-    parser.add_argument("--refresh-dbd", action="store_true",
-                        help="re-fetch WoWDBDefs schema definitions and enums")
-    parser.add_argument("--list", action="store_true",
-                        help="show what would be built, and exit")
+    parser = argparse.ArgumentParser(description="Build the Epsilook exploration database (development tool).")
+    parser.add_argument("version", nargs="*", help="build id prefix, e.g. 9.2.7 (default: all)")
+    parser.add_argument("--refresh-dbd", action="store_true", help="re-fetch WoWDBDefs schema definitions and enums")
+    parser.add_argument("--list", action="store_true", help="show what would be built, and exit")
     parser.add_argument("--db", default=str(DB_PATH), help=f"output (default {DB_PATH})")
     args = parser.parse_args()
 
@@ -962,15 +1002,20 @@ def main() -> int:
     # one build read one downloaded export, but a private client's decode is a
     # set of its own at the same build number.
     manifest: list[dict[str, Any]] = [
-        {"id": pack.id, "build": pack.build, "label": pack.label,
-         "default": pack.default,
-         "dir": str(client_tables_dir(pack.client, pack.build) if pack.client
-                    else CACHE / pack.build)}
-        for pack in table_sets()]
+        {
+            "id": pack.id,
+            "build": pack.build,
+            "label": pack.label,
+            "default": pack.default,
+            "dir": str(client_tables_dir(pack.client, pack.build) if pack.client else CACHE / pack.build),
+        }
+        for pack in table_sets()
+    ]
 
     # TDB tags come from the build so the mapping is not written down twice.
     try:
         from pack.sources.tdb import tdb_release  # pylint: disable=import-outside-toplevel
+
         for entry in manifest:
             release = tdb_release(entry["build"])
             entry["tdb_tag"] = release.get("tag") if release else None
@@ -980,11 +1025,9 @@ def main() -> int:
 
     selected = manifest
     if args.version:
-        selected = [e for e in manifest
-                    if any(e["id"].startswith(v) for v in args.version)]
+        selected = [e for e in manifest if any(e["id"].startswith(v) for v in args.version)]
         if not selected:
-            log(f"no version matches {args.version}; have: "
-                + ", ".join(e["id"] for e in manifest))
+            log(f"no version matches {args.version}; have: " + ", ".join(e["id"] for e in manifest))
             return 1
 
     if args.list:
@@ -992,8 +1035,10 @@ def main() -> int:
             directory = Path(entry["dir"])
             csvs = len(list(directory.glob("*.csv"))) if directory.is_dir() else 0
             mark = "*" if entry in selected else " "
-            log(f" {mark} {schema_name(entry['id']):<9} {entry['id']:<14} "
-                f"{csvs:>3} csv  tdb={entry['tdb_tag'] or '-'}  {entry.get('label', '')}")
+            log(
+                f" {mark} {schema_name(entry['id']):<9} {entry['id']:<14} "
+                f"{csvs:>3} csv  tdb={entry['tdb_tag'] or '-'}  {entry.get('label', '')}"
+            )
         return 0
 
     started = time.time()
@@ -1018,8 +1063,7 @@ def main() -> int:
         directory = Path(entry["dir"])
         log(f"\n{schema_name(pack_id)}  ({entry.get('label', pack_id)})")
         fetch_extra_tables(build_id, directory)
-        tables, rows, fallbacks = build_version(
-            con, pack_id, build_id, directory, catalog, args.refresh_dbd)
+        tables, rows, fallbacks = build_version(con, pack_id, build_id, directory, catalog, args.refresh_dbd)
         tdb = load_tdb(con, pack_id, entry.get("tdb_tag"))
         views = build_views(con, schema_name(pack_id))
         total_tables += tables + tdb
@@ -1036,8 +1080,10 @@ def main() -> int:
     con.close()
 
     size = database.stat().st_size / 1e6
-    log(f"\n{total_tables} tables, {total_rows:,} rows, {total_views} views "
-        f"-> {size:,.0f} MB in {time.time() - started:.0f}s")
+    log(
+        f"\n{total_tables} tables, {total_rows:,} rows, {total_views} views "
+        f"-> {size:,.0f} MB in {time.time() - started:.0f}s"
+    )
     return 0
 
 

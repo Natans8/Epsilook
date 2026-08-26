@@ -35,13 +35,18 @@ from dataclasses import dataclass, field
 
 from ..routes.colors import pack_rgb
 from ..routes.effects import MOVEMENT_NAMES
-from ..routes.models import (MODEL_CAT_AREA, MODEL_CAT_ATTACH, MODEL_CAT_BARRAGE,
-                             MODEL_CAT_DISPLAY, MODEL_CAT_ITEM, MODEL_CAT_MISSILE,
-                             MODEL_CAT_TRAIL)
+from ..routes.models import (
+    MODEL_CAT_AREA,
+    MODEL_CAT_ATTACH,
+    MODEL_CAT_BARRAGE,
+    MODEL_CAT_DISPLAY,
+    MODEL_CAT_ITEM,
+    MODEL_CAT_MISSILE,
+    MODEL_CAT_TRAIL,
+)
 from ..routes.vehicles import PASSENGER_ROLE_NAMES
 from .context import Reads
-from .rows import (ModelRow, id_rows, masked_rows, replacement_rows,
-                   spell_role_rows, spell_rows)
+from .rows import ModelRow, id_rows, masked_rows, replacement_rows, spell_role_rows, spell_rows
 
 RowValue = int | float
 """One stored value.
@@ -211,16 +216,14 @@ class KindPool:
                 held[prop] = self.columns[at]
                 at += 1
             else:
-                held[prop] = {name: self.columns[at + which]
-                              for which, name in enumerate(parts)}
+                held[prop] = {name: self.columns[at + which] for which, name in enumerate(parts)}
                 at += len(parts)
         return held
 
     @property
     def extras(self) -> Mapping[str, list[RowValue]]:
         """The carried columns, by name. Empty for most kinds."""
-        return dict(zip(self.carried, self.columns[len(self.columns)
-                                                   - len(self.carried):]))
+        return dict(zip(self.carried, self.columns[len(self.columns) - len(self.carried) :]))
 
 
 @dataclass(frozen=True)
@@ -239,8 +242,7 @@ class ColumnRows:
     refs: list[int]
 
 
-def _pool(family: Family, rows: Iterable[SpellRow],
-          into: dict[int, list[int]], base: int) -> KindPool:
+def _pool(family: Family, rows: Iterable[SpellRow], into: dict[int, list[int]], base: int) -> KindPool:
     """One family's rows pooled, and every spell's references recorded.
 
     Insertion order is the pool's order, which keeps the encoding deterministic
@@ -256,19 +258,18 @@ def _pool(family: Family, rows: Iterable[SpellRow],
     # builds one vocabulary map, so without the cut a kind ships entries for
     # properties it does not have.
     own = set(family.props)
-    return KindPool(props=family.props, columns=columns,
-                    vocab={prop: where for prop, where in family.vocab.items()
-                           if prop in own},
-                    absent={prop: gap for prop, gap in family.absent.items()
-                            if prop in own},
-                    rows=len(slots),
-                    spans={prop: parts for prop, parts in family.spans.items()
-                           if prop in own},
-                    carried=family.carried)
+    return KindPool(
+        props=family.props,
+        columns=columns,
+        vocab={prop: where for prop, where in family.vocab.items() if prop in own},
+        absent={prop: gap for prop, gap in family.absent.items() if prop in own},
+        rows=len(slots),
+        spans={prop: parts for prop, parts in family.spans.items() if prop in own},
+        carried=family.carried,
+    )
 
 
-def build_column(families: Sequence[Family], reads: Reads,
-                 spell_ids: Sequence[int]) -> ColumnRows:
+def build_column(families: Sequence[Family], reads: Reads, spell_ids: Sequence[int]) -> ColumnRows:
     """Every family of one column, pooled and indexed by spell.
 
     A spell's references are sorted, so equal runs sit together and a reader
@@ -286,15 +287,14 @@ def build_column(families: Sequence[Family], reads: Reads,
     for family in families:
         unknown = sorted(set(family.vocab.values()) - set(VOCABULARIES))
         if unknown:
-            raise ValueError(
-                f"{family.kind} resolves {', '.join(unknown)}, which no "
-                f"vocabulary declares")
+            raise ValueError(f"{family.kind} resolves {', '.join(unknown)}, which no vocabulary declares")
         keyed = sorted(set(family.spans) & set(family.vocab))
         if keyed:
             raise ValueError(
                 f"{family.kind} spans {', '.join(keyed)} and resolves them "
                 f"through a vocabulary; a vocabulary keys ONE stored number "
-                f"and a spanning property has none to key")
+                f"and a spanning property has none to key"
+            )
         pools[family.kind] = _pool(family, family.rows(reads), per_spell, base)
         base += pools[family.kind].rows
 
@@ -310,8 +310,7 @@ def build_column(families: Sequence[Family], reads: Reads,
         ordered = sorted(mine)
         counts.append(len(ordered))
         refs.extend(ordered)
-    return ColumnRows(kinds=tuple(family.kind for family in families),
-                      pools=pools, counts=counts, refs=refs)
+    return ColumnRows(kinds=tuple(family.kind for family in families), pools=pools, counts=counts, refs=refs)
 
 
 # The model column.
@@ -323,8 +322,7 @@ Only the kinds reached through `SpellVisualKitModelAttach` declare these; the
 rest carry the neutral placement and would ship a column of it saying nothing.
 """
 
-PLACEMENT_SPANS = {"offset": ("x", "y", "z"),
-                   "rotation": ("yaw", "pitch", "roll")}
+PLACEMENT_SPANS = {"offset": ("x", "y", "z"), "rotation": ("yaw", "pitch", "roll")}
 """The placement properties that are one thing over several columns.
 
 A position and a rotation are each one value a reader means as a whole. Nothing
@@ -350,14 +348,19 @@ def placed(row: ModelRow) -> RowValues:
     TODO: give the arriving and departing animations their own properties once
     a reader has a way to ask about a moment rather than about a model.
     """
-    return (row.placement.scale, row.built,
-            *row.placement.offset, *row.placement.rotation,
-            row.placement.held, row.placement.animkit)
+    return (
+        row.placement.scale,
+        row.built,
+        *row.placement.offset,
+        *row.placement.rotation,
+        row.placement.held,
+        row.placement.animkit,
+    )
 
 
-def _models(kind: str, cat: int, props: tuple[str, ...],
-            pick: Callable[[ModelRow], RowValues],
-            carried: bool | None = None) -> Family:
+def _models(
+    kind: str, cat: int, props: tuple[str, ...], pick: Callable[[ModelRow], RowValues], carried: bool | None = None
+) -> Family:
     """One model category as its own kind.
 
     A weapon the caster already carries has no model of its own: its file id is
@@ -377,19 +380,28 @@ def _models(kind: str, cat: int, props: tuple[str, ...],
 
     def rows(reads: Reads) -> Iterable[SpellRow]:
         for row in reads.rows.models:
-            if row.category != cat or (carried is not None
-                                       and (row.file < 0) is not carried):
+            if row.category != cat or (carried is not None and (row.file < 0) is not carried):
                 continue
             yield row.spell, pick(row)
 
     return Family(
-        kind=kind, props=props, rows=rows,
-        vocab={"file": "files", "slot": "slots", "where": "attachments",
-               "from": "attachments", "to": "attachments",
-               "motion": "motions", "projectiles": "motionProjectiles",
-               "name": "items", "anim": "anims"},
+        kind=kind,
+        props=props,
+        rows=rows,
+        vocab={
+            "file": "files",
+            "slot": "slots",
+            "where": "attachments",
+            "from": "attachments",
+            "to": "attachments",
+            "motion": "motions",
+            "projectiles": "motionProjectiles",
+            "name": "items",
+            "anim": "anims",
+        },
         absent={"where": ABSENT, "from": ABSENT, "to": ABSENT},
-        spans=PLACEMENT_SPANS)
+        spans=PLACEMENT_SPANS,
+    )
 
 
 def _mounts(reads: Reads) -> Iterable[SpellRow]:
@@ -408,37 +420,47 @@ MODEL_FAMILIES: tuple[Family, ...] = (
     # which vocabulary reads it -- its name, or how many projectiles it is
     # written for. The count stays one copy in the motion table that way, the
     # same trade `tint.colour` makes.
-    _models("missile", MODEL_CAT_MISSILE,
-            ("file", "from", "to", "motion", "projectiles", "target"),
-            lambda row: (row.file, row.source, row.destination,
-                         row.motion, row.motion, row.mask)),
-    _models("barrage", MODEL_CAT_BARRAGE, ("file", "where", "target"),
-            lambda row: (row.file, row.source, row.mask)),
-    _models("ground", MODEL_CAT_AREA, ("file", "target"),
-            lambda row: (row.file, row.mask)),
-    _models("attach", MODEL_CAT_ATTACH,
-            ("file", "where", "target", *PLACEMENT_PROPS),
-            lambda row: (row.file, row.source, row.mask, *placed(row)),
-            carried=False),
-    _models("trail", MODEL_CAT_TRAIL, ("file", "target"),
-            lambda row: (row.file, row.mask)),
-    _models("display", MODEL_CAT_DISPLAY,
-            ("id", "file", "where", "target", *PLACEMENT_PROPS),
-            lambda row: (row.ref, row.file, row.source, row.mask, *placed(row))),
-    _models("item", MODEL_CAT_ITEM,
-            ("file", "id", "name", "where", "target", *PLACEMENT_PROPS),
-            lambda row: (row.file, row.ref, row.ref, row.source, row.mask,
-                         *placed(row))),
-    _models("equipped", MODEL_CAT_ATTACH,
-            ("slot", "where", "target", *PLACEMENT_PROPS),
-            lambda row: (row.file, row.source, row.mask, *placed(row)),
-            carried=True),
-    Family(kind="mount", props=("name", "file"), rows=_mounts,
-           vocab={"name": "mounts", "file": "files"}),
+    _models(
+        "missile",
+        MODEL_CAT_MISSILE,
+        ("file", "from", "to", "motion", "projectiles", "target"),
+        lambda row: (row.file, row.source, row.destination, row.motion, row.motion, row.mask),
+    ),
+    _models("barrage", MODEL_CAT_BARRAGE, ("file", "where", "target"), lambda row: (row.file, row.source, row.mask)),
+    _models("ground", MODEL_CAT_AREA, ("file", "target"), lambda row: (row.file, row.mask)),
+    _models(
+        "attach",
+        MODEL_CAT_ATTACH,
+        ("file", "where", "target", *PLACEMENT_PROPS),
+        lambda row: (row.file, row.source, row.mask, *placed(row)),
+        carried=False,
+    ),
+    _models("trail", MODEL_CAT_TRAIL, ("file", "target"), lambda row: (row.file, row.mask)),
+    _models(
+        "display",
+        MODEL_CAT_DISPLAY,
+        ("id", "file", "where", "target", *PLACEMENT_PROPS),
+        lambda row: (row.ref, row.file, row.source, row.mask, *placed(row)),
+    ),
+    _models(
+        "item",
+        MODEL_CAT_ITEM,
+        ("file", "id", "name", "where", "target", *PLACEMENT_PROPS),
+        lambda row: (row.file, row.ref, row.ref, row.source, row.mask, *placed(row)),
+    ),
+    _models(
+        "equipped",
+        MODEL_CAT_ATTACH,
+        ("slot", "where", "target", *PLACEMENT_PROPS),
+        lambda row: (row.file, row.source, row.mask, *placed(row)),
+        carried=True,
+    ),
+    Family(kind="mount", props=("name", "file"), rows=_mounts, vocab={"name": "mounts", "file": "files"}),
 )
 
 
 # The sound column.
+
 
 def _sounds(reads: Reads) -> Iterable[SpellRow]:
     """Every sound file a spell plays, under the kit that plays it.
@@ -452,13 +474,18 @@ def _sounds(reads: Reads) -> Iterable[SpellRow]:
 
 
 SOUND_FAMILIES: tuple[Family, ...] = (
-    Family(kind="sound", props=("file", "kit", "type", "target"), rows=_sounds,
-           vocab={"file": "files", "kit": "kits", "type": "soundTypes"},
-           absent={"type": ABSENT}),
+    Family(
+        kind="sound",
+        props=("file", "kit", "type", "target"),
+        rows=_sounds,
+        vocab={"file": "files", "kit": "kits", "type": "soundTypes"},
+        absent={"type": ABSENT},
+    ),
 )
 
 
 # The anim column.
+
 
 def _animkits(reads: Reads) -> Iterable[SpellRow]:
     """One row per animation a kit plays, and per region that animation moves.
@@ -498,8 +525,7 @@ def _loose(reads: Reads) -> Iterable[SpellRow]:
             if anim < limit:
                 seen.setdefault(spell, set()).add(anim)
                 yield spell, (anim, mask)
-    for spell, anim in spell_rows(reads.vehicles.vehicle_anims,
-                                  reads.rows.vehicles, limit):
+    for spell, anim in spell_rows(reads.vehicles.vehicle_anims, reads.rows.vehicles, limit):
         if anim not in seen.get(spell, ()):
             yield spell, (anim, 0)
 
@@ -511,8 +537,8 @@ def _replacements(reads: Reads) -> Iterable[SpellRow]:
     one the kind's own word reaches.
     """
     for spell, source, destination, mask in replacement_rows(
-            reads.visuals, reads.effects, reads.anim_replacements,
-            len(reads.declared.anim_names)):
+        reads.visuals, reads.effects, reads.anim_replacements, len(reads.declared.anim_names)
+    ):
         yield spell, (destination, source, mask)
 
 
@@ -522,8 +548,7 @@ def _poses(reads: Reads) -> Iterable[SpellRow]:
         yield spell, ()
 
 
-_ROLES: tuple[str, ...] = tuple(
-    PASSENGER_ROLE_NAMES[role] for role in sorted(PASSENGER_ROLE_NAMES))
+_ROLES: tuple[str, ...] = tuple(PASSENGER_ROLE_NAMES[role] for role in sorted(PASSENGER_ROLE_NAMES))
 """The rider's roles as property names, in role order.
 
 Read off the route's own declaration so a role added there becomes a property
@@ -539,30 +564,42 @@ def _passengers(reads: Reads) -> Iterable[SpellRow]:
     animation it holds once seated.
     """
     for spell, anim, role in spell_role_rows(
-            reads.vehicles.passenger_anims, reads.rows.vehicles,
-            len(reads.declared.anim_names)):
+        reads.vehicles.passenger_anims, reads.rows.vehicles, len(reads.declared.anim_names)
+    ):
         values = [ABSENT] * len(PASSENGER_ROLE_NAMES)
         values[role] = anim
         yield spell, tuple(values)
 
 
 ANIM_FAMILIES: tuple[Family, ...] = (
-    Family(kind="kit", props=("id", "anim", "boneset", "target"), rows=_animkits,
-           vocab={"anim": "anims", "boneset": "bonesets"},
-           absent={"anim": ABSENT, "boneset": ABSENT}),
-    Family(kind="loose", props=("anim", "target"), rows=_loose,
-           vocab={"anim": "anims"}, absent={"anim": ABSENT}),
-    Family(kind="replace", props=("to", "from", "target"), rows=_replacements,
-           vocab={"to": "anims", "from": "anims"},
-           absent={"to": ABSENT, "from": ABSENT}),
+    Family(
+        kind="kit",
+        props=("id", "anim", "boneset", "target"),
+        rows=_animkits,
+        vocab={"anim": "anims", "boneset": "bonesets"},
+        absent={"anim": ABSENT, "boneset": ABSENT},
+    ),
+    Family(kind="loose", props=("anim", "target"), rows=_loose, vocab={"anim": "anims"}, absent={"anim": ABSENT}),
+    Family(
+        kind="replace",
+        props=("to", "from", "target"),
+        rows=_replacements,
+        vocab={"to": "anims", "from": "anims"},
+        absent={"to": ABSENT, "from": ABSENT},
+    ),
     Family(kind="pose", props=(), rows=_poses),
-    Family(kind="passenger", props=_ROLES, rows=_passengers,
-           vocab={role: "anims" for role in _ROLES},
-           absent={role: ABSENT for role in _ROLES}),
+    Family(
+        kind="passenger",
+        props=_ROLES,
+        rows=_passengers,
+        vocab={role: "anims" for role in _ROLES},
+        absent={role: ABSENT for role in _ROLES},
+    ),
 )
 
 
 # The fx column.
+
 
 def _painted(reads: Reads, fids: Iterable[int]) -> list[int]:
     """The textures among `fids` the listfile names, in order.
@@ -622,8 +659,7 @@ def _coloured(bucket: str) -> Callable[[Reads], Iterable[SpellRow]]:
     return rows
 
 
-def _percents(bucket: str, value_of: Callable[[Reads, int], int]
-              ) -> Callable[[Reads], Iterable[SpellRow]]:
+def _percents(bucket: str, value_of: Callable[[Reads, int], int]) -> Callable[[Reads], Iterable[SpellRow]]:
     """A percent-only family: the percent IS the row, so there is no id table.
 
     Two rows resolving to one percent are one row wearing both audiences, so
@@ -677,8 +713,7 @@ def _scales(reads: Reads) -> Iterable[SpellRow]:
     """Every size change a spell applies, as a signed percentage."""
     for spell, percents in sorted(reads.effects.scales.items()):
         for percent in sorted(percents):
-            yield spell, (percent,
-                          reads.effects.scale_targets.get((spell, percent), 0))
+            yield spell, (percent, reads.effects.scale_targets.get((spell, percent), 0))
 
 
 def _summons(reads: Reads) -> Iterable[SpellRow]:
@@ -689,8 +724,7 @@ def _summons(reads: Reads) -> Iterable[SpellRow]:
     """
     for spell, summoned in sorted(reads.effects.summons.items()):
         for creature, control in sorted(summoned):
-            yield spell, (creature, control,
-                          reads.effects.summon_targets.get((spell, creature), 0))
+            yield spell, (creature, control, reads.effects.summon_targets.get((spell, creature), 0))
 
 
 def _objects(reads: Reads) -> Iterable[SpellRow]:
@@ -706,12 +740,8 @@ def _screens(reads: Reads) -> Iterable[SpellRow]:
     it -- and they union here because they are the same fact about the spell.
     The audience comes from the aura, which is the route that records one.
     """
-    reached = {(spell, screen)
-               for spell, ids in reads.effects.screens.ids.items()
-               for screen in ids}
-    reached |= {(spell, screen)
-                for spell, screens_of in reads.visuals.screens.items()
-                for screen in screens_of}
+    reached = {(spell, screen) for spell, ids in reads.effects.screens.ids.items() for screen in ids}
+    reached |= {(spell, screen) for spell, screens_of in reads.visuals.screens.items() for screen in screens_of}
     for spell, screen in sorted(reached):
         payload = reads.fx.screens.get(screen)
         drawn = sorted((role, fid) for fid, role in payload.textures) if payload else []
@@ -721,45 +751,60 @@ def _screens(reads: Reads) -> Iterable[SpellRow]:
 
 
 FX_FAMILIES: tuple[Family, ...] = (
-    Family(kind="chain", props=("texture", "from", "to", "colour", "target"),
-           rows=_chains, carried=("chain",),
-           vocab={"texture": "files", "from": "attachments", "to": "attachments",
-                  "colour": "chainColours"},
-           absent={"from": ABSENT, "to": ABSENT}),
-    Family(kind="dissolve", props=("where", "texture", "target"),
-           rows=_dissolves, carried=("dissolve",),
-           vocab={"where": "anchors", "texture": "files"},
-           absent={"where": NO_ANCHOR}),
-    Family(kind="shadowy", props=("where", "colour", "target"), rows=_shadowies,
-           vocab={"where": "anchors", "colour": "shadowyColours"},
-           absent={"where": NO_ANCHOR}),
-    Family(kind="ghost", props=("colour", "target"), rows=_coloured("ghost_mats"),
-           vocab={"colour": "ghostColours"}),
-    Family(kind="glow", props=("colour", "target"), rows=_coloured("glows"),
-           vocab={"colour": "glowColours"}),
-    Family(kind="tint", props=("colour", "target"), rows=_coloured("tints"),
-           vocab={"colour": "tintColours"}),
-    Family(kind="transparency", props=("percent", "target"),
-           rows=_percents("transps", lambda reads, row: reads.procs.transps[row])),
-    Family(kind="desaturate", props=("percent", "target"),
-           rows=_percents("desats", lambda reads, row: reads.procs.desats[row])),
+    Family(
+        kind="chain",
+        props=("texture", "from", "to", "colour", "target"),
+        rows=_chains,
+        carried=("chain",),
+        vocab={"texture": "files", "from": "attachments", "to": "attachments", "colour": "chainColours"},
+        absent={"from": ABSENT, "to": ABSENT},
+    ),
+    Family(
+        kind="dissolve",
+        props=("where", "texture", "target"),
+        rows=_dissolves,
+        carried=("dissolve",),
+        vocab={"where": "anchors", "texture": "files"},
+        absent={"where": NO_ANCHOR},
+    ),
+    Family(
+        kind="shadowy",
+        props=("where", "colour", "target"),
+        rows=_shadowies,
+        vocab={"where": "anchors", "colour": "shadowyColours"},
+        absent={"where": NO_ANCHOR},
+    ),
+    Family(kind="ghost", props=("colour", "target"), rows=_coloured("ghost_mats"), vocab={"colour": "ghostColours"}),
+    Family(kind="glow", props=("colour", "target"), rows=_coloured("glows"), vocab={"colour": "glowColours"}),
+    Family(kind="tint", props=("colour", "target"), rows=_coloured("tints"), vocab={"colour": "tintColours"}),
+    Family(
+        kind="transparency",
+        props=("percent", "target"),
+        rows=_percents("transps", lambda reads, row: reads.procs.transps[row]),
+    ),
+    Family(
+        kind="desaturate",
+        props=("percent", "target"),
+        rows=_percents("desats", lambda reads, row: reads.procs.desats[row]),
+    ),
     Family(kind="freeze", props=(), rows=_flagged("freezes")),
     Family(kind="camo", props=(), rows=_flagged("camos")),
-    Family(kind="morph", props=("creature", "target"), rows=_entities("morphs"),
-           vocab={"creature": "morphs"}),
-    Family(kind="shapeshift", props=("form", "target"), rows=_entities("forms"),
-           vocab={"form": "shapeshifts"}),
+    Family(kind="morph", props=("creature", "target"), rows=_entities("morphs"), vocab={"creature": "morphs"}),
+    Family(kind="shapeshift", props=("form", "target"), rows=_entities("forms"), vocab={"form": "shapeshifts"}),
     Family(kind="scale", props=("amount", "target"), rows=_scales),
-    Family(kind="summon", props=("creature", "control", "target"), rows=_summons,
-           vocab={"creature": "creatures", "control": "controls"}),
-    Family(kind="object", props=("object", "target"), rows=_objects,
-           vocab={"object": "objects"}),
-    Family(kind="screen", props=("texture", "target"), rows=_screens,
-           carried=("screen",), vocab={"texture": "files"}),
+    Family(
+        kind="summon",
+        props=("creature", "control", "target"),
+        rows=_summons,
+        vocab={"creature": "creatures", "control": "controls"},
+    ),
+    Family(kind="object", props=("object", "target"), rows=_objects, vocab={"object": "objects"}),
+    Family(kind="screen", props=("texture", "target"), rows=_screens, carried=("screen",), vocab={"texture": "files"}),
 )
 
 
 # The mech column.
+
 
 def _mask_of(bits: Mapping[int, int], first: int, second: int) -> int:
     """The audience one effect row plays to, from its two implicit targets.
@@ -791,9 +836,9 @@ def _effects(reads: Reads) -> Iterable[SpellRow]:
         if not effect:
             raise ValueError(
                 f"spell {spell} has an effect row with aura {aura} and no "
-                f"effect; the row model carries the row on its effect")
-        yield spell, (effect, _mask_of(bits, first, second),
-                      aura, first, second, misc_a, misc_b)
+                f"effect; the row model carries the row on its effect"
+            )
+        yield spell, (effect, _mask_of(bits, first, second), aura, first, second, misc_a, misc_b)
 
 
 def _auras(reads: Reads) -> Iterable[SpellRow]:
@@ -819,8 +864,7 @@ def _links(forward: bool) -> Callable[[Reads], Iterable[SpellRow]]:
 
     def rows(reads: Reads) -> Iterable[SpellRow]:
         for source, destination, word, mask in reads.rows.links:
-            yield ((source, (destination, word, mask)) if forward
-                   else (destination, (source, word, mask)))
+            yield ((source, (destination, word, mask)) if forward else (destination, (source, word, mask)))
 
     return rows
 
@@ -843,13 +887,11 @@ def _channels(payload: str, paired: bool) -> Callable[[Reads], Iterable[SpellRow
     """
 
     def rows(reads: Reads) -> Iterable[SpellRow]:
-        hiding = Counter(kind for kinds in reads.effects.invis.ids.values()
-                         for kind in kinds)
+        hiding = Counter(kind for kinds in reads.effects.invis.ids.values() for kind in kinds)
         source = getattr(reads.effects, payload)
-        for spell, kind in sorted((spell, kind)
-                                  for spell, kinds in source.ids.items()
-                                  for kind in kinds
-                                  if not paired or kind in hiding):
+        for spell, kind in sorted(
+            (spell, kind) for spell, kinds in source.ids.items() for kind in kinds if not paired or kind in hiding
+        ):
             mask = source.masks.get((spell, kind), 0)
             yield spell, ((kind, hiding[kind], mask) if paired else (kind, mask))
 
@@ -883,46 +925,74 @@ def _speeds(reads: Reads) -> Iterable[SpellRow]:
     """
     for spell, mods in sorted(reads.effects.speeds.items()):
         for movement, percent in sorted(mods):
-            yield spell, (percent, MOVEMENT_NAMES.index(movement),
-                          reads.effects.speed_targets.get(
-                              (spell, movement, percent), 0))
+            yield (
+                spell,
+                (
+                    percent,
+                    MOVEMENT_NAMES.index(movement),
+                    reads.effects.speed_targets.get((spell, movement, percent), 0),
+                ),
+            )
 
 
 def _keybinds(reads: Reads) -> Iterable[SpellRow]:
     """Which keybound override an aura suppresses while it holds."""
     for spell, override in id_rows(reads.effects.keybinds):
-        yield spell, (override,
-                      reads.effects.keybinds.masks.get((spell, override), 0))
+        yield spell, (override, reads.effects.keybinds.masks.get((spell, override), 0))
 
 
 MECH_FAMILIES: tuple[Family, ...] = (
-    Family(kind="effect", props=("name", "target"), rows=_effects,
-           carried=("aura", "targetA", "targetB", "misc0", "misc1"),
-           vocab={"name": "effects"}),
-    Family(kind="aura", props=("name", "target"), rows=_auras,
-           vocab={"name": "auras"}),
+    Family(
+        kind="effect",
+        props=("name", "target"),
+        rows=_effects,
+        carried=("aura", "targetA", "targetB", "misc0", "misc1"),
+        vocab={"name": "effects"},
+    ),
+    Family(kind="aura", props=("name", "target"), rows=_auras, vocab={"name": "auras"}),
     # The word is an INDEX into the pool, so nought is the first word rather
     # than no word: an edge always prints one, and the gap has to be a value
     # the pool cannot hold.
-    Family(kind="triggers", props=("spell", "how", "target"), rows=_links(True),
-           vocab={"spell": "spells", "how": "linkWords"},
-           absent={"how": ABSENT}),
-    Family(kind="origin", props=("spell", "how", "target"), rows=_links(False),
-           vocab={"spell": "spells", "how": "linkWords"},
-           absent={"how": ABSENT}),
-    Family(kind="location", props=("area",), rows=_areas,
-           vocab={"area": "areas"}),
-    Family(kind="invis", props=("channel", "target"),
-           rows=_channels("invis", paired=False), absent={"channel": ABSENT}),
-    Family(kind="detect", props=("channel", "count", "target"),
-           rows=_channels("detect", paired=True), absent={"channel": ABSENT}),
-    Family(kind="vehicle", props=("seats", "where", "target"), rows=_seats,
-           carried=("vehicle",), vocab={"where": "seatAnchors"},
-           absent={"where": ABSENT}),
-    Family(kind="speed", props=("amount", "mode", "target"), rows=_speeds,
-           vocab={"mode": "movements"}, absent={"mode": ABSENT}),
-    Family(kind="keybind", props=("key", "target"), rows=_keybinds,
-           vocab={"key": "keybinds"}),
+    Family(
+        kind="triggers",
+        props=("spell", "how", "target"),
+        rows=_links(True),
+        vocab={"spell": "spells", "how": "linkWords"},
+        absent={"how": ABSENT},
+    ),
+    Family(
+        kind="origin",
+        props=("spell", "how", "target"),
+        rows=_links(False),
+        vocab={"spell": "spells", "how": "linkWords"},
+        absent={"how": ABSENT},
+    ),
+    Family(kind="location", props=("area",), rows=_areas, vocab={"area": "areas"}),
+    Family(
+        kind="invis", props=("channel", "target"), rows=_channels("invis", paired=False), absent={"channel": ABSENT}
+    ),
+    Family(
+        kind="detect",
+        props=("channel", "count", "target"),
+        rows=_channels("detect", paired=True),
+        absent={"channel": ABSENT},
+    ),
+    Family(
+        kind="vehicle",
+        props=("seats", "where", "target"),
+        rows=_seats,
+        carried=("vehicle",),
+        vocab={"where": "seatAnchors"},
+        absent={"where": ABSENT},
+    ),
+    Family(
+        kind="speed",
+        props=("amount", "mode", "target"),
+        rows=_speeds,
+        vocab={"mode": "movements"},
+        absent={"mode": ABSENT},
+    ),
+    Family(kind="keybind", props=("key", "target"), rows=_keybinds, vocab={"key": "keybinds"}),
     Family(kind="debuff", props=(), rows=_attributed("auraisdebuff")),
 )
 
@@ -943,13 +1013,20 @@ the per-spell columns directly.
 COLUMN_READS: Mapping[str, tuple[str, ...]] = {
     "model": ("spell_ids", "rows", "mounts"),
     "sound": ("spell_ids", "rows", "kit_types"),
-    "anim": ("spell_ids", "rows", "visuals", "effects", "declared", "vehicles",
-             "attributes", "anim_replacements", "animkit_anims",
-             "animkit_bonesets"),
-    "fx": ("spell_ids", "rows", "visuals", "effects", "declared", "attributes",
-           "fx", "procs", "references", "paths"),
-    "mech": ("spell_ids", "rows", "visuals", "effects", "declared", "vehicles",
-             "attributes", "areas"),
+    "anim": (
+        "spell_ids",
+        "rows",
+        "visuals",
+        "effects",
+        "declared",
+        "vehicles",
+        "attributes",
+        "anim_replacements",
+        "animkit_anims",
+        "animkit_bonesets",
+    ),
+    "fx": ("spell_ids", "rows", "visuals", "effects", "declared", "attributes", "fx", "procs", "references", "paths"),
+    "mech": ("spell_ids", "rows", "visuals", "effects", "declared", "vehicles", "attributes", "areas"),
 }
 """What each column's families map FROM, per column rather than in one union.
 
@@ -972,8 +1049,7 @@ VOCABULARIES: Mapping[str, Mapping[str, str]] = {
     "attachments": {"in": "attachmentNames"},
     "motions": {"in": "missileMotions", "keys": "ids", "values": "names"},
     "soundTypes": {"in": "soundTypes", "keys": "ids", "values": "names"},
-    "motionProjectiles": {"in": "missileMotions", "keys": "ids",
-                          "values": "projectiles"},
+    "motionProjectiles": {"in": "missileMotions", "keys": "ids", "values": "projectiles"},
     "items": {"in": "items", "keys": "ids", "values": "names"},
     "mounts": {"in": "mounts", "keys": "displayIds", "values": "names"},
     "kits": {"in": "soundKitNames", "keys": "soundKitIds", "values": "names"},
@@ -982,8 +1058,7 @@ VOCABULARIES: Mapping[str, Mapping[str, str]] = {
     "slots": {"in": "equippedSlots", "keys": "fids", "values": "slots"},
     "anchors": {"in": "anchorNames"},
     "chainColours": {"in": "fxChains", "keys": "ids", "values": "colors"},
-    "shadowyColours": {"in": "shadowies", "keys": "ids",
-                       "values": "primaryColors"},
+    "shadowyColours": {"in": "shadowies", "keys": "ids", "values": "primaryColors"},
     "ghostColours": {"in": "ghostMats", "keys": "ids", "values": "colors"},
     "glowColours": {"in": "glows", "keys": "ids", "values": "colors"},
     "tintColours": {"in": "tints", "keys": "ids", "values": "colors"},

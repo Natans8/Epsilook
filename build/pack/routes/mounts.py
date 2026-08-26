@@ -28,22 +28,19 @@ class MountData:
     """Display -> its model file, 0 where it does not resolve."""
 
 
-def read_mounts(tables: Tables, spell_names: dict[int, str],
-                creatures: CreatureModels) -> MountData:
+def read_mounts(tables: Tables, spell_names: dict[int, str], creatures: CreatureModels) -> MountData:
     """Read the mount displays each mount-granting spell reaches.
 
     A mount whose granting spell this build does not ship is skipped. The first
     mount to claim a display names it.
     """
     displays: dict[int, list[int]] = {}
-    for display_id, mount_id in tables.rows(
-            "MountXDisplay", ["CreatureDisplayInfoID", "MountID"]):
+    for display_id, mount_id in tables.rows("MountXDisplay", ["CreatureDisplayInfoID", "MountID"]):
         displays.setdefault(to_int(mount_id), []).append(to_int(display_id))
 
     mounts = MountData()
     links: set[tuple[int, int]] = set()
-    for mount_id, name, source in tables.rows(
-            "Mount", ["ID", "Name_lang", "SourceSpellID"]):
+    for mount_id, name, source in tables.rows("Mount", ["ID", "Name_lang", "SourceSpellID"]):
         spell = to_int(source)
         if spell not in spell_names:
             continue

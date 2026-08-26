@@ -79,7 +79,9 @@ def scaling_source(build: str, cache_dir: Path) -> Fetched:
         name=f"spell scaling game table ({build})",
         origin=Origin(RAW_FILE_URL.format(file=SPELL_SCALING_FILE, build=build)),
         dest=cache_dir / f"gtSpellScaling-{build}.txt",
-        fetch=Pinned(), optional=True)
+        fetch=Pinned(),
+        optional=True,
+    )
 
 
 def read_scaling(landing: Path | None) -> dict[int, dict[str, float]]:
@@ -115,9 +117,14 @@ def read_scaling(landing: Path | None) -> dict[int, dict[str, float]]:
     return table
 
 
-def scaled_amount(table: Mapping[int, Mapping[str, float]], scaling_class: int,
-                  coefficient: float, level: int,
-                  minimum: int = 0, maximum: int = 0) -> float | None:
+def scaled_amount(
+    table: Mapping[int, Mapping[str, float]],
+    scaling_class: int,
+    coefficient: float,
+    level: int,
+    minimum: int = 0,
+    maximum: int = 0,
+) -> float | None:
     """One effect's amount at `level`, or None when it cannot be resolved.
 
     The level is clamped to the spell's own scaling window first, which is what

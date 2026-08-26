@@ -17,8 +17,7 @@ from ..tables import Tables
 from .attachments import NO_ATTACHMENT, NO_MOTION
 from .columns import to_int
 from .fx import ChainEffect, FxPayloads, expand_chain
-from .models import (MODEL_CAT_AREA, MODEL_CAT_BARRAGE, SCALE_UNIT, UNPLACED,
-                     AttachModel, ModelSources)
+from .models import MODEL_CAT_AREA, MODEL_CAT_BARRAGE, SCALE_UNIT, UNPLACED, AttachModel, ModelSources
 from .procedures import ProcEffects
 
 _KIT_EFFECT_TYPES = load_local_enum("spell_visual_kit_effect_types")
@@ -84,18 +83,16 @@ class RosteredPayload:
 
 
 ROSTERED_PAYLOADS: dict[int, RosteredPayload] = {
-    EFFECT_TYPE_DISSOLVE: RosteredPayload(lambda fx: fx.dissolves,
-                                          lambda kits: kits.dissolves),
-    EFFECT_TYPE_EDGE_GLOW: RosteredPayload(lambda fx: fx.glows,
-                                           lambda kits: kits.glows),
-    EFFECT_TYPE_SHADOWY: RosteredPayload(lambda fx: fx.shadowies,
-                                         lambda kits: kits.shadowies),
+    EFFECT_TYPE_DISSOLVE: RosteredPayload(lambda fx: fx.dissolves, lambda kits: kits.dissolves),
+    EFFECT_TYPE_EDGE_GLOW: RosteredPayload(lambda fx: fx.glows, lambda kits: kits.glows),
+    EFFECT_TYPE_SHADOWY: RosteredPayload(lambda fx: fx.shadowies, lambda kits: kits.shadowies),
 }
 """Effect type to the payload it keeps, for the types that only look one up."""
 
 
-def add_chains(chains: Mapping[int, ChainEffect], chain_id: int,
-               source: int, destination: int, into: set[ChainDraw]) -> None:
+def add_chains(
+    chains: Mapping[int, ChainEffect], chain_id: int, source: int, destination: int, into: set[ChainDraw]
+) -> None:
     """Add a chain and every chain it nests, tagged with an attachment pair.
 
     Nested chains inherit the parent beam's attachments: they are segments of
@@ -106,27 +103,28 @@ def add_chains(chains: Mapping[int, ChainEffect], chain_id: int,
     into.update((chain, source, destination) for chain in expanded)
 
 
-def read_kit_effects(tables: Tables, models: ModelSources, procs: ProcEffects,
-                     fx: FxPayloads) -> KitEffects:
+def read_kit_effects(tables: Tables, models: ModelSources, procs: ProcEffects, fx: FxPayloads) -> KitEffects:
     """Dispatch every kit effect row into the bucket its type chose."""
     kits = KitEffects(
         models={kit: set(rows) for kit, rows in models.attach_models.items()},
         # The attached models seed the same buckets this walk fills; the walk
         # unions rather than replaces.
         animkits={kit: set(rows) for kit, rows in models.attach_animkits.items()},
-        visual_anims={kit: set(rows) for kit, rows in models.attach_anims.items()})
+        visual_anims={kit: set(rows) for kit, rows in models.attach_anims.items()},
+    )
 
     # An animation effect points at a row carrying both an anim kit and up to
     # two animations the kit plays directly on the unit. 0 and -1 both mean
     # unset here: 0 would be Stand.
     visual_anims: dict[int, tuple[int, int, int]] = {}
     for row_id, initial, loop, animkit in tables.rows(
-            "SpellVisualAnim", ["ID", "InitialAnimID", "LoopAnimID", "AnimKitID"]):
+        "SpellVisualAnim", ["ID", "InitialAnimID", "LoopAnimID", "AnimKitID"]
+    ):
         visual_anims[to_int(row_id)] = (to_int(initial), to_int(loop), to_int(animkit))
 
     for kit_id, type_id, effect_id in tables.rows(
-            "SpellVisualKitEffect",
-            ["ParentSpellVisualKitID", "EffectType", "Effect"]):
+        "SpellVisualKitEffect", ["ParentSpellVisualKitID", "EffectType", "Effect"]
+    ):
         kit, effect_type, effect = to_int(kit_id), to_int(type_id), to_int(effect_id)
         if not (kit and effect):
             continue
@@ -142,10 +140,8 @@ def read_kit_effects(tables: Tables, models: ModelSources, procs: ProcEffects,
         elif effect_type == EFFECT_TYPE_PROC:
             _add_procedure(kits, kit, effect, procs, fx)
         elif effect_type == EFFECT_TYPE_BEAM:
-            chain, source, destination = fx.beam_chain.get(
-                effect, (0, NO_ATTACHMENT, NO_ATTACHMENT))
-            add_chains(fx.chains, chain, source, destination,
-                       kits.chains.setdefault(kit, set()))
+            chain, source, destination = fx.beam_chain.get(effect, (0, NO_ATTACHMENT, NO_ATTACHMENT))
+            add_chains(fx.chains, chain, source, destination, kits.chains.setdefault(kit, set()))
         elif (rostered := ROSTERED_PAYLOADS.get(effect_type)) is not None:
             if effect in rostered.known(fx):
                 rostered.into(kits).setdefault(kit, set()).add(effect)
@@ -153,15 +149,15 @@ def read_kit_effects(tables: Tables, models: ModelSources, procs: ProcEffects,
             file = models.emission_fid.get(effect, 0)
             if file:
                 kits.models.setdefault(kit, set()).add(
-                    AttachModel(file, MODEL_CAT_AREA, NO_ATTACHMENT, NO_ATTACHMENT,
-                                0, NO_MOTION, UNPLACED, SCALE_UNIT))
+                    AttachModel(file, MODEL_CAT_AREA, NO_ATTACHMENT, NO_ATTACHMENT, 0, NO_MOTION, UNPLACED, SCALE_UNIT)
+                )
         elif effect_type == EFFECT_TYPE_BARRAGE:
             file = models.barrage_fid.get(effect, 0)
             if file:
                 attach = models.barrage_attach.get(effect, NO_ATTACHMENT)
                 kits.models.setdefault(kit, set()).add(
-                    AttachModel(file, MODEL_CAT_BARRAGE, attach, NO_ATTACHMENT,
-                                0, NO_MOTION, UNPLACED, SCALE_UNIT))
+                    AttachModel(file, MODEL_CAT_BARRAGE, attach, NO_ATTACHMENT, 0, NO_MOTION, UNPLACED, SCALE_UNIT)
+                )
         elif effect_type == EFFECT_TYPE_SCREEN:
             screen = fx.svse_screen.get(effect, 0)
             if screen in fx.screens:
@@ -169,20 +165,20 @@ def read_kit_effects(tables: Tables, models: ModelSources, procs: ProcEffects,
     return kits
 
 
-def _add_procedure(kits: KitEffects, kit: int, procedure: int,
-                   procs: ProcEffects, fx: FxPayloads) -> None:
+def _add_procedure(kits: KitEffects, kit: int, procedure: int, procs: ProcEffects, fx: FxPayloads) -> None:
     """Route one procedure reference to whichever buckets it landed in.
 
     A procedure-route chain has no beam row, so it carries no attachment pair.
     """
     chain = procs.chain.get(procedure, 0)
     if chain:
-        add_chains(fx.chains, chain, NO_ATTACHMENT, NO_ATTACHMENT,
-                   kits.chains.setdefault(kit, set()))
-    for bucket, into in ((procs.tints, kits.tints),
-                         (procs.ghost_mats, kits.ghost_mats),
-                         (procs.desats, kits.desats),
-                         (procs.transps, kits.transps)):
+        add_chains(fx.chains, chain, NO_ATTACHMENT, NO_ATTACHMENT, kits.chains.setdefault(kit, set()))
+    for bucket, into in (
+        (procs.tints, kits.tints),
+        (procs.ghost_mats, kits.ghost_mats),
+        (procs.desats, kits.desats),
+        (procs.transps, kits.transps),
+    ):
         if procedure in bucket:
             into.setdefault(kit, set()).add(procedure)
     if procedure in procs.freezes:

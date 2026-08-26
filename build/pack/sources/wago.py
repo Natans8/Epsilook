@@ -187,8 +187,11 @@ def _export(table: str, version: str, locale: str = "") -> Part:
         locale: the language to write its text in; empty for the build's own.
     """
     url = WAGO_CSV_URL.format(table=table, version=version)
-    return Part(origin=Origin(f"{url}&locale={locale}" if locale else url),
-                name=f"{table}.csv", optional=table in OPTIONAL_TABLES)
+    return Part(
+        origin=Origin(f"{url}&locale={locale}" if locale else url),
+        name=f"{table}.csv",
+        optional=table in OPTIONAL_TABLES,
+    )
 
 
 def locale_dir(version: str, locale: str) -> Path:
@@ -203,9 +206,12 @@ def locale_dir(version: str, locale: str) -> Path:
 
 def tables_source(version: str) -> Source:
     """This build's table exports, as the one directory a provider reads."""
-    return Gathered(name=f"tables (wago.tools, build {version})",
-                    into=CACHE_DIR / version, fetch=Pinned(),
-                    parts=[_export(table, version) for table in TABLES])
+    return Gathered(
+        name=f"tables (wago.tools, build {version})",
+        into=CACHE_DIR / version,
+        fetch=Pinned(),
+        parts=[_export(table, version) for table in TABLES],
+    )
 
 
 def locale_tables_source(version: str, locale: str) -> Source:
@@ -217,8 +223,10 @@ def locale_tables_source(version: str, locale: str) -> Source:
     """
     return Gathered(
         name=f"tables (wago.tools, build {version}, locale {locale})",
-        into=locale_dir(version, locale), fetch=Pinned(),
-        parts=[_export(table, version, locale) for table in LOCALIZED_TABLES])
+        into=locale_dir(version, locale),
+        fetch=Pinned(),
+        parts=[_export(table, version, locale) for table in LOCALIZED_TABLES],
+    )
 
 
 def pinned_tables_source() -> Source:
@@ -231,5 +239,7 @@ def pinned_tables_source() -> Source:
     """
     return Gathered(
         name=f"sound-kit names (wago.tools, pinned build {SOUNDKITNAME_BUILD})",
-        into=CACHE_DIR / SOUNDKITNAME_BUILD, fetch=Pinned(),
-        parts=[_export("SoundKitName", SOUNDKITNAME_BUILD)])
+        into=CACHE_DIR / SOUNDKITNAME_BUILD,
+        fetch=Pinned(),
+        parts=[_export("SoundKitName", SOUNDKITNAME_BUILD)],
+    )

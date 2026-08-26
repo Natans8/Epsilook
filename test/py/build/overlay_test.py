@@ -32,13 +32,11 @@ Id,Label,Verified
 
 BUILD = 900
 
-STAMPED = Overlay("spell", {"ID": "Id", "Name": "Label"},
-                  judged_on="Verified", admits=at_least(BUILD))
+STAMPED = Overlay("spell", {"ID": "Id", "Name": "Label"}, judged_on="Verified", admits=at_least(BUILD))
 """The hotfix shape: judged on the build a row was verified against."""
 
 
-def written(tmp_path: Path, base_text: str | None = BASE,
-            revisions: str | None = REVISIONS) -> tuple[Path, Path]:
+def written(tmp_path: Path, base_text: str | None = BASE, revisions: str | None = REVISIONS) -> tuple[Path, Path]:
     """The two source directories, written. `None` leaves that side absent."""
     base, source = tmp_path / "base", tmp_path / "source"
     base.mkdir()
@@ -53,8 +51,7 @@ def written(tmp_path: Path, base_text: str | None = BASE,
 @pytest.fixture(name="tables")
 def _tables(tmp_path: Path) -> OverlaidTables:
     base, source = written(tmp_path)
-    return OverlaidTables(base=CsvTables(base), overlays={"Spell": STAMPED},
-                          source=CsvTables(source))
+    return OverlaidTables(base=CsvTables(base), overlays={"Spell": STAMPED}, source=CsvTables(source))
 
 
 def rows(tables: OverlaidTables, *columns: str) -> list[tuple[str, ...]]:
@@ -68,17 +65,16 @@ def by_id(tables: OverlaidTables, column: str) -> dict[str, str]:
 
 def test_a_revision_replaces_the_column_it_supplies(tables: OverlaidTables) -> None:
     assert by_id(tables, "Name") == {
-        "10": "Fireball",            # unrevised
-        "11": "Frostbolt Rank 2",    # revised
-        "12": "Blink",               # revised, but its stamp is too old
-        "99": "Added Server-Side",   # added
+        "10": "Fireball",  # unrevised
+        "11": "Frostbolt Rank 2",  # revised
+        "12": "Blink",  # revised, but its stamp is too old
+        "99": "Added Server-Side",  # added
     }
 
 
 def test_a_column_the_overlay_does_not_supply_survives(tables: OverlaidTables) -> None:
     """The reason the merge is per column: a row replace would blank it."""
-    assert by_id(tables, "Amount") == {
-        "10": "50", "11": "7", "12": "3", "99": ""}
+    assert by_id(tables, "Amount") == {"10": "50", "11": "7", "12": "3", "99": ""}
 
 
 def test_a_stamp_at_or_beyond_the_build_applies(tables: OverlaidTables) -> None:
@@ -94,8 +90,7 @@ def test_a_stamp_below_the_build_does_not(tables: OverlaidTables) -> None:
 def test_an_unreadable_stamp_does_not_apply(tmp_path: Path) -> None:
     """A source that stamps its rows stamps all of them, so a missing value is
     a malformed row rather than one that means "always"."""
-    base, source = written(tmp_path,
-                           revisions="Id,Label,Verified\n11,Revised,\n")
+    base, source = written(tmp_path, revisions="Id,Label,Verified\n11,Revised,\n")
     tables = OverlaidTables(CsvTables(base), {"Spell": STAMPED}, CsvTables(source))
     assert by_id(tables, "Name")["11"] == "Frostbolt"
 
@@ -114,13 +109,11 @@ def test_added_rows_come_after_the_base_in_file_order(tables: OverlaidTables) ->
 
 def test_the_key_need_not_be_among_the_columns_asked_for(tables: OverlaidTables) -> None:
     """A route asks for what it needs, not for what the merge needs."""
-    assert rows(tables, "Name") == [("Fireball",), ("Frostbolt Rank 2",),
-                                    ("Blink",), ("Added Server-Side",)]
+    assert rows(tables, "Name") == [("Fireball",), ("Frostbolt Rank 2",), ("Blink",), ("Added Server-Side",)]
 
 
 def test_a_table_with_no_overlay_passes_straight_through(tables: OverlaidTables) -> None:
-    assert list(tables.rows("Spell", ["Note"])) == [("client",), ("client",),
-                                                    ("client",), ("",)]
+    assert list(tables.rows("Spell", ["Note"])) == [("client",), ("client",), ("client",), ("",)]
 
 
 def test_availability_and_header_follow_the_base(tables: OverlaidTables) -> None:
@@ -141,18 +134,16 @@ def test_a_table_the_build_predates_stays_empty(tmp_path: Path) -> None:
     revision row would surface as an addition."""
     base, source = written(tmp_path, base_text=None)
     tables = OverlaidTables(
-        CsvTables(base, absent_tables={"Spell": "the spell list"}),
-        {"Spell": STAMPED}, CsvTables(source))
+        CsvTables(base, absent_tables={"Spell": "the spell list"}), {"Spell": STAMPED}, CsvTables(source)
+    )
     assert rows(tables, "ID", "Name") == []
 
 
 def test_two_spellings_of_one_id_are_one_row(tmp_path: Path) -> None:
     """Values travel as text, but `11` and `11.0` must still be one row."""
-    base, source = written(
-        tmp_path, revisions="Id,Label,Verified\n11.0,Revised,900\n")
+    base, source = written(tmp_path, revisions="Id,Label,Verified\n11.0,Revised,900\n")
     tables = OverlaidTables(CsvTables(base), {"Spell": STAMPED}, CsvTables(source))
-    assert by_id(tables, "Name") == {"10": "Fireball", "11": "Revised",
-                                     "12": "Blink"}
+    assert by_id(tables, "Name") == {"10": "Fireball", "11": "Revised", "12": "Blink"}
 
 
 def test_the_key_must_be_mapped() -> None:
@@ -165,9 +156,9 @@ def test_an_overlay_with_no_rule_admits_every_row(tmp_path: Path) -> None:
     """A supplement whose rows are all in scope declares nothing and gets them
     all, which is why the default rule is the permissive one."""
     base, source = written(tmp_path)
-    tables = OverlaidTables(CsvTables(base),
-                            {"Spell": Overlay("spell", {"ID": "Id", "Name": "Label"})},
-                            CsvTables(source))
+    tables = OverlaidTables(
+        CsvTables(base), {"Spell": Overlay("spell", {"ID": "Id", "Name": "Label"})}, CsvTables(source)
+    )
     assert by_id(tables, "Name")["12"] == "Blink Revised"
 
 
@@ -180,17 +171,15 @@ def test_a_rule_can_judge_the_key_rather_than_a_column(tmp_path: Path) -> None:
     exporters, so the rule reads the key through the same normalisation the join
     uses. Reading it strictly would refuse the row the rule exists to admit, and
     a refused row is indistinguishable from an absent one."""
-    base, source = written(
-        tmp_path,
-        revisions="Id,Label\n11,Must Not Win\n5000.0,Beyond The Base\n")
+    base, source = written(tmp_path, revisions="Id,Label\n11,Must Not Win\n5000.0,Beyond The Base\n")
     tables = OverlaidTables(
         CsvTables(base),
-        {"Spell": Overlay("spell", {"ID": "Id", "Name": "Label"},
-                          admits=above(1000))},
-        CsvTables(source))
+        {"Spell": Overlay("spell", {"ID": "Id", "Name": "Label"}, admits=above(1000))},
+        CsvTables(source),
+    )
     assert by_id(tables, "Name") == {
         "10": "Fireball",
-        "11": "Frostbolt",             # refused: inside the base's own range
+        "11": "Frostbolt",  # refused: inside the base's own range
         "12": "Blink",
         # Admitted, and spelled as its own source spelled it: an added row keeps
         # the overlay's text rather than the normalised form the rule compared,
@@ -204,13 +193,12 @@ def test_naming_the_key_column_means_what_omitting_it_means(tmp_path: Path) -> N
     """The rule resolves what it judges by what the field IS, not by whether it
     was named, so the two spellings of "judge the id" cannot disagree about
     normalisation."""
-    base, source = written(
-        tmp_path, revisions="Id,Label\n5000.0,Beyond The Base\n")
+    base, source = written(tmp_path, revisions="Id,Label\n5000.0,Beyond The Base\n")
     named = OverlaidTables(
         CsvTables(base),
-        {"Spell": Overlay("spell", {"ID": "Id", "Name": "Label"},
-                          judged_on="Id", admits=above(1000))},
-        CsvTables(source))
+        {"Spell": Overlay("spell", {"ID": "Id", "Name": "Label"}, judged_on="Id", admits=above(1000))},
+        CsvTables(source),
+    )
     assert by_id(named, "Name")["5000.0"] == "Beyond The Base"
 
 
@@ -262,5 +250,6 @@ def test_every_table_a_spell_name_is_read_from_is_overlaid() -> None:
     for table, columns in SPELL_NAME_SOURCES:
         overlay = hotfix_overlays(BUILD).get(table)
         assert overlay is not None, f"{table} carries spell names but is not overlaid"
-        assert columns[1] in overlay.columns, \
+        assert columns[1] in overlay.columns, (
             f"{table}.{columns[1]} is the name column but the overlay does not revise it"
+        )

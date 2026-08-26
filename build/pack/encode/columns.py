@@ -89,8 +89,7 @@ starts disagreeing with the record that describes it.
 """
 
 
-def encode_column(values: Column, encoding: Encoding,
-                  absent: object = EMPTY_SLOT) -> object:
+def encode_column(values: Column, encoding: Encoding, absent: object = EMPTY_SLOT) -> object:
     """One column, laid out as it declared.
 
     `absent` reaches only the layouts that need to tell a value from a gap.
@@ -103,8 +102,7 @@ def encode_column(values: Column, encoding: Encoding,
     return LAYOUTS[encoding](values)
 
 
-def decode_column(shipped: object, encoding: Encoding,
-                  absent: object = EMPTY_SLOT, rows: int | None = None) -> Column:
+def decode_column(shipped: object, encoding: Encoding, absent: object = EMPTY_SLOT, rows: int | None = None) -> Column:
     """A shipped column back as the section produced it.
 
     The inverse of `encode_column`, and it lives beside it because that is the
@@ -134,12 +132,10 @@ def decode_column(shipped: object, encoding: Encoding,
         if isinstance(shipped, Mapping):
             return dict(shipped)
         if not isinstance(shipped, Sequence):
-            raise ValueError(f"a dense column ships a sequence or a mapping, "
-                             f"not {type(shipped).__name__}")
+            raise ValueError(f"a dense column ships a sequence or a mapping, not {type(shipped).__name__}")
         return list(shipped)
     if not isinstance(shipped, Mapping):
-        raise ValueError(f"a {encoding.value} column ships a mapping, "
-                         f"not {type(shipped).__name__}")
+        raise ValueError(f"a {encoding.value} column ships a mapping, not {type(shipped).__name__}")
     if encoding is Encoding.DEDUP:
         pool, index = shipped["text"], shipped["of"]
         return [pool[position] for position in index]

@@ -190,9 +190,9 @@ class _AceReader:
         self.i = 0
 
     def _read_marker(self) -> bytes:
-        if self.raw[self.i: self.i + 1] != b"^":
+        if self.raw[self.i : self.i + 1] != b"^":
             raise ValueError(f"expected a '^' marker at offset {self.i}")
-        marker = self.raw[self.i: self.i + 2]
+        marker = self.raw[self.i : self.i + 2]
         self.i += 2
         return marker
 
@@ -200,7 +200,7 @@ class _AceReader:
         nxt = self.raw.find(b"^", self.i)
         if nxt < 0:
             raise ValueError("unterminated AceSerializer stream")
-        data = self.raw[self.i: nxt]
+        data = self.raw[self.i : nxt]
         self.i = nxt
         return data
 
@@ -227,7 +227,7 @@ class _AceReader:
             return None
         if marker == b"^T":
             table: dict[Any, Any] = {}
-            while self.raw[self.i: self.i + 2] != b"^t":
+            while self.raw[self.i : self.i + 2] != b"^t":
                 key = self.read_value()
                 table[key] = self.read_value()
             self.i += 2
@@ -248,7 +248,7 @@ def ace_deserialize(raw: bytes) -> Any:
     reader = _AceReader(raw)
     reader.i = 2
     value = reader.read_value()
-    if reader.raw[reader.i: reader.i + 2] != b"^^":
+    if reader.raw[reader.i : reader.i + 2] != b"^^":
         raise ValueError("AceSerializer stream did not end with ^^")
     return value
 
@@ -285,7 +285,7 @@ def decode_for_print(text: str) -> bytes:
     i = 0
     while i + 4 <= len(text):
         cache = 0
-        for j, ch in enumerate(text[i: i + 4]):
+        for j, ch in enumerate(text[i : i + 4]):
             cache |= _DECODE[ch] << (6 * j)
         out += bytes([cache & 255, (cache >> 8) & 255, (cache >> 16) & 255])
         i += 4
@@ -430,10 +430,16 @@ class ArcSpell:
             "fullName": self.fullName,
             "actions": [a.to_table() for a in self.actions],
         }
-        for key, value in (("description", self.description), ("author", self.author), ("icon", self.icon),
-                           ("castbar", self.castbar), ("cooldown", self.cooldown),
-                           ("conditions", self.conditions), ("breakOnMove", self.breakOnMove),
-                           ("castOnFail", self.castOnFail)):
+        for key, value in (
+            ("description", self.description),
+            ("author", self.author),
+            ("icon", self.icon),
+            ("castbar", self.castbar),
+            ("cooldown", self.cooldown),
+            ("conditions", self.conditions),
+            ("breakOnMove", self.breakOnMove),
+            ("castOnFail", self.castOnFail),
+        ):
             if value is not None:
                 table[key] = value
         table.update(self.extra)
@@ -442,8 +448,19 @@ class ArcSpell:
     @classmethod
     def from_table(cls, t: dict[str, Any]) -> ArcSpell:
         """Rebuild a spell from a decoded export, so decode -> edit -> re-encode is lossless."""
-        known = {"commID", "fullName", "actions", "description", "author", "icon", "castbar", "cooldown",
-                 "conditions", "breakOnMove", "castOnFail"}
+        known = {
+            "commID",
+            "fullName",
+            "actions",
+            "description",
+            "author",
+            "icon",
+            "castbar",
+            "cooldown",
+            "conditions",
+            "breakOnMove",
+            "castOnFail",
+        }
         return cls(
             commID=t.get("commID", ""),
             fullName=t.get("fullName", ""),
@@ -512,7 +529,7 @@ SPELL_CATEGORIES: dict[str, dict[str, Any]] = {
         "trigger": "walking into a location prompt (Sparks)",
         "chat": True,
         "note": "Phase-authored and speaks for the phase, not the player. Runs for GUESTS, so it must not need "
-                "member+ commands. Sparks pass inputs, so @input1@ is available.",
+        "member+ commands. Sparks pass inputs, so @input1@ is available.",
     },
     "item": {
         "trigger": "using an item carrying an ArcTag, or a linked ArcSpell",
@@ -562,20 +579,28 @@ _DEBUG_PRINT_ACTIONS = {"PrintMsg", "ErrorMsg"}
 # Each entry names the route that gets the same look WITHOUT touching the player's setting.
 # ---------------------------------------------------------------------------
 _STOMPS_PLAYER_STATE = {
-    "Scale": ("the character's own height (reverts to `mod scale 1`, not to what they were)",
-              "a SCALE AURA instead -- `.aura <id>` multiplies on top of their scale and `.unaura` removes it "
-              "cleanly. Epsilook's scale pill searches these by percentage (aura 61, ~71 distinct values)"),
-    "Speed": ("their movement speed (reverts to `mod speed 1`)",
-              "a speed AURA -- same argument, and Epsilook's speed pill indexes them"),
+    "Scale": (
+        "the character's own height (reverts to `mod scale 1`, not to what they were)",
+        "a SCALE AURA instead -- `.aura <id>` multiplies on top of their scale and `.unaura` removes it "
+        "cleanly. Epsilook's scale pill searches these by percentage (aura 61, ~71 distinct values)",
+    ),
+    "Speed": (
+        "their movement speed (reverts to `mod speed 1`)",
+        "a speed AURA -- same argument, and Epsilook's speed pill indexes them",
+    ),
     "SpeedWalk": ("their walk speed (reverts to `mod speed walk 1`)", "a speed aura"),
     "SpeedFly": ("their fly speed (reverts to `mod speed fly 1`)", "a speed aura"),
     "SpeedSwim": ("their swim speed (reverts to `mod speed swim 1`)", "a speed aura"),
     "SpeedBackwalk": ("their backwalk speed (reverts to `mod speed backwalk 1`)", "a speed aura"),
-    "Native": ("their NATIVE model -- and the revert is `demorph`, which removes ALL morphs including the native "
-               "they set for their character",
-               "a morph aura, or accept that this is a permanent change the player must undo themselves"),
-    "Morph": ("nothing by itself, but its revert is `demorph`, which also strips any NATIVE the player had set",
-              "a transform AURA, which removes cleanly and leaves their native alone"),
+    "Native": (
+        "their NATIVE model -- and the revert is `demorph`, which removes ALL morphs including the native "
+        "they set for their character",
+        "a morph aura, or accept that this is a permanent change the player must undo themselves",
+    ),
+    "Morph": (
+        "nothing by itself, but its revert is `demorph`, which also strips any NATIVE the player had set",
+        "a transform AURA, which removes cleanly and leaves their native alone",
+    ),
 }
 
 # A modifier key is only still held for the instant around the cast. Conditions are re-checked when a DELAYED row
@@ -594,9 +619,15 @@ _TARGET_UNSAFE_FAMILIES = {"appearance", "animation", "movement"}
 
 # An explicit teardown row where the action's own revert already does the job. Not wrong, just two rows for one.
 _INVERSE_OF = {
-    "StopAutoRun": "StartAutoRun", "Unmorph": "Morph", "ResetAnim": "Anim",
-    "ResetStandstate": "Standstate", "RemoveAura": "SpellAura", "StopFollow": "FollowUnit",
-    "CheatOff": "CheatOn", "StopMusic": "PlayMusic", "StopLocalSoundKit": "PlayLocalSoundKit",
+    "StopAutoRun": "StartAutoRun",
+    "Unmorph": "Morph",
+    "ResetAnim": "Anim",
+    "ResetStandstate": "Standstate",
+    "RemoveAura": "SpellAura",
+    "StopFollow": "FollowUnit",
+    "CheatOff": "CheatOn",
+    "StopMusic": "PlayMusic",
+    "StopLocalSoundKit": "PlayLocalSoundKit",
 }
 
 
@@ -624,64 +655,94 @@ def lint_spell(spell: ArcSpell, category: str = "personal") -> list[str]:
         if not meta["chat"] and action.actionType in _CHAT_ACTIONS:
             warnings.append(
                 f"action {i}: {action.actionType} writes to chat, but a '{category}' spell should not -- "
-                "the roleplayer narrates. Move it to a spark/gossip/item spell, or drop it.")
+                "the roleplayer narrates. Move it to a spark/gossip/item spell, or drop it."
+            )
         if action.actionType in _DEBUG_PRINT_ACTIONS:
-            warnings.append(f"action {i}: {action.actionType} is a debug printer -- fine while testing, "
-                            "noise in a spell you hand to someone else")
+            warnings.append(
+                f"action {i}: {action.actionType} is a debug printer -- fine while testing, "
+                "noise in a spell you hand to someone else"
+            )
         # Inert rather than invalid -- see the note in validate_spell.
         if action.selfOnly and entry and not entry.get("selfAble"):
-            warnings.append(f"action {i}: selfOnly does nothing on {action.actionType} -- only a server-command "
-                            "action reads it (it appends ' self'). Harmless, but it is not doing what it looks like.")
+            warnings.append(
+                f"action {i}: selfOnly does nothing on {action.actionType} -- only a server-command "
+                "action reads it (it appends ' self'). Harmless, but it is not doing what it looks like."
+            )
 
         # Execute.lua force-nulls revertDelay when the action declares no revert, so this is dropped in silence.
         if action.revertDelay and not entry.get("revertable", True):
             alt = entry.get("revertAlternative")
-            warnings.append(f"action {i}: {action.actionType} has no revert, so revertDelay is silently DROPPED"
-                            + (f" -- {alt.splitlines()[0]}" if alt else ""))
+            warnings.append(
+                f"action {i}: {action.actionType} has no revert, so revertDelay is silently DROPPED"
+                + (f" -- {alt.splitlines()[0]}" if alt else "")
+            )
 
         # The worst class: a "rollback" that overwrites the player's own persistent setting with a server default.
         stomp = _STOMPS_PLAYER_STATE.get(action.actionType)
         if stomp:
             damage, instead = stomp
             if action.revertDelay is not None:
-                warnings.append(f"action {i}: {action.actionType}'s revert RESETS TO A DEFAULT, so it clobbers "
-                                f"{damage}. Use {instead}.")
+                warnings.append(
+                    f"action {i}: {action.actionType}'s revert RESETS TO A DEFAULT, so it clobbers "
+                    f"{damage}. Use {instead}."
+                )
             else:
-                warnings.append(f"action {i}: {action.actionType} changes {damage} and you left it that way. "
-                                f"Either that is the point, or use {instead}.")
+                warnings.append(
+                    f"action {i}: {action.actionType} changes {damage} and you left it that way. "
+                    f"Either that is the point, or use {instead}."
+                )
 
         if entry.get("permission") in ("member", "officer"):
-            warnings.append(f"action {i}: {action.actionType} runs '.{entry['command'].split()[0]}', which a phase "
-                            f"GUEST cannot -- expect it to fail silently for most of your audience")
+            warnings.append(
+                f"action {i}: {action.actionType} runs '.{entry['command'].split()[0]}', which a phase "
+                f"GUEST cannot -- expect it to fail silently for most of your audience"
+            )
 
         # Comma-splitting is the single most surprising thing about the input box.
         if "," in action.vars and not entry.get("doNotDelimit") and entry.get("target") == "server":
-            warnings.append(f"action {i}: '{action.vars}' contains a comma and {action.actionType} is comma-split, "
-                            "so this runs once PER value -- intended?")
+            warnings.append(
+                f"action {i}: '{action.vars}' contains a comma and {action.actionType} is comma-split, "
+                "so this runs once PER value -- intended?"
+            )
 
         # The trap that nearly shipped a spell leaving its caster permanently invisible: the player releases the key
         # within a frame or two of casting, so a gated row at 1.8s -- or the REVERT of a gated row -- never matches.
-        held = sorted({str(row["Type"]) for group in (action.conditions or []) for row in group
-                       if isinstance(row, dict) and row.get("Type") in _MODIFIER_CONDITIONS})
+        held = sorted(
+            {
+                str(row["Type"])
+                for group in (action.conditions or [])
+                for row in group
+                if isinstance(row, dict) and row.get("Type") in _MODIFIER_CONDITIONS
+            }
+        )
         if held:
             keys = "/".join(held)
             if action.delay > _MODIFIER_GRACE:
-                warnings.append(f"action {i}: gated on {keys} but fires at {action.delay}s -- the key is long "
-                                f"released by then, so this row silently never runs. Modifier gates only hold for "
-                                f"~{_MODIFIER_GRACE}s after the cast; for a longer sequence use a castOnFail pair, "
-                                "whose condition is checked ONCE at spell level.")
+                warnings.append(
+                    f"action {i}: gated on {keys} but fires at {action.delay}s -- the key is long "
+                    f"released by then, so this row silently never runs. Modifier gates only hold for "
+                    f"~{_MODIFIER_GRACE}s after the cast; for a longer sequence use a castOnFail pair, "
+                    "whose condition is checked ONCE at spell level."
+                )
             if action.revertDelay is not None:
-                warnings.append(f"action {i}: gated on {keys} AND has a revert -- conditions are re-evaluated when "
-                                "the revert fires, so the rollback is skipped and the state is STRANDED. Put the "
-                                "gate on the spell, not on a row that has to undo itself.")
+                warnings.append(
+                    f"action {i}: gated on {keys} AND has a revert -- conditions are re-evaluated when "
+                    "the revert fires, so the rollback is skipped and the state is STRANDED. Put the "
+                    "gate on the spell, not on a row that has to undo itself."
+                )
 
         # Silently landing a transformation on whoever you had selected is the worst failure available here.
-        if (entry.get("target") == "server" and not entry.get("selfAble")
-                and entry.get("family") in _TARGET_UNSAFE_FAMILIES
-                and not any(a.actionType == "secClearTarg" and a.delay <= action.delay for a in spell.actions)):
-            warnings.append(f"action {i}: {action.actionType} acts on your TARGET if you have one and cannot take "
-                            "selfOnly -- in a scene it will land on your partner. Add a secClearTarg row at or "
-                            "before this delay.")
+        if (
+            entry.get("target") == "server"
+            and not entry.get("selfAble")
+            and entry.get("family") in _TARGET_UNSAFE_FAMILIES
+            and not any(a.actionType == "secClearTarg" and a.delay <= action.delay for a in spell.actions)
+        ):
+            warnings.append(
+                f"action {i}: {action.actionType} acts on your TARGET if you have one and cannot take "
+                "selfOnly -- in a scene it will land on your partner. Add a secClearTarg row at or "
+                "before this delay."
+            )
 
     # A row that stops the spell has to beat every row it is stopping. The wiki's own item-requirement recipe says
     # the same thing, and getting it wrong means the guard passes while the payload has already fired.
@@ -691,15 +752,18 @@ def lint_spell(spell: ArcSpell, category: str = "personal") -> list[str]:
         if racing:
             warnings.append(
                 f"ArcStopThisSpell fires at {stop.delay}s but {len(racing)} row(s) fire at or before it -- "
-                "a stop only stops what has not run yet. Give every guarded row a later delay.")
+                "a stop only stops what has not run yet. Give every guarded row a later delay."
+            )
 
     # A spell that drives its own movement cannot also break on movement -- it aborts itself the instant it starts.
     if spell.breakOnMove:
         movers = [i for i, a in enumerate(spell.actions, start=1) if a.actionType in _SELF_MOVING_ACTIONS]
         if movers:
             names = ", ".join(f"action {i}" for i in movers)
-            warnings.append(f"breakOnMove is set but {names} moves the caster -- PLAYER_STARTED_MOVING fires the "
-                            "moment it does, so the spell aborts the movement it just started. Drop breakOnMove.")
+            warnings.append(
+                f"breakOnMove is set but {names} moves the caster -- PLAYER_STARTED_MOVING fires the "
+                "moment it does, so the spell aborts the movement it just started. Drop breakOnMove."
+            )
 
     # Two rows where one revert would do. The catalogue records what each revert actually runs, so check revertDesc
     # before writing a teardown by hand.
@@ -712,20 +776,28 @@ def lint_spell(spell: ArcSpell, category: str = "personal") -> list[str]:
                 continue
             if action.actionType == "RemoveAura" and other.vars.strip() != action.vars.strip():
                 continue
-            warnings.append(f"action {i}: {action.actionType} undoes action {j} ({opener}) by hand -- "
-                            f"{opener}'s own revert already does that. One row with "
-                            f"revertDelay {round(action.delay - other.delay, 3)} replaces both.")
+            warnings.append(
+                f"action {i}: {action.actionType} undoes action {j} ({opener}) by hand -- "
+                f"{opener}'s own revert already does that. One row with "
+                f"revertDelay {round(action.delay - other.delay, 3)} replaces both."
+            )
             break
 
     # State a spell turns on and never turns off. Not wrong -- a deliberate toggle is a real design -- but it is the
     # thing most often forgotten, so it is worth naming.
     if category in ("personal", "spark", "item", "gossip"):
-        sticky = [(i, a) for i, a in enumerate(spell.actions, start=1)
-                  if catalog.get(a.actionType, {}).get("family") in ("appearance", "ui", "camera")
-                  and a.revertDelay is None and catalog.get(a.actionType, {}).get("revertable")]
+        sticky = [
+            (i, a)
+            for i, a in enumerate(spell.actions, start=1)
+            if catalog.get(a.actionType, {}).get("family") in ("appearance", "ui", "camera")
+            and a.revertDelay is None
+            and catalog.get(a.actionType, {}).get("revertable")
+        ]
         for i, action in sticky:
-            warnings.append(f"action {i}: {action.actionType} changes state with no revertDelay -- it persists after "
-                            "the spell ends. Intended as a toggle, or a missing rollback?")
+            warnings.append(
+                f"action {i}: {action.actionType} changes state with no revertDelay -- it persists after "
+                "the spell ends. Intended as a toggle, or a missing rollback?"
+            )
     return warnings
 
 
@@ -772,16 +844,17 @@ def _validate_conditions(table: ConditionTable | None, where: str) -> list[str]:
         return [f"{where}: conditions must be a list of GROUPS, each a list of rows"]
     for g, group in enumerate(table, start=1):
         if not isinstance(group, list):
-            problems.append(f"{where}: condition group {g} is not a list -- conditions are groups of rows "
-                            "(OR of ANDs), so a single row still needs to be wrapped: [[{...}]]")
+            problems.append(
+                f"{where}: condition group {g} is not a list -- conditions are groups of rows "
+                "(OR of ANDs), so a single row still needs to be wrapped: [[{...}]]"
+            )
             continue
         for r, row in enumerate(group, start=1):
             if not isinstance(row, dict) or "Type" not in row:
                 problems.append(f"{where}: condition {g}.{r} needs a 'Type'")
                 continue
             if catalog and row["Type"] not in catalog:
-                problems.append(f"{where}: condition {g}.{r} unknown Type {row['Type']!r} "
-                                "(see: arcanum.py conditions)")
+                problems.append(f"{where}: condition {g}.{r} unknown Type {row['Type']!r} (see: arcanum.py conditions)")
     return problems
 
 
@@ -868,8 +941,7 @@ def timeline(spell: ArcSpell) -> str:
         if a.revertDelay is not None:
             entry = catalog.get(a.actionType, {})
             if not entry.get("revertable", True):
-                events.append((float(a.delay or 0), 1,
-                               f"xx  row {i}  revert DROPPED -- {a.actionType} declares none"))
+                events.append((float(a.delay or 0), 1, f"xx  row {i}  revert DROPPED -- {a.actionType} declares none"))
             else:
                 undo = entry.get("revert", "?").replace("@N@", a.vars or "?")
                 # Worth stating on every constant revert, but not worth shouting about: resetting a standstate is
@@ -878,8 +950,13 @@ def timeline(spell: ArcSpell) -> str:
                 warn = "  [to default, not to prior]" if entry.get("revertResetsToDefault") else ""
                 # Rounded because a revert time is a SUM: 0.1 + 9.7 and 3.9 + 5.9 are the same instant to the
                 # player and 1.8e-15 apart in binary, which printed a phantom gap and split one instant in two.
-                events.append((round(float(a.delay or 0) + float(a.revertDelay), 3), 1,
-                               f"<<  row {i}  revert {label(a)} -> .{undo}{warn}"))
+                events.append(
+                    (
+                        round(float(a.delay or 0) + float(a.revertDelay), 3),
+                        1,
+                        f"<<  row {i}  revert {label(a)} -> .{undo}{warn}",
+                    )
+                )
 
     lines = [f"{spell.fullName}  (/sf {spell.commID})"]
     if spell.description:
@@ -893,7 +970,7 @@ def timeline(spell: ArcSpell) -> str:
         if last is not None and time != last:
             gap = time - last
             # The reading of a gap is in SKILL.md; the numbers are repeated here because this is where you look.
-            reads = ("layered" if gap <= 0.2 else "a beat" if gap <= 0.8 else "a separate event")
+            reads = "layered" if gap <= 0.2 else "a beat" if gap <= 0.8 else "a separate event"
             lines.append(f"        + {gap:g}s   ({reads})")
         stamp = f"{time:6.2f}s" if time != last else " " * 7
         lines.append(f"{stamp}  {text}")
@@ -923,53 +1000,159 @@ def timeline(spell: ArcSpell) -> str:
 ACTION_FAMILIES: dict[str, set[str]] = {
     # the two cast paths: server-side .cast, and the client path that runs the pre-check layer
     "casting": {"SpellCast", "SpellTrig", "secCast", "secCastID", "secStopCasting"},
-    "auras": {"SpellAura", "RemoveAura", "RemoveAllAuras", "ToggleAura", "ToggleAuraSelf",
-              "PhaseAura", "PhaseUnaura", "GroupAura", "GroupUnaura"},
+    "auras": {
+        "SpellAura",
+        "RemoveAura",
+        "RemoveAllAuras",
+        "ToggleAura",
+        "ToggleAuraSelf",
+        "PhaseAura",
+        "PhaseUnaura",
+        "GroupAura",
+        "GroupUnaura",
+    },
     "animation": {"Anim", "ResetAnim", "AnimKit", "Standstate", "ResetStandstate", "ToggleSheath", "DefaultEmote"},
-    "sound": {"PlayLocalSoundKit", "PlayLocalSoundFile", "PlayPhaseSound", "PlayMusic",
-              "StopLocalSoundKit", "StopLocalSoundFile", "StopMusic"},
-    "appearance": {"Morph", "Unmorph", "Native", "Scale", "Mount", "Dismount",
-                   "Equip", "Unequip", "EquipSet", "MogitEquip"},
-    "movement": {"Speed", "SpeedWalk", "SpeedFly", "SpeedSwim", "SpeedBackwalk",
-                 "StartAutoRun", "StopAutoRun", "ToggleAutoRun", "ToggleRun",
-                 "FollowUnit", "StopFollow", "MouselookModeStart"},
-    "teleport": {"TeleCommand", "PhaseTeleCommand", "WorldportCommand",
-                 "SaveARCLocation", "GotoARCLocation"},
+    "sound": {
+        "PlayLocalSoundKit",
+        "PlayLocalSoundFile",
+        "PlayPhaseSound",
+        "PlayMusic",
+        "StopLocalSoundKit",
+        "StopLocalSoundFile",
+        "StopMusic",
+    },
+    "appearance": {
+        "Morph",
+        "Unmorph",
+        "Native",
+        "Scale",
+        "Mount",
+        "Dismount",
+        "Equip",
+        "Unequip",
+        "EquipSet",
+        "MogitEquip",
+    },
+    "movement": {
+        "Speed",
+        "SpeedWalk",
+        "SpeedFly",
+        "SpeedSwim",
+        "SpeedBackwalk",
+        "StartAutoRun",
+        "StopAutoRun",
+        "ToggleAutoRun",
+        "ToggleRun",
+        "FollowUnit",
+        "StopFollow",
+        "MouselookModeStart",
+    },
+    "teleport": {"TeleCommand", "PhaseTeleCommand", "WorldportCommand", "SaveARCLocation", "GotoARCLocation"},
     # what the scene SAYS -- the half of RP that is not a visual at all
     "speech": {"SendSay", "SendYell", "SendEmote", "PrintMsg", "ErrorMsg", "RaidMsg", "BoxMsg", "TalkingHead"},
     # framing: what the audience is looking at, and what is in the way
-    "camera": {"ZoomCameraInBy", "ZoomCameraOutBy", "ZoomCameraInStart", "ZoomCameraOutStart", "ZoomCameraSet",
-               "ZoomCameraSaveCurrent", "ZoomCameraLoadSaved",
-               "RotateCameraLeftStart", "RotateCameraRightStart", "RotateCameraUpStart", "RotateCameraDownStart",
-               "RotateCameraStop"},
-    "ui": {"HideMostUI", "UnhideMostUI", "FadeInMainUI", "FadeOutMainUI",
-           "HideNames", "ShowNames", "RestoreNames", "ToggleNames",
-           "OpenWorldMap", "ToggleWorldMap", "UnitPowerBar", "UnitPowerBarValue", "ArcCastbar"},
+    "camera": {
+        "ZoomCameraInBy",
+        "ZoomCameraOutBy",
+        "ZoomCameraInStart",
+        "ZoomCameraOutStart",
+        "ZoomCameraSet",
+        "ZoomCameraSaveCurrent",
+        "ZoomCameraLoadSaved",
+        "RotateCameraLeftStart",
+        "RotateCameraRightStart",
+        "RotateCameraUpStart",
+        "RotateCameraDownStart",
+        "RotateCameraStop",
+    },
+    "ui": {
+        "HideMostUI",
+        "UnhideMostUI",
+        "FadeInMainUI",
+        "FadeOutMainUI",
+        "HideNames",
+        "ShowNames",
+        "RestoreNames",
+        "ToggleNames",
+        "OpenWorldMap",
+        "ToggleWorldMap",
+        "UnitPowerBar",
+        "UnitPowerBarValue",
+        "ArcCastbar",
+    },
     # branching, chaining and stopping -- what makes an ArcSpell a program rather than a list
-    "flow": {"ArcStopThisSpell", "ArcSpell", "ArcSpellPhase", "ArcSpellCastImport", "ArcImport",
-             "ArcSaveFromPhase", "ArcStopSpells", "ArcStopSpellByName", "ArcTrigCooldown"},
+    "flow": {
+        "ArcStopThisSpell",
+        "ArcSpell",
+        "ArcSpellPhase",
+        "ArcSpellCastImport",
+        "ArcImport",
+        "ArcSaveFromPhase",
+        "ArcStopSpells",
+        "ArcStopSpellByName",
+        "ArcTrigCooldown",
+    },
     # persistent values, which is how a spell becomes a two-way toggle
     "state": {"ARCSet", "ARCTog", "ARCPhaseSet", "ARCPhaseTog"},
-    "prompts": {"BoxPromptCommand", "BoxPromptCommandChoice", "BoxPromptCommandNoInput",
-                "BoxPromptScript", "BoxPromptScriptChoice", "BoxPromptScriptNoInput"},
+    "prompts": {
+        "BoxPromptCommand",
+        "BoxPromptCommandChoice",
+        "BoxPromptCommandNoInput",
+        "BoxPromptScript",
+        "BoxPromptScriptChoice",
+        "BoxPromptScriptNoInput",
+    },
     "items": {"AddItem", "AddRandomItem", "RemoveItem", "secUseItem", "OpenSendMail", "SendMail"},
-    "targeting": {"secTarget", "secClearTarg", "secFocus", "secClearFocus", "secAssist",
-                  "secTargLEnemy", "secTargLFriend", "secTargLTarg", "secTargNAny", "secTargNEnPlayer",
-                  "secTargNEnemy", "secTargNFrPlayer", "secTargNFriend", "secTargNParty", "secTargNRaid"},
+    "targeting": {
+        "secTarget",
+        "secClearTarg",
+        "secFocus",
+        "secClearFocus",
+        "secAssist",
+        "secTargLEnemy",
+        "secTargLFriend",
+        "secTargLTarg",
+        "secTargNAny",
+        "secTargNEnPlayer",
+        "secTargNEnemy",
+        "secTargNFrPlayer",
+        "secTargNFriend",
+        "secTargNParty",
+        "secTargNRaid",
+    },
     "objects": {"SpawnBlueprint"},
     "cheats": {"CheatOn", "CheatOff"},
     # the escape hatches: anything the catalogue does not cover goes through one of these two
     "raw": {"Command", "MacroText"},
-    "arcanum": {"ARCCopy", "QCBookAddSpell", "QCBookNewBook", "QCBookNewPage", "QCBookSetPosition",
-                "QCBookStyle", "QCBookSwitchPage", "QCBookToggle"},
+    "arcanum": {
+        "ARCCopy",
+        "QCBookAddSpell",
+        "QCBookNewBook",
+        "QCBookNewPage",
+        "QCBookSetPosition",
+        "QCBookStyle",
+        "QCBookSwitchPage",
+        "QCBookToggle",
+    },
 }
 
 _FAMILY_BY_KEY = {key: family for family, keys in ACTION_FAMILIES.items() for key in keys}
 
 # The families a composer reaches for constantly. `arcanum.py actions` shows these unless asked for more; it is a
 # display default, not a judgement about the rest.
-CORE_FAMILIES = {"casting", "auras", "animation", "sound", "appearance", "movement",
-                 "teleport", "speech", "flow", "state", "raw"}
+CORE_FAMILIES = {
+    "casting",
+    "auras",
+    "animation",
+    "sound",
+    "appearance",
+    "movement",
+    "teleport",
+    "speech",
+    "flow",
+    "state",
+    "raw",
+}
 
 
 def _lua_string(text: str) -> str | None:
@@ -1031,10 +1214,20 @@ def _lua_expr_string(text: str, consts: dict[str, str]) -> str | None:
 # CLIENT-side protected-function gate, not a phase tier). Treat "member" and "officer" as "expect this to fail for a
 # guest and confirm before shipping a spell that relies on it", never as fact.
 _PERMISSION_BY_ROOT = {
-    "cast": "anyone", "aura": "anyone", "unaura": "anyone", "mod": "anyone", "morph": "anyone",
-    "demorph": "anyone", "dismount": "anyone", "tele": "anyone", "worldport": "anyone", "cheat": "anyone",
+    "cast": "anyone",
+    "aura": "anyone",
+    "unaura": "anyone",
+    "mod": "anyone",
+    "morph": "anyone",
+    "demorph": "anyone",
+    "dismount": "anyone",
+    "tele": "anyone",
+    "worldport": "anyone",
+    "cheat": "anyone",
     "group": "anyone",
-    "phase": "member", "gob": "member", "additem": "member",
+    "phase": "member",
+    "gob": "member",
+    "additem": "member",
 }
 
 
@@ -1046,15 +1239,25 @@ def regen_catalog(checkout: Path) -> dict[str, Any]:
     actions: dict[str, Any] = {}
     for m in re.finditer(r"\[ACTION_TYPE\.(\w+)]\s*=\s*(serverAction|scriptAction)\(\s*\"([^\"]*)\"\s*,\s*\{", src):
         key, kind, name = m.group(1), m.group(2), m.group(3)
-        body = src[m.end(): _match_brace(src, m.end()) - 1]
+        body = src[m.end() : _match_brace(src, m.end()) - 1]
 
         entry: dict[str, Any] = {"name": name, "target": "server" if kind == "serverAction" else "script"}
-        for fieldname in ("command", "dataName", "example", "revert", "revertDesc", "revertAlternative",
-                          "inputDescription", "description", "dependency", "disabledWarning"):
+        for fieldname in (
+            "command",
+            "dataName",
+            "example",
+            "revert",
+            "revertDesc",
+            "revertAlternative",
+            "inputDescription",
+            "description",
+            "dependency",
+            "disabledWarning",
+        ):
             fm = re.search(rf"^\s*{fieldname}\s*=", body, re.M)
             if not fm:
                 continue
-            value = _lua_expr_string(body[fm.end():], consts)
+            value = _lua_expr_string(body[fm.end() :], consts)
             if value is not None:
                 entry[fieldname] = value
 
@@ -1064,7 +1267,7 @@ def regen_catalog(checkout: Path) -> dict[str, Any]:
                 entry[flag] = True
         req = re.search(r"^\s*requirement\s*=", body, re.M)
         if req:
-            entry["requirement"] = _lua_expr_string(body[req.end():], consts) or "function"
+            entry["requirement"] = _lua_expr_string(body[req.end() :], consts) or "function"
 
         # A revertDelay is FORCE-NULLED by Execute.lua when the action has no revert, so "can this roll itself back"
         # is a property worth stating outright rather than inferring from the presence of a string.
@@ -1087,16 +1290,16 @@ def regen_catalog(checkout: Path) -> dict[str, Any]:
 
     return {
         "_comment": "Generated from EpsilonRP/PublicAddOns Actions/Data.lua by "
-                    "`python tools/arcanum.py regen-catalog <checkout>`. Script actions take a Lua function as their "
-                    "command, so only server actions carry a command string. `revertable` is whether the action "
-                    "declares a NON-NIL revert -- 87 of the 184 write `revert = nil` outright, usually beside a "
-                    "`revertAlternative` naming the manual teardown, and Execute.lua force-nulls revertDelay on those, "
-                    "so a revert on a non-revertable row is silently dropped. `doNotDelimit` means the input is NOT "
-                    "comma-split: "
-                    "without it, `a,b` runs the action once per value. `permission` is DERIVED FROM THE COMMAND WORD "
-                    "and is a prediction, not a measurement -- the addon carries no phase-permission field. `family` "
-                    "groups actions by what they are FOR; anything needing another addon is tagged 'integration', "
-                    "because whether it is available outranks what it does.",
+        "`python tools/arcanum.py regen-catalog <checkout>`. Script actions take a Lua function as their "
+        "command, so only server actions carry a command string. `revertable` is whether the action "
+        "declares a NON-NIL revert -- 87 of the 184 write `revert = nil` outright, usually beside a "
+        "`revertAlternative` naming the manual teardown, and Execute.lua force-nulls revertDelay on those, "
+        "so a revert on a non-revertable row is silently dropped. `doNotDelimit` means the input is NOT "
+        "comma-split: "
+        "without it, `a,b` runs the action once per value. `permission` is DERIVED FROM THE COMMAND WORD "
+        "and is a prediction, not a measurement -- the addon carries no phase-permission field. `family` "
+        "groups actions by what they are FOR; anything needing another addon is tagged 'integration', "
+        "because whether it is available outranks what it does.",
         "actions": actions,
     }
 
@@ -1152,17 +1355,17 @@ def regen_conditions(checkout: Path) -> dict[str, Any]:
             category = m.group(1)
             continue
         key = m.group(2)
-        body = src[m.end(): _match_brace(src, m.end()) - 1]
+        body = src[m.end() : _match_brace(src, m.end()) - 1]
         entry: dict[str, Any] = {"category": category}
         for fieldname in ("name", "description", "inputDesc", "inputExample"):
             fm = re.search(rf"^\s*{fieldname}\s*=", body, re.M)
             if fm:
-                value = _lua_expr_string(body[fm.end():], consts)
+                value = _lua_expr_string(body[fm.end() :], consts)
                 if value is not None:
                     entry[fieldname] = value
         inputs_match = re.search(r"^\s*inputs\s*=\s*\{", body, re.M)
         if inputs_match:
-            inputs_body = body[inputs_match.end(): _match_brace(body, inputs_match.end()) - 1]
+            inputs_body = body[inputs_match.end() : _match_brace(body, inputs_match.end()) - 1]
             entry["inputs"] = [
                 {"label": im.group(1), "type": im.group(2)}
                 for im in re.finditer(r'input\(\s*"([^"]*)"\s*,\s*"([^"]*)"', inputs_body)
@@ -1171,11 +1374,11 @@ def regen_conditions(checkout: Path) -> dict[str, Any]:
 
     return {
         "_comment": "Generated from EpsilonRP/PublicAddOns Actions/ConditionsData.lua by "
-                    "`python tools/arcanum.py regen-catalog <checkout>`. Conditions attach to a whole spell "
-                    "(spell.conditions) or to one action (action.conditions), same shape either way: a list of "
-                    "GROUPS, each a list of ROWS of {Type, Input, IsNot}. Execute.lua ANDs within a group and ORs "
-                    "across groups -- disjunctive normal form. No conditions, or an empty list, passes. Input is a "
-                    "comma-delimited string and runs through input substitution before evaluation.",
+        "`python tools/arcanum.py regen-catalog <checkout>`. Conditions attach to a whole spell "
+        "(spell.conditions) or to one action (action.conditions), same shape either way: a list of "
+        "GROUPS, each a list of ROWS of {Type, Input, IsNot}. Execute.lua ANDs within a group and ORs "
+        "across groups -- disjunctive normal form. No conditions, or an empty list, passes. Input is a "
+        "comma-delimited string and runs through input substitution before evaluation.",
         "conditions": conditions,
     }
 
@@ -1209,9 +1412,9 @@ def regen_api(checkout: Path) -> dict[str, Any]:
         for back in range(i - 1, max(-1, i - 12), -1):
             prev = lines[back].strip()
             if prev.startswith("-- SYNTAX:"):
-                doc.insert(0, prev[len("-- SYNTAX:"):].strip())
+                doc.insert(0, prev[len("-- SYNTAX:") :].strip())
             elif prev.startswith("---@param"):
-                params.insert(0, prev[len("---@param"):].strip())
+                params.insert(0, prev[len("---@param") :].strip())
             elif prev.startswith("--") or prev == "":
                 continue
             else:
@@ -1224,11 +1427,11 @@ def regen_api(checkout: Path) -> dict[str, Any]:
 
     return {
         "_comment": "Generated from EpsilonRP/PublicAddOns API.lua by "
-                    "`python tools/arcanum.py regen-catalog <checkout>`. This is the ARC surface a Macro Script "
-                    "action can call. `kind` is how the entry is assigned: 'wrapped' entries went through "
-                    "wrapToEvalFinalVal and accept BOTH `ARC:X(a)` and `ARC.X(a)`; 'raw' entries accept ONLY the DOT "
-                    "form, because a colon call passes the ARC table as the first argument. ARC.ImportSpell is the "
-                    "raw case that has already bitten us.",
+        "`python tools/arcanum.py regen-catalog <checkout>`. This is the ARC surface a Macro Script "
+        "action can call. `kind` is how the entry is assigned: 'wrapped' entries went through "
+        "wrapToEvalFinalVal and accept BOTH `ARC:X(a)` and `ARC.X(a)`; 'raw' entries accept ONLY the DOT "
+        "form, because a colon call passes the ARC table as the first argument. ARC.ImportSpell is the "
+        "raw case that has already bitten us.",
         "api": entries,
     }
 
@@ -1375,8 +1578,11 @@ def main(argv: list[str] | None = None) -> int:
 
     p_lint = sub.add_parser("lint", help="design review: state left behind, unwanted chat, dropped reverts, races")
     p_lint.add_argument("spec", help="path to a JSON spec, or '-' for stdin")
-    p_lint.add_argument("--category", choices=sorted(SPELL_CATEGORIES),
-                        help="how the spell is triggered (default: the spec's own, else personal)")
+    p_lint.add_argument(
+        "--category",
+        choices=sorted(SPELL_CATEGORIES),
+        help="how the spell is triggered (default: the spec's own, else personal)",
+    )
 
     sub.add_parser("categories", help="how a spell gets triggered, and what that lets it politely do")
 
@@ -1402,9 +1608,11 @@ def main(argv: list[str] | None = None) -> int:
     p_round.add_argument("spec")
 
     p_regen = sub.add_parser("regen-catalog", help="rebuild arcanum_actions.json from a SpellCreator checkout")
-    p_regen.add_argument("checkout",
-                         help="path to a SpellCreator checkout - prefer EpsilonRP/PublicAddOns "
-                              "(_retail_/Interface/AddOns/SpellCreator), which is the addon Epsilon actually serves")
+    p_regen.add_argument(
+        "checkout",
+        help="path to a SpellCreator checkout - prefer EpsilonRP/PublicAddOns "
+        "(_retail_/Interface/AddOns/SpellCreator), which is the addon Epsilon actually serves",
+    )
 
     sub.add_parser("selftest", help="check the codec still agrees with the addon's own Lua libraries")
 
@@ -1418,8 +1626,10 @@ def main(argv: list[str] | None = None) -> int:
         print(f"wrote {CATALOG_PATH.name} ({len(catalog['actions'])} actions across {len(families)} families)")
         unclassified = families.get("misc", 0)
         if unclassified:
-            print(f"  ⚠ {unclassified} landed in 'misc' -- the addon added actions ACTION_FAMILIES does not know: "
-                  + ", ".join(k for k, e in catalog["actions"].items() if e["family"] == "misc"))
+            print(
+                f"  ⚠ {unclassified} landed in 'misc' -- the addon added actions ACTION_FAMILIES does not know: "
+                + ", ".join(k for k, e in catalog["actions"].items() if e["family"] == "misc")
+            )
 
         conditions = regen_conditions(checkout)
         CONDITIONS_PATH.write_text(json.dumps(conditions, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
@@ -1468,8 +1678,9 @@ def main(argv: list[str] | None = None) -> int:
         else:
             spell = ArcSpell.from_table(decode_spell(text))
         if not spell.actions:
-            print("no actions found -- is this one spell? (a file of several needs one picked out first)",
-                  file=sys.stderr)
+            print(
+                "no actions found -- is this one spell? (a file of several needs one picked out first)", file=sys.stderr
+            )
             return 1
         print(timeline(spell))
         return 0
@@ -1512,8 +1723,10 @@ def main(argv: list[str] | None = None) -> int:
                 continue
             if not args.all and not args.family and family not in CORE_FAMILIES:
                 continue
-            haystack = f"{key} {family} {entry.get('name', '')} {entry.get('command', '')} " \
-                       f"{entry.get('description', '')}".lower()
+            haystack = (
+                f"{key} {family} {entry.get('name', '')} {entry.get('command', '')} "
+                f"{entry.get('description', '')}".lower()
+            )
             if query and query not in haystack:
                 continue
             shown += 1
@@ -1522,16 +1735,21 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{family:<12} {key:<28} {entry.get('name', ''):<30}{cmd}{revert}")
             if args.verbose:
                 if entry.get("dataName"):
-                    print(f"    input: {entry['dataName']}"
-                          + ("  (comma-split: one run per value)" if not entry.get("doNotDelimit") else ""))
+                    print(
+                        f"    input: {entry['dataName']}"
+                        + ("  (comma-split: one run per value)" if not entry.get("doNotDelimit") else "")
+                    )
                 if entry.get("description"):
                     print(f"    {entry['description'].splitlines()[0]}")
                 for extra in ("inputDescription", "example", "revertAlternative", "dependency"):
                     if entry.get(extra):
                         print(f"    {extra}: {entry[extra].splitlines()[0]}")
         if not shown:
-            print("no actions matched -- try --all, or --family "
-                  f"({', '.join(sorted(ACTION_FAMILIES))}, integration, misc)", file=sys.stderr)
+            print(
+                "no actions matched -- try --all, or --family "
+                f"({', '.join(sorted(ACTION_FAMILIES))}, integration, misc)",
+                file=sys.stderr,
+            )
         return 0
 
     if args.cmd == "conditions":
@@ -1541,8 +1759,9 @@ def main(argv: list[str] | None = None) -> int:
         conditions = json.loads(CONDITIONS_PATH.read_text(encoding="utf-8"))["conditions"]
         query = args.query.lower()
         for key, entry in sorted(conditions.items(), key=lambda kv: (kv[1].get("category") or "", kv[0])):
-            haystack = f"{key} {entry.get('category', '')} {entry.get('name', '')} " \
-                       f"{entry.get('description', '')}".lower()
+            haystack = (
+                f"{key} {entry.get('category', '')} {entry.get('name', '')} {entry.get('description', '')}".lower()
+            )
             if query and query not in haystack:
                 continue
             inputs = ", ".join(f"{i['label']}:{i['type']}" for i in entry.get("inputs", []))

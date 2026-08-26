@@ -31,12 +31,9 @@ class ShapeshiftForms:
 def read_shapeshift_forms(tables: Tables) -> ShapeshiftForms:
     """Read each form's name and its creature displays."""
     forms = ShapeshiftForms()
-    columns = array_columns(tables, "SpellShapeshiftForm", "CreatureDisplayID",
-                            FORM_DISPLAY_SLOTS)
-    for form_id, name, *displays in tables.rows(
-            "SpellShapeshiftForm", ["ID", "Name_lang", *columns]):
+    columns = array_columns(tables, "SpellShapeshiftForm", "CreatureDisplayID", FORM_DISPLAY_SLOTS)
+    for form_id, name, *displays in tables.rows("SpellShapeshiftForm", ["ID", "Name_lang", *columns]):
         form = to_int(form_id)
         forms.names[form] = name
-        forms.displays[form] = [display for display in
-                                (to_int(value) for value in displays) if display > 0]
+        forms.displays[form] = [display for display in (to_int(value) for value in displays) if display > 0]
     return forms

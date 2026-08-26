@@ -48,6 +48,7 @@ def read_gob_displays() -> dict[int, int]:
             if fid and display:
                 displays[fid] = -display
     if len(displays) < GOB_FLOOR:
-        sys.exit(f"error: {GOB_DISPLAYS.name} parsed as {len(displays):,} rows, "
-                 f"under the {GOB_FLOOR:,} a readable copy has")
+        sys.exit(
+            f"error: {GOB_DISPLAYS.name} parsed as {len(displays):,} rows, under the {GOB_FLOOR:,} a readable copy has"
+        )
     return displays

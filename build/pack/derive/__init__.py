@@ -11,18 +11,14 @@ makes every derivation here testable from plain values with no source at all.
 
 from __future__ import annotations
 
-from .context import (CONTEXT_FIELDS, SPOKEN_FIELDS, DeriveContext, Reads,
-                      Spoken)
+from .context import CONTEXT_FIELDS, SPOKEN_FIELDS, DeriveContext, Reads, Spoken
 from .displays import Display, ResolvedDisplays, resolve_displays
 from .icons import NO_ICON, IconIndex, build_icon_index, build_item_icons, icon_name
-from .kinds import (COLUMN_FAMILIES, COLUMN_READS, VOCABULARIES, ColumnRows, Family,
-                    build_column)
-from .locales import (DEFAULT_LOCALE, LOCALES, Locale, locale_of,
-                      locales_named)
+from .kinds import COLUMN_FAMILIES, COLUMN_READS, VOCABULARIES, ColumnRows, Family, build_column
+from .locales import DEFAULT_LOCALE, LOCALES, Locale, locale_of, locales_named
 from .prose import CookedText, cook_text
 from .references import References, collect_references
-from .rows import (PackRows, build_rows, id_rows, masked_rows,
-                   replacement_rows, spell_role_rows, spell_rows)
+from .rows import PackRows, build_rows, id_rows, masked_rows, replacement_rows, spell_role_rows, spell_rows
 from .walk import KIT_BUCKETS, SpellVisuals, walk_spells
 
 __all__ = [

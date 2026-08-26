@@ -41,8 +41,7 @@ class VisualGraph:
     """Visual -> the SoundKit its animation events play."""
 
 
-def expand_redirects(seeds: set[int],
-                     redirects: dict[int, list[tuple[int, int]]]) -> dict[int, int]:
+def expand_redirects(seeds: set[int], redirects: dict[int, list[tuple[int, int]]]) -> dict[int, int]:
     """Every visual reachable from `seeds`, with the bits it was reached through.
 
     A worklist, not a recursion: the redirect graph contains cycles. A visual
@@ -74,8 +73,7 @@ def read_visual_graph(tables: Tables) -> VisualGraph:
     edge.
     """
     direct: dict[int, set[int]] = defaultdict(set)
-    for spell_id, visual_id in tables.rows("SpellXSpellVisual",
-                                           ["SpellID", "SpellVisualID"]):
+    for spell_id, visual_id in tables.rows("SpellXSpellVisual", ["SpellID", "SpellVisualID"]):
         spell, visual = to_int(spell_id), to_int(visual_id)
         if spell and visual:
             direct[spell].add(visual)
@@ -83,25 +81,22 @@ def read_visual_graph(tables: Tables) -> VisualGraph:
     bits = list(VISUAL_REDIRECTS.values())
     redirects: dict[int, list[tuple[int, int]]] = {}
     graph = VisualGraph()
-    for row_id, sound_id, *target_ids in tables.rows(
-            "SpellVisual", ["ID", "AnimEventSoundID", *VISUAL_REDIRECTS]):
+    for row_id, sound_id, *target_ids in tables.rows("SpellVisual", ["ID", "AnimEventSoundID", *VISUAL_REDIRECTS]):
         visual, sound = to_int(row_id), to_int(sound_id)
         if sound:
             graph.visual_sounds[visual] = sound
         # A visual naming itself is a no-op redirect, dropped here rather than
         # in the expansion.
-        hops = [(target, bit) for target, bit in zip(map(to_int, target_ids), bits)
-                if target and target != visual]
+        hops = [(target, bit) for target, bit in zip(map(to_int, target_ids), bits) if target and target != visual]
         if hops:
             redirects[visual] = hops
 
-    graph.spell_visuals = {spell: expand_redirects(visuals, redirects)
-                           for spell, visuals in direct.items()}
+    graph.spell_visuals = {spell: expand_redirects(visuals, redirects) for spell, visuals in direct.items()}
 
     kits: dict[int, dict[int, tuple[int, int]]] = defaultdict(dict)
     for visual_id, kit_id, target_type, start_event in tables.rows(
-            "SpellVisualEvent",
-            ["SpellVisualID", "SpellVisualKitID", "TargetType", "StartEvent"]):
+        "SpellVisualEvent", ["SpellVisualID", "SpellVisualKitID", "TargetType", "StartEvent"]
+    ):
         visual, kit = to_int(visual_id), to_int(kit_id)
         if not (visual and kit):
             continue

@@ -7,23 +7,19 @@ not name a file, a URL or an emitter; `tools/check.py` enforces that.
 
 from __future__ import annotations
 
-from .anims import (read_anim_replacements, read_animkit_anims,
-                    read_animkit_bonesets)
+from .anims import read_anim_replacements, read_animkit_anims, read_animkit_bonesets
 from .areas import Area, AreaGates, read_area_gates, read_zone_maps
 from .assets import resolve_paths
 from .attributes import attribute_bit, read_spell_attributes
 from .creatures import CreatureModels, read_creature_models
 from .delivery import Delivery, read_spell_delivery
-from .effects import (EffectRow, MaskedIds, SpellEffectRows,
-                      implicit_target_bits, read_spell_effect_rows)
-from .fx import (ChainEffect, FxPayloads, ScreenRow, expand_chain,
-                 read_fx_payloads)
+from .effects import EffectRow, MaskedIds, SpellEffectRows, implicit_target_bits, read_spell_effect_rows
+from .fx import ChainEffect, FxPayloads, ScreenRow, expand_chain, read_fx_payloads
 from .gameobjects import GameObjectData, read_gameobjects
 from .items import ItemModels, read_item_models
 from .keybinds import KeyboundOverride, read_keybound_overrides
 from .kits import KitEffects, read_kit_effects
-from .missiles import (Missile, MissileMotion, VisualMissiles, read_missile_motions,
-                       read_missiles)
+from .missiles import Missile, MissileMotion, VisualMissiles, read_missile_motions, read_missiles
 from .models import ModelSources, read_model_sources
 from .mounts import MountData, read_mounts
 from .names import SpellNames, read_override_names, read_spell_names

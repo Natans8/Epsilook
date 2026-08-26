@@ -257,8 +257,7 @@ def parse(text: str, table: str) -> Definition:
     return definition
 
 
-def load(table: str, cache_dir: Path, refresh: bool = False,
-         timeout: int = 60) -> Definition | None:
+def load(table: str, cache_dir: Path, refresh: bool = False, timeout: int = 60) -> Definition | None:
     """Fetch (and cache) one table's `.dbd`. Returns None if it has none.
 
     Cached forever by default: definitions change only when someone reverse
@@ -295,8 +294,7 @@ DEFAULT_BITS = {"float": 32, "string": 32, "locstring": 32}
 """Declared width for the kinds a definition does not give one for."""
 
 
-def schema_for(definition: Definition | None,
-               build: Build | None) -> list[ColumnSpec] | None:
+def schema_for(definition: Definition | None, build: Build | None) -> list[ColumnSpec] | None:
     """A reader's schema from a parsed definition's block for one build.
 
     Here rather than beside a reader because it is the definition half of the
@@ -315,9 +313,16 @@ def schema_for(definition: Definition | None,
     for entry in block.columns:
         meaning = definition.columns.get(entry.name) if definition else None
         kind = meaning.type if meaning else "int"
-        out.append(ColumnSpec(name=entry.name, kind=kind,
-                              bits=entry.width or DEFAULT_BITS.get(kind, 32),
-                              signed=not entry.unsigned, count=entry.array or 1,
-                              is_id=entry.is_id, is_relation=entry.is_relation,
-                              in_record=not entry.noninline))
+        out.append(
+            ColumnSpec(
+                name=entry.name,
+                kind=kind,
+                bits=entry.width or DEFAULT_BITS.get(kind, 32),
+                signed=not entry.unsigned,
+                count=entry.array or 1,
+                is_id=entry.is_id,
+                is_relation=entry.is_relation,
+                in_record=not entry.noninline,
+            )
+        )
     return out

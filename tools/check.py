@@ -12,8 +12,8 @@ that is pinned in pyproject.toml rather than installed on a bare interpreter.
 
 Two families of check live here.
 
-  TOOLCHAIN - tsc, node --check, mypy, pyflakes. Nothing repo-specific; they
-  just used to be four commands to remember.
+  TOOLCHAIN - tsc, node --check, ruff format, mypy, pyflakes. Nothing
+  repo-specific; they just used to be commands to remember.
 
   REPO GUARDS - the invariants CLAUDE.md states in prose and a human has to
   remember: the ?v= string is one string in both places (1 css + 1 js), it is
@@ -58,8 +58,22 @@ from pathlib import Path
 import mermaid
 import packfile
 import packs
-from repo import (BUMP_PATHS, CACHE, DIM, GREEN, LISTFILE_ASSET, RED, RESET, ROOT, YELLOW,
-                  changed_under, deploy_branches, git, have_ref, survive_console_encoding)
+from repo import (
+    BUMP_PATHS,
+    CACHE,
+    DIM,
+    GREEN,
+    LISTFILE_ASSET,
+    RED,
+    RESET,
+    ROOT,
+    YELLOW,
+    changed_under,
+    deploy_branches,
+    git,
+    have_ref,
+    survive_console_encoding,
+)
 
 # A failure detail quotes whatever the failing tool printed, and node --test
 # opens every line with U+25B6.
@@ -94,8 +108,10 @@ DOC_TRIGGERS = (
     # the only record of how the vendored file was produced. A route added or
     # a rule changed without the procedure following it is how that record goes
     # stale, and nothing else would notice.
-    (("tools/supplement.py", "tools/epsilon_names.py", "tools/epsilon_walks.py",
-      "tools/epsilon_storage.py"), "docs/SUPPLEMENT.md"),
+    (
+        ("tools/supplement.py", "tools/epsilon_names.py", "tools/epsilon_walks.py", "tools/epsilon_storage.py"),
+        "docs/SUPPLEMENT.md",
+    ),
 )
 
 # A PACK FORMAT BUMP MEANS THE PACK'S SHAPE CHANGED, and these consume that
@@ -199,10 +215,24 @@ ENGINE_TREES = ("src/search/", "src/i18n/")
 # and strings stripped — several of these words (`document`, `Element`) are
 # ordinary English and appear in the prose above them constantly.
 DOM_NAMES = (
-    "document", "window", "navigator", "localStorage", "sessionStorage",
-    "HTMLElement", "HTMLImageElement", "HTMLAnchorElement", "HTMLButtonElement",
-    "HTMLInputElement", "Element", "Node", "NodeList", "ParentNode", "Event",
-    "customElements", "requestAnimationFrame", "getComputedStyle",
+    "document",
+    "window",
+    "navigator",
+    "localStorage",
+    "sessionStorage",
+    "HTMLElement",
+    "HTMLImageElement",
+    "HTMLAnchorElement",
+    "HTMLButtonElement",
+    "HTMLInputElement",
+    "Element",
+    "Node",
+    "NodeList",
+    "ParentNode",
+    "Event",
+    "customElements",
+    "requestAnimationFrame",
+    "getComputedStyle",
 )
 
 # THE THIRD SEAM - the data build's layering rule.
@@ -226,8 +256,7 @@ PYTHON_TESTS = "test/py"
 # the same names test/py carries, so every tool runs over it as a second
 # invocation rather than in one sweep with the repository's sources.
 ADDON_TESTS = "addon/test"
-BUILD_LAYERS = ("sources", "tables", "routes", "derive", "model", "encode",
-                "emit", "pipeline", "__main__")
+BUILD_LAYERS = ("sources", "tables", "routes", "derive", "model", "encode", "emit", "pipeline", "__main__")
 
 # The layer that wires the rest together, and the one exemption to the reading
 # rule below. Every other layer is written not to know what is around it - a
@@ -261,8 +290,7 @@ PLACE_NAMES = ("Path", "open", "urlopen", "urllib", "requests", "listdir", "glob
 # cannot drift on what they cover. The versions they run at are pinned by
 # uv.lock rather than by whatever the machine happens to have installed, which
 # is why all three go through `uv run`.
-PYTHON_SOURCES = (BUILD_PACKAGE,
-                  PYTHON_TESTS, "tools")
+PYTHON_SOURCES = (BUILD_PACKAGE, PYTHON_TESTS, "tools")
 
 # How long a pack-freshness answer stays good. Blizzard patches weekly at
 # most, so a day is generous and keeps a normal working day to one request.
@@ -292,8 +320,11 @@ class Report:
     def _say(self, colour: str, tag: str, name: str, detail: str) -> None:
         pad = " " * max(0, 26 - len(name))
         self.lines.append(f"{tag:>4}  {name}{pad}{detail}".rstrip())
-        print(f"{colour}{tag:>4}{RESET}  {name}{pad}{DIM}{detail}{RESET}" if detail
-              else f"{colour}{tag:>4}{RESET}  {name}")
+        print(
+            f"{colour}{tag:>4}{RESET}  {name}{pad}{DIM}{detail}{RESET}"
+            if detail
+            else f"{colour}{tag:>4}{RESET}  {name}"
+        )
 
     def detail(self, lines: Iterable[str]) -> None:
         """Keep a failing tool's whole output in the log without printing it.
@@ -379,9 +410,10 @@ def check_assets(rep: Report, built: bool) -> str | None:
     elif built:
         rep.ok("asset files", f"all {len(referenced)} resolve")
     else:
-        rep.ok("asset files",
-               f"{len(required)} committed assets resolve"
-               f" ({len(generated)} built ones unchecked - no build this run)")
+        rep.ok(
+            "asset files",
+            f"{len(required)} committed assets resolve ({len(generated)} built ones unchecked - no build this run)",
+        )
 
     # the other direction, for the committed css only: site/js is generated
     # wholesale, and an unreachable SOURCE file fails in tools/build.mjs
@@ -437,9 +469,7 @@ def check_bump(rep: Report, base: str, version: str | None) -> None:
         return
 
     changed = changed_under(base, BUMP_PATHS)
-    deployed = {v
-                for p in site_pages()
-                for _, v in asset_versions(git("show", f"{base}:site/{p.name}"))}
+    deployed = {v for p in site_pages() for _, v in asset_versions(git("show", f"{base}:site/{p.name}"))}
 
     if not changed:
         rep.ok("?v= bump", f"no css/js change against {base}")
@@ -450,22 +480,25 @@ def check_bump(rep: Report, base: str, version: str | None) -> None:
     if version in deployed:
         head = ", ".join(sorted(changed)[:3])
         more = f" (+{len(changed) - 3} more)" if len(changed) > 3 else ""
-        rep.fail("?v= bump",
-                 f"{len(changed)} css/js file(s) changed but ?v= is still "
-                 f"{version} - run tools/bump.py  [{head}{more}]")
+        rep.fail(
+            "?v= bump",
+            f"{len(changed)} css/js file(s) changed but ?v= is still {version} - run tools/bump.py  [{head}{more}]",
+        )
     else:
         rep.ok("?v= bump", f"{max(deployed)} -> {version}, {len(changed)} file(s)")
 
 
 # Every tracked text extension, so a new directory is covered without being listed.
-TEXT_EXTS = (".js", ".css", ".html", ".py", ".md", ".json", ".ts", ".tsx", ".svg",
-             ".yml", ".sh", ".conf", ".mjs")
+TEXT_EXTS = (".js", ".css", ".html", ".py", ".md", ".json", ".ts", ".tsx", ".svg", ".yml", ".sh", ".conf", ".mjs")
 
 
 def text_files() -> list[str]:
     """The tracked files whose line endings are meant to be LF."""
-    return [f for f in git("ls-files").splitlines()
-            if f.endswith(TEXT_EXTS) or Path(f).name == "Dockerfile" or f.endswith(".dockerignore")]
+    return [
+        f
+        for f in git("ls-files").splitlines()
+        if f.endswith(TEXT_EXTS) or Path(f).name == "Dockerfile" or f.endswith(".dockerignore")
+    ]
 
 
 def check_line_endings(rep: Report) -> None:
@@ -481,8 +514,7 @@ def check_line_endings(rep: Report) -> None:
     names = text_files()
     bad = []
     for name in names:
-        blob = subprocess.run(["git", "-C", str(ROOT), "show", f"HEAD:{name}"],
-                              capture_output=True, check=False).stdout
+        blob = subprocess.run(["git", "-C", str(ROOT), "show", f"HEAD:{name}"], capture_output=True, check=False).stdout
         if b"\r\n" in blob:
             bad.append(name)
     if bad:
@@ -501,11 +533,11 @@ def check_binary_text(rep: Report) -> None:
     that one commit too late; a NUL byte also defeats grep, which reports the
     file as binary rather than searching it.
     """
-    bad = [name for name in text_files()
-           if (ROOT / name).is_file() and b"\x00" in (ROOT / name).read_bytes()]
+    bad = [name for name in text_files() if (ROOT / name).is_file() and b"\x00" in (ROOT / name).read_bytes()]
     if bad:
-        rep.fail("binary text", "NUL byte in a text file, so its line endings stop being normalised: "
-                                f"{', '.join(bad[:4])}")
+        rep.fail(
+            "binary text", f"NUL byte in a text file, so its line endings stop being normalised: {', '.join(bad[:4])}"
+        )
     else:
         rep.ok("binary text", "no tracked text file reads as binary")
 
@@ -559,13 +591,12 @@ def unreferenced_modules(entries: list[dict[str, object]]) -> list[str]:
     if not directory.is_dir():
         return []
     named = module_files(entries)
-    stale = sorted(path.name for path in directory.iterdir()
-                   if path.is_file()
-                   and f"data/modules/{path.name}" not in named)
+    stale = sorted(
+        path.name for path in directory.iterdir() if path.is_file() and f"data/modules/{path.name}" not in named
+    )
     if not stale:
         return []
-    return [f"{len(stale)} module(s) no manifest names, e.g. {stale[0]} "
-            f"- run tools/rebuild.py --prune-modules"]
+    return [f"{len(stale)} module(s) no manifest names, e.g. {stale[0]} - run tools/rebuild.py --prune-modules"]
 
 
 def check_manifest(rep: Report) -> None:
@@ -597,8 +628,7 @@ def check_manifest(rep: Report) -> None:
         if actual != entry.get("hash"):
             problems.append(f"{entry.get('id')}: hash {entry.get('hash')} but pack is {actual}")
 
-    on_disk = {p.name for p in (SITE / "data").iterdir()
-               if p.is_dir() and (p / "manifest.json").exists()}
+    on_disk = {p.name for p in (SITE / "data").iterdir() if p.is_dir() and (p / "manifest.json").exists()}
     for orphan in sorted(on_disk - listed):
         problems.append(f"{orphan}: pack on disk, no manifest entry")
 
@@ -612,8 +642,7 @@ def check_manifest(rep: Report) -> None:
         rep.fail("data manifest", "; ".join(problems[:3]))
     else:
         via = f", {pointers} via LFS pointer" if pointers else ""
-        rep.ok("data manifest",
-               f"{len(entries)} packs, hashes match{via}, default={defaults[0]}")
+        rep.ok("data manifest", f"{len(entries)} packs, hashes match{via}, default={defaults[0]}")
 
 
 def check_docs(rep: Report, base: str) -> None:
@@ -632,15 +661,13 @@ def check_docs(rep: Report, base: str) -> None:
     if PACK_FORMAT_HOME in changed and _format_moved(base):
         missed = [f for f in FORMAT_CONSUMERS if f not in changed]
         if missed:
-            rep.warn("pack format consumers",
-                     f"PACK_FORMAT moved but {', '.join(missed)} did not")
+            rep.warn("pack format consumers", f"PACK_FORMAT moved but {', '.join(missed)} did not")
 
 
 def _format_moved(base: str) -> bool:
     """Did this diff change PACK_FORMAT? Read off the diff, not the file."""
     diff = git("diff", "-U0", base, "--", PACK_FORMAT_HOME)
-    return any(line.startswith(("+PACK_FORMAT", "-PACK_FORMAT"))
-               for line in diff.splitlines())
+    return any(line.startswith(("+PACK_FORMAT", "-PACK_FORMAT")) for line in diff.splitlines())
 
 
 def check_format_declaration(rep: Report) -> None:
@@ -655,11 +682,11 @@ def check_format_declaration(rep: Report) -> None:
     if not home.exists():
         rep.fail("pack format home", f"{PACK_FORMAT_HOME} does not exist")
         return
-    if not re.search(r"^PACK_FORMAT\s*=\s*\d+", home.read_text(encoding="utf-8"),
-                     re.M):
-        rep.fail("pack format home",
-                 f"{PACK_FORMAT_HOME} declares no PACK_FORMAT; the format "
-                 f"consumer warning is watching the wrong file")
+    if not re.search(r"^PACK_FORMAT\s*=\s*\d+", home.read_text(encoding="utf-8"), re.M):
+        rep.fail(
+            "pack format home",
+            f"{PACK_FORMAT_HOME} declares no PACK_FORMAT; the format consumer warning is watching the wrong file",
+        )
         return
     rep.ok("pack format home", PACK_FORMAT_HOME)
 
@@ -678,8 +705,7 @@ def pack_sections() -> tuple[dict[str, object] | None, str]:
     if not MANIFEST.exists():
         return None, "no versions.json"
     entries = json.loads(MANIFEST.read_text(encoding="utf-8"))
-    default = next((e for e in entries if e.get("default")),
-                   entries[0] if entries else None)
+    default = next((e for e in entries if e.get("default")), entries[0] if entries else None)
     if not default:
         return None, "no default pack"
     pack_dir = SITE / Path(default["file"]).parent
@@ -688,8 +714,7 @@ def pack_sections() -> tuple[dict[str, object] | None, str]:
 
     for file in packfile.files(packfile.manifest_of(pack_dir)):
         module_path = SITE / file
-        if (not module_path.exists()
-                or module_path.read_bytes()[:len(LFS_POINTER_MAGIC)] == LFS_POINTER_MAGIC):
+        if not module_path.exists() or module_path.read_bytes()[: len(LFS_POINTER_MAGIC)] == LFS_POINTER_MAGIC:
             return None, f"{file} not smudged locally"
 
     try:
@@ -722,27 +747,32 @@ def check_pack_sections(rep: Report) -> None:
     # addon reads the pack through its own API, by section name.
     source = "".join(
         (ROOT / part).read_text(encoding="utf-8")
-        for part in ("src/data.ts", "src/packrows.ts", "tools/dataset.ts",
-                     "addon/Epsilook/API.lua"))
+        for part in ("src/data.ts", "src/packrows.ts", "tools/dataset.ts", "addon/Epsilook/API.lua")
+    )
 
     # Two kinds of section are reached by DECLARATION rather than by name, so
     # no reader mentions them and searching the source for one would report a
     # section that is read on every query as dead. A row table is addressed by
     # its column, and a vocabulary is named by the row table pointing at it.
     vocabs = loaded.get("rowVocabs")
-    declared = {str(where.get("in", ""))
-                for where in (vocabs.values() if isinstance(vocabs, dict) else ())
-                if isinstance(where, dict)}
-    rows = {name for name, block in loaded.items()
-            if isinstance(block, dict) and {"kinds", "sizes", "refs"} <= set(block)}
+    declared = {
+        str(where.get("in", ""))
+        for where in (vocabs.values() if isinstance(vocabs, dict) else ())
+        if isinstance(where, dict)
+    }
+    rows = {
+        name for name, block in loaded.items() if isinstance(block, dict) and {"kinds", "sizes", "refs"} <= set(block)
+    }
 
     unread = sorted(sections - rows - declared - {s for s in sections if s in source})
     if unread:
         rep.fail("pack sections", f"shipped but read by nothing: {', '.join(unread)}")
     else:
-        rep.ok("pack sections",
-               f"all {len(sections)} read: {len(rows)} row tables, "
-               f"{len(declared)} vocabularies they name, the rest by name")
+        rep.ok(
+            "pack sections",
+            f"all {len(sections)} read: {len(rows)} row tables, "
+            f"{len(declared)} vocabularies they name, the rest by name",
+        )
 
 
 def _blank(text: str) -> str:
@@ -774,7 +804,7 @@ def strip_ts_comments(src: str) -> str:
             j, quote = i + 1, c
             while j < n and src[j] != quote:
                 j += 2 if src[j] == "\\" else 1
-            out.append(src[i:j + 1])
+            out.append(src[i : j + 1])
             i = j + 1
         else:
             out.append(c)
@@ -798,7 +828,7 @@ def strip_ts_noise(src: str) -> str:
             j, quote = i + 1, c
             while j < n and src[j] != quote:
                 j += 2 if src[j] == "\\" else 1
-            out.append(_blank(src[i:j + 1]))
+            out.append(_blank(src[i : j + 1]))
             i = j + 1
         else:
             out.append(c)
@@ -815,8 +845,7 @@ def declared_kinds() -> dict[str, set[str]]:
     `defineKind({...})` call; its word is the `word:` field, or its column's key
     where it declares none, and its properties are the keys of `props`.
     """
-    source = (ROOT / "src" / "search" / "schema" / "catalogue.ts").read_text(
-        encoding="utf-8")
+    source = (ROOT / "src" / "search" / "schema" / "catalogue.ts").read_text(encoding="utf-8")
     kinds: dict[str, set[str]] = {}
     helpers = spread_helpers(source)
     for call in re.finditer(r"defineKind\(\{(.*?)\n\}\);", source, re.DOTALL):
@@ -912,8 +941,7 @@ def check_row_schema(rep: Report) -> None:
     if sections is None:
         rep.skip("row schema", why)
         return
-    tables = {name: block for name, block in sections.items()
-              if name.endswith("Rows") and isinstance(block, dict)}
+    tables = {name: block for name, block in sections.items() if name.endswith("Rows") and isinstance(block, dict)}
     if not tables:
         rep.skip("row schema", "pack ships no row tables")
         return
@@ -930,8 +958,7 @@ def check_row_schema(rep: Report) -> None:
             shipped += 1
             stray = sorted(props - catalogue[kind])
             if stray:
-                problems.append(
-                    f"{kind} ships {', '.join(stray)}, which it does not declare")
+                problems.append(f"{kind} ships {', '.join(stray)}, which it does not declare")
     if problems:
         rep.fail("row schema", "; ".join(problems))
     else:
@@ -960,8 +987,7 @@ def check_span_components(rep: Report) -> None:
         rep.skip("span components", why)
         return
 
-    source = (ROOT / "src" / "search" / "vocabulary" / "value-types.ts").read_text(
-        encoding="utf-8")
+    source = (ROOT / "src" / "search" / "vocabulary" / "value-types.ts").read_text(encoding="utf-8")
     composites: dict[frozenset[str], tuple[str, list[str]]] = {}
     for call in re.finditer(r"composite\(\{(.*?)\n\}\);", source, re.DOTALL):
         body = call.group(1)
@@ -986,19 +1012,18 @@ def check_span_components(rep: Report) -> None:
                 held = composites.get(frozenset(shipped))
                 if held is None:
                     problems.append(
-                        f"{kind}.{prop} ships components {', '.join(shipped)}, "
-                        f"which no composite type declares")
+                        f"{kind}.{prop} ships components {', '.join(shipped)}, which no composite type declares"
+                    )
                 elif held[1] != shipped:
                     problems.append(
-                        f"{kind}.{prop} ships {', '.join(shipped)} but "
-                        f"{held[0]} reads {', '.join(held[1])}")
+                        f"{kind}.{prop} ships {', '.join(shipped)} but {held[0]} reads {', '.join(held[1])}"
+                    )
     if problems:
         rep.fail("span components", "; ".join(problems))
     elif spans == 0:
         rep.ok("span components", "the pack ships no spanning property")
     else:
-        rep.ok("span components",
-               f"{spans} spanning columns arrive in the order their type reads")
+        rep.ok("span components", f"{spans} spanning columns arrive in the order their type reads")
 
 
 def check_row_vocabularies(rep: Report) -> None:
@@ -1030,8 +1055,9 @@ def check_row_vocabularies(rep: Report) -> None:
         for kind, named in sorted(block.get("vocab", {}).items()):
             for prop, vocab in sorted(named.items()):
                 if vocab not in vocabs:
-                    problems.append(f"{table}.{kind}.{prop} resolves through "
-                                    f"{vocab!r}, which rowVocabs does not declare")
+                    problems.append(
+                        f"{table}.{kind}.{prop} resolves through {vocab!r}, which rowVocabs does not declare"
+                    )
 
     for name, where in sorted(vocabs.items()):
         if not isinstance(where, dict):
@@ -1039,21 +1065,18 @@ def check_row_vocabularies(rep: Report) -> None:
             continue
         home = sections.get(str(where.get("in", "")))
         if home is None:
-            problems.append(f"rowVocabs.{name} lives in {where.get('in')!r}, "
-                            f"which the pack does not ship")
+            problems.append(f"rowVocabs.{name} lives in {where.get('in')!r}, which the pack does not ship")
             continue
         for half in ("keys", "values"):
-            if half in where and (not isinstance(home, dict)
-                                  or where[half] not in home):
-                problems.append(f"rowVocabs.{name} reads {where['in']}."
-                                f"{where[half]}, which the shipped section "
-                                f"does not carry")
+            if half in where and (not isinstance(home, dict) or where[half] not in home):
+                problems.append(
+                    f"rowVocabs.{name} reads {where['in']}.{where[half]}, which the shipped section does not carry"
+                )
 
     if problems:
         rep.fail("row vocabularies", "; ".join(problems))
     else:
-        rep.ok("row vocabularies",
-               f"{len(vocabs)} vocabularies resolve in the shipped pack")
+        rep.ok("row vocabularies", f"{len(vocabs)} vocabularies resolve in the shipped pack")
 
 
 MODULE_GZIP_FINGERPRINT = "18bfeb6a365aa843"
@@ -1104,7 +1127,8 @@ def check_gzip_flavour(rep: Report) -> None:
         f"this interpreter compresses differently ({here} against "
         f"{MODULE_GZIP_FINGERPRINT}{', zlib-ng ' + flavour if flavour else ''}); "
         f"rebuilding one pack here renames its modules and unshares them, so "
-        f"rebuild the whole roster or none of it")
+        f"rebuild the whole roster or none of it",
+    )
 
 
 def check_layers(rep: Report) -> None:
@@ -1126,8 +1150,7 @@ def check_layers(rep: Report) -> None:
     # `import "./app/boot";` pulls in the entire GUI and was invisible here
     # until 2026-08-09 — the one violation shape this guard had never been
     # tested against.
-    imports = re.compile(
-        r"""^\s*(?:import|export)\b\s*(?:[^;]*?from\s*)?["']([^"']+)["']""", re.M)
+    imports = re.compile(r"""^\s*(?:import|export)\b\s*(?:[^;]*?from\s*)?["']([^"']+)["']""", re.M)
     problems: list[str] = []
     for mod in DATA_MODULES:
         src = (ROOT / mod).read_text(encoding="utf-8")
@@ -1231,8 +1254,10 @@ def check_matcher_seam(rep: Report, imports: re.Pattern[str]) -> None:
         if len(problems) > 6:
             rep.fail("matcher seam", f"...and {len(problems) - 6} more")
     else:
-        rep.ok("matcher seam",
-               f"{len(core)} modules in {'/, '.join(SEARCH_DECLARING)}/ free of {'/, '.join(SEARCH_EVALUATING)}/")
+        rep.ok(
+            "matcher seam",
+            f"{len(core)} modules in {'/, '.join(SEARCH_DECLARING)}/ free of {'/, '.join(SEARCH_EVALUATING)}/",
+        )
 
 
 def build_layer_of(module: str) -> str | None:
@@ -1258,7 +1283,7 @@ def imported_modules(tree: ast.Module, package: str) -> list[str]:
                 out.append(node.module or "")
                 continue
             parts = package.split(".")
-            base = parts[:len(parts) - node.level + 1]
+            base = parts[: len(parts) - node.level + 1]
             out.append(".".join([*base, node.module] if node.module else base))
     return out
 
@@ -1290,9 +1315,11 @@ def check_build_layers(rep: Report) -> None:
     not become the reason a checkout without it cannot commit.
     """
     root = ROOT / BUILD_PACKAGE
-    modules = sorted(p for p in root.rglob("*.py")
-                     if not p.name.endswith("_test.py")
-                     and p.name != "conftest.py") if root.is_dir() else []
+    modules = (
+        sorted(p for p in root.rglob("*.py") if not p.name.endswith("_test.py") and p.name != "conftest.py")
+        if root.is_dir()
+        else []
+    )
     if not modules:
         rep.skip("build layers", f"{BUILD_PACKAGE} not present yet")
         return
@@ -1318,19 +1345,23 @@ def check_build_layers(rep: Report) -> None:
                 problems.append(f"{name} is package-root vocabulary but imports {reached}/")
             elif BUILD_LAYERS.index(reached) > BUILD_LAYERS.index(layer):
                 problems.append(f"{name} imports upward, into {reached}/")
-            elif (reached in BUILD_SOURCE_LAYERS
-                  and layer != BUILD_WIRING_LAYER
-                  and BUILD_LAYERS.index(layer) > BUILD_LAYERS.index(BUILD_READING_LAYER)):
-                problems.append(f"{name} reads a game table directly, from {reached}/; "
-                                f"only {BUILD_READING_LAYER}/ may")
+            elif (
+                reached in BUILD_SOURCE_LAYERS
+                and layer != BUILD_WIRING_LAYER
+                and BUILD_LAYERS.index(layer) > BUILD_LAYERS.index(BUILD_READING_LAYER)
+            ):
+                problems.append(f"{name} reads a game table directly, from {reached}/; only {BUILD_READING_LAYER}/ may")
 
         if layer not in BUILD_PLACELESS:
             continue
         for node in ast.walk(tree):
             if isinstance(node, ast.Name) and node.id in PLACE_NAMES:
                 problems.append(f"{name}:{node.lineno} reaches for a file: `{node.id}`")
-            elif isinstance(node, ast.Constant) and isinstance(node.value, str) \
-                    and node.value.startswith(("http://", "https://")):
+            elif (
+                isinstance(node, ast.Constant)
+                and isinstance(node.value, str)
+                and node.value.startswith(("http://", "https://"))
+            ):
                 problems.append(f"{name}:{node.lineno} names a URL")
 
     if problems:
@@ -1339,26 +1370,40 @@ def check_build_layers(rep: Report) -> None:
         if len(problems) > 6:
             rep.fail("build layers", f"...and {len(problems) - 6} more")
     else:
-        rep.ok("build layers",
-               f"{len(modules)} modules import downward only, and no further "
-               f"than {BUILD_READING_LAYER}/ for a table; {placeless} in "
-               f"{'/, '.join(BUILD_PLACELESS)}/ name no path or URL directly")
+        rep.ok(
+            "build layers",
+            f"{len(modules)} modules import downward only, and no further "
+            f"than {BUILD_READING_LAYER}/ for a table; {placeless} in "
+            f"{'/, '.join(BUILD_PLACELESS)}/ name no path or URL directly",
+        )
 
 
 PROSE_RULES: list[tuple[str, re.Pattern[str], str]] = [
-    ("decoration", re.compile(r"[←-⯿─-╿\U0001F000-\U0001FAFF]|[-=#]{5,}"),
-     "emoji or a decorative rule; use plain prose"),
-    ("shouting", re.compile(r"(?:\b[A-Z][A-Z'’-]+\b[ ,]+){3,}\b[A-Z][A-Z'’-]+\b"),
-     "an all-caps sentence; use an ordinary one"),
-    ("dated", re.compile(r"\b(?:19|20)\d\d-\d\d-\d\d\b"),
-     "a date; describe the code as it is now"),
-    ("attributed", re.compile(r"\b(?:the )?users?'?s?\s+(?:call|own|rule|verdict|"
-                              r"spec|priority|question)\b|\(user[,)]|\bwe agreed\b",
-                              re.IGNORECASE),
-     "a decision attributed to a person; state the rule instead"),
-    ("cross-referenced", re.compile(r"\bPHASE\s*\d|\bsection\s*\d+[a-z]?\b|§",
-                                    re.IGNORECASE),
-     "a plan section or phase number; name the concept instead"),
+    (
+        "decoration",
+        re.compile(r"[←-⯿─-╿\U0001F000-\U0001FAFF]|[-=#]{5,}"),
+        "emoji or a decorative rule; use plain prose",
+    ),
+    (
+        "shouting",
+        re.compile(r"(?:\b[A-Z][A-Z'’-]+\b[ ,]+){3,}\b[A-Z][A-Z'’-]+\b"),
+        "an all-caps sentence; use an ordinary one",
+    ),
+    ("dated", re.compile(r"\b(?:19|20)\d\d-\d\d-\d\d\b"), "a date; describe the code as it is now"),
+    (
+        "attributed",
+        re.compile(
+            r"\b(?:the )?users?'?s?\s+(?:call|own|rule|verdict|"
+            r"spec|priority|question)\b|\(user[,)]|\bwe agreed\b",
+            re.IGNORECASE,
+        ),
+        "a decision attributed to a person; state the rule instead",
+    ),
+    (
+        "cross-referenced",
+        re.compile(r"\bPHASE\s*\d|\bsection\s*\d+[a-z]?\b|§", re.IGNORECASE),
+        "a plan section or phase number; name the concept instead",
+    ),
 ]
 """What a comment may not contain, with the wording to use instead.
 
@@ -1416,8 +1461,7 @@ def prose_of(source: str, name: str) -> Iterator[tuple[int, str]]:
         # A docstring is a triple-quoted string opening its own line. The
         # prefix letters are stripped rather than enumerated, so `r'''` and
         # `f"""` are covered without listing every combination.
-        if token.type is tokenize.STRING and token.line.lstrip().lstrip(
-                "rbfuRBFU").startswith(('"""', "'''")):
+        if token.type is tokenize.STRING and token.line.lstrip().lstrip("rbfuRBFU").startswith(('"""', "'''")):
             yield token.start[0], token.string
     if block:
         yield start, " ".join(block)
@@ -1441,8 +1485,7 @@ def check_comment_style(rep: Report) -> None:
     become the reason a checkout without it cannot commit.
     """
     roots = [ROOT / BUILD_PACKAGE, ROOT / PYTHON_TESTS, ROOT / ADDON_TESTS]
-    modules = sorted(path for root in roots if root.is_dir()
-                     for path in root.rglob("*.py"))
+    modules = sorted(path for root in roots if root.is_dir() for path in root.rglob("*.py"))
     if not modules:
         rep.skip("comment style", f"{BUILD_PACKAGE} not present yet")
         return
@@ -1464,9 +1507,9 @@ def check_comment_style(rep: Report) -> None:
         if len(problems) > 8:
             rep.fail("comment style", f"...and {len(problems) - 8} more")
     else:
-        rep.ok("comment style",
-               f"{len(modules)} modules free of emoji, shouting, dates, "
-               f"attribution and plan references")
+        rep.ok(
+            "comment style", f"{len(modules)} modules free of emoji, shouting, dates, attribution and plan references"
+        )
 
 
 def check_cache_declaration(rep: Report) -> None:
@@ -1490,8 +1533,7 @@ def check_cache_declaration(rep: Report) -> None:
         rep.fail("cache declaration", f"could not read the build's declaration: {exc}")
         return
     if theirs.resolve() != CACHE.resolve():
-        rep.fail("cache declaration",
-                 f"the build caches in {theirs}, the tools in {CACHE}")
+        rep.fail("cache declaration", f"the build caches in {theirs}, the tools in {CACHE}")
     else:
         rep.ok("cache declaration", f"build and tools agree on {CACHE.name}/")
 
@@ -1518,15 +1560,16 @@ def check_localized_tables(rep: Report) -> None:
     pair a table with its columns for a build to choose between.
     """
     root = ROOT / BUILD_PACKAGE
-    modules = sorted(p for p in root.rglob("*.py")
-                     if not p.name.endswith("_test.py")) if root.is_dir() else []
+    modules = sorted(p for p in root.rglob("*.py") if not p.name.endswith("_test.py")) if root.is_dir() else []
     if not modules:
         rep.skip("localized tables", f"{BUILD_PACKAGE} not present yet")
         return
     try:
         sys.path.insert(0, str(ROOT / "build"))
         from pack.sources.wago import (  # pylint: disable=import-outside-toplevel
-            LOCALIZED_TABLES, READ_IN_ONE_LANGUAGE)
+            LOCALIZED_TABLES,
+            READ_IN_ONE_LANGUAGE,
+        )
     except ImportError as exc:
         rep.fail("localized tables", f"could not read the build's roster: {exc}")
         return
@@ -1552,16 +1595,18 @@ def check_localized_tables(rep: Report) -> None:
                 answered |= lines
         named += len(wanted)
         for line in sorted(wanted - answered):
-            problems.append(f"{path.relative_to(ROOT).as_posix()}:{line} reads a "
-                            f"_lang column from a table neither LOCALIZED_TABLES "
-                            f"nor READ_IN_ONE_LANGUAGE names")
+            problems.append(
+                f"{path.relative_to(ROOT).as_posix()}:{line} reads a "
+                f"_lang column from a table neither LOCALIZED_TABLES "
+                f"nor READ_IN_ONE_LANGUAGE names"
+            )
 
     if problems:
         rep.fail("localized tables", "; ".join(problems[:3]))
     else:
-        rep.ok("localized tables",
-               f"{named} lines naming a translated column, all from the "
-               f"{len(covered)} declared tables")
+        rep.ok(
+            "localized tables", f"{named} lines naming a translated column, all from the {len(covered)} declared tables"
+        )
 
 
 def check_locale_declaration(rep: Report) -> None:
@@ -1589,29 +1634,27 @@ def check_locale_declaration(rep: Report) -> None:
         rep.fail("locale declaration", f"could not read the build's declaration: {exc}")
         return
     if DEFAULT_LOCALE != packfile.DEFAULT_LOCALE:
-        rep.fail("locale declaration",
-                 f"the build defaults to {DEFAULT_LOCALE}, the tools to "
-                 f"{packfile.DEFAULT_LOCALE}")
+        rep.fail(
+            "locale declaration", f"the build defaults to {DEFAULT_LOCALE}, the tools to {packfile.DEFAULT_LOCALE}"
+        )
         return
     if DEFAULT_LOCALE not in {locale.code for locale in LOCALES}:
-        rep.fail("locale declaration",
-                 f"{DEFAULT_LOCALE} is the default but no pack is built in it")
+        rep.fail("locale declaration", f"{DEFAULT_LOCALE} is the default but no pack is built in it")
         return
-    found = re.search(r'^export const DEFAULT_LOCALE = "([^"]+)"',
-                      (ROOT / "tools" / "packfile.ts").read_text(encoding="utf-8"),
-                      re.MULTILINE)
+    found = re.search(
+        r'^export const DEFAULT_LOCALE = "([^"]+)"',
+        (ROOT / "tools" / "packfile.ts").read_text(encoding="utf-8"),
+        re.MULTILINE,
+    )
     if found is None:
-        rep.fail("locale declaration",
-                 "tools/packfile.ts no longer declares DEFAULT_LOCALE")
+        rep.fail("locale declaration", "tools/packfile.ts no longer declares DEFAULT_LOCALE")
         return
     if found.group(1) != DEFAULT_LOCALE:
-        rep.fail("locale declaration",
-                 f"the build defaults to {DEFAULT_LOCALE}, packfile.ts to "
-                 f"{found.group(1)}")
+        rep.fail("locale declaration", f"the build defaults to {DEFAULT_LOCALE}, packfile.ts to {found.group(1)}")
         return
-    rep.ok("locale declaration",
-           f"build, tools and the bundle agree on {DEFAULT_LOCALE}, "
-           f"{len(LOCALES)} language(s) built")
+    rep.ok(
+        "locale declaration", f"build, tools and the bundle agree on {DEFAULT_LOCALE}, {len(LOCALES)} language(s) built"
+    )
 
 
 def check_delivery_declaration(rep: Report) -> None:
@@ -1637,22 +1680,25 @@ def check_delivery_declaration(rep: Report) -> None:
             return
         found[name] = 1 << int(match.group(1))
     if found["DELIVERY_CHANNELLED"] != CHANNELLED or found["DELIVERY_BREAKS_ON_MOVE"] != BREAKS_ON_MOVE:
-        rep.fail("delivery flag bits",
-                 f"the build writes CHANNELLED={CHANNELLED} BREAKS_ON_MOVE={BREAKS_ON_MOVE}, "
-                 f"packrows.ts reads {found['DELIVERY_CHANNELLED']}/{found['DELIVERY_BREAKS_ON_MOVE']}")
+        rep.fail(
+            "delivery flag bits",
+            f"the build writes CHANNELLED={CHANNELLED} BREAKS_ON_MOVE={BREAKS_ON_MOVE}, "
+            f"packrows.ts reads {found['DELIVERY_CHANNELLED']}/{found['DELIVERY_BREAKS_ON_MOVE']}",
+        )
         return
     # The addon reads the same flags, and can import the build no more than the
     # app can; its declaration is one line and is reconciled here the same way.
     lua = (ROOT / "addon" / "Epsilook" / "Engine" / "Search.lua").read_text(encoding="utf-8")
     match = re.search(r"^local DELIVERY_CHANNELLED, DELIVERY_BREAKS_ON_MOVE = (\d+), (\d+)$", lua, re.MULTILINE)
     if match is None:
-        rep.fail("delivery flag bits",
-                 "addon/Epsilook/Engine/Search.lua no longer declares the two bits on one line")
+        rep.fail("delivery flag bits", "addon/Epsilook/Engine/Search.lua no longer declares the two bits on one line")
         return
     if int(match.group(1)) != CHANNELLED or int(match.group(2)) != BREAKS_ON_MOVE:
-        rep.fail("delivery flag bits",
-                 f"the build writes CHANNELLED={CHANNELLED} BREAKS_ON_MOVE={BREAKS_ON_MOVE}, "
-                 f"Search.lua reads {match.group(1)}/{match.group(2)}")
+        rep.fail(
+            "delivery flag bits",
+            f"the build writes CHANNELLED={CHANNELLED} BREAKS_ON_MOVE={BREAKS_ON_MOVE}, "
+            f"Search.lua reads {match.group(1)}/{match.group(2)}",
+        )
         return
     rep.ok("delivery flag bits", "build, row reader and addon agree on both bits")
 
@@ -1680,20 +1726,22 @@ def check_range_declaration(rep: Report) -> None:
             return
         found[name] = 1 << int(match.group(1))
     if found["RANGE_MELEE"] != MELEE or found["RANGE_WEAPON"] != WEAPON:
-        rep.fail("range flag bits",
-                 f"the build writes MELEE={MELEE} WEAPON={WEAPON}, "
-                 f"packrows.ts reads {found['RANGE_MELEE']}/{found['RANGE_WEAPON']}")
+        rep.fail(
+            "range flag bits",
+            f"the build writes MELEE={MELEE} WEAPON={WEAPON}, "
+            f"packrows.ts reads {found['RANGE_MELEE']}/{found['RANGE_WEAPON']}",
+        )
         return
     lua = (ROOT / "addon" / "Epsilook" / "Engine" / "Search.lua").read_text(encoding="utf-8")
     match = re.search(r"^local RANGE_MELEE, RANGE_WEAPON = (\d+), (\d+)$", lua, re.MULTILINE)
     if match is None:
-        rep.fail("range flag bits",
-                 "addon/Epsilook/Engine/Search.lua no longer declares the two bits on one line")
+        rep.fail("range flag bits", "addon/Epsilook/Engine/Search.lua no longer declares the two bits on one line")
         return
     if int(match.group(1)) != MELEE or int(match.group(2)) != WEAPON:
-        rep.fail("range flag bits",
-                 f"the build writes MELEE={MELEE} WEAPON={WEAPON}, "
-                 f"Search.lua reads {match.group(1)}/{match.group(2)}")
+        rep.fail(
+            "range flag bits",
+            f"the build writes MELEE={MELEE} WEAPON={WEAPON}, Search.lua reads {match.group(1)}/{match.group(2)}",
+        )
         return
     rep.ok("range flag bits", "build, row reader and addon agree on both bits")
 
@@ -1727,10 +1775,10 @@ def check_locale_catalogs(rep: Report) -> None:
             for name, child in node.items():
                 found |= walk(child, f"{prefix}.{name}" if prefix else str(name))
             return found
+
         return walk(json.loads(path.read_text(encoding="utf-8")), "")
 
-    namespaces = {path.stem: keys_of(path)
-                  for path in sorted(english.glob("*.json")) if path.stem != "query"}
+    namespaces = {path.stem: keys_of(path) for path in sorted(english.glob("*.json")) if path.stem != "query"}
     if not namespaces:
         rep.fail("locale catalogs", "src/locales/en/ holds no catalogs")
         return
@@ -1757,12 +1805,11 @@ def check_locale_catalogs(rep: Report) -> None:
         for namespace in sorted(declared & found):
             stale = keys_of(locale / f"{namespace}.json") - namespaces[namespace]
             for key in sorted(stale):
-                problems.append(f"{locale.name}/{namespace}.json key \"{key}\" is not in English — never read")
+                problems.append(f'{locale.name}/{namespace}.json key "{key}" is not in English — never read')
     if problems:
         rep.fail("locale catalogs", "; ".join(problems))
         return
-    rep.ok("locale catalogs",
-           f"{len(others)} language(s) beside English, every key within the English set")
+    rep.ok("locale catalogs", f"{len(others)} language(s) beside English, every key within the English set")
 
 
 def check_listfile_declaration(rep: Report) -> None:
@@ -1795,8 +1842,7 @@ def check_listfile_declaration(rep: Report) -> None:
         rep.fail("listfile declaration", f"could not read the build's declaration: {exc}")
         return
     if theirs != LISTFILE_ASSET:
-        rep.fail("listfile declaration",
-                 f"the build reads {theirs}, the tools read {LISTFILE_ASSET}")
+        rep.fail("listfile declaration", f"the build reads {theirs}, the tools read {LISTFILE_ASSET}")
         return
     rep.ok("listfile declaration", f"build and tools agree on {theirs}")
 
@@ -1823,9 +1869,10 @@ def check_mypy_strict(rep: Report) -> None:
     config = tomllib.loads(PYPROJECT.read_text(encoding="utf-8"))
     settings = config.get("tool", {}).get("mypy", {})
     if settings.get("strict") is not True:
-        rep.fail("mypy strict",
-                 "pyproject.toml no longer sets strict = true for [tool.mypy]; "
-                 "nothing is held to strict by default")
+        rep.fail(
+            "mypy strict",
+            "pyproject.toml no longer sets strict = true for [tool.mypy]; nothing is held to strict by default",
+        )
         return
 
     exempt: list[str] = []
@@ -1836,13 +1883,14 @@ def check_mypy_strict(rep: Report) -> None:
     home = ROOT / STRICT_EXEMPT_HOME
     stray = [name for name in exempt if not (home / f"{name}.py").exists()]
     if stray:
-        rep.fail("mypy strict",
-                 f"{', '.join(sorted(stray))} is exempted from strict but is "
-                 f"no module in {STRICT_EXEMPT_HOME}/; only that directory is "
-                 f"still allowed out of it")
+        rep.fail(
+            "mypy strict",
+            f"{', '.join(sorted(stray))} is exempted from strict but is "
+            f"no module in {STRICT_EXEMPT_HOME}/; only that directory is "
+            f"still allowed out of it",
+        )
         return
-    rep.ok("mypy strict",
-           f"strict by default, {len(exempt)} {STRICT_EXEMPT_HOME}/ module(s) exempt")
+    rep.ok("mypy strict", f"strict by default, {len(exempt)} {STRICT_EXEMPT_HOME}/ module(s) exempt")
 
 
 DISALLOWED_CALLS = ("eval", "exec")
@@ -1885,23 +1933,21 @@ def check_build_constructs(rep: Report) -> None:
         for node in ast.walk(tree):
             if isinstance(node, ast.Assert):
                 asserts.append(f"{where}:{node.lineno}")
-            if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
-                    and node.func.id in DISALLOWED_CALLS):
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in DISALLOWED_CALLS:
                 calls.append(f"{where}:{node.lineno} {node.func.id}")
 
     if asserts:
-        rep.fail("build constructs",
-                 f"{asserts[0]} is an assert; -O removes it, so anything the "
-                 f"next line depends on has to be an if and a raise "
-                 f"({len(asserts)} in all)")
+        rep.fail(
+            "build constructs",
+            f"{asserts[0]} is an assert; -O removes it, so anything the "
+            f"next line depends on has to be an if and a raise "
+            f"({len(asserts)} in all)",
+        )
         return
     if calls:
-        rep.fail("build constructs",
-                 f"{calls[0]} turns build data into code; parse it instead "
-                 f"({len(calls)} in all)")
+        rep.fail("build constructs", f"{calls[0]} turns build data into code; parse it instead ({len(calls)} in all)")
         return
-    rep.ok("build constructs",
-           f"no assert and no {'/'.join(DISALLOWED_CALLS)} across {BUILD_PACKAGE}")
+    rep.ok("build constructs", f"no assert and no {'/'.join(DISALLOWED_CALLS)} across {BUILD_PACKAGE}")
 
 
 def check_test_collection(rep: Report) -> None:
@@ -1930,29 +1976,35 @@ def check_test_collection(rep: Report) -> None:
     if not home.exists():
         rep.skip("test collection", f"{PYTHON_TESTS} not present yet")
         return
-    on_disk = {path.relative_to(ROOT).as_posix()
-               for path in home.rglob("*_test.py")}
+    on_disk = {path.relative_to(ROOT).as_posix() for path in home.rglob("*_test.py")}
 
     exe = shutil.which("uv")
     if exe is None:
         rep.skip("test collection", "uv not on PATH")
         return
-    proc = subprocess.run([exe, "run", "pytest", "--collect-only", "-q"],
-                          cwd=ROOT, capture_output=True, encoding="utf-8",
-                          errors="replace", check=False)
+    proc = subprocess.run(
+        [exe, "run", "pytest", "--collect-only", "-q"],
+        cwd=ROOT,
+        capture_output=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
     if proc.returncode != 0:
-        rep.fail("test collection",
-                 f"pytest could not collect: {proc.stdout.strip()[-300:]}")
+        rep.fail("test collection", f"pytest could not collect: {proc.stdout.strip()[-300:]}")
         return
-    collected = {match.group(1).replace("\\", "/")
-                 for match in re.finditer(r"^(\S+_test\.py):\s*\d+\s*$",
-                                          proc.stdout, re.MULTILINE)}
+    collected = {
+        match.group(1).replace("\\", "/")
+        for match in re.finditer(r"^(\S+_test\.py):\s*\d+\s*$", proc.stdout, re.MULTILINE)
+    }
 
     missed = sorted(on_disk - collected)
     if missed:
-        rep.fail("test collection",
-                 f"{len(missed)} test file(s) on disk that pytest never ran, "
-                 f"starting with {missed[0]}; the run is green and short")
+        rep.fail(
+            "test collection",
+            f"{len(missed)} test file(s) on disk that pytest never ran, "
+            f"starting with {missed[0]}; the run is green and short",
+        )
         return
     rep.ok("test collection", f"all {len(on_disk)} test files collected")
 
@@ -1978,27 +2030,34 @@ def check_test_layout(rep: Report) -> None:
         return
 
     roots = [ROOT / part for part in ("build", "tools")]
-    groups = [path for path in home.iterdir()
-              if path.is_dir() and not path.name.startswith((".", "__"))]
-    shadowed = [group.name for group in groups for root in roots
-                if (root / group.name).is_dir()
-                or (root / f"{group.name}.py").exists()]
+    groups = [path for path in home.iterdir() if path.is_dir() and not path.name.startswith((".", "__"))]
+    shadowed = [
+        group.name
+        for group in groups
+        for root in roots
+        if (root / group.name).is_dir() or (root / f"{group.name}.py").exists()
+    ]
     if shadowed:
-        rep.fail("test layout",
-                 f"{PYTHON_TESTS}/{shadowed[0]}/ shadows an importable module "
-                 f"of the same name; a group may not be named for one")
+        rep.fail(
+            "test layout",
+            f"{PYTHON_TESTS}/{shadowed[0]}/ shadows an importable module "
+            f"of the same name; a group may not be named for one",
+        )
         return
 
-    walkers = sorted(path.relative_to(ROOT).as_posix()
-                     for path in home.rglob("*_test.py")
-                     if "__file__" in path.read_text(encoding="utf-8"))
+    walkers = sorted(
+        path.relative_to(ROOT).as_posix()
+        for path in home.rglob("*_test.py")
+        if "__file__" in path.read_text(encoding="utf-8")
+    )
     if walkers:
-        rep.fail("test layout",
-                 f"{walkers[0]} derives a path from __file__; take ROOT from "
-                 f"support.py, or the file's own location becomes load-bearing")
+        rep.fail(
+            "test layout",
+            f"{walkers[0]} derives a path from __file__; take ROOT from "
+            f"support.py, or the file's own location becomes load-bearing",
+        )
         return
-    rep.ok("test layout",
-           f"{len(groups)} group(s), none shadowing a module, none self-locating")
+    rep.ok("test layout", f"{len(groups)} group(s), none shadowing a module, none self-locating")
 
 
 def check_python_path(rep: Report) -> None:
@@ -2017,15 +2076,17 @@ def check_python_path(rep: Report) -> None:
     runner = tool.get("pytest", {}).get("ini_options", {}).get("pythonpath")
     checker = tool.get("mypy", {}).get("mypy_path")
     if runner is None or checker is None:
-        rep.fail("import path",
-                 f"pyproject.toml declares pythonpath={runner!r} and "
-                 f"mypy_path={checker!r}; both are needed")
+        rep.fail(
+            "import path", f"pyproject.toml declares pythonpath={runner!r} and mypy_path={checker!r}; both are needed"
+        )
         return
     if sorted(runner) != sorted(checker):
-        rep.fail("import path",
-                 f"pytest imports through {sorted(runner)} and mypy resolves "
-                 f"through {sorted(checker)}; a tree checked alone will not "
-                 f"find what it tests")
+        rep.fail(
+            "import path",
+            f"pytest imports through {sorted(runner)} and mypy resolves "
+            f"through {sorted(checker)}; a tree checked alone will not "
+            f"find what it tests",
+        )
         return
     rep.ok("import path", f"pytest and mypy share {len(runner)} root(s)")
 
@@ -2053,31 +2114,37 @@ def check_kit_effect_types(rep: Report) -> None:
     declared = {int(key) for key in values}
     holes = sorted(set(range(min(declared), max(declared) + 1)) - declared)
     if holes:
-        rep.fail("kit effect types",
-                 f"EffectType {', '.join(str(hole) for hole in holes)} "
-                 f"undeclared, so the build would skip those rows in silence")
+        rep.fail(
+            "kit effect types",
+            f"EffectType {', '.join(str(hole) for hole in holes)} "
+            f"undeclared, so the build would skip those rows in silence",
+        )
         return
     # The two values whose payload is not a row in another table: an empty row,
     # and one whose number is a type rather than an id. Naming them is what
     # makes a third missing pointer an omission rather than another case.
     names_no_table = {"None", "UnitSoundType"}
-    wrong = {"names a table but does not say which":
-             sorted(int(key) for key, payload in values.items()
-                    if payload["name"] not in names_no_table
-                    and not payload.get("points_at")),
-             "points at a table it cannot have one of":
-             sorted(int(key) for key, payload in values.items()
-                    if payload["name"] in names_no_table
-                    and payload.get("points_at"))}
+    wrong = {
+        "names a table but does not say which": sorted(
+            int(key)
+            for key, payload in values.items()
+            if payload["name"] not in names_no_table and not payload.get("points_at")
+        ),
+        "points at a table it cannot have one of": sorted(
+            int(key)
+            for key, payload in values.items()
+            if payload["name"] in names_no_table and payload.get("points_at")
+        ),
+    }
     for complaint, offenders in wrong.items():
         if offenders:
-            rep.fail("kit effect types",
-                     f"EffectType {', '.join(str(one) for one in offenders)} "
-                     f"{complaint}")
+            rep.fail("kit effect types", f"EffectType {', '.join(str(one) for one in offenders)} {complaint}")
             return
-    rep.ok("kit effect types",
-           f"{len(declared)} values declared, {min(declared)} to {max(declared)}, "
-           f"no gaps, {len(declared) - len(names_no_table)} pointing at a table")
+    rep.ok(
+        "kit effect types",
+        f"{len(declared)} values declared, {min(declared)} to {max(declared)}, "
+        f"no gaps, {len(declared) - len(names_no_table)} pointing at a table",
+    )
 
 
 def check_soundkit_declaration(rep: Report) -> None:
@@ -2103,13 +2170,12 @@ def check_soundkit_declaration(rep: Report) -> None:
     source = (ROOT / BUILD_PACKAGE / "sources" / "wago.py").read_text(encoding="utf-8")
     found = re.search(r'^SOUNDKITNAME_BUILD\s*=\s*"([^"]+)"', source, re.MULTILINE)
     if found is None:
-        rep.fail("sound-kit declaration",
-                 "build/pack/sources/wago.py no longer declares SOUNDKITNAME_BUILD")
+        rep.fail("sound-kit declaration", "build/pack/sources/wago.py no longer declares SOUNDKITNAME_BUILD")
         return
     if found.group(1) != packs.SOUNDKITNAME_BUILD:
-        rep.fail("sound-kit declaration",
-                 f"the build pins {found.group(1)}, the sweeper spares "
-                 f"{packs.SOUNDKITNAME_BUILD}")
+        rep.fail(
+            "sound-kit declaration", f"the build pins {found.group(1)}, the sweeper spares {packs.SOUNDKITNAME_BUILD}"
+        )
         return
     rep.ok("sound-kit declaration", f"build and sweeper agree on {found.group(1)}")
 
@@ -2138,14 +2204,14 @@ def check_supplement(rep: Report) -> None:
     try:
         sys.path.insert(0, str(ROOT / "tools"))
         from supplement import SUPPLEMENT_FLOOR as ours  # pylint: disable=import-outside-toplevel
+
         sys.path.insert(0, str(ROOT / "build"))
         from pack.sources.listfile import SUPPLEMENT_FLOOR as theirs  # pylint: disable=import-outside-toplevel
     except ImportError as exc:
         rep.fail("supplement", f"could not read a floor declaration: {exc}")
         return
     if ours != theirs:
-        rep.fail("supplement",
-                 f"the build admits above {theirs:,}, the reconstruction above {ours:,}")
+        rep.fail("supplement", f"the build admits above {theirs:,}, the reconstruction above {ours:,}")
         return
 
     previous, duplicates, below = -1, 0, 0
@@ -2231,9 +2297,11 @@ def check_cache(rep: Report) -> None:
     total = sum(size for _, size in stale)
     names = ", ".join(directory.name for directory, _ in stale[:3])
     more = f" +{len(stale) - 3} more" if len(stale) > 3 else ""
-    rep.warn("cache rotation",
-             f"{len(stale)} unused build cache(s), {total / 1e6:,.0f} MB "
-             f"({names}{more}) - python tools/rebuild.py --prune-cache")
+    rep.warn(
+        "cache rotation",
+        f"{len(stale)} unused build cache(s), {total / 1e6:,.0f} MB "
+        f"({names}{more}) - python tools/rebuild.py --prune-cache",
+    )
 
 
 def check_pack_freshness(rep: Report) -> None:
@@ -2283,17 +2351,19 @@ def check_pack_freshness(rep: Report) -> None:
 
     # PATCH, not build — the user's call. A microbuild moving is not a reason to
     # re-ship eleven packs, and warning about one would make this noise.
-    behind = [(p, latest[p.flavour]) for p in tracked
-              if p.flavour in latest
-              and patch_key(latest[p.flavour]) > patch_key(p.build)]
+    behind = [
+        (p, latest[p.flavour])
+        for p in tracked
+        if p.flavour in latest and patch_key(latest[p.flavour]) > patch_key(p.build)
+    ]
     if behind:
         # Only now is the availability probe worth its two requests: it answers
         # whether the bump is even possible yet, before anyone edits the roster.
-        detail = "; ".join(f"{p.key} {p.patch} -> {new}{availability(new)}"
-                           for p, new in behind)
-        rep.warn("pack freshness",
-                 f"{detail}  (edit build= in tools/packs.py, then "
-                 f"python tools/rebuild.py {behind[0][0].key})")
+        detail = "; ".join(f"{p.key} {p.patch} -> {new}{availability(new)}" for p, new in behind)
+        rep.warn(
+            "pack freshness",
+            f"{detail}  (edit build= in tools/packs.py, then python tools/rebuild.py {behind[0][0].key})",
+        )
     else:
         rep.ok("pack freshness", f"{len(tracked)} tracked line(s) current")
 
@@ -2306,8 +2376,9 @@ def run_tool(rep: Report, name: str, cmd: list[str], detail: str = "") -> None:
     if exe is None:
         rep.skip(name, f"{cmd[0]} not on PATH")
         return
-    proc = subprocess.run([exe, *cmd[1:]], cwd=ROOT, capture_output=True,
-                          encoding="utf-8", errors="replace", check=False)
+    proc = subprocess.run(
+        [exe, *cmd[1:]], cwd=ROOT, capture_output=True, encoding="utf-8", errors="replace", check=False
+    )
     if proc.returncode == 0:
         rep.ok(name, detail)
         return
@@ -2353,8 +2424,9 @@ def check_browser_matrix(rep: Report) -> None:
     if registry is None or not any(registry.glob("firefox-*")):
         rep.skip("browser matrix", "no Playwright Firefox (npx playwright install firefox)")
         return
-    run_tool(rep, "browser matrix", ["npx", "playwright", "test"],
-             "test/browser/ against the harness, real input, Firefox")
+    run_tool(
+        rep, "browser matrix", ["npx", "playwright", "test"], "test/browser/ against the harness, real input, Firefox"
+    )
 
 
 def check_cli_entries(rep: Report) -> None:
@@ -2377,15 +2449,13 @@ def check_cli_entries(rep: Report) -> None:
         rep.fail("cli entries", "no CLI_ENTRIES list in tools/build.mjs")
         return
     bundled = set(re.findall(r"[\"']([\w.-]+)[\"']", m.group(1)))
-    typed = {p.rsplit("/", 1)[-1].removesuffix(".ts")
-             for p in re.findall(r"[\"'](tools/[\w.-]+\.ts)[\"']", tsconf)}
+    typed = {p.rsplit("/", 1)[-1].removesuffix(".ts") for p in re.findall(r"[\"'](tools/[\w.-]+\.ts)[\"']", tsconf)}
     problems = [f"{n}: bundled, not in tsconfig.tools.json" for n in sorted(bundled - typed)]
     problems += [f"{n}: typechecked, not in CLI_ENTRIES" for n in sorted(typed - bundled)]
     if problems:
         rep.fail("cli entries", "; ".join(problems))
     else:
-        rep.ok("cli entries", f"{len(bundled)} bundled and typechecked: "
-                              f"{', '.join(sorted(bundled))}")
+        rep.ok("cli entries", f"{len(bundled)} bundled and typechecked: {', '.join(sorted(bundled))}")
 
 
 def check_license_scope(rep: Report) -> None:
@@ -2413,8 +2483,7 @@ def check_license_scope(rep: Report) -> None:
     names = sorted(p.name for p in SITE.iterdir() if p.is_dir())
     missing = [n for n in names if f"site/{n}" not in text]
     if missing:
-        rep.fail("license scope",
-                 "under site/ but unclassified in NOTICE: " + ", ".join(f"site/{n}" for n in missing))
+        rep.fail("license scope", "under site/ but unclassified in NOTICE: " + ", ".join(f"site/{n}" for n in missing))
     else:
         rep.ok("license scope", f"{len(names)} site/ directories classified: {', '.join(names)}")
 
@@ -2445,8 +2514,9 @@ def check_dependencies(rep: Report) -> None:
             rep.skip("dependencies", "npm not on PATH")
             return
         # `npm outdated` exits 1 when anything is outdated, which is not an error
-        proc = subprocess.run([exe, "outdated", "--json"], cwd=ROOT, capture_output=True,
-                              encoding="utf-8", errors="replace", check=False)
+        proc = subprocess.run(
+            [exe, "outdated", "--json"], cwd=ROOT, capture_output=True, encoding="utf-8", errors="replace", check=False
+        )
         try:
             stale = json.loads(proc.stdout or "{}")
         except json.JSONDecodeError:
@@ -2455,13 +2525,11 @@ def check_dependencies(rep: Report) -> None:
         cache.parent.mkdir(parents=True, exist_ok=True)
         cache.write_text(json.dumps(stale), encoding="utf-8")
 
-    behind = {name: info for name, info in stale.items()
-              if info.get("current") != info.get("latest")}
+    behind = {name: info for name, info in stale.items() if info.get("current") != info.get("latest")}
     if not behind:
         rep.ok("dependencies", "every npm dependency is at its latest release")
         return
-    listing = ", ".join(f"{n} {i.get('current')}->{i.get('latest')}"
-                        for n, i in sorted(behind.items())[:4])
+    listing = ", ".join(f"{n} {i.get('current')}->{i.get('latest')}" for n, i in sorted(behind.items())[:4])
     more = f" (+{len(behind) - 4} more)" if len(behind) > 4 else ""
     rep.warn("dependencies", f"{len(behind)} behind: {listing}{more} - evaluate before deploying")
 
@@ -2523,14 +2591,17 @@ def check_toolchain(rep: Report) -> None:
     of them fail rather than pass.
     """
     run_tool(rep, "tsc", ["npx", "tsc"], "strict, tsconfig.json (browser)")
-    run_tool(rep, "tsc (cli)", ["npx", "tsc", "-p", "tsconfig.tools.json"],
-             "strict, tsconfig.tools.json (node)")
-    run_tool(rep, "tsc (browser suite)", ["npx", "tsc", "-p", "test/browser"],
-             "strict, test/browser/tsconfig.json (playwright)")
-    run_tool(rep, "bundle", ["npm", "run", "--silent", "build"],
-             "esbuild src/main.ts -> site/js/app.js")
-    run_tool(rep, "cli bundle", ["node", "tools/build.mjs", "--cli"],
-             "esbuild tools/*.ts -> tools/*.mjs (query, measure)")
+    run_tool(rep, "tsc (cli)", ["npx", "tsc", "-p", "tsconfig.tools.json"], "strict, tsconfig.tools.json (node)")
+    run_tool(
+        rep,
+        "tsc (browser suite)",
+        ["npx", "tsc", "-p", "test/browser"],
+        "strict, test/browser/tsconfig.json (playwright)",
+    )
+    run_tool(rep, "bundle", ["npm", "run", "--silent", "build"], "esbuild src/main.ts -> site/js/app.js")
+    run_tool(
+        rep, "cli bundle", ["node", "tools/build.mjs", "--cli"], "esbuild tools/*.ts -> tools/*.mjs (query, measure)"
+    )
     run_tool(rep, "tests", ["npm", "test", "--silent"], "node --test over test/*.test.ts")
     # Gated on everything 2.0 is being built out of: the engine (src/search),
     # the presentation layer (src/ui), the tools and the tests. .oxlintrc.json
@@ -2540,28 +2611,42 @@ def check_toolchain(rep: Report) -> None:
     # oversight: 1.0 is dead code that PHASE 14 deletes, it carries a backlog
     # of ~100 findings predating the linter, and the standing rule is to spend
     # nothing there. `npx oxlint --type-aware` with no path shows them.
-    run_tool(rep, "oxlint", ["npx", "oxlint", "--type-aware", "src/search", "src/ui", "test", "tools"],
-             "correctness + type-aware rules, .oxlintrc.json")
+    run_tool(
+        rep,
+        "oxlint",
+        ["npx", "oxlint", "--type-aware", "src/search", "src/ui", "test", "tools"],
+        "correctness + type-aware rules, .oxlintrc.json",
+    )
     # The addon's Lua, held to the client's own interpreter. selene.toml pins
     # std = lua51, which is what stops a construct that parses on a modern Lua
     # and fails in the game from reaching a commit. It skips when selene is
     # not installed, like the browser matrix does: a single binary from winget,
     # not something a checkout can assume.
-    run_tool(rep, "selene", ["selene", "addon"],
-             "lua 5.1 correctness over addon/, selene.toml")
+    run_tool(rep, "selene", ["selene", "addon"], "lua 5.1 correctness over addon/, selene.toml")
+    # Formatting as a gate rather than as a habit. `--check` writes nothing and
+    # fails on a file that would change, which is the half the pre-deploy IDE
+    # pass could never give: it runs in CI, it runs on a machine without
+    # PyCharm, and it cannot report success without having looked.
+    run_tool(
+        rep,
+        "ruff format",
+        ["uv", "run", "ruff", "format", "--check", *PYTHON_SOURCES, ADDON_TESTS],
+        "black style at 120 columns, [tool.ruff] in pyproject.toml",
+    )
     run_tool(rep, "mypy", ["uv", "run", "mypy", *PYTHON_SOURCES])
     run_tool(rep, "mypy addon", ["uv", "run", "mypy", ADDON_TESTS])
     run_tool(rep, "pyflakes", ["uv", "run", "pyflakes", *PYTHON_SOURCES, ADDON_TESTS])
     # --recursive walks a directory that is not an import package. test/py is
     # deliberately one of those: pytest's importlib mode wants no __init__.py,
     # and without this pylint reports the absent file as a parse error.
-    run_tool(rep, "pylint", ["uv", "run", "pylint", "--errors-only", "--score=n",
-                             "--recursive=y", *PYTHON_SOURCES],
-             "errors only; style findings are advisory (.pylintrc)")
-    run_tool(rep, "pylint addon", ["uv", "run", "pylint", "--errors-only", "--score=n",
-                                   "--recursive=y", ADDON_TESTS])
-    run_tool(rep, "pytest", ["uv", "run", "pytest"],
-             "test/py/{build,tools}/*_test.py")
+    run_tool(
+        rep,
+        "pylint",
+        ["uv", "run", "pylint", "--errors-only", "--score=n", "--recursive=y", *PYTHON_SOURCES],
+        "errors only; style findings are advisory (.pylintrc)",
+    )
+    run_tool(rep, "pylint addon", ["uv", "run", "pylint", "--errors-only", "--score=n", "--recursive=y", ADDON_TESTS])
+    run_tool(rep, "pytest", ["uv", "run", "pytest"], "test/py/{build,tools}/*_test.py")
     run_tool(rep, "pytest addon", ["uv", "run", "pytest", ADDON_TESTS], "addon/test/*_test.py, under lupa")
     check_browser_matrix(rep)
     check_mermaid(rep)
@@ -2591,17 +2676,16 @@ def straddle_report(before: str, after: str) -> str | None:
     """
     if not before or not after or before == after:
         return None
-    return (f"HEAD moved under this run, {before[:9]} to {after[:9]} - "
-            "nothing above describes a tree that exists; run it again on a still one")
+    return (
+        f"HEAD moved under this run, {before[:9]} to {after[:9]} - "
+        "nothing above describes a tree that exists; run it again on a still one"
+    )
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description=__doc__,
-                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--base", default="origin/main",
-                    help="the deployed tree to compare against (default: origin/main)")
-    ap.add_argument("--fast", action="store_true",
-                    help="repo guards only - skip tsc/node/mypy/pyflakes")
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--base", default="origin/main", help="the deployed tree to compare against (default: origin/main)")
+    ap.add_argument("--fast", action="store_true", help="repo guards only - skip tsc/node/mypy/pyflakes")
     ap.add_argument("--quiet", action="store_true", help="print only failures and warnings")
     args = ap.parse_args()
 
@@ -2665,8 +2749,7 @@ def main() -> int:
         if log is not None:
             print(f"{DIM}the whole report, whatever the console kept: {log}{RESET}")
         return 1
-    print(f"{GREEN}all checks passed{RESET}"
-          + (f", {YELLOW}{rep.warned} warning(s){RESET}" if rep.warned else ""))
+    print(f"{GREEN}all checks passed{RESET}" + (f", {YELLOW}{rep.warned} warning(s){RESET}" if rep.warned else ""))
     return 0
 
 

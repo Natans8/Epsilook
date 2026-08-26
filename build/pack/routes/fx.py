@@ -85,8 +85,7 @@ class ScreenRow:
 class FxPayloads:
     """Every fx payload table, keyed by its own row id."""
 
-    chains: dict[int, ChainEffect] = \
-        field(default_factory=dict)
+    chains: dict[int, ChainEffect] = field(default_factory=dict)
     """Chain -> what it draws."""
 
     beam_chain: dict[int, tuple[int, int, int]] = field(default_factory=dict)
@@ -114,13 +113,14 @@ class FxPayloads:
 def read_blend_sets(tables: Tables) -> dict[int, tuple[int, ...]]:
     """Blend set -> its textures, deduplicated and in slot order."""
     columns = array_columns(tables, "TextureBlendSet", "TextureFileDataID", 3)
-    return {to_int(row[0]): tuple(dict.fromkeys(
-        file for file in (to_int(value) for value in row[1:]) if file))
-        for row in tables.rows("TextureBlendSet", ["ID", *columns])}
+    return {
+        to_int(row[0]): tuple(dict.fromkeys(file for file in (to_int(value) for value in row[1:]) if file))
+        for row in tables.rows("TextureBlendSet", ["ID", *columns])
+    }
 
 
 def read_full_screen_effects(
-        tables: Tables, blend_sets: dict[int, tuple[int, ...]]
+    tables: Tables, blend_sets: dict[int, tuple[int, ...]]
 ) -> dict[int, tuple[int, int, Vignette, Textures]]:
     """Full-screen effect -> (multiply, add, vignette, textures).
 
@@ -129,11 +129,22 @@ def read_full_screen_effects(
     """
     rows: dict[int, tuple[int, int, Vignette, Textures]] = {}
     for row in tables.rows(
-            "FullScreenEffect",
-            ["ID", "ColorMultiplyRed", "ColorMultiplyGreen", "ColorMultiplyBlue",
-             "ColorAdditionRed", "ColorAdditionGreen", "ColorAdditionBlue",
-             "OverlayTextureFileDataID", "TextureBlendSetID",
-             "MaskOffsetY", "MaskSizeMultiplier", "MaskPower"]):
+        "FullScreenEffect",
+        [
+            "ID",
+            "ColorMultiplyRed",
+            "ColorMultiplyGreen",
+            "ColorMultiplyBlue",
+            "ColorAdditionRed",
+            "ColorAdditionGreen",
+            "ColorAdditionBlue",
+            "OverlayTextureFileDataID",
+            "TextureBlendSetID",
+            "MaskOffsetY",
+            "MaskSizeMultiplier",
+            "MaskPower",
+        ],
+    ):
         overlay = to_int(row[7])
         # A file carrying both roles keeps the overlay one: painting finished
         # art as a mask would tint art that has its own colours.
@@ -152,25 +163,27 @@ def read_full_screen_effects(
     return rows
 
 
-def read_screens(tables: Tables,
-                 full_screen: dict[int, tuple[int, int, Vignette, Textures]]
-                 ) -> dict[int, ScreenRow]:
+def read_screens(tables: Tables, full_screen: dict[int, tuple[int, int, Vignette, Textures]]) -> dict[int, ScreenRow]:
     """Screen effect -> its payload, the full-screen half folded in.
 
     The fog parameter is AARRGGBB, not the RRGGBBXX the wiki claims.
     """
     screens: dict[int, ScreenRow] = {}
     for screen_id, name, parameter, effect, full_screen_id in tables.rows(
-            "ScreenEffect", ["ID", "Name", "Param_0", "Effect", "FullScreenEffectID"]):
+        "ScreenEffect", ["ID", "Name", "Param_0", "Effect", "FullScreenEffectID"]
+    ):
         is_fog = to_int(effect) == SCREEN_EFFECT_FOG
         packed = to_int(parameter)
-        multiply, add, mask, textures = full_screen.get(
-            to_int(full_screen_id), (-1, -1, (0.0, 0.0, 0.0), ()))
+        multiply, add, mask, textures = full_screen.get(to_int(full_screen_id), (-1, -1, (0.0, 0.0, 0.0), ()))
         screens[to_int(screen_id)] = ScreenRow(
             name=name,
             fog=(packed & RGB_MASK) if is_fog else -1,
             fog_alpha=((packed & 0xFFFFFFFF) >> ARGB_ALPHA_SHIFT) & 0xFF if is_fog else -1,
-            mul=multiply, add=add, mask=mask, textures=textures)
+            mul=multiply,
+            add=add,
+            mask=mask,
+            textures=textures,
+        )
     return screens
 
 
@@ -182,63 +195,65 @@ def read_fx_payloads(tables: Tables) -> FxPayloads:
     # The geometry columns are renderer tuning; the attachment is not. -1 here
     # means the whole body rather than unset, so it is kept.
     for dissolve_id, blend_set_id, duration, attach in tables.rows(
-            "DissolveEffect", ["ID", "TextureBlendSetID", "Duration", "AttachID"]):
+        "DissolveEffect", ["ID", "TextureBlendSetID", "Duration", "AttachID"]
+    ):
         payloads.dissolves[to_int(dissolve_id)] = (
             to_float(duration, 2) if duration else 0,
             blend_sets.get(to_int(blend_set_id), ()),
-            to_int(attach))
+            to_int(attach),
+        )
 
-    payloads.screens = read_screens(
-        tables, read_full_screen_effects(tables, blend_sets))
+    payloads.screens = read_screens(tables, read_full_screen_effects(tables, blend_sets))
     for row_id, screen_id, _type_id in tables.rows(
-            "SpellVisualScreenEffect", ["ID", "ScreenEffectID", "ScreenEffectTypeID"]):
+        "SpellVisualScreenEffect", ["ID", "ScreenEffectID", "ScreenEffectTypeID"]
+    ):
         payloads.svse_screen[to_int(row_id)] = to_int(screen_id)
 
     # The colour is the whole visible payload; the multiplier, fade and fresnel
     # columns are tuning. The alpha is a real spread rather than a flag.
     for glow_id, red, green, blue, alpha in tables.rows(
-            "EdgeGlowEffect",
-            ["ID", "GlowRed", "GlowGreen", "GlowBlue", "GlowAlpha"]):
-        payloads.glows[to_int(glow_id)] = pack_rgb(
-            to_channel(red), to_channel(green), to_channel(blue))
+        "EdgeGlowEffect", ["ID", "GlowRed", "GlowGreen", "GlowBlue", "GlowAlpha"]
+    ):
+        payloads.glows[to_int(glow_id)] = pack_rgb(to_channel(red), to_channel(green), to_channel(blue))
         payloads.glow_alphas[to_int(glow_id)] = to_channel(alpha)
 
     # Two packed colours stored as signed ARGB, so the alpha byte is masked off.
     # The attachment reads like the dissolve's.
     for effect_id, primary, secondary, attach in tables.rows(
-            "ShadowyEffect", ["ID", "PrimaryColor", "SecondaryColor", "AttachPos"]):
+        "ShadowyEffect", ["ID", "PrimaryColor", "SecondaryColor", "AttachPos"]
+    ):
         payloads.shadowies[to_int(effect_id)] = (
-            to_int(primary) & RGB_MASK, to_int(secondary) & RGB_MASK, to_int(attach))
+            to_int(primary) & RGB_MASK,
+            to_int(secondary) & RGB_MASK,
+            to_int(attach),
+        )
 
     # Chains nest: a composite chain names up to eleven others. The flicker and
     # wave columns are tuning.
     textures = array_columns(tables, "SpellChainEffects", "TextureFileDataID", 3)
     nested = array_columns(tables, "SpellChainEffects", "SpellChainEffectID", 11)
-    for row in tables.rows("SpellChainEffects",
-                           ["ID", "Red", "Green", "Blue", "SoundKitID",
-                            *textures, *nested]):
+    for row in tables.rows("SpellChainEffects", ["ID", "Red", "Green", "Blue", "SoundKitID", *textures, *nested]):
         first = 5 + len(textures)
-        chain_red, chain_green, chain_blue, sound = (
-            to_int(value) for value in row[1:5])
+        chain_red, chain_green, chain_blue, sound = (to_int(value) for value in row[1:5])
         payloads.chains[to_int(row[0])] = ChainEffect(
-            chain_red, chain_green, chain_blue, sound,
-            tuple(dict.fromkeys(file for file in
-                                (to_int(value) for value in row[5:first]) if file)),
-            tuple(chain for chain in
-                  (to_int(value) for value in row[first:]) if chain),
+            chain_red,
+            chain_green,
+            chain_blue,
+            sound,
+            tuple(dict.fromkeys(file for file in (to_int(value) for value in row[5:first]) if file)),
+            tuple(chain for chain in (to_int(value) for value in row[first:]) if chain),
         )
 
     # A beam attaches at both ends, so the pair rides with the chain it draws
     # rather than with either end.
     for beam_id, chain_id, source, destination in tables.rows(
-            "BeamEffect", ["ID", "BeamID", "SourceAttachID", "DestAttachID"]):
-        payloads.beam_chain[to_int(beam_id)] = (
-            to_int(chain_id), to_int(source), to_int(destination))
+        "BeamEffect", ["ID", "BeamID", "SourceAttachID", "DestAttachID"]
+    ):
+        payloads.beam_chain[to_int(beam_id)] = (to_int(chain_id), to_int(source), to_int(destination))
     return payloads
 
 
-def expand_chain(chains: Mapping[int, ChainEffect], chain_id: int,
-                 into: set[int]) -> None:
+def expand_chain(chains: Mapping[int, ChainEffect], chain_id: int, into: set[int]) -> None:
     """Add a chain and every chain it nests to `into`.
 
     A worklist, not a recursion: the graph may contain a cycle. Membership in

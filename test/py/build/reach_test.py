@@ -79,34 +79,30 @@ def test_a_spell_naming_no_band_is_left_out(tables: BuildTables) -> None:
     assert read_spell_reach(source(tables), properties({100: 999})) == []
 
 
-def test_the_unlimited_marker_is_kept_as_the_distance(
-        tables: BuildTables) -> None:
+def test_the_unlimited_marker_is_kept_as_the_distance(tables: BuildTables) -> None:
     """It is a quantity in the table and a word everywhere else, so the route
     ships it verbatim and leaves the naming to the catalogue."""
     rows = read_spell_reach(source(tables), properties({100: 13}))
     assert rows[0].max_yards == UNLIMITED
 
 
-def test_a_combat_band_says_the_reach_is_the_caster_s(
-        tables: BuildTables) -> None:
+def test_a_combat_band_says_the_reach_is_the_caster_s(tables: BuildTables) -> None:
     rows = read_spell_reach(source(tables), properties({100: 2}))
     assert rows[0].flags == MELEE
 
 
-def test_a_weapon_band_says_the_reach_is_the_weapon_s(
-        tables: BuildTables) -> None:
+def test_a_weapon_band_says_the_reach_is_the_weapon_s(tables: BuildTables) -> None:
     rows = read_spell_reach(source(tables), properties({100: 114}))
     assert rows[0].flags == WEAPON
 
 
-def test_only_the_two_declared_bits_of_the_flag_column_survive(
-        tables: BuildTables) -> None:
+def test_only_the_two_declared_bits_of_the_flag_column_survive(tables: BuildTables) -> None:
     """Anything else the column carries is dropped rather than passed on under
     a name nothing can give it."""
     rows = read_spell_reach(
-        tables(SpellRange="ID,Flags,RangeMin_0,RangeMin_1,RangeMax_0,RangeMax_1\n"
-                          "7,255,0,0,10,10\n"),
-        properties({100: 7}))
+        tables(SpellRange="ID,Flags,RangeMin_0,RangeMin_1,RangeMax_0,RangeMax_1\n7,255,0,0,10,10\n"),
+        properties({100: 7}),
+    )
     assert rows[0].flags == MELEE | WEAPON
 
 
@@ -118,8 +114,7 @@ def test_the_hostile_band_is_the_one_that_ships(tables: BuildTables) -> None:
     assert rows[0].max_yards == 20
 
 
-def test_a_fractional_distance_is_rounded_to_what_it_means(
-        tables: BuildTables) -> None:
+def test_a_fractional_distance_is_rounded_to_what_it_means(tables: BuildTables) -> None:
     """The source is float32, so a tenth of a yard arrives with a tail long
     enough to make every value distinct and the band table useless."""
     rows = read_spell_reach(source(tables), properties({100: 470}))

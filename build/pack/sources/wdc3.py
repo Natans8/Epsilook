@@ -110,11 +110,12 @@ class Section:
         of negative length, and the id list, copy table and offset map all
         then resolve to somewhere before the section begins.
         """
-        return (self.encryption_key == 0
-                and self.record_count > 0
-                and 0 < self.file_offset < size
-                and (not offset_map
-                     or self.offset_records_end > self.file_offset))
+        return (
+            self.encryption_key == 0
+            and self.record_count > 0
+            and 0 < self.file_offset < size
+            and (not offset_map or self.offset_records_end > self.file_offset)
+        )
 
 
 @dataclass(frozen=True)
@@ -199,7 +200,7 @@ def read_bits(data: bytes, offset_bits: int, size_bits: int) -> int:
     start = offset_bits >> 3
     shift = offset_bits & 7
     length = (size_bits + shift + 7) >> 3
-    raw = int.from_bytes(data[start:start + length], "little")
+    raw = int.from_bytes(data[start : start + length], "little")
     return (raw >> shift) & ((1 << size_bits) - 1)
 
 
@@ -237,8 +238,7 @@ def format_float(value: float) -> str:
     if value == int(value):
         return str(int(value))
 
-    rounded = _SIGNIFICANT.plus(_WIDENED.plus(Decimal(value)).quantize(
-        Decimal("1e-11"), rounding=ROUND_HALF_UP))
+    rounded = _SIGNIFICANT.plus(_WIDENED.plus(Decimal(value)).quantize(Decimal("1e-11"), rounding=ROUND_HALF_UP))
     if not rounded:
         return "0"
     if abs(rounded) >= Decimal("1e-4"):
@@ -249,8 +249,7 @@ def format_float(value: float) -> str:
     mantissa = str(digits[0])
     if len(digits) > 1:
         mantissa += "." + "".join(str(digit) for digit in digits[1:])
-    return (f"{'-' if sign else ''}{mantissa}"
-            f"e{'-' if power < 0 else '+'}{abs(power):02d}")
+    return f"{'-' if sign else ''}{mantissa}e{'-' if power < 0 else '+'}{abs(power):02d}"
 
 
 class Db2:
@@ -274,29 +273,47 @@ class Db2:
         self.blob = blob
         # Seventeen words, of which decoding reads nine; the rest are bound to
         # throwaways rather than dropped so the count stays visible.
-        (_magic, self.record_count, self.field_count, self.record_size,
-         _string_table_size, _table_hash, _layout_hash, _min_id, _max_id,
-         _locale, self.flags, self.id_index, _total_field_count,
-         _bitpacked_data_offset, _lookup_column_count,
-         self.field_storage_info_size, self.common_data_size,
-         self.pallet_data_size, self.section_count) = _HEADER.unpack_from(blob, 0)
+        (
+            _magic,
+            self.record_count,
+            self.field_count,
+            self.record_size,
+            _string_table_size,
+            _table_hash,
+            _layout_hash,
+            _min_id,
+            _max_id,
+            _locale,
+            self.flags,
+            self.id_index,
+            _total_field_count,
+            _bitpacked_data_offset,
+            _lookup_column_count,
+            self.field_storage_info_size,
+            self.common_data_size,
+            self.pallet_data_size,
+            self.section_count,
+        ) = _HEADER.unpack_from(blob, 0)
 
         at = _HEADER.size
-        self.sections = [Section(*_SECTION.unpack_from(blob, at + i * _SECTION.size))
-                         for i in range(self.section_count)]
+        self.sections = [
+            Section(*_SECTION.unpack_from(blob, at + i * _SECTION.size)) for i in range(self.section_count)
+        ]
         at += self.section_count * _SECTION.size
 
         # The field structure array carries a declared width that a packed
         # field does not honour, so nothing here reads it; the storage info
         # that follows is what decoding uses.
         at += self.field_count * _FIELD_STRUCTURE.size
-        storage = [_STORAGE_INFO.unpack_from(blob, at + i * _STORAGE_INFO.size)
-                   for i in range(self.field_storage_info_size // _STORAGE_INFO.size)]
+        storage = [
+            _STORAGE_INFO.unpack_from(blob, at + i * _STORAGE_INFO.size)
+            for i in range(self.field_storage_info_size // _STORAGE_INFO.size)
+        ]
         at += self.field_storage_info_size
 
-        self.pallet_data = blob[at:at + self.pallet_data_size]
+        self.pallet_data = blob[at : at + self.pallet_data_size]
         at += self.pallet_data_size
-        self.common_data = blob[at:at + self.common_data_size]
+        self.common_data = blob[at : at + self.common_data_size]
 
         self.fields = self._fields(storage)
         self.declared = self._join(schema)
@@ -316,10 +333,18 @@ class Db2:
         pallet_at = common_at = 0
         for index, entry in enumerate(storage):
             offset_bits, size_bits, additional, kind = entry[:4]
-            fields.append(Field(index=index, offset_bits=offset_bits,
-                                size_bits=size_bits, storage=kind,
-                                default=entry[4], pallet_at=pallet_at,
-                                common_at=common_at, additional_size=additional))
+            fields.append(
+                Field(
+                    index=index,
+                    offset_bits=offset_bits,
+                    size_bits=size_bits,
+                    storage=kind,
+                    default=entry[4],
+                    pallet_at=pallet_at,
+                    common_at=common_at,
+                    additional_size=additional,
+                )
+            )
             if kind in (PALLET, PALLET_ARRAY):
                 pallet_at += additional
             elif kind == COMMON:
@@ -363,11 +388,9 @@ class Db2:
         where before it was absent and every copied row overwrote the first
         column instead.
         """
-        columns = [ColumnSpec(name=f"Field_{field.index}")
-                   for field in self.fields]
+        columns = [ColumnSpec(name=f"Field_{field.index}") for field in self.fields]
         if self.flags & 4:
-            return [ColumnSpec(name="ID", is_id=True, in_record=False),
-                    *columns]
+            return [ColumnSpec(name="ID", is_id=True, in_record=False), *columns]
         if 0 <= self.id_index < len(columns):
             columns[self.id_index] = replace(columns[self.id_index], is_id=True)
         return columns
@@ -380,25 +403,27 @@ class Db2:
             pallet = struct.Struct(f"<{spec.count}I")
         elif field is not None and field.storage == COMMON:
             common = self._common_map(field)
-        return Column(spec=spec, field=field, bits=bits, mask=(1 << bits) - 1,
-                      element_bits=element_bits(spec, field) if field is not None else 0,
-                      pallet=pallet, common=common)
+        return Column(
+            spec=spec,
+            field=field,
+            bits=bits,
+            mask=(1 << bits) - 1,
+            element_bits=element_bits(spec, field) if field is not None else 0,
+            pallet=pallet,
+            common=common,
+        )
 
     @property
     def columns(self) -> list[str]:
         """The CSV header: the schema's order, arrays expanded."""
-        return [name for column in self.declared
-                for name in column.spec.spellings()]
+        return [name for column in self.declared for name in column.spec.spellings()]
 
     def _common_map(self, field: Field) -> dict[int, int]:
         """A common-data field's exceptions to its default, keyed by record id."""
-        block = self.common_data[field.common_at:
-                                 field.common_at + field.additional_size]
-        return dict(struct.unpack_from("<II", block, at)
-                    for at in range(0, len(block) - 7, 8))
+        block = self.common_data[field.common_at : field.common_at + field.additional_size]
+        return dict(struct.unpack_from("<II", block, at) for at in range(0, len(block) - 7, 8))
 
-    def _values(self, column: Column, block: bytes, record_at: int,
-                record_id: int) -> list[int]:
+    def _values(self, column: Column, block: bytes, record_at: int, record_id: int) -> list[int]:
         """The column's raw unsigned value(s), before width and type apply."""
         spec, field = column.spec, column.field
         if field is None:
@@ -406,30 +431,27 @@ class Db2:
         base = record_at * 8 + field.offset_bits
         if field.storage == NONE:
             width = column.element_bits
-            return [read_bits(block, base + i * width, width)
-                    for i in range(spec.count)]
+            return [read_bits(block, base + i * width, width) for i in range(spec.count)]
         if field.storage in (BITPACKED, BITPACKED_SIGNED):
             return [read_bits(block, base, field.size_bits)]
         if column.common is not None:
             return [column.common.get(record_id, field.default)]
         if column.pallet is None:
             raise ValueError(
-                f"field {field.index} declares storage type {field.storage}, "
-                "which this reader does not know")
+                f"field {field.index} declares storage type {field.storage}, which this reader does not know"
+            )
         index = read_bits(block, base, field.size_bits)
-        return list(column.pallet.unpack_from(
-            self.pallet_data, field.pallet_at + index * 4 * spec.count))
+        return list(column.pallet.unpack_from(self.pallet_data, field.pallet_at + index * 4 * spec.count))
 
-    def _text(self, column: Column, values: Sequence[int], block: bytes,
-              record_at: int, strings_at: int) -> list[str]:
+    def _text(self, column: Column, values: Sequence[int], block: bytes, record_at: int, strings_at: int) -> list[str]:
         """Turn a column's raw values into the text the CSV export carries."""
         spec, mask, bits = column.spec, column.mask, column.bits
         if spec.kind in ("string", "locstring"):
-            return [self._string(column, value & mask, block, record_at,
-                                 position, strings_at)
-                    for position, value in enumerate(values)]
-        return [self._spell(spec.kind, spec.signed, value & mask, bits)
-                for value in values]
+            return [
+                self._string(column, value & mask, block, record_at, position, strings_at)
+                for position, value in enumerate(values)
+            ]
+        return [self._spell(spec.kind, spec.signed, value & mask, bits) for value in values]
 
     def _spell(self, kind: str, signed: bool, value: int, bits: int) -> str:
         """One scalar value, spelled the way the CSV export spells it."""
@@ -437,13 +459,11 @@ class Db2:
             word = value & 0xFFFFFFFF
             text = self._floats.get(word)
             if text is None:
-                text = self._floats[word] = format_float(
-                    struct.unpack("<f", word.to_bytes(4, "little"))[0])
+                text = self._floats[word] = format_float(struct.unpack("<f", word.to_bytes(4, "little"))[0])
             return text
         return str(sign_extend(value, bits) if signed else value)
 
-    def _string(self, column: Column, value: int, block: bytes, record_at: int,
-                position: int, strings_at: int) -> str:
+    def _string(self, column: Column, value: int, block: bytes, record_at: int, position: int, strings_at: int) -> str:
         """One string field, resolved from its offset.
 
         The offset is signed and measured from the field's own byte position.
@@ -454,14 +474,12 @@ class Db2:
         field = column.field
         if value == 0 or field is None:
             return ""
-        here = (record_at + (field.offset_bits >> 3)
-                + position * (column.spec.bits >> 3))
-        at = (strings_at + here + sign_extend(value, column.spec.bits)
-              - self._record_area)
+        here = record_at + (field.offset_bits >> 3) + position * (column.spec.bits >> 3)
+        at = strings_at + here + sign_extend(value, column.spec.bits) - self._record_area
         if not 0 <= at < len(block):
             return ""
         end = block.find(b"\0", at)
-        return block[at:end if end >= 0 else None].decode("utf-8", errors="replace")
+        return block[at : end if end >= 0 else None].decode("utf-8", errors="replace")
 
     def _layout(self, section: Section) -> dict[str, int]:
         """Where each of a section's parts begins, in the file's own order."""
@@ -474,8 +492,7 @@ class Db2:
             strings_size = section.string_table_size
         cursor = at + records_size + strings_size
 
-        parts = {"records_at": at, "records_size": records_size,
-                 "strings_size": strings_size, "id_list_at": cursor}
+        parts = {"records_at": at, "records_size": records_size, "strings_size": strings_size, "id_list_at": cursor}
         cursor += section.id_list_size
         parts["copy_at"] = cursor
         cursor += section.copy_table_count * 8
@@ -493,10 +510,8 @@ class Db2:
         # The count is the file's own word, and the block that has to hold the
         # pairs is what bounds it. Unbounded, a malformed header walks the read
         # into whatever follows the section and builds a dict out of it.
-        count = min(struct.unpack_from("<I", self.blob, at)[0],
-                    max(0, (section.relationship_data_size - 12) // 8))
-        return dict(struct.unpack_from("<II", self.blob, at + 12 + i * 8)[::-1]
-                    for i in range(count))
+        count = min(struct.unpack_from("<I", self.blob, at)[0], max(0, (section.relationship_data_size - 12) // 8))
+        return dict(struct.unpack_from("<II", self.blob, at + 12 + i * 8)[::-1] for i in range(count))
 
     def id_position(self) -> int:
         """Which exported column carries the id.
@@ -534,9 +549,9 @@ class Db2:
         # table is read before the rows so that only the rows it names are
         # held: a section whose copies reuse a hundredth of it would otherwise
         # be retained whole, which is not what a generator promises.
-        copies = [struct.unpack_from("<II", self.blob,
-                                     layout["copy_at"] + i * 8)
-                  for i in range(section.copy_table_count)]
+        copies = [
+            struct.unpack_from("<II", self.blob, layout["copy_at"] + i * 8) for i in range(section.copy_table_count)
+        ]
         wanted = {copied for _new_id, copied in copies}
 
         sources: dict[int, tuple[str, ...]] = {}
@@ -549,26 +564,22 @@ class Db2:
         for new_id, copied in copies:
             source = sources.get(copied)
             if source is not None:
-                yield source[:id_at] + (str(new_id),) + source[id_at + 1:]
+                yield source[:id_at] + (str(new_id),) + source[id_at + 1 :]
 
-    def _record_rows(self, section: Section, layout: dict[str, int],
-                     relationship: dict[int, int]
-                     ) -> Iterator[tuple[int, tuple[str, ...]]]:
+    def _record_rows(
+        self, section: Section, layout: dict[str, int], relationship: dict[int, int]
+    ) -> Iterator[tuple[int, tuple[str, ...]]]:
         """Fixed-length records, with their strings in the block that follows."""
         start = layout["records_at"]
-        block = self.blob[start:start + layout["records_size"]
-                          + layout["strings_size"]]
+        block = self.blob[start : start + layout["records_size"] + layout["strings_size"]]
         ids: list[int] = []
         if section.id_list_size:
-            ids = list(struct.unpack_from(f"<{section.id_list_size // 4}I",
-                                          self.blob, layout["id_list_at"]))
+            ids = list(struct.unpack_from(f"<{section.id_list_size // 4}I", self.blob, layout["id_list_at"]))
 
         for index in range(section.record_count):
             record_at = index * self.record_size
             record_id = ids[index] if ids else self._inline_id(block, record_at)
-            yield record_id, self._row(block, record_at, record_id,
-                                       layout["records_size"],
-                                       relationship.get(index, 0))
+            yield record_id, self._row(block, record_at, record_id, layout["records_size"], relationship.get(index, 0))
 
     def _inline_id(self, block: bytes, record_at: int) -> int:
         """The id read out of the record, for a table with no id list."""
@@ -590,8 +601,7 @@ class Db2:
             return str(record_id)
         return str(foreign) if column.spec.is_relation else None
 
-    def _row(self, block: bytes, record_at: int, record_id: int,
-             strings_at: int, foreign: int) -> tuple[str, ...]:
+    def _row(self, block: bytes, record_at: int, record_id: int, strings_at: int, foreign: int) -> tuple[str, ...]:
         """One record, spelled as the CSV export spells it."""
         out: list[str] = []
         for column in self.declared:
@@ -599,24 +609,21 @@ class Db2:
             if supplied is not None:
                 out.append(supplied)
             else:
-                out.extend(self._text(
-                    column, self._values(column, block, record_at, record_id),
-                    block, record_at, strings_at))
+                out.extend(
+                    self._text(column, self._values(column, block, record_at, record_id), block, record_at, strings_at)
+                )
         return tuple(out)
 
-    def _offset_map_rows(self, section: Section, layout: dict[str, int],
-                         relationship: dict[int, int]
-                         ) -> Iterator[tuple[int, tuple[str, ...]]]:
+    def _offset_map_rows(
+        self, section: Section, layout: dict[str, int], relationship: dict[int, int]
+    ) -> Iterator[tuple[int, tuple[str, ...]]]:
         """Variable-length records: inline strings, and no string table."""
         count = section.offset_map_id_count
-        entries = [struct.unpack_from("<IH", self.blob,
-                                      layout["offset_map_at"] + i * 6)
-                   for i in range(count)]
-        ids = struct.unpack_from(f"<{count}I", self.blob,
-                                 layout["offset_map_ids_at"])
+        entries = [struct.unpack_from("<IH", self.blob, layout["offset_map_at"] + i * 6) for i in range(count)]
+        ids = struct.unpack_from(f"<{count}I", self.blob, layout["offset_map_ids_at"])
 
         for index, ((offset, size), record_id) in enumerate(zip(entries, ids)):
-            record = self.blob[offset:offset + size]
+            record = self.blob[offset : offset + size]
             out: list[str] = []
             at = 0
             foreign = relationship.get(index, 0)
@@ -632,15 +639,13 @@ class Db2:
                     # row would still come out the right width. Spelled the way
                     # the fixed-length path spells it, so one schema does not
                     # describe two row shapes.
-                    out.extend(self._text(column, [0] * column.spec.count,
-                                          record, 0, 0))
+                    out.extend(self._text(column, [0] * column.spec.count, record, 0, 0))
                     continue
                 text, at = self._inline_value(column.spec, record, at)
                 out.extend(text)
             yield record_id, tuple(out)
 
-    def _inline_value(self, spec: ColumnSpec, record: bytes,
-                      at: int) -> tuple[list[str], int]:
+    def _inline_value(self, spec: ColumnSpec, record: bytes, at: int) -> tuple[list[str], int]:
         """One column of an offset-map record, and where the next one starts."""
         out: list[str] = []
         for _ in range(spec.count):
@@ -650,7 +655,7 @@ class Db2:
                 at = end + 1
                 continue
             width = spec.bits >> 3
-            value = int.from_bytes(record[at:at + width], "little")
+            value = int.from_bytes(record[at : at + width], "little")
             at += width
             out.append(self._spell(spec.kind, spec.signed, value, spec.bits))
         return out, at

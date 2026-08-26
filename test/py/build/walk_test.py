@@ -8,12 +8,9 @@ rather than a convenience.
 from __future__ import annotations
 
 from pack.derive.walk import KIT_BUCKETS, SpellVisuals, walk_spells
-from pack.routes import (ChainEffect, FxPayloads, KitEffects, Missile,
-                         SpellEffectRows, VisualGraph, VisualMissiles)
-from pack.routes.models import (MODEL_CAT_MISSILE, SCALE_UNIT, UNPLACED,
-                                AttachModel)
-from pack.targets import (NO_TARGET, TARGET_AREA, TARGET_CASTER, TARGET_TARGET,
-                          merge_masked)
+from pack.routes import ChainEffect, FxPayloads, KitEffects, Missile, SpellEffectRows, VisualGraph, VisualMissiles
+from pack.routes.models import MODEL_CAT_MISSILE, SCALE_UNIT, UNPLACED, AttachModel
+from pack.targets import NO_TARGET, TARGET_AREA, TARGET_CASTER, TARGET_TARGET, merge_masked
 
 SPELLS = frozenset({100})
 
@@ -22,24 +19,43 @@ MODEL = AttachModel(500, 1, 2, 3, 0, 0, UNPLACED, SCALE_UNIT)
 placed, and the size the model itself is."""
 
 
-def graph(*, visual: int = 7, kit: int = 9, extra: int = NO_TARGET,
-          aura_mask: int = NO_TARGET, other_mask: int = TARGET_CASTER,
-          sound: int = 0, spell: int = 100) -> VisualGraph:
+def graph(
+    *,
+    visual: int = 7,
+    kit: int = 9,
+    extra: int = NO_TARGET,
+    aura_mask: int = NO_TARGET,
+    other_mask: int = TARGET_CASTER,
+    sound: int = 0,
+    spell: int = 100,
+) -> VisualGraph:
     """One spell reaching one kit through one visual."""
-    return VisualGraph(spell_visuals={spell: {visual: extra}},
-                       visual_kits={visual: {kit: (aura_mask, other_mask)}},
-                       visual_sounds={visual: sound} if sound else {})
+    return VisualGraph(
+        spell_visuals={spell: {visual: extra}},
+        visual_kits={visual: {kit: (aura_mask, other_mask)}},
+        visual_sounds={visual: sound} if sound else {},
+    )
 
 
-def walk(graph_in: VisualGraph, kits: KitEffects | None = None, *,
-         missiles: dict[int, VisualMissiles] | None = None,
-         soundkit_files: dict[int, set[int]] | None = None,
-         fx: FxPayloads | None = None,
-         effects: SpellEffectRows | None = None) -> SpellVisuals:
+def walk(
+    graph_in: VisualGraph,
+    kits: KitEffects | None = None,
+    *,
+    missiles: dict[int, VisualMissiles] | None = None,
+    soundkit_files: dict[int, set[int]] | None = None,
+    fx: FxPayloads | None = None,
+    effects: SpellEffectRows | None = None,
+) -> SpellVisuals:
     """Run the walk with everything not under test left empty."""
-    return walk_spells(SPELLS, graph_in, missiles or {}, kits or KitEffects(),
-                       soundkit_files or {}, fx or FxPayloads(),
-                       effects or SpellEffectRows())
+    return walk_spells(
+        SPELLS,
+        graph_in,
+        missiles or {},
+        kits or KitEffects(),
+        soundkit_files or {},
+        fx or FxPayloads(),
+        effects or SpellEffectRows(),
+    )
 
 
 def test_every_declared_family_reaches_the_spell() -> None:
@@ -54,8 +70,7 @@ def test_every_declared_family_reaches_the_spell() -> None:
     kits = KitEffects()
     for bucket in KIT_BUCKETS:
         bucket.of_kit(kits)[9] = {item}
-    vis = walk(graph(), kits,
-               fx=FxPayloads(chains={3: ChainEffect(0, 0, 0, 0, (), ())}))
+    vis = walk(graph(), kits, fx=FxPayloads(chains={3: ChainEffect(0, 0, 0, 0, (), ())}))
     for index, bucket in enumerate(KIT_BUCKETS):
         collected = bucket.of_spell(vis)[100]
         assert collected == {item: TARGET_CASTER}, f"family {index} did not collect"
@@ -67,8 +82,8 @@ def test_a_kit_reached_twice_unions_its_audiences() -> None:
     kits = KitEffects(models={9: {MODEL}})
     reached = VisualGraph(
         spell_visuals={100: {7: NO_TARGET, 8: NO_TARGET}},
-        visual_kits={7: {9: (NO_TARGET, TARGET_CASTER)},
-                     8: {9: (NO_TARGET, TARGET_TARGET)}})
+        visual_kits={7: {9: (NO_TARGET, TARGET_CASTER)}, 8: {9: (NO_TARGET, TARGET_TARGET)}},
+    )
     vis = walk(reached, kits)
     assert vis.models[100] == {MODEL: TARGET_CASTER | TARGET_TARGET}
 
@@ -82,7 +97,7 @@ def test_a_redirect_edge_adds_its_bits_to_everything_beyond_it() -> None:
 
 
 def test_a_target_bit_becomes_a_caster_bit_on_a_self_cast_spell() -> None:
-    """"The target" is the caster when the spell aims only at itself, and only
+    """ "The target" is the caster when the spell aims only at itself, and only
     the spell's own effects can say that."""
     kits = KitEffects(models={9: {MODEL}})
     effects = SpellEffectRows(cast_target_bits={100: TARGET_CASTER})
@@ -92,12 +107,9 @@ def test_a_target_bit_becomes_a_caster_bit_on_a_self_cast_spell() -> None:
 
 def test_a_missile_carries_no_target_type_of_its_own() -> None:
     """A missile set has no event row, so it takes only what the edge gave it."""
-    launched = {7: VisualMissiles(models={Missile(500, 4, 2, 3)}, soundkits=set(),
-                                  animkits={11})}
+    launched = {7: VisualMissiles(models={Missile(500, 4, 2, 3)}, soundkits=set(), animkits={11})}
     vis = walk(graph(extra=TARGET_AREA, other_mask=NO_TARGET), missiles=launched)
-    assert vis.models[100] == {
-        AttachModel(500, MODEL_CAT_MISSILE, 2, 3, 0, 4,
-                    UNPLACED, SCALE_UNIT): TARGET_AREA}
+    assert vis.models[100] == {AttachModel(500, MODEL_CAT_MISSILE, 2, 3, 0, 4, UNPLACED, SCALE_UNIT): TARGET_AREA}
     assert vis.animkits[100] == {11: TARGET_AREA}
 
 

@@ -66,11 +66,18 @@ def schema_for(definition: Any, build: Any) -> list[ColumnSpec] | None:
     for entry in block.columns:
         meaning = definition.columns.get(entry.name)
         kind = meaning.type if meaning else "int"
-        out.append(ColumnSpec(name=entry.name, kind=kind,
-                              bits=entry.width or _DEFAULT_BITS.get(kind, 32),
-                              signed=not entry.unsigned, count=entry.array or 1,
-                              is_id=entry.is_id, is_relation=entry.is_relation,
-                              in_record=not entry.noninline))
+        out.append(
+            ColumnSpec(
+                name=entry.name,
+                kind=kind,
+                bits=entry.width or _DEFAULT_BITS.get(kind, 32),
+                signed=not entry.unsigned,
+                count=entry.array or 1,
+                is_id=entry.is_id,
+                is_relation=entry.is_relation,
+                in_record=not entry.noninline,
+            )
+        )
     return out
 
 
@@ -144,7 +151,7 @@ def table_ids() -> dict[str, int]:
             fid, separator, path = line.partition(";")
             name = path.strip().lower()
             if separator and name.startswith(prefix) and name.endswith(".db2"):
-                found[name[len(prefix):-len(".db2")]] = int(fid)
+                found[name[len(prefix) : -len(".db2")]] = int(fid)
     return found
 
 

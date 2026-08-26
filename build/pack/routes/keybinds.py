@@ -43,9 +43,11 @@ def read_keybound_overrides(tables: Tables) -> dict[int, KeyboundOverride]:
     The flags column is not read: absent on two builds, all-zero on most, and
     its nonzero rows carry no recoverable meaning.
     """
-    return {to_int(override_id): KeyboundOverride(
-        function=(function or "").strip(),
-        when=keybound_type_word(to_int(type_id)),
-        spell=to_int(data))
+    return {
+        to_int(override_id): KeyboundOverride(
+            function=(function or "").strip(), when=keybound_type_word(to_int(type_id)), spell=to_int(data)
+        )
         for override_id, function, type_id, data in tables.rows(
-            "SpellKeyboundOverride", ["ID", "Function", "Type", "Data"])}
+            "SpellKeyboundOverride", ["ID", "Function", "Type", "Data"]
+        )
+    }

@@ -22,14 +22,12 @@ from collections.abc import Callable, Iterator, Mapping, Sequence
 from itertools import accumulate, chain, repeat
 from typing import cast
 
-from ...derive import (COLUMN_FAMILIES, COLUMN_READS, VOCABULARIES, Reads,
-                       build_column)
+from ...derive import COLUMN_FAMILIES, COLUMN_READS, VOCABULARIES, Reads, build_column
 from ...derive.kinds import ColumnRows, RowValue
 from ...measure import numeric_domain
 from ...routes.models import SYNTHETIC_MODEL_FILES
 from ..registry import register
-from ..section import (CountFamily, Domain, Layout, Scope, Section,
-                       SectionColumns)
+from ..section import CountFamily, Domain, Layout, Scope, Section, SectionColumns
 
 Triple = tuple[int, str, Mapping[str, RowValue]]
 """One row as the counts see it: which spell, which kind, and its values."""
@@ -54,8 +52,7 @@ def columns_of(rows: ColumnRows) -> SectionColumns:
         "kinds": list(rows.kinds),
         "sizes": [rows.pools[kind].rows for kind in rows.kinds],
         "values": {kind: dict(rows.pools[kind].values) for kind in rows.kinds},
-        "carried": {kind: dict(rows.pools[kind].extras) for kind in rows.kinds
-                    if rows.pools[kind].carried},
+        "carried": {kind: dict(rows.pools[kind].extras) for kind in rows.kinds if rows.pools[kind].carried},
         "vocab": {kind: dict(rows.pools[kind].vocab) for kind in rows.kinds},
         "absent": {kind: dict(rows.pools[kind].absent) for kind in rows.kinds},
         "counts": rows.counts,
@@ -67,8 +64,7 @@ def produce(column: str) -> Callable[[Reads], SectionColumns]:
     """One column's row table, built from the families that fill it."""
 
     def run(reads: Reads) -> SectionColumns:
-        return columns_of(build_column(COLUMN_FAMILIES[column], reads,
-                                       reads.spell_ids))
+        return columns_of(build_column(COLUMN_FAMILIES[column], reads, reads.spell_ids))
 
     return run
 
@@ -81,8 +77,7 @@ def _single(held: Mapping[str, object]) -> dict[str, Sequence[RowValue]]:
     domains -- asks about a position or a rotation. Naming the components here
     would invent a spelling for a reader that does not exist.
     """
-    return {name: cast(Sequence[RowValue], column) for name, column in held.items()
-            if not isinstance(column, Mapping)}
+    return {name: cast(Sequence[RowValue], column) for name, column in held.items() if not isinstance(column, Mapping)}
 
 
 def walk(columns: SectionColumns) -> Iterator[Triple]:
@@ -101,22 +96,19 @@ def walk(columns: SectionColumns) -> Iterator[Triple]:
     values = cast(Mapping[str, Mapping[str, object]], columns["values"])
     carried = cast(Mapping[str, Mapping[str, object]], columns["carried"])
     refs = cast(Sequence[int], columns["refs"])
-    read = {kind: _single({**values[kind], **carried.get(kind, {})})
-            for kind in kinds}
+    read = {kind: _single({**values[kind], **carried.get(kind, {})}) for kind in kinds}
 
     # Reference to kind by position: the pools are numbered end to end, so one
     # array as long as the pools answers it without a search per reference.
-    owner = list(chain.from_iterable(repeat(kind, size)
-                                     for kind, size in zip(kinds, sizes)))
+    owner = list(chain.from_iterable(repeat(kind, size) for kind, size in zip(kinds, sizes)))
     base = dict(zip(kinds, accumulate(sizes, initial=0)))
 
     at = 0
     for spell, count in enumerate(cast(Sequence[int], columns["counts"])):
-        for ref in refs[at:at + count]:
+        for ref in refs[at : at + count]:
             kind = owner[ref]
             slot = ref - base[kind]
-            yield spell, kind, {name: column[slot]
-                                for name, column in read[kind].items()}
+            yield spell, kind, {name: column[slot] for name, column in read[kind].items()}
         at += count
 
 
@@ -156,8 +148,7 @@ def per_spell(rows: Sequence[Triple], kinds: frozenset[str]) -> Counter[int]:
     return Counter(spell for spell, kind, _values in rows if kind in kinds)
 
 
-def per_spell_distinct(rows: Sequence[Triple], kind: str,
-                       *keys: str) -> Counter[int]:
+def per_spell_distinct(rows: Sequence[Triple], kind: str, *keys: str) -> Counter[int]:
     """How many DISTINCT rows of one kind each spell reaches.
 
     What a domain over an expanded kind has to measure. A kit ships one row per
@@ -177,8 +168,7 @@ MOUNT_KIND = "mount"
 rather than through a visual, which is why it was never in the `spellModels`
 count and is not in the model count domain."""
 
-MODEL_KINDS = frozenset(family.kind for family in COLUMN_FAMILIES["model"]
-                        ) - {MOUNT_KIND}
+MODEL_KINDS = frozenset(family.kind for family in COLUMN_FAMILIES["model"]) - {MOUNT_KIND}
 """The model kinds a visual reaches, derived so a family added to the column
 cannot be left out of the counts that describe it."""
 
@@ -195,10 +185,9 @@ def model_counts(rows: Sequence[Triple]) -> Mapping[str, int]:
         # and trailing categories too, and the count has always been about the
         # file, not about the kind that happens to show it.
         "spellWeaponModels": sum(
-            1 for _spell, _kind, values in rows
-            if values.get("slot", values.get("file", 0)) in SYNTHETIC_MODEL_FILES),
-        "spellMissileMotions": sum(1 for _spell, kind, values in rows
-                                   if kind == "missile" and values["motion"]),
+            1 for _spell, _kind, values in rows if values.get("slot", values.get("file", 0)) in SYNTHETIC_MODEL_FILES
+        ),
+        "spellMissileMotions": sum(1 for _spell, kind, values in rows if kind == "missile" and values["motion"]),
         "spellMounts": kinds["mount"],
     }
 
@@ -212,16 +201,14 @@ def anim_counts(rows: Sequence[Triple]) -> Mapping[str, int]:
     """
     kinds = Counter(kind for _spell, kind, _values in rows)
     return {
-        "spellAnimKits": len({(spell, values["id"])
-                              for spell, kind, values in rows if kind == "kit"}),
+        "spellAnimKits": len({(spell, values["id"]) for spell, kind, values in rows if kind == "kit"}),
         "spellVisualAnims": kinds["loose"],
         "spellReplaceAnims": kinds["replace"],
         "spellPassengerAnims": kinds["passenger"],
     }
 
 
-def entries(rows: Sequence[Triple], kind: str,
-            *keys: str) -> set[tuple[int, tuple[RowValue, ...]]]:
+def entries(rows: Sequence[Triple], kind: str, *keys: str) -> set[tuple[int, tuple[RowValue, ...]]]:
     """The distinct rows of one kind the named columns identify, by spell.
 
     Three fx families expand one effect into a row per texture it paints with,
@@ -230,8 +217,7 @@ def entries(rows: Sequence[Triple], kind: str,
     are what the retired section's rows were keyed by, which is the only thing
     that keeps the count meaning what it always meant.
     """
-    return {(spell, tuple(values[key] for key in keys))
-            for spell, word, values in rows if word == kind}
+    return {(spell, tuple(values[key] for key in keys)) for spell, word, values in rows if word == kind}
 
 
 CHAIN_KEYS = ("chain", "from", "to", "target")
@@ -281,8 +267,7 @@ def mech_counts(rows: Sequence[Triple]) -> Mapping[str, int]:
         "spellLinks": kinds["triggers"],
         "spellAreas": kinds["location"],
         "spellInvis": kinds["invis"],
-        "invisChannels": len({values["channel"] for _spell, kind, values in rows
-                              if kind == "invis"}),
+        "invisChannels": len({values["channel"] for _spell, kind, values in rows if kind == "invis"}),
         "spellDetects": kinds["detect"],
         "spellVehicles": len(entries(rows, "vehicle", "vehicle")),
         "spellSpeeds": kinds["speed"],
@@ -295,87 +280,112 @@ def amounts(rows: Sequence[Triple], kind: str, prop: str) -> list[RowValue]:
     return [values[prop] for _spell, word, values in rows if word == kind]
 
 
-ROW_COLUMNS = ("kinds", "sizes", "values", "carried", "vocab", "absent",
-               "counts", "refs")
+ROW_COLUMNS = ("kinds", "sizes", "values", "carried", "vocab", "absent", "counts", "refs")
 
-MODEL_ROWS = register(Section(
-    name="modelRows",
-    doc="Every model a spell shows, as rows of the kind each one is.",
-    module="core",
-    produce=produce("model"),
-    columns=ROW_COLUMNS,
-    reads=COLUMN_READS["model"],
-    counts=(counted(model_counts),),
-    domains=(Domain("count.model", lambda columns, _r: numeric_domain(
-        per_spell(walked(columns), MODEL_KINDS).values())),),
-))
+MODEL_ROWS = register(
+    Section(
+        name="modelRows",
+        doc="Every model a spell shows, as rows of the kind each one is.",
+        module="core",
+        produce=produce("model"),
+        columns=ROW_COLUMNS,
+        reads=COLUMN_READS["model"],
+        counts=(counted(model_counts),),
+        domains=(
+            Domain("count.model", lambda columns, _r: numeric_domain(per_spell(walked(columns), MODEL_KINDS).values())),
+        ),
+    )
+)
 
-SOUND_ROWS = register(Section(
-    name="soundRows",
-    doc="Every sound a spell plays, as rows carrying the kit that plays it.",
-    module="core",
-    produce=produce("sound"),
-    columns=ROW_COLUMNS,
-    reads=COLUMN_READS["sound"],
-    counts=(counted(lambda rows: {"spellSounds": len(rows)}),),
-    domains=(Domain("count.sound", lambda columns, _r: numeric_domain(
-        per_spell(walked(columns), frozenset({"sound"})).values())),),
-))
+SOUND_ROWS = register(
+    Section(
+        name="soundRows",
+        doc="Every sound a spell plays, as rows carrying the kit that plays it.",
+        module="core",
+        produce=produce("sound"),
+        columns=ROW_COLUMNS,
+        reads=COLUMN_READS["sound"],
+        counts=(counted(lambda rows: {"spellSounds": len(rows)}),),
+        domains=(
+            Domain(
+                "count.sound",
+                lambda columns, _r: numeric_domain(per_spell(walked(columns), frozenset({"sound"})).values()),
+            ),
+        ),
+    )
+)
 
-ANIM_ROWS = register(Section(
-    name="animRows",
-    doc="Every animation a spell reaches, as rows of the kind that reaches it.",
-    module="core",
-    produce=produce("anim"),
-    columns=ROW_COLUMNS,
-    reads=COLUMN_READS["anim"],
-    counts=(counted(anim_counts),),
-    domains=(Domain("count.anim", lambda columns, _r: numeric_domain(
-        per_spell_distinct(walked(columns), "kit", "id").values())),),
-))
+ANIM_ROWS = register(
+    Section(
+        name="animRows",
+        doc="Every animation a spell reaches, as rows of the kind that reaches it.",
+        module="core",
+        produce=produce("anim"),
+        columns=ROW_COLUMNS,
+        reads=COLUMN_READS["anim"],
+        counts=(counted(anim_counts),),
+        domains=(
+            Domain(
+                "count.anim",
+                lambda columns, _r: numeric_domain(per_spell_distinct(walked(columns), "kit", "id").values()),
+            ),
+        ),
+    )
+)
 
-FX_ROWS = register(Section(
-    name="fxRows",
-    doc="Every visual effect a spell wears, as rows of the kind each one is.",
-    module="core",
-    produce=produce("fx"),
-    columns=ROW_COLUMNS,
-    reads=COLUMN_READS["fx"],
-    counts=(counted(fx_counts),),
-    domains=(
-        # The beams alone, which is what this axis has always counted: the
-        # other sixteen families are unrelated tables that happen to render
-        # in one column, and folding them in would change what the control
-        # measures rather than widen it.
-        Domain("count.fx", lambda columns, _r: numeric_domain(
-            per_spell_distinct(walked(columns), "chain",
-                               *CHAIN_KEYS).values())),
-        Domain("desaturate", lambda columns, _r: numeric_domain(
-            amounts(walked(columns), "desaturate", "percent")), unit="%"),
-        Domain("transparency", lambda columns, _r: numeric_domain(
-            amounts(walked(columns), "transparency", "percent")), unit="%"),
-        Domain("scale", lambda columns, _r: numeric_domain(
-            amounts(walked(columns), "scale", "amount")), unit="%"),
-    ),
-))
+FX_ROWS = register(
+    Section(
+        name="fxRows",
+        doc="Every visual effect a spell wears, as rows of the kind each one is.",
+        module="core",
+        produce=produce("fx"),
+        columns=ROW_COLUMNS,
+        reads=COLUMN_READS["fx"],
+        counts=(counted(fx_counts),),
+        domains=(
+            # The beams alone, which is what this axis has always counted: the
+            # other sixteen families are unrelated tables that happen to render
+            # in one column, and folding them in would change what the control
+            # measures rather than widen it.
+            Domain(
+                "count.fx",
+                lambda columns, _r: numeric_domain(per_spell_distinct(walked(columns), "chain", *CHAIN_KEYS).values()),
+            ),
+            Domain(
+                "desaturate",
+                lambda columns, _r: numeric_domain(amounts(walked(columns), "desaturate", "percent")),
+                unit="%",
+            ),
+            Domain(
+                "transparency",
+                lambda columns, _r: numeric_domain(amounts(walked(columns), "transparency", "percent")),
+                unit="%",
+            ),
+            Domain("scale", lambda columns, _r: numeric_domain(amounts(walked(columns), "scale", "amount")), unit="%"),
+        ),
+    )
+)
 
-MECH_ROWS = register(Section(
-    name="mechRows",
-    doc="Everything a spell DOES, as rows of the kind that does it.",
-    module="core",
-    produce=produce("mech"),
-    columns=ROW_COLUMNS,
-    reads=COLUMN_READS["mech"],
-    counts=(counted(mech_counts),),
-    domains=(
-        Domain("count.mech", lambda columns, _r: numeric_domain(
-            per_spell(walked(columns), frozenset({"effect"})).values())),
-        Domain("invis", lambda columns, _r: numeric_domain(
-            amounts(walked(columns), "invis", "channel"))),
-        Domain("speed", lambda columns, _r: numeric_domain(
-            amounts(walked(columns), "speed", "amount")), unit="%"),
-    ),
-))
+MECH_ROWS = register(
+    Section(
+        name="mechRows",
+        doc="Everything a spell DOES, as rows of the kind that does it.",
+        module="core",
+        produce=produce("mech"),
+        columns=ROW_COLUMNS,
+        reads=COLUMN_READS["mech"],
+        counts=(counted(mech_counts),),
+        domains=(
+            Domain(
+                "count.mech",
+                lambda columns, _r: numeric_domain(per_spell(walked(columns), frozenset({"effect"})).values()),
+            ),
+            Domain("invis", lambda columns, _r: numeric_domain(amounts(walked(columns), "invis", "channel"))),
+            Domain("speed", lambda columns, _r: numeric_domain(amounts(walked(columns), "speed", "amount")), unit="%"),
+        ),
+    )
+)
+
 
 def equipped_slots(_reads: Reads) -> SectionColumns:
     """The weapon slot each fileless model marker stands for.
@@ -384,27 +394,28 @@ def equipped_slots(_reads: Reads) -> SectionColumns:
     parallel because one ordering made them, never because two orderings agreed.
     """
     fids = sorted(SYNTHETIC_MODEL_FILES)
-    return {"fids": fids,
-            "slots": [SYNTHETIC_MODEL_FILES[fid].removeprefix("equipped ")
-                      for fid in fids]}
+    return {"fids": fids, "slots": [SYNTHETIC_MODEL_FILES[fid].removeprefix("equipped ") for fid in fids]}
 
 
-EQUIPPED_SLOTS = register(Section(
-    name="equippedSlots",
-    doc="The weapon slot each fileless model marker stands for.",
-    module="universal",
-    produce=equipped_slots,
-    columns=("fids", "slots"),
-    scope=Scope.UNIVERSAL,
-))
+EQUIPPED_SLOTS = register(
+    Section(
+        name="equippedSlots",
+        doc="The weapon slot each fileless model marker stands for.",
+        module="universal",
+        produce=equipped_slots,
+        columns=("fids", "slots"),
+        scope=Scope.UNIVERSAL,
+    )
+)
 
-ROW_VOCABULARIES = register(Section(
-    name="rowVocabs",
-    doc="Where each row property's vocabulary lives, and how it is keyed.",
-    module="universal",
-    produce=lambda _reads: {"vocabs": {name: dict(where)
-                                       for name, where in VOCABULARIES.items()}},
-    columns=("vocabs",),
-    layout=Layout.BARE,
-    scope=Scope.UNIVERSAL,
-))
+ROW_VOCABULARIES = register(
+    Section(
+        name="rowVocabs",
+        doc="Where each row property's vocabulary lives, and how it is keyed.",
+        module="universal",
+        produce=lambda _reads: {"vocabs": {name: dict(where) for name, where in VOCABULARIES.items()}},
+        columns=("vocabs",),
+        layout=Layout.BARE,
+        scope=Scope.UNIVERSAL,
+    )
+)

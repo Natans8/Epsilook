@@ -124,8 +124,10 @@ def distil() -> Distilled:
         rows = wdbc.read(unpacked, definition, LAYOUT_BUILD)
 
     if len(rows) != EXPECTED_ROWS:
-        sys.exit(f"error: {VENDORED.name} holds {len(rows):,} rows, expected "
-                 f"{EXPECTED_ROWS:,} — this is not the vendored dump")
+        sys.exit(
+            f"error: {VENDORED.name} holds {len(rows):,} rows, expected "
+            f"{EXPECTED_ROWS:,} — this is not the vendored dump"
+        )
 
     ids: list[int] = []
     names: list[str] = []
@@ -150,14 +152,14 @@ def write(data: Distilled) -> None:
 def main() -> int:
     """Rebuild the artifact, or compare it with what is committed."""
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--verify", action="store_true",
-                        help="rebuild and compare with the committed file, writing nothing")
+    parser.add_argument(
+        "--verify", action="store_true", help="rebuild and compare with the committed file, writing nothing"
+    )
     args = parser.parse_args()
 
     data = distil()
     dropped = EXPECTED_ROWS - len(data["ids"])
-    print(f"{TABLE}: {len(data['ids']):,} names with a model path "
-          f"({dropped:,} rows dropped as uncorroboratable)")
+    print(f"{TABLE}: {len(data['ids']):,} names with a model path ({dropped:,} rows dropped as uncorroboratable)")
 
     if args.verify:
         if not OUT.exists():

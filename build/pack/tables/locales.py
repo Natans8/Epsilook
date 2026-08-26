@@ -36,11 +36,19 @@ _TRANSLATIONS: Mapping[str, Overlay] = {
     # the same spelling: `Name` on the creature table and `name` on the object
     # one. A join on the wrong one reads as a language with nothing in it.
     "creature_template": Overlay(
-        "creature_template_locale", {"entry": "entry", "name": "Name"},
-        key="entry", judged_on=LOCALE_COLUMN, restates=True),
+        "creature_template_locale",
+        {"entry": "entry", "name": "Name"},
+        key="entry",
+        judged_on=LOCALE_COLUMN,
+        restates=True,
+    ),
     "gameobject_template": Overlay(
-        "gameobject_template_locale", {"entry": "entry", "name": "name"},
-        key="entry", judged_on=LOCALE_COLUMN, restates=True),
+        "gameobject_template_locale",
+        {"entry": "entry", "name": "name"},
+        key="entry",
+        judged_on=LOCALE_COLUMN,
+        restates=True,
+    ),
 }
 """World table -> how its translations revise it, before a language is known."""
 
@@ -81,12 +89,13 @@ def locale_overlays(code: str) -> dict[str, Overlay]:
             table with no error and no log line.
     """
     if not code:
-        raise ValueError("locale_overlays: no language named; a blank code "
-                         "matches no row and would read as a language the "
-                         "server has nothing in")
+        raise ValueError(
+            "locale_overlays: no language named; a blank code "
+            "matches no row and would read as a language the "
+            "server has nothing in"
+        )
     admits = spoken(code)
-    return {base: replace(overlay, admits=admits)
-            for base, overlay in _TRANSLATIONS.items()}
+    return {base: replace(overlay, admits=admits) for base, overlay in _TRANSLATIONS.items()}
 
 
 def check_translation_declaration() -> list[str]:

@@ -39,16 +39,17 @@ ASSET_RE = re.compile(r'(?:href|src)="((?:css|js)/[^"?]+\?v=[0-9a-z]+)"')
 VERSION_RE = re.compile(r'(?:href|src)="(?:css|js)/[^"?]+\?v=([0-9a-z]+)"')
 
 
-
 def bust(url: str, token: int) -> str:
     return f"{url}{'&' if '?' in url else '?'}cachebust={token}"
 
 
 def fetch_once(url: str, token: int, head: bool = False) -> tuple[int, bytes, dict]:
     """One request, cache-busted. Returns (status, body, headers); 0 = no reply."""
-    req = urllib.request.Request(bust(url, token), method="HEAD" if head else "GET",
-                                 headers={"Cache-Control": "no-cache",
-                                          "User-Agent": "epsilook-verify"})
+    req = urllib.request.Request(
+        bust(url, token),
+        method="HEAD" if head else "GET",
+        headers={"Cache-Control": "no-cache", "User-Agent": "epsilook-verify"},
+    )
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
             return resp.status, (b"" if head else resp.read()), dict(resp.headers)
@@ -74,16 +75,18 @@ def get(url: str, token: int, head: bool = False, tries: int = 3) -> tuple[int, 
             if transient and attempt > 1:
                 print(f"{DIM}  gave up after {tries} tries{RESET}")
             return status, body, headers
-        print(f"{DIM}  HTTP {status or 'no reply'} on {url.rsplit('/', 1)[-1]}, "
-              f"retrying ({attempt}/{tries - 1}){RESET}")
+        print(
+            f"{DIM}  HTTP {status or 'no reply'} on {url.rsplit('/', 1)[-1]}, retrying ({attempt}/{tries - 1}){RESET}"
+        )
         time.sleep(2 * attempt)
     return 0, b"", {}
 
 
 def git(*args: str) -> str:
     try:
-        out = subprocess.run(["git", "-C", str(ROOT), *args], capture_output=True,
-                             encoding="utf-8", errors="replace", check=True)
+        out = subprocess.run(
+            ["git", "-C", str(ROOT), *args], capture_output=True, encoding="utf-8", errors="replace", check=True
+        )
     except (subprocess.CalledProcessError, FileNotFoundError):
         return ""
     return out.stdout or ""
@@ -96,13 +99,14 @@ def check_pushed() -> None:
     remote = git("rev-parse", "origin/main").strip()
     if local and remote and local != remote:
         ahead = git("rev-list", "--count", "origin/main..HEAD").strip() or "?"
-        print(f"{YELLOW}warning{RESET}  HEAD is {ahead} commit(s) ahead of origin/main "
-              f"{DIM}- push before this can pass{RESET}")
+        print(
+            f"{YELLOW}warning{RESET}  HEAD is {ahead} commit(s) ahead of origin/main "
+            f"{DIM}- push before this can pass{RESET}"
+        )
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description=__doc__,
-                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--expect", help="the ?v= to wait for (default: this tree's)")
     ap.add_argument("--timeout", type=int, default=300, help="seconds to wait (default: 300)")
     ap.add_argument("--now", action="store_true", help="check what is live now, do not wait")
@@ -129,16 +133,13 @@ def main() -> int:
         live = sorted(set(VERSION_RE.findall(html)))
         served = live[0] if live else "?"
         if status == 200 and expected in live:
-            print(f"{GREEN}live{RESET}  {expected} is being served "
-                  f"{DIM}(attempt {attempt}){RESET}")
+            print(f"{GREEN}live{RESET}  {expected} is being served {DIM}(attempt {attempt}){RESET}")
             break
         if time.time() >= deadline:
             if args.now:
-                print(f"{YELLOW}serving {served}{RESET}, expected {expected} "
-                      f"{DIM}(--now, did not wait){RESET}")
+                print(f"{YELLOW}serving {served}{RESET}, expected {expected} {DIM}(--now, did not wait){RESET}")
             else:
-                print(f"{RED}timeout{RESET}  after {args.timeout}s Pages still serves "
-                      f"{served}, expected {expected}")
+                print(f"{RED}timeout{RESET}  after {args.timeout}s Pages still serves {served}, expected {expected}")
             return 1
         print(f"{DIM}  serving {served}, waiting for {expected} ...{RESET}")
         time.sleep(10)
@@ -157,8 +158,7 @@ def main() -> int:
     #
     # versions.json carries a content hash per pack, so it IS the oracle for
     # this half, the same way index.html's ?v= is for the other.
-    local_manifest: list[dict] = json.loads(
-        (ROOT / "site" / "data" / "versions.json").read_text(encoding="utf-8"))
+    local_manifest: list[dict] = json.loads((ROOT / "site" / "data" / "versions.json").read_text(encoding="utf-8"))
     attempt = 0
     while True:
         attempt += 1
@@ -168,16 +168,14 @@ def main() -> int:
         except json.JSONDecodeError:
             served_manifest = None
         if served_manifest == local_manifest:
-            print(f"{GREEN}live{RESET}  manifest matches "
-                  f"{DIM}({len(local_manifest)} packs, attempt {attempt}){RESET}")
+            print(f"{GREEN}live{RESET}  manifest matches {DIM}({len(local_manifest)} packs, attempt {attempt}){RESET}")
             break
         if time.time() >= deadline:
             stale = "unreadable" if served_manifest is None else "still the previous one"
             if args.now:
                 print(f"{YELLOW}manifest {stale}{RESET} {DIM}(--now, did not wait){RESET}")
             else:
-                print(f"{RED}timeout{RESET}  after {args.timeout}s the served manifest "
-                      f"is {stale}")
+                print(f"{RED}timeout{RESET}  after {args.timeout}s the served manifest is {stale}")
             return 1
         print(f"{DIM}  manifest not propagated yet, waiting ...{RESET}")
         time.sleep(10)
@@ -224,11 +222,9 @@ def main() -> int:
             print(f"{RED}FAIL{RESET}  {owner} module {file} HTTP {status}")
         elif local_size >= 0 and size != local_size:
             failures += 1
-            print(f"{RED}FAIL{RESET}  {file} is {size:,} bytes live, "
-                  f"{local_size:,} local")
+            print(f"{RED}FAIL{RESET}  {file} is {size:,} bytes live, {local_size:,} local")
     if not failures:
-        print(f"{GREEN}ok{RESET}    {len(manifest)} packs served over "
-              f"{len(wanted)} module(s), sizes match local")
+        print(f"{GREEN}ok{RESET}    {len(manifest)} packs served over {len(wanted)} module(s), sizes match local")
 
     print()
     if failures:

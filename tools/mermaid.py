@@ -58,16 +58,22 @@ def renderer() -> list[str] | None:
     if npx is None:
         return None
     cmd = [npx, "--no-install", MERMAID_CLI]
-    probe = subprocess.run([*cmd, "--version"], cwd=ROOT, capture_output=True,
-                           encoding="utf-8", errors="replace", check=False)
+    probe = subprocess.run(
+        [*cmd, "--version"], cwd=ROOT, capture_output=True, encoding="utf-8", errors="replace", check=False
+    )
     return cmd if probe.returncode == 0 else None
 
 
 def _run(cmd: list[str], src: Path, out: Path) -> str | None:
     """Run the renderer once. Returns None on success, or the error to report."""
-    proc = subprocess.run([*cmd, "--input", str(src), "--output", str(out)],
-                          cwd=ROOT, capture_output=True, encoding="utf-8",
-                          errors="replace", check=False)
+    proc = subprocess.run(
+        [*cmd, "--input", str(src), "--output", str(out)],
+        cwd=ROOT,
+        capture_output=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
     if proc.returncode == 0:
         return None
     output = ((proc.stdout or "") + (proc.stderr or "")).strip().splitlines()
@@ -98,8 +104,7 @@ def render_block(cmd: list[str], source: str, out: Path) -> str | None:
         return _run(cmd, src, out)
 
 
-def failing_blocks(cmd: list[str], path: Path, blocks: list[tuple[int, str]],
-                   scratch: Path) -> list[tuple[int, str]]:
+def failing_blocks(cmd: list[str], path: Path, blocks: list[tuple[int, str]], scratch: Path) -> list[tuple[int, str]]:
     """Which blocks of a file fail, and why. Only worth running after one did."""
     bad = []
     for line, source in blocks:
@@ -125,8 +130,10 @@ def main() -> int:
 
     cmd = renderer()
     if cmd is None:
-        print(f"{YELLOW}mermaid-cli is not installed{RESET}  "
-              f"{DIM}npm i -g {MERMAID_CLI}, or npx {MERMAID_CLI} once{RESET}")
+        print(
+            f"{YELLOW}mermaid-cli is not installed{RESET}  "
+            f"{DIM}npm i -g {MERMAID_CLI}, or npx {MERMAID_CLI} once{RESET}"
+        )
         return 2
 
     keep = Path(args.png).resolve() if args.png else None

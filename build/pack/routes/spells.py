@@ -51,8 +51,7 @@ class SpellProperties:
     """Spell to its `SpellRange` id. Zero where it names no row."""
 
 
-def read_spell_properties(tables: Tables,
-                          spell_names: Container[int]) -> SpellProperties:
+def read_spell_properties(tables: Tables, spell_names: Container[int]) -> SpellProperties:
     """Read the icon, school and attribute flags of every listed spell.
 
     Args:
@@ -64,12 +63,21 @@ def read_spell_properties(tables: Tables,
         One entry per spell for each column, taken from its base-difficulty row
         where it has one.
     """
-    columns = array_columns(tables, "SpellMisc", "Attributes",
-                            ATTRIBUTE_COLUMNS_MAX)
+    columns = array_columns(tables, "SpellMisc", "Attributes", ATTRIBUTE_COLUMNS_MAX)
     spells = SpellProperties()
-    for row in tables.rows("SpellMisc", [
-            "SpellID", "DifficultyID", "SpellIconFileDataID", "SchoolMask",
-            "CastingTimeIndex", "DurationIndex", "RangeIndex", *columns]):
+    for row in tables.rows(
+        "SpellMisc",
+        [
+            "SpellID",
+            "DifficultyID",
+            "SpellIconFileDataID",
+            "SchoolMask",
+            "CastingTimeIndex",
+            "DurationIndex",
+            "RangeIndex",
+            *columns,
+        ],
+    ):
         spell, difficulty = to_int(row[0]), to_int(row[1])
         if spell not in spell_names:
             continue
@@ -84,6 +92,5 @@ def read_spell_properties(tables: Tables,
             spells.cast_index[spell] = to_int(row[4])
             spells.duration_index[spell] = to_int(row[5])
             spells.range_index[spell] = to_int(row[6])
-            spells.attribute_words[spell] = tuple(
-                to_int(value) for value in row[7:])
+            spells.attribute_words[spell] = tuple(to_int(value) for value in row[7:])
     return spells

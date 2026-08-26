@@ -11,6 +11,7 @@ nothing to do.
 `tools/` is a source root, so a sibling import resolves the same way
 `builddb.py` already imports `dbd`.
 """
+
 from __future__ import annotations
 
 import io
@@ -49,6 +50,7 @@ def survive_console_encoding() -> None:
     for stream in (sys.stdout, sys.stderr):
         if isinstance(stream, io.TextIOWrapper):
             stream.reconfigure(errors="replace")
+
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -115,8 +117,9 @@ def git(*args: str) -> str:
     resulting error in its reader thread and hands back None.
     """
     try:
-        out = subprocess.run(["git", "-C", str(ROOT), *args], capture_output=True,
-                             encoding="utf-8", errors="replace", check=True)
+        out = subprocess.run(
+            ["git", "-C", str(ROOT), *args], capture_output=True, encoding="utf-8", errors="replace", check=True
+        )
     except (subprocess.CalledProcessError, FileNotFoundError):
         return ""
     return out.stdout or ""

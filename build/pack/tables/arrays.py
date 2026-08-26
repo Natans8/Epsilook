@@ -23,5 +23,4 @@ def array_columns(tables: Tables, table: str, base: str, count: int) -> list[str
         return [column for column in indexed if column in header]
     if base in header:
         return [base]
-    sys.exit(f"error: {table} has neither {indexed[0]} nor a scalar {base}; "
-             f"header = {sorted(header)}")
+    sys.exit(f"error: {table} has neither {indexed[0]} nor a scalar {base}; header = {sorted(header)}")

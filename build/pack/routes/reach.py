@@ -68,8 +68,7 @@ class Reach:
     """`MELEE` and `WEAPON`."""
 
 
-def read_spell_reach(tables: Tables,
-                     spells: SpellProperties) -> list[Reach]:
+def read_spell_reach(tables: Tables, spells: SpellProperties) -> list[Reach]:
     """Read the band of every spell that reaches past its caster.
 
     Args:
@@ -79,11 +78,10 @@ def read_spell_reach(tables: Tables,
     Returns:
         One entry per spell reaching past its caster, sorted by spell.
     """
-    bands = {to_int(row[0]): (to_float(row[1], YARD_DIGITS),
-                              to_float(row[2], YARD_DIGITS),
-                              to_int(row[3]) & REACH_FLAGS)
-             for row in tables.rows(
-                 "SpellRange", ["ID", "RangeMax_0", "RangeMin_0", "Flags"])}
+    bands = {
+        to_int(row[0]): (to_float(row[1], YARD_DIGITS), to_float(row[2], YARD_DIGITS), to_int(row[3]) & REACH_FLAGS)
+        for row in tables.rows("SpellRange", ["ID", "RangeMax_0", "RangeMin_0", "Flags"])
+    }
 
     out: list[Reach] = []
     for spell, band_id in sorted(spells.range_index.items()):

@@ -68,8 +68,10 @@ def parse_create_table(statement: str) -> list[Column]:
     # `.this.name` is the enum member's own name. Formatting the member and
     # stripping its class prefix would leave every kind unrecognised after an
     # upstream rename, and `lossy` false with it.
-    return [Column(column.name, column.kind.this.name if column.kind else "")
-            for column in parsed.find_all(expressions.ColumnDef)]
+    return [
+        Column(column.name, column.kind.this.name if column.kind else "")
+        for column in parsed.find_all(expressions.ColumnDef)
+    ]
 
 
 def iter_insert_rows(line: str) -> Iterator[list[str]]:

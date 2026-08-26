@@ -40,10 +40,23 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from epsilon_names import (ICON_DIRECTORY, ROOT_BUCKET, icon_names,  # noqa: E402
-                           object_names, read_object_dump)
-from repo import (DIM, GREEN, RED, RESET, ROOT, YELLOW, log,  # noqa: E402
-                  survive_console_encoding)
+from epsilon_names import (
+    ICON_DIRECTORY,
+    ROOT_BUCKET,
+    icon_names,  # noqa: E402
+    object_names,
+    read_object_dump,
+)
+from repo import (
+    DIM,
+    GREEN,
+    RED,
+    RESET,
+    ROOT,
+    YELLOW,
+    log,  # noqa: E402
+    survive_console_encoding,
+)
 
 SUPPLEMENT_FLOOR = 18_000_000
 """The id below which this may not name anything.
@@ -133,6 +146,7 @@ def storage() -> object:
         # running on an interpreter that has none of the build's dependencies.
         from epsilon_storage import EpsilonStorage  # pylint: disable=import-outside-toplevel
         from epsilon_names import INSTALL  # pylint: disable=import-outside-toplevel
+
         _STORAGE = EpsilonStorage(INSTALL)
     return _STORAGE
 
@@ -146,9 +160,9 @@ def stock_paths() -> dict[int, str]:
     global _STOCK  # pylint: disable=global-statement
     if _STOCK is None:
         from repo import CACHE, LISTFILE_ASSET  # pylint: disable=import-outside-toplevel
+
         rows: dict[int, str] = {}
-        with (CACHE / "listfile" / LISTFILE_ASSET).open(encoding="utf-8",
-                                                        errors="replace") as handle:
+        with (CACHE / "listfile" / LISTFILE_ASSET).open(encoding="utf-8", errors="replace") as handle:
             for line in handle:
                 fid, sep, path = line.partition(";")
                 if sep and path.strip().lower().endswith(".wmo"):
@@ -162,18 +176,18 @@ def _icons(_known: dict[int, str]) -> dict[int, str]:
 
 
 def _objects(_known: dict[int, str]) -> dict[int, str]:
-    return object_names(read_object_dump(cached=REFERENCE / "dump_gob_names.json",
-                                         storage=storage()),
-                        SUPPLEMENT_FLOOR)
+    return object_names(read_object_dump(cached=REFERENCE / "dump_gob_names.json", storage=storage()), SUPPLEMENT_FLOOR)
 
 
 def _terrain(_known: dict[int, str]) -> dict[int, str]:
     from epsilon_walks import terrain_names  # pylint: disable=import-outside-toplevel
+
     return terrain_names(storage(), SUPPLEMENT_FLOOR)  # type: ignore[arg-type]
 
 
 def _customization(_known: dict[int, str]) -> dict[int, str]:
     from epsilon_walks import customization_names  # pylint: disable=import-outside-toplevel
+
     return customization_names(storage(), SUPPLEMENT_FLOOR)  # type: ignore[arg-type]
 
 
@@ -184,116 +198,170 @@ def _unnamed(known: dict[int, str]) -> set[int]:
 
 def _modelnames(known: dict[int, str]) -> dict[int, str]:
     from epsilon_walks import model_self_names  # pylint: disable=import-outside-toplevel
-    return model_self_names(storage(), _unnamed(known),  # type: ignore[arg-type]
-                            local_only=LOCAL_ONLY)
+
+    return model_self_names(
+        storage(),  # type: ignore[arg-type]
+        _unnamed(known),
+        local_only=LOCAL_ONLY,
+    )
 
 
 def _reskins(known: dict[int, str]) -> dict[int, str]:
     from epsilon_walks import reskin_names  # pylint: disable=import-outside-toplevel
-    return reskin_names(storage(), _unnamed(known),  # type: ignore[arg-type]
-                        stock_paths(), local_only=LOCAL_ONLY)
+
+    return reskin_names(
+        storage(),  # type: ignore[arg-type]
+        _unnamed(known),
+        stock_paths(),
+        local_only=LOCAL_ONLY,
+    )
 
 
 def _placements(known: dict[int, str]) -> dict[int, str]:
     from epsilon_walks import placement_names  # pylint: disable=import-outside-toplevel
-    return placement_names(storage(), known, _unnamed(known),  # type: ignore[arg-type]
-                           local_only=LOCAL_ONLY)
+
+    return placement_names(
+        storage(),  # type: ignore[arg-type]
+        known,
+        _unnamed(known),
+        local_only=LOCAL_ONLY,
+    )
 
 
 def _ground(known: dict[int, str]) -> dict[int, str]:
     from epsilon_walks import ground_texture_names  # pylint: disable=import-outside-toplevel
-    return ground_texture_names(storage(), known, _unnamed(known),  # type: ignore[arg-type]
-                                local_only=LOCAL_ONLY)
+
+    return ground_texture_names(
+        storage(),  # type: ignore[arg-type]
+        known,
+        _unnamed(known),
+        local_only=LOCAL_ONLY,
+    )
 
 
 def _world_models(known: dict[int, str]) -> dict[int, str]:
     from epsilon_walks import world_model_children  # pylint: disable=import-outside-toplevel
-    return world_model_children(storage(), known, _unnamed(known),  # type: ignore[arg-type]
-                                local_only=LOCAL_ONLY).names
+
+    return world_model_children(
+        storage(),  # type: ignore[arg-type]
+        known,
+        _unnamed(known),
+        local_only=LOCAL_ONLY,
+    ).names
 
 
 def _models(known: dict[int, str]) -> dict[int, str]:
     from epsilon_walks import model_children  # pylint: disable=import-outside-toplevel
-    return model_children(storage(), known, _unnamed(known),  # type: ignore[arg-type]
-                          local_only=LOCAL_ONLY).names
+
+    return model_children(
+        storage(),  # type: ignore[arg-type]
+        known,
+        _unnamed(known),
+        local_only=LOCAL_ONLY,
+    ).names
 
 
 def _neighbours(known: dict[int, str]) -> dict[int, str]:
     from epsilon_walks import neighbour_names  # pylint: disable=import-outside-toplevel
-    return neighbour_names(storage(), known, _unnamed(known),  # type: ignore[arg-type]
-                           local_only=LOCAL_ONLY)
+
+    return neighbour_names(
+        storage(),  # type: ignore[arg-type]
+        known,
+        _unnamed(known),
+        local_only=LOCAL_ONLY,
+    )
 
 
 ROUTES: tuple[Route, ...] = (
-    Route(name="terrain",
-          summary="the map table, and each map's own grid of tiles",
-          needs="the storage",
-          cost="a minute",
-          produce=_terrain),
-    Route(name="icons",
-          summary="the client's own icon database, in an addon it ships",
-          needs="the install",
-          cost="a second",
-          produce=_icons,
-          golden="epsilon_icon_names.json",
-          # The copy holds bare icon names; the route yields the paths they
-          # resolve to, and covers the stock icons this one does not.
-          reference=lambda raw: {int(fid): f"{ICON_DIRECTORY}/{name}.blp"
-                                 for fid, name in raw.items()
-                                 if int(fid) > SUPPLEMENT_FLOOR},
-          compare=lambda rows: {fid: path for fid, path in rows.items()
-                                if fid > SUPPLEMENT_FLOOR}),
-    Route(name="objects",
-          summary="the gameobject name list the client ships",
-          needs="the storage",
-          cost="seconds",
-          produce=_objects,
-          golden="pseudo_paths.json",
-          # The copy records only the names that had to be derived, not the
-          # ones the client already reported as paths.
-          reference=lambda raw: {int(fid): path for fid, path in raw.items()},
-          compare=lambda rows: {fid: path for fid, path in rows.items()
-                                if path.startswith(f"{ROOT_BUCKET}/")}),
-    Route(name="customization",
-          summary="textures named by the character option and choice they paint",
-          needs="the storage",
-          cost="a minute",
-          produce=_customization),
-    Route(name="modelnames",
-          summary="models named by the name they carry about themselves",
-          needs="the storage",
-          cost="minutes",
-          produce=_modelnames),
-    Route(name="reskins",
-          summary="world models named by the retail model they were copied from",
-          needs="the storage and the listfile",
-          cost="minutes, and every retail root with --network",
-          produce=_reskins),
-    Route(name="placements",
-          summary="world models named by the map whose terrain places them",
-          needs="the storage",
-          cost="minutes",
-          produce=_placements),
-    Route(name="ground",
-          summary="textures named by the map whose terrain paints with them",
-          needs="the storage",
-          cost="minutes",
-          produce=_ground),
-    Route(name="worldmodels",
-          summary="group geometry and material textures, from the models using them",
-          needs="the storage",
-          cost="minutes",
-          produce=_world_models),
-    Route(name="models",
-          summary="skins, textures and animations, from the models using them",
-          needs="the storage",
-          cost="minutes",
-          produce=_models),
-    Route(name="neighbours",
-          summary="files named by the art they were delivered alongside",
-          needs="the storage, and every name the routes above it settled",
-          cost="seconds, and every remaining file with --network",
-          produce=_neighbours),
+    Route(
+        name="terrain",
+        summary="the map table, and each map's own grid of tiles",
+        needs="the storage",
+        cost="a minute",
+        produce=_terrain,
+    ),
+    Route(
+        name="icons",
+        summary="the client's own icon database, in an addon it ships",
+        needs="the install",
+        cost="a second",
+        produce=_icons,
+        golden="epsilon_icon_names.json",
+        # The copy holds bare icon names; the route yields the paths they
+        # resolve to, and covers the stock icons this one does not.
+        reference=lambda raw: {
+            int(fid): f"{ICON_DIRECTORY}/{name}.blp" for fid, name in raw.items() if int(fid) > SUPPLEMENT_FLOOR
+        },
+        compare=lambda rows: {fid: path for fid, path in rows.items() if fid > SUPPLEMENT_FLOOR},
+    ),
+    Route(
+        name="objects",
+        summary="the gameobject name list the client ships",
+        needs="the storage",
+        cost="seconds",
+        produce=_objects,
+        golden="pseudo_paths.json",
+        # The copy records only the names that had to be derived, not the
+        # ones the client already reported as paths.
+        reference=lambda raw: {int(fid): path for fid, path in raw.items()},
+        compare=lambda rows: {fid: path for fid, path in rows.items() if path.startswith(f"{ROOT_BUCKET}/")},
+    ),
+    Route(
+        name="customization",
+        summary="textures named by the character option and choice they paint",
+        needs="the storage",
+        cost="a minute",
+        produce=_customization,
+    ),
+    Route(
+        name="modelnames",
+        summary="models named by the name they carry about themselves",
+        needs="the storage",
+        cost="minutes",
+        produce=_modelnames,
+    ),
+    Route(
+        name="reskins",
+        summary="world models named by the retail model they were copied from",
+        needs="the storage and the listfile",
+        cost="minutes, and every retail root with --network",
+        produce=_reskins,
+    ),
+    Route(
+        name="placements",
+        summary="world models named by the map whose terrain places them",
+        needs="the storage",
+        cost="minutes",
+        produce=_placements,
+    ),
+    Route(
+        name="ground",
+        summary="textures named by the map whose terrain paints with them",
+        needs="the storage",
+        cost="minutes",
+        produce=_ground,
+    ),
+    Route(
+        name="worldmodels",
+        summary="group geometry and material textures, from the models using them",
+        needs="the storage",
+        cost="minutes",
+        produce=_world_models,
+    ),
+    Route(
+        name="models",
+        summary="skins, textures and animations, from the models using them",
+        needs="the storage",
+        cost="minutes",
+        produce=_models,
+    ),
+    Route(
+        name="neighbours",
+        summary="files named by the art they were delivered alongside",
+        needs="the storage, and every name the routes above it settled",
+        cost="seconds, and every remaining file with --network",
+        produce=_neighbours,
+    ),
 )
 """Every route, in priority order.
 
@@ -380,8 +448,7 @@ def run(wanted: list[Route], seed: dict[int, str]) -> tuple[dict[int, str], list
         merged.update(fresh)
         below = len(rows) - len(admitted)
         note = f", {below:,} below the floor" if below else ""
-        report.append(f"  {route.name:{_NAME_WIDTH}} {len(rows):>8,} rows, "
-                      f"{len(fresh):>8,} new{note}")
+        report.append(f"  {route.name:{_NAME_WIDTH}} {len(rows):>8,} rows, {len(fresh):>8,} new{note}")
     return merged, report
 
 
@@ -394,8 +461,7 @@ def show_list() -> None:
     cost = max(len(route.cost) for route in ROUTES)
     log(f"\n  {'route':{name}} {'needs':{needs}} {'cost':{cost}} what it reads")
     for route in ROUTES:
-        log(f"  {route.name:{name}} {route.needs:{needs}} {route.cost:{cost}} "
-            f"{DIM}{route.summary}{RESET}")
+        log(f"  {route.name:{name}} {route.needs:{needs}} {route.cost:{cost}} {DIM}{route.summary}{RESET}")
     log("")
 
 
@@ -409,23 +475,22 @@ def verify() -> int:
     for route in ROUTES:
         expected = golden_rows(route)
         if expected is None:
-            log(f"  {YELLOW}skip{RESET}  {route.name:{_NAME_WIDTH}} "
-                f"{DIM}no reference copy on disk{RESET}")
+            log(f"  {YELLOW}skip{RESET}  {route.name:{_NAME_WIDTH}} {DIM}no reference copy on disk{RESET}")
             continue
         actual = route.produce({})
         if route.compare is not None:
             actual = route.compare(actual)
 
         if actual == expected:
-            log(f"  {GREEN}ok{RESET}    {route.name:{_NAME_WIDTH}} "
-                f"{DIM}{len(actual):,} rows reproduced exactly{RESET}")
+            log(f"  {GREEN}ok{RESET}    {route.name:{_NAME_WIDTH}} {DIM}{len(actual):,} rows reproduced exactly{RESET}")
             continue
         failures += 1
         missing, extra = set(expected) - set(actual), set(actual) - set(expected)
-        differing = [fid for fid in set(actual) & set(expected)
-                     if actual[fid] != expected[fid]]
-        log(f"  {RED}FAIL{RESET}  {route.name:{_NAME_WIDTH}} {len(missing):,} missing, "
-            f"{len(extra):,} unexpected, {len(differing):,} differing")
+        differing = [fid for fid in set(actual) & set(expected) if actual[fid] != expected[fid]]
+        log(
+            f"  {RED}FAIL{RESET}  {route.name:{_NAME_WIDTH}} {len(missing):,} missing, "
+            f"{len(extra):,} unexpected, {len(differing):,} differing"
+        )
         for fid in sorted(differing)[:3]:
             log(f"          {fid}  got {actual[fid]}")
             log(f"          {' ' * len(str(fid))}  want {expected[fid]}")
@@ -452,8 +517,7 @@ def coverage(merged: dict[int, str]) -> None:
     log(f"  unnamed       {len(unnamed):,}")
 
     storage().encoding_keys(unnamed)  # type: ignore[attr-defined]
-    here = [fid for fid in unnamed
-            if storage().holds_locally(fid)]  # type: ignore[attr-defined]
+    here = [fid for fid in unnamed if storage().holds_locally(fid)]  # type: ignore[attr-defined]
 
     # With the network allowed there is no reason to report on a subset. The
     # question this answers is what the remainder IS, and an answer drawn only
@@ -478,8 +542,10 @@ def coverage(merged: dict[int, str]) -> None:
     if unreadable:
         log(f"    {'unreadable':22} {unreadable:>7,}")
     if len(opening) < len(unnamed):
-        log(f"    {DIM}{len(unnamed) - len(opening):,} more are not held locally "
-            f"and were not opened; --network includes them{RESET}")
+        log(
+            f"    {DIM}{len(unnamed) - len(opening):,} more are not held locally "
+            f"and were not opened; --network includes them{RESET}"
+        )
 
 
 def referrers(merged: dict[int, str]) -> None:
@@ -520,18 +586,26 @@ def referrers(merged: dict[int, str]) -> None:
         if table is None:
             unreadable += 1
             continue
-        hits = {int(cell) for row in table.rows for cell in row
-                if len(cell) in width and cell.isdigit() and int(cell) in unnamed}
+        hits = {
+            int(cell)
+            for row in table.rows
+            for cell in row
+            if len(cell) in width and cell.isdigit() and int(cell) in unnamed
+        }
         if hits:
             found[name] = hits
 
     reached = set().union(*found.values()) if found else set()
-    log(f"\n  {len(ids) - absent - unreadable:,} tables read; {absent:,} the client "
-        f"does not ship, {unreadable:,} unreadable")
+    log(
+        f"\n  {len(ids) - absent - unreadable:,} tables read; {absent:,} the client "
+        f"does not ship, {unreadable:,} unreadable"
+    )
     log(f"  {len(reached):,} of the {len(unnamed):,} unnamed are mentioned somewhere")
-    log(f"  {len(unnamed) - len(reached):,} are mentioned by no table at all"
+    log(
+        f"  {len(unnamed) - len(reached):,} are mentioned by no table at all"
         + (f"  {RED}(and {unreadable:,} tables went unread){RESET}" if unreadable else "")
-        + "\n")
+        + "\n"
+    )
     for name, hits in sorted(found.items(), key=lambda kv: -len(kv[1]))[:25]:
         log(f"    {name:36} {len(hits):>6,}")
 
@@ -549,8 +623,10 @@ def diff_against_vendored(merged: dict[int, str]) -> None:
     log(f"\n  vendored      {len(current):,}")
     log(f"  reconstructed {len(merged):,}")
     log(f"  added         {len(added):,}")
-    log(f"  {'lost' if lost else 'lost':13} {len(lost):,}"
-        + (f"   {RED}a vendored name this run cannot reproduce{RESET}" if lost else ""))
+    log(
+        f"  {'lost' if lost else 'lost':13} {len(lost):,}"
+        + (f"   {RED}a vendored name this run cannot reproduce{RESET}" if lost else "")
+    )
     log(f"  changed       {len(changed):,}")
     for fid in sorted(lost)[:5]:
         log(f"    {DIM}lost{RESET} {fid}  {current[fid]}")
@@ -562,25 +638,23 @@ def diff_against_vendored(merged: dict[int, str]) -> None:
 def main() -> int:
     """Run the routes asked for, merge them, and report."""
     survive_console_encoding()
-    parser = argparse.ArgumentParser(
-        description="Reconstruct the Epsilon asset-name supplement.")
-    parser.add_argument("--list", action="store_true",
-                        help="what each route needs and costs; run nothing")
-    parser.add_argument("--only", metavar="ROUTE", action="append",
-                        choices=[route.name for route in ROUTES],
-                        help="run only this route (repeatable)")
-    parser.add_argument("--verify", action="store_true",
-                        help="check each route against its known-good copy")
-    parser.add_argument("--diff", action="store_true",
-                        help="compare the merged result against the vendored file")
-    parser.add_argument("--network", action="store_true",
-                        help="let the walks read files the install does not hold")
-    parser.add_argument("--coverage", action="store_true",
-                        help="report what is still unnamed, classified by kind")
-    parser.add_argument("--referrers", action="store_true",
-                        help="sweep every client table for mentions of what is unnamed")
-    parser.add_argument("--vendor", action="store_true",
-                        help="write the merged result to the file the build reads")
+    parser = argparse.ArgumentParser(description="Reconstruct the Epsilon asset-name supplement.")
+    parser.add_argument("--list", action="store_true", help="what each route needs and costs; run nothing")
+    parser.add_argument(
+        "--only",
+        metavar="ROUTE",
+        action="append",
+        choices=[route.name for route in ROUTES],
+        help="run only this route (repeatable)",
+    )
+    parser.add_argument("--verify", action="store_true", help="check each route against its known-good copy")
+    parser.add_argument("--diff", action="store_true", help="compare the merged result against the vendored file")
+    parser.add_argument("--network", action="store_true", help="let the walks read files the install does not hold")
+    parser.add_argument("--coverage", action="store_true", help="report what is still unnamed, classified by kind")
+    parser.add_argument(
+        "--referrers", action="store_true", help="sweep every client table for mentions of what is unnamed"
+    )
+    parser.add_argument("--vendor", action="store_true", help="write the merged result to the file the build reads")
     args = parser.parse_args()
 
     if args.list:
@@ -598,8 +672,10 @@ def main() -> int:
         # else -- exactly what a vendored artefact may not be. A partial run
         # is refused for the same reason from the other end: it would vendor a
         # merge of this run and whatever the last one left in the cache.
-        log(f"  {RED}FAIL{RESET}  --vendor needs a full --network run: "
-            "a local-only or partial walk is not reproducible off this machine")
+        log(
+            f"  {RED}FAIL{RESET}  --vendor needs a full --network run: "
+            "a local-only or partial walk is not reproducible off this machine"
+        )
         return 1
     # Vendoring is meant to be a decision, and the diff is what makes it one.
     args.diff = args.diff or args.vendor
@@ -607,8 +683,7 @@ def main() -> int:
     global LOCAL_ONLY  # pylint: disable=global-statement
     LOCAL_ONLY = not args.network
 
-    wanted = [route for route in ROUTES
-              if args.only is None or route.name in args.only]
+    wanted = [route for route in ROUTES if args.only is None or route.name in args.only]
 
     # A walk run on its own still needs the names the routes before it settled,
     # so a partial run starts from the last full one rather than from nothing.

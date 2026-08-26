@@ -8,10 +8,8 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
-from ..model.section import (Cardinality, Encoding, Layout, Section,
-                             SectionColumns)
-from .columns import (EMPTY_SLOT, LAYOUTS, decode_column, dense, deduped,
-                      encode_column, sparse)
+from ..model.section import Cardinality, Encoding, Layout, Section, SectionColumns
+from .columns import EMPTY_SLOT, LAYOUTS, decode_column, dense, deduped, encode_column, sparse
 from .policy import FEWEST_BYTES, FEWEST_ENTRIES, layout_of
 
 __all__ = [
@@ -30,8 +28,9 @@ __all__ = [
 ]
 
 
-def encode_section(section: Section, produced: SectionColumns,
-                   policy: Mapping[Cardinality, Encoding] = FEWEST_BYTES) -> object:
+def encode_section(
+    section: Section, produced: SectionColumns, policy: Mapping[Cardinality, Encoding] = FEWEST_BYTES
+) -> object:
     """One section's produced columns, laid out as the record declares.
 
     Args:
@@ -58,19 +57,19 @@ def encode_section(section: Section, produced: SectionColumns,
             f"{section.name} declares {section.columns} but produced "
             f"{sorted(produced)}"
             + (f"; missing {', '.join(missing)}" if missing else "")
-            + (f"; unexpected {', '.join(extra)}" if extra else ""))
+            + (f"; unexpected {', '.join(extra)}" if extra else "")
+        )
 
-    encoded = {name: encode_column(produced[name],
-                                   layout_for(section, name, policy),
-                                   section.absent.get(name, EMPTY_SLOT))
-               for name in section.columns}
+    encoded = {
+        name: encode_column(produced[name], layout_for(section, name, policy), section.absent.get(name, EMPTY_SLOT))
+        for name in section.columns
+    }
     if section.layout is Layout.BARE:
         return encoded[section.columns[0]]
     return encoded
 
 
-def layout_for(section: Section, column: str,
-               policy: Mapping[Cardinality, Encoding]) -> Encoding:
+def layout_for(section: Section, column: str, policy: Mapping[Cardinality, Encoding]) -> Encoding:
     """The layout one column ships in.
 
     A layout the section named outright wins; otherwise the column's declared

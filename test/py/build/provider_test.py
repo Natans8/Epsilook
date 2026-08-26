@@ -28,10 +28,8 @@ Factory = Callable[..., Tables]
 PROVIDERS: list[tuple[str, Factory]] = [
     ("CsvTables", CsvTables),
     ("SqlTables", SqlTables),
-    ("OverlaidCsvTables",
-     lambda directory, **drift: OverlaidTables(CsvTables(directory, **drift))),
-    ("OverlaidSqlTables",
-     lambda directory, **drift: OverlaidTables(SqlTables(directory, **drift))),
+    ("OverlaidCsvTables", lambda directory, **drift: OverlaidTables(CsvTables(directory, **drift))),
+    ("OverlaidSqlTables", lambda directory, **drift: OverlaidTables(SqlTables(directory, **drift))),
 ]
 
 TABLE = """\
@@ -55,6 +53,7 @@ def _make(request: pytest.FixtureRequest, source: Path) -> Factory:
     Handed as a factory rather than an instance because the drift cases stand
     their own declarations in, and every implementation owes those too.
     """
+
     def build(**drift: Any) -> Tables:
         # What the fixture was parametrised with is known to the decorator and
         # invisible to the checker, which types `param` as Any for everyone.
@@ -93,8 +92,7 @@ def test_values_are_text_exactly_as_written(tables: Tables) -> None:
 
 
 def test_a_quoted_value_keeps_its_comma_and_its_spaces(tables: Tables) -> None:
-    assert list(tables.rows("Spell", ["Name"])) == [
-        ("Fireball",), ("Comma, Inc",), ("  padded  ",)]
+    assert list(tables.rows("Spell", ["Name"])) == [("Fireball",), ("Comma, Inc",), ("  padded  ",)]
 
 
 def test_an_empty_field_is_the_empty_string(tables: Tables) -> None:
@@ -120,8 +118,7 @@ def test_a_declared_absent_table_yields_nothing(make: Factory) -> None:
 
 def test_a_declared_optional_column_yields_its_stand_in(make: Factory) -> None:
     tables = make(defaults={("Spell", "Missing"): "-1"})
-    assert list(tables.rows("Spell", ["ID", "Missing"])) == [
-        ("3", "-1"), ("1", "-1"), ("2", "-1")]
+    assert list(tables.rows("Spell", ["ID", "Missing"])) == [("3", "-1"), ("1", "-1"), ("2", "-1")]
 
 
 def test_a_request_of_nothing_but_stand_ins_still_yields_every_row(make: Factory) -> None:
@@ -132,8 +129,7 @@ def test_a_request_of_nothing_but_stand_ins_still_yields_every_row(make: Factory
     read from the columns alone loses the table here.
     """
     tables = make(defaults={("Spell", "Gone"): "-1", ("Spell", "Also"): "0"})
-    assert list(tables.rows("Spell", ["Gone", "Also"])) == [
-        ("-1", "0"), ("-1", "0"), ("-1", "0")]
+    assert list(tables.rows("Spell", ["Gone", "Also"])) == [("-1", "0"), ("-1", "0"), ("-1", "0")]
 
 
 def test_an_undeclared_missing_column_is_fatal(tables: Tables) -> None:
@@ -167,7 +163,6 @@ def test_a_truncated_row_is_fatal(source: Path, tables: Tables) -> None:
     from, which is the one thing an operator needs with sixty tables and
     twelve builds to choose between.
     """
-    (source / "Spell.csv").write_text("ID,Name,Amount,Empty\n3,Fireball\n",
-                                      encoding="utf-8", newline="")
+    (source / "Spell.csv").write_text("ID,Name,Amount,Empty\n3,Fireball\n", encoding="utf-8", newline="")
     with pytest.raises(SystemExit):
         list(tables.rows("Spell", ["ID", "Amount"]))

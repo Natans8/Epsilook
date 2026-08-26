@@ -22,17 +22,25 @@ reader would ask about apart.
 """
 
 SEAT_PASSENGER_ANIM_COLUMNS = {
-    "EnterAnimStart": 0, "EnterAnimLoop": 0,
-    "RideAnimStart": 1, "RideAnimLoop": 1,
-    "RideUpperAnimStart": 1, "RideUpperAnimLoop": 1,
-    "ExitAnimStart": 2, "ExitAnimLoop": 2, "ExitAnimEnd": 2,
+    "EnterAnimStart": 0,
+    "EnterAnimLoop": 0,
+    "RideAnimStart": 1,
+    "RideAnimLoop": 1,
+    "RideUpperAnimStart": 1,
+    "RideUpperAnimLoop": 1,
+    "ExitAnimStart": 2,
+    "ExitAnimLoop": 2,
+    "ExitAnimEnd": 2,
 }
 """The rider's animation columns, each under the role it plays in."""
-SEAT_VEHICLE_ANIM_COLUMNS = ["VehicleEnterAnim", "VehicleExitAnim",
-                             "VehicleRideAnimLoop"]
+SEAT_VEHICLE_ANIM_COLUMNS = ["VehicleEnterAnim", "VehicleExitAnim", "VehicleRideAnimLoop"]
 SEAT_ANIMKIT_COLUMNS = [
-    "EnterAnimKitID", "RideAnimKitID", "ExitAnimKitID",
-    "VehicleEnterAnimKitID", "VehicleRideAnimKitID", "VehicleExitAnimKitID",
+    "EnterAnimKitID",
+    "RideAnimKitID",
+    "ExitAnimKitID",
+    "VehicleEnterAnimKitID",
+    "VehicleRideAnimKitID",
+    "VehicleExitAnimKitID",
 ]
 """The seat's anim kits. Ordinary anim kit ids, so they join that group."""
 
@@ -69,31 +77,26 @@ def read_vehicle_seats(tables: Tables) -> VehicleSeats:
         return vehicles
     seat_columns = sorted(
         (column for column in tables.header("Vehicle") if column.startswith("SeatID_")),
-        key=lambda column: int(column.split("_")[1]))
+        key=lambda column: int(column.split("_")[1]),
+    )
     slots: dict[int, list[int]] = {}
     for vehicle_id, *declared in tables.rows("Vehicle", ["ID", *seat_columns]):
-        slots[to_int(vehicle_id)] = [seat for seat in (to_int(value) for value in declared)
-                                     if seat > 0]
+        slots[to_int(vehicle_id)] = [seat for seat in (to_int(value) for value in declared) if seat > 0]
 
     if not tables.available("VehicleSeat"):
         vehicles.seats = {vehicle: [""] * len(seats) for vehicle, seats in slots.items()}
         return vehicles
 
     present = set(tables.header("VehicleSeat"))
-    rider_columns = [column for column in SEAT_PASSENGER_ANIM_COLUMNS
-                     if column in present]
-    vehicle_columns = [column for column in SEAT_VEHICLE_ANIM_COLUMNS
-                       if column in present]
+    rider_columns = [column for column in SEAT_PASSENGER_ANIM_COLUMNS if column in present]
+    vehicle_columns = [column for column in SEAT_VEHICLE_ANIM_COLUMNS if column in present]
     kit_columns = [column for column in SEAT_ANIMKIT_COLUMNS if column in present]
     riders, driven = len(rider_columns), len(vehicle_columns)
     seat_rows: dict[int, tuple[int, list[int], list[int], list[int]]] = {}
-    for row in tables.rows("VehicleSeat", ["ID", "AttachmentID", *rider_columns,
-                                           *vehicle_columns, *kit_columns]):
+    for row in tables.rows("VehicleSeat", ["ID", "AttachmentID", *rider_columns, *vehicle_columns, *kit_columns]):
         values = [to_int(value) for value in row]
         rest = values[2:]
-        seat_rows[values[0]] = (values[1], rest[:riders],
-                                rest[riders:riders + driven],
-                                rest[riders + driven:])
+        seat_rows[values[0]] = (values[1], rest[:riders], rest[riders : riders + driven], rest[riders + driven :])
 
     for vehicle, seat_ids in slots.items():
         names: list[str] = []
@@ -106,13 +109,14 @@ def read_vehicle_seats(tables: Tables) -> VehicleSeats:
                 continue
             attachment, rider_anims, vehicle_anims, seat_kits = seat
             names.append(seat_attachment_name(attachment))
-            roled = {(value, SEAT_PASSENGER_ANIM_COLUMNS[column])
-                     for column, value in zip(rider_columns, rider_anims)
-                     if value > 0}
+            roled = {
+                (value, SEAT_PASSENGER_ANIM_COLUMNS[column])
+                for column, value in zip(rider_columns, rider_anims)
+                if value > 0
+            }
             if roled:
                 vehicles.passenger_anims.setdefault(vehicle, set()).update(roled)
-            for values, into in ((vehicle_anims, vehicles.vehicle_anims),
-                                 (seat_kits, vehicles.animkits)):
+            for values, into in ((vehicle_anims, vehicles.vehicle_anims), (seat_kits, vehicles.animkits)):
                 played = {value for value in values if value > 0}
                 if played:
                     into.setdefault(vehicle, set()).update(played)

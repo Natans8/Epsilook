@@ -23,8 +23,10 @@ def find_7z() -> str:
     for candidate in (shutil.which("7z"), r"C:\Program Files\7-Zip\7z.exe", "/usr/bin/7z"):
         if candidate and Path(candidate).exists():
             return candidate
-    sys.exit("error: 7-Zip (7z) is required to extract the TDB archive — install it "
-             "or place the extracted .sql files in the cache tdb dir yourself")
+    sys.exit(
+        "error: 7-Zip (7z) is required to extract the TDB archive — install it "
+        "or place the extracted .sql files in the cache tdb dir yourself"
+    )
 
 
 @contextmanager
@@ -39,8 +41,8 @@ def read_member(archive: Path, member: str) -> Iterator[TextIO]:
     # is draining fills at 64 KB and deadlocks the extraction.
     with tempfile.TemporaryFile() as complaints:
         process = subprocess.Popen(  # pylint: disable=consider-using-with
-            [find_7z(), "x", "-so", str(archive), member],
-            stdout=subprocess.PIPE, stderr=complaints)
+            [find_7z(), "x", "-so", str(archive), member], stdout=subprocess.PIPE, stderr=complaints
+        )
         stream = process.stdout
         if not isinstance(stream, io.BufferedReader):
             raise RuntimeError("7z was started with stdout=PIPE and has none")

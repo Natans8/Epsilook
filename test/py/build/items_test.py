@@ -46,11 +46,15 @@ ItemID,ItemAppearanceID
 
 
 def items(tables: BuildTables) -> ItemModels:
-    return read_item_models(tables(ItemSearchName=ITEM_SEARCH_NAME,
-                                   ModelFileData=MODEL_FILE_DATA,
-                                   ItemDisplayInfo=ITEM_DISPLAY_INFO,
-                                   ItemAppearance=ITEM_APPEARANCE,
-                                   ItemModifiedAppearance=ITEM_MODIFIED_APPEARANCE))
+    return read_item_models(
+        tables(
+            ItemSearchName=ITEM_SEARCH_NAME,
+            ModelFileData=MODEL_FILE_DATA,
+            ItemDisplayInfo=ITEM_DISPLAY_INFO,
+            ItemAppearance=ITEM_APPEARANCE,
+            ItemModifiedAppearance=ITEM_MODIFIED_APPEARANCE,
+        )
+    )
 
 
 def test_the_first_appearance_wins(tables: BuildTables) -> None:
@@ -60,15 +64,13 @@ def test_the_first_appearance_wins(tables: BuildTables) -> None:
     assert items(tables).icon_fid[10] == 9000
 
 
-def test_the_lowest_file_of_a_resources_id_is_the_base_model(
-        tables: BuildTables) -> None:
+def test_the_lowest_file_of_a_resources_id_is_the_base_model(tables: BuildTables) -> None:
     """A model shipping with levels of detail names several files, out of
     order."""
     assert items(tables).model_fid[10] == 8099
 
 
-def test_the_second_model_slot_is_reached_when_the_first_is_unset(
-        tables: BuildTables) -> None:
+def test_the_second_model_slot_is_reached_when_the_first_is_unset(tables: BuildTables) -> None:
     """A paired item carries its second component in slot 1."""
     assert items(tables).model_fid[11] == 8200
 

@@ -15,6 +15,7 @@ from .attachments import DEFAULT_MISSILE_SOURCE
 from .columns import to_int
 from .models import ModelSources, file_for_effect_name
 
+
 class Missile(NamedTuple):
     """One projectile a visual launches, and where it flies between.
 
@@ -80,10 +81,11 @@ def read_missile_motions(tables: Tables) -> dict[int, MissileMotion]:
 
     The table's remaining column is the path's script, which nothing renders.
     """
-    return {to_int(motion_id): MissileMotion(name, to_int(projectiles))
-            for motion_id, name, projectiles in tables.rows(
-                "SpellMissileMotion", ["ID", "Name", "MissileCount"])
-            if name}
+    return {
+        to_int(motion_id): MissileMotion(name, to_int(projectiles))
+        for motion_id, name, projectiles in tables.rows("SpellMissileMotion", ["ID", "Name", "MissileCount"])
+        if name
+    }
 
 
 def read_missiles(tables: Tables, models: ModelSources) -> dict[int, VisualMissiles]:
@@ -92,8 +94,13 @@ def read_missiles(tables: Tables, models: ModelSources) -> dict[int, VisualMissi
     The row's attachments win over its visual's, which fills in what the row
     leaves unset. The precedence was settled in game.
     """
-    visual_columns = ["ID", "SpellVisualMissileSetID", "RaidSpellVisualMissileSetID",
-                      "MissileAttachment", "MissileDestinationAttachment"]
+    visual_columns = [
+        "ID",
+        "SpellVisualMissileSetID",
+        "RaidSpellVisualMissileSetID",
+        "MissileAttachment",
+        "MissileDestinationAttachment",
+    ]
     visuals: dict[int, tuple[int, int, int, int]] = {}
     for visual_id, *values in tables.rows("SpellVisual", visual_columns):
         first, raid, source, destination = (to_int(value) for value in values)
@@ -103,11 +110,18 @@ def read_missiles(tables: Tables, models: ModelSources) -> dict[int, VisualMissi
     # naming several motions becomes several rows.
     sets: dict[int, VisualMissiles] = {}
     for row in tables.rows(
-            "SpellVisualMissile",
-            ["SpellVisualMissileSetID", "SpellVisualEffectNameID", "SoundEntriesID",
-             "AnimKitID", "SpellMissileMotionID", "Attachment", "DestinationAttachment"]):
-        set_id, name_id, sound, animkit, motion, source, destination = (
-            to_int(value) for value in row)
+        "SpellVisualMissile",
+        [
+            "SpellVisualMissileSetID",
+            "SpellVisualEffectNameID",
+            "SoundEntriesID",
+            "AnimKitID",
+            "SpellMissileMotionID",
+            "Attachment",
+            "DestinationAttachment",
+        ],
+    ):
+        set_id, name_id, sound, animkit, motion, source, destination = (to_int(value) for value in row)
         if not set_id:
             continue
         into = sets.setdefault(set_id, VisualMissiles())
@@ -128,14 +142,17 @@ def read_missiles(tables: Tables, models: ModelSources) -> dict[int, VisualMissi
             if found is None:
                 continue
             merged.models.update(
-                Missile(shot.file, shot.motion,
-                        shot.source if shot.source >= 0
-                        else (visual_source if visual_source >= 0
-                              else DEFAULT_MISSILE_SOURCE),
-                        shot.destination if shot.destination >= 0
-                        else visual_destination,
-                        shot.effect)
-                for shot in found.models)
+                Missile(
+                    shot.file,
+                    shot.motion,
+                    shot.source
+                    if shot.source >= 0
+                    else (visual_source if visual_source >= 0 else DEFAULT_MISSILE_SOURCE),
+                    shot.destination if shot.destination >= 0 else visual_destination,
+                    shot.effect,
+                )
+                for shot in found.models
+            )
             merged.soundkits.update(found.soundkits)
             merged.animkits.update(found.animkits)
         if merged:

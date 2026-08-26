@@ -13,9 +13,17 @@ from .columns import to_float
 
 # Hue boundaries in degrees, each naming everything below it and above the one
 # before. Red appears twice because it wraps the circle.
-HUE_WORDS = ((15, "red"), (45, "orange"), (70, "yellow"), (160, "green"),
-             (200, "cyan"), (255, "blue"), (290, "purple"), (330, "pink"),
-             (361, "red"))
+HUE_WORDS = (
+    (15, "red"),
+    (45, "orange"),
+    (70, "yellow"),
+    (160, "green"),
+    (200, "cyan"),
+    (255, "blue"),
+    (290, "purple"),
+    (330, "pink"),
+    (361, "red"),
+)
 
 MIN_SATURATION, MIN_VALUE = 0.15, 0.08
 """Below either, a colour names no hue: white, grey and near-black are the
@@ -55,6 +63,5 @@ def hue_words(colors: tuple[int, ...]) -> str:
 
     A negative entry is the "no colour here" sentinel and names nothing.
     """
-    words = dict.fromkeys(word for color in colors if color >= 0
-                          if (word := hue_word(*unpack_rgb(color))))
+    words = dict.fromkeys(word for color in colors if color >= 0 if (word := hue_word(*unpack_rgb(color))))
     return " ".join(words)

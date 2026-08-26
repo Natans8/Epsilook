@@ -62,11 +62,11 @@ UV_RUN = ["uv", "run", "python"]
 """How every Python the repository owns is launched (see `build_argv`)."""
 
 
-
 def git(*args: str) -> str:
     try:
-        out = subprocess.run(["git", "-C", str(ROOT), *args], capture_output=True,
-                             encoding="utf-8", errors="replace", check=True)
+        out = subprocess.run(
+            ["git", "-C", str(ROOT), *args], capture_output=True, encoding="utf-8", errors="replace", check=True
+        )
     except (subprocess.CalledProcessError, FileNotFoundError):
         return ""
     return out.stdout or ""
@@ -144,15 +144,17 @@ def prewarm(chosen: Sequence[Pack], refresh: bool) -> int:
     for build, packs in by_build.items():
         # Empty means every declared language here exactly as it does on a
         # roster row, so one pack asking for all of them settles the build.
-        locales = (set() if any(not pack.locales for pack in packs)
-                   else {code for pack in packs for code in pack.locales})
+        locales = (
+            set() if any(not pack.locales for pack in packs) else {code for pack in packs for code in pack.locales}
+        )
         argv = [*UV_RUN, "-m", BUILD, "--version", build, "--sources-only"]
         for locale in sorted(locales):
             argv += ["--locale", locale]
         if refresh:
             argv.append("--refresh")
-        proc = subprocess.run(argv, cwd=BUILD_ROOT, capture_output=True,
-                              encoding="utf-8", errors="replace", check=False)
+        proc = subprocess.run(
+            argv, cwd=BUILD_ROOT, capture_output=True, encoding="utf-8", errors="replace", check=False
+        )
         if proc.returncode != 0:
             print(f"{RED}fetch failed{RESET} {build} exit {proc.returncode}")
             print(proc.stdout or "", proc.stderr or "", sep="")
@@ -160,8 +162,7 @@ def prewarm(chosen: Sequence[Pack], refresh: bool) -> int:
     return 0
 
 
-def build_one(pack: Pack, refresh: bool, timing: bool,
-              capture: bool) -> tuple[Pack, int, str]:
+def build_one(pack: Pack, refresh: bool, timing: bool, capture: bool) -> tuple[Pack, int, str]:
     """Run one pack's build to completion, and bring back what it said.
 
     `capture` is false for a lone build, which is the development loop: its
@@ -169,9 +170,14 @@ def build_one(pack: Pack, refresh: bool, timing: bool,
     exactly as it did before there was a pool. Captured output would turn a
     twenty-five second build into twenty-five seconds of silence.
     """
-    proc = subprocess.run(build_argv(pack, refresh, timing), cwd=BUILD_ROOT,
-                          capture_output=capture, encoding="utf-8",
-                          errors="replace", check=False)
+    proc = subprocess.run(
+        build_argv(pack, refresh, timing),
+        cwd=BUILD_ROOT,
+        capture_output=capture,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
     if not capture:
         return pack, proc.returncode, ""
     return pack, proc.returncode, (proc.stdout or "") + (proc.stderr or "")
@@ -192,8 +198,7 @@ def run_serially(chosen: Sequence[Pack], refresh: bool, timing: bool) -> int:
     return 0
 
 
-def run_together(chosen: Sequence[Pack], refresh: bool, timing: bool,
-                 jobs: int) -> int:
+def run_together(chosen: Sequence[Pack], refresh: bool, timing: bool, jobs: int) -> int:
     """Build the packs at once, printing each whole. How many failed.
 
     Every pack is attempted even after one fails, because they are independent
@@ -202,8 +207,7 @@ def run_together(chosen: Sequence[Pack], refresh: bool, timing: bool,
     """
     failed = 0
     with ThreadPoolExecutor(max_workers=jobs) as pool:
-        running = [pool.submit(build_one, pack, refresh, timing, True)
-                   for pack in chosen]
+        running = [pool.submit(build_one, pack, refresh, timing, True) for pack in chosen]
         for done, future in enumerate(as_completed(running), 1):
             pack, code, output = future.result()
             print(f"{DIM}[{done}/{len(chosen)}] {pack.id}  {pack.label}{RESET}")
@@ -214,8 +218,7 @@ def run_together(chosen: Sequence[Pack], refresh: bool, timing: bool,
     return failed
 
 
-def build_all(chosen: Sequence[Pack], refresh: bool, timing: bool,
-              jobs: int) -> int:
+def build_all(chosen: Sequence[Pack], refresh: bool, timing: bool, jobs: int) -> int:
     """Build every chosen pack. Zero when they all succeeded.
 
     Subprocesses supervised by threads rather than a process pool: a build is
@@ -243,8 +246,7 @@ def build_all(chosen: Sequence[Pack], refresh: bool, timing: bool,
     if failed:
         print(f"{RED}{failed} of {len(chosen)} build(s) failed{RESET}")
         return 1
-    print(f"{DIM}built {len(chosen)} pack(s) across {jobs} job(s) "
-          f"[{elapsed:.1f}s]{RESET}")
+    print(f"{DIM}built {len(chosen)} pack(s) across {jobs} job(s) [{elapsed:.1f}s]{RESET}")
     return 0
 
 
@@ -373,8 +375,7 @@ def describe_difference(before: dict, after: dict) -> list[str]:
             notes.append(f"-{key}")
         elif before[key] != after[key]:
             if key == "meta":
-                sub = sorted(k for k in set(before[key]) | set(after[key])
-                             if before[key].get(k) != after[key].get(k))
+                sub = sorted(k for k in set(before[key]) | set(after[key]) if before[key].get(k) != after[key].get(k))
                 notes.append(f"meta: {', '.join(sub)}")
             elif isinstance(before[key], (list, dict)):
                 notes.append(f"{key} ({len(before[key])} -> {len(after[key])})")
@@ -397,8 +398,7 @@ def verify(pack: Pack, refresh: bool, timing: bool = False) -> bool | None:
     pack_path = ROOT / pack_rel
 
     if git("status", "--porcelain", "--", pack_rel).strip():
-        print(f"{RED}refusing{RESET} {pack_rel} has uncommitted changes - "
-              f"commit or stash them first")
+        print(f"{RED}refusing{RESET} {pack_rel} has uncommitted changes - commit or stash them first")
         return None
     if not pack_path.exists():
         print(f"{RED}refusing{RESET} {pack_rel} does not exist yet - build it first")
@@ -425,8 +425,10 @@ def verify(pack: Pack, refresh: bool, timing: bool = False) -> bool | None:
             print(f"{GREEN}identical{RESET}  {pack.id} reproduced byte for byte")
             return True
         if after == before:
-            print(f"{GREEN}date only{RESET}  {pack.id} is reproducible; only "
-                  f"meta.built moved {DIM}(restoring - do not commit this){RESET}")
+            print(
+                f"{GREEN}date only{RESET}  {pack.id} is reproducible; only "
+                f"meta.built moved {DIM}(restoring - do not commit this){RESET}"
+            )
             return True
         notes = describe_difference(before, after)
         print(f"{YELLOW}CONTENT DIFFERS{RESET}  {pack.id}: {'; '.join(notes) or 'values changed'}")
@@ -439,39 +441,44 @@ def verify(pack: Pack, refresh: bool, timing: bool = False) -> bool | None:
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description=__doc__,
-                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("version", nargs="?", help="pack id or a prefix of one (default: all)")
-    ap.add_argument("--all", action="store_true",
-                    help="with --verify, check every pack rather than the "
-                         "default one")
-    ap.add_argument("--verify", action="store_true",
-                    help="deterministic-build oracle: rebuild, compare, restore")
+    ap.add_argument("--all", action="store_true", help="with --verify, check every pack rather than the default one")
+    ap.add_argument("--verify", action="store_true", help="deterministic-build oracle: rebuild, compare, restore")
     ap.add_argument("--refresh", action="store_true", help="re-download sources even if cached")
     ap.add_argument("--list", action="store_true", help="print the commands, run nothing")
-    ap.add_argument("--timing", action="store_true",
-                    help="have each build print where its time went, phase by phase")
-    ap.add_argument("--jobs", type=int, default=0, metavar="N",
-                    help="how many packs to build at once (default: all of "
-                         "them; 1 builds one after another)")
-    ap.add_argument("--prune-cache", action="store_true",
-                    help="delete the download caches no pack needs, and stop "
-                         "(a rebuild does this for you)")
-    ap.add_argument("--prune-modules", action="store_true",
-                    help="delete the module files no pack's manifest names, "
-                         "and stop (a rebuild does this for you)")
+    ap.add_argument("--timing", action="store_true", help="have each build print where its time went, phase by phase")
+    ap.add_argument(
+        "--jobs",
+        type=int,
+        default=0,
+        metavar="N",
+        help="how many packs to build at once (default: all of them; 1 builds one after another)",
+    )
+    ap.add_argument(
+        "--prune-cache",
+        action="store_true",
+        help="delete the download caches no pack needs, and stop (a rebuild does this for you)",
+    )
+    ap.add_argument(
+        "--prune-modules",
+        action="store_true",
+        help="delete the module files no pack's manifest names, and stop (a rebuild does this for you)",
+    )
     args = ap.parse_args()
 
     if args.prune_cache:
         freed = prune_cache()
-        print(f"{GREEN}freed {freed / 1e6:,.0f} MB{RESET}" if freed
-              else f"{GREEN}cache is current{RESET}")
+        print(f"{GREEN}freed {freed / 1e6:,.0f} MB{RESET}" if freed else f"{GREEN}cache is current{RESET}")
         return 0
 
     if args.prune_modules:
         stale, reclaimed = prune_modules()
-        print(f"{GREEN}pruned {stale} module(s), {reclaimed / 1e6:,.0f} MB{RESET}"
-              if stale else f"{GREEN}every module on disk is named{RESET}")
+        print(
+            f"{GREEN}pruned {stale} module(s), {reclaimed / 1e6:,.0f} MB{RESET}"
+            if stale
+            else f"{GREEN}every module on disk is named{RESET}"
+        )
         return 0
 
     chosen = select(args.version)
@@ -483,27 +490,28 @@ def main() -> int:
 
     if args.list:
         for pack in chosen:
-            printable = " ".join(f'"{a}"' if " " in a else a
-                                 for a in build_argv(pack, args.refresh, args.timing))
+            printable = " ".join(f'"{a}"' if " " in a else a for a in build_argv(pack, args.refresh, args.timing))
             print(printable)
         return 0
 
     if args.verify:
-        print(f"verifying {len(chosen)} of {len(PACKS)} pack(s): "
-              f"{', '.join(p.id for p in chosen)}"
-              + ("" if args.all or args.version
-                 else f"  {DIM}(--all for the whole roster){RESET}"))
-        answers = {pack.id: verify(pack, args.refresh, args.timing)
-                   for pack in chosen}
+        print(
+            f"verifying {len(chosen)} of {len(PACKS)} pack(s): "
+            f"{', '.join(p.id for p in chosen)}"
+            + ("" if args.all or args.version else f"  {DIM}(--all for the whole roster){RESET}")
+        )
+        answers = {pack.id: verify(pack, args.refresh, args.timing) for pack in chosen}
         failed = [i for i, ok in answers.items() if ok is False]
         declined = [i for i, ok in answers.items() if ok is None]
         # Said again at the end, because a rebuild prints thousands of lines
         # and the verdict is the one thing a reader scrolls to.
         verdict = RED if failed or declined else GREEN
         reproduced = len(chosen) - len(failed) - len(declined)
-        print(f"\n{verdict}{reproduced}/{len(chosen)} reproduced{RESET}"
-              + (f" - differs: {', '.join(failed)}" if failed else "")
-              + (f" - not checked: {', '.join(declined)}" if declined else ""))
+        print(
+            f"\n{verdict}{reproduced}/{len(chosen)} reproduced{RESET}"
+            + (f" - differs: {', '.join(failed)}" if failed else "")
+            + (f" - not checked: {', '.join(declined)}" if declined else "")
+        )
         return 1 if failed or declined else 0
 
     if build_all(chosen, args.refresh, args.timing, jobs_for(args.jobs, chosen)) != 0:
@@ -515,8 +523,7 @@ def main() -> int:
         print(f"{DIM}retired    site/data/{name} (no longer in the roster){RESET}")
     stale, reclaimed = prune_modules()
     if stale:
-        print(f"{DIM}pruned     {stale} module(s) no manifest names, "
-              f"{reclaimed / 1e6:,.0f} MB{RESET}")
+        print(f"{DIM}pruned     {stale} module(s) no manifest names, {reclaimed / 1e6:,.0f} MB{RESET}")
     freed = prune_cache()
 
     note = f", freed {freed / 1e6:,.0f} MB of cache" if freed else ""

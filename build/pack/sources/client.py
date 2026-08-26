@@ -67,9 +67,8 @@ def table_ids(listfile: Path) -> dict[str, int]:
         for line in handle:
             fid, separator, path = line.partition(";")
             name = path.strip().lower()
-            if separator and name.startswith(TABLE_PREFIX) \
-                    and name.endswith(TABLE_SUFFIX):
-                found[name[len(TABLE_PREFIX):-len(TABLE_SUFFIX)]] = int(fid)
+            if separator and name.startswith(TABLE_PREFIX) and name.endswith(TABLE_SUFFIX):
+                found[name[len(TABLE_PREFIX) : -len(TABLE_SUFFIX)]] = int(fid)
     return found
 
 
@@ -109,8 +108,7 @@ class ClientTables:
 
     def origins(self) -> list[Origin]:
         """The service, named without asking it anything."""
-        return [Origin(self.service.versions_url,
-                       detail=f"{len(self.tables)} tables of build {self.version}")]
+        return [Origin(self.service.versions_url, detail=f"{len(self.tables)} tables of build {self.version}")]
 
     def _stamp(self) -> str:
         """What a complete extraction of this roster would record."""
@@ -141,29 +139,27 @@ class ClientTables:
 
         storage = Storage(self.service)
         if storage.build != self.version:
-            log(f"  the service is on {storage.build}, and this pack is declared "
-                f"{self.version}; bump the roster row before building it")
+            log(
+                f"  the service is on {storage.build}, and this pack is declared "
+                f"{self.version}; bump the roster row before building it"
+            )
             return None
 
         ids = table_ids(listfile)
-        wanted = {table: ids[table.lower()] for table in self.tables
-                  if table.lower() in ids}
+        wanted = {table: ids[table.lower()] for table in self.tables if table.lower() in ids}
         absent = [table for table in self.tables if table.lower() not in ids]
         if absent:
-            log(f"  {len(absent)} table(s) the listfile does not name: "
-                f"{', '.join(sorted(absent))}")
+            log(f"  {len(absent)} table(s) the listfile does not name: {', '.join(sorted(absent))}")
 
         blobs = storage.open_many(sorted(set(wanted.values())))
         build = dbd.parse_build(self.version)
         self.into.mkdir(parents=True, exist_ok=True)
         written = self._write(wanted, blobs, build)
         (self.into / STAMP).write_text(self._stamp(), encoding="utf-8")
-        log(f"  {written} of {len(self.tables)} tables extracted to "
-            f"{self.into.name}")
+        log(f"  {written} of {len(self.tables)} tables extracted to {self.into.name}")
         return self.into
 
-    def _write(self, wanted: dict[str, int], blobs: dict[int, bytes],
-               build: dbd.Build | None) -> int:
+    def _write(self, wanted: dict[str, int], blobs: dict[int, bytes], build: dbd.Build | None) -> int:
         """Decode each table and write it, returning how many landed.
 
         A table that cannot be decoded is left absent rather than written
@@ -192,8 +188,7 @@ class ClientTables:
             written += 1
         return written
 
-    def _write_table(self, table: str, columns: Sequence[str],
-                     rows: Sequence[Sequence[object]]) -> None:
+    def _write_table(self, table: str, columns: Sequence[str], rows: Sequence[Sequence[object]]) -> None:
         """One table's CSV, in the shape the exports use.
 
         Written through a temporary and renamed, so an interrupted run leaves
@@ -203,9 +198,7 @@ class ClientTables:
         with temporary.open("w", newline="", encoding="utf-8") as handle:
             writer = csv.writer(handle)
             writer.writerow(columns)
-            writer.writerows(
-                ["" if value is None else str(value) for value in row]
-                for row in rows)
+            writer.writerows(["" if value is None else str(value) for value in row] for row in rows)
         temporary.replace(self.into / f"{table}.csv")
 
 
@@ -242,6 +235,10 @@ def client_tables_source(client: str, version: str) -> Source:
     """
     return ClientTables(
         name=f"tables ({client} client, build {version})",
-        service=CLIENTS[client], version=version, tables=TABLES,
-        into=client_tables_dir(client, version), listfile=listfile_source(),
-        definitions=DEFINITIONS)
+        service=CLIENTS[client],
+        version=version,
+        tables=TABLES,
+        into=client_tables_dir(client, version),
+        listfile=listfile_source(),
+        definitions=DEFINITIONS,
+    )

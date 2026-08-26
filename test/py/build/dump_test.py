@@ -62,11 +62,14 @@ def test_a_line_without_values_yields_nothing() -> None:
     assert list(iter_insert_rows("CREATE TABLE `t` (`id` int(10) unsigned NOT NULL);")) == []
 
 
-@pytest.mark.parametrize("line", [
-    "INSERT INTO `t` VALUES ('ends on a backslash\\",
-    "INSERT INTO `t` VALUES ('unterminated",
-    "INSERT INTO `t` VALUES (1,2",
-])
+@pytest.mark.parametrize(
+    "line",
+    [
+        "INSERT INTO `t` VALUES ('ends on a backslash\\",
+        "INSERT INTO `t` VALUES ('unterminated",
+        "INSERT INTO `t` VALUES (1,2",
+    ],
+)
 def test_a_truncated_row_is_an_error(line: str) -> None:
     """A silently short row is the failure worth crashing over."""
     with pytest.raises(ValueError):
@@ -90,20 +93,16 @@ def test_the_schema_is_the_column_order_an_insert_relies_on() -> None:
 
 
 def test_a_generated_column_is_still_a_column() -> None:
-    statement = ("CREATE TABLE `t` (`a` int NOT NULL, "
-                 "`b` int GENERATED ALWAYS AS (`a` + 1) STORED, `c` varchar(8));")
+    statement = "CREATE TABLE `t` (`a` int NOT NULL, `b` int GENERATED ALWAYS AS (`a` + 1) STORED, `c` varchar(8));"
     assert names(statement) == ["a", "b", "c"]
 
 
 def test_a_float_is_lossy_and_a_double_is_not() -> None:
     """MySQL prints a FLOAT at six significant digits and a DOUBLE in full."""
-    statement = ("CREATE TABLE `t` (`a` float NOT NULL, `b` double NOT NULL, "
-                 "`c` int NOT NULL, `d` varchar(8));")
-    assert [column.lossy for column in parse_create_table(statement)] == \
-           [True, False, False, False]
+    statement = "CREATE TABLE `t` (`a` float NOT NULL, `b` double NOT NULL, `c` int NOT NULL, `d` varchar(8));"
+    assert [column.lossy for column in parse_create_table(statement)] == [True, False, False, False]
 
 
 def test_a_column_carries_the_type_the_dialect_spells() -> None:
     statement = "CREATE TABLE `t` (`a` int unsigned NOT NULL, `b` char(100));"
-    assert [column.kind for column in parse_create_table(statement)] == \
-           ["UINT", "CHAR"]
+    assert [column.kind for column in parse_create_table(statement)] == ["UINT", "CHAR"]

@@ -26,8 +26,7 @@ from pack.tables.sql_tables import SqlTables
 PACK = "9.2.7.45745"
 TABLE_DIR = CACHE_DIR / PACK
 
-pytestmark = pytest.mark.skipif(
-    not TABLE_DIR.is_dir(), reason=f"no cached tables for {PACK}; build a pack first")
+pytestmark = pytest.mark.skipif(not TABLE_DIR.is_dir(), reason=f"no cached tables for {PACK}; build a pack first")
 
 
 def agree(directory: Path, table: str) -> None:

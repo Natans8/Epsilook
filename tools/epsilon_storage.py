@@ -31,9 +31,14 @@ from typing import Protocol
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "build"))
 
-from pack.sources.casc import (EPSILON, Located as Remote,  # noqa: E402
-                               Storage, decode_blte, find_encoding_keys,
-                               read_index)
+from pack.sources.casc import (
+    EPSILON,
+    Located as Remote,  # noqa: E402
+    Storage,
+    decode_blte,
+    find_encoding_keys,
+    read_index,
+)
 from tqdm import tqdm  # noqa: E402
 
 HEAD_CAP = 16 * 1024
@@ -138,8 +143,7 @@ class LocalArchives:
         found: dict[bytes, Remote] = {}
         if not self.indices.is_dir():
             return found
-        for path in tqdm(sorted(self.indices.glob("*.index")),
-                         desc="archive indices (install)", unit="index"):
+        for path in tqdm(sorted(self.indices.glob("*.index")), desc="archive indices (install)", unit="index"):
             found.update(self._read_archive(path, wanted))
         return found
 
@@ -160,9 +164,9 @@ class LocalArchives:
             path: the index file.
             wanted: the only keys worth keeping.
         """
-        return {key: Remote(path.stem, offset, size)
-                for key, offset, size in read_index(path.read_bytes())
-                if key in wanted}
+        return {
+            key: Remote(path.stem, offset, size) for key, offset, size in read_index(path.read_bytes()) if key in wanted
+        }
 
     def _current(self) -> list[Path]:
         """The newest index file per bucket.
@@ -186,11 +190,10 @@ class LocalArchives:
         found: dict[bytes, Located] = {}
         at = _INDEX_ENTRIES_AT
         for _ in range(size // _INDEX_ENTRY):
-            key = raw[at:at + _KEY_PREFIX]
-            packed = int.from_bytes(raw[at + _KEY_PREFIX:at + _KEY_PREFIX + 5], "big")
+            key = raw[at : at + _KEY_PREFIX]
+            packed = int.from_bytes(raw[at + _KEY_PREFIX : at + _KEY_PREFIX + 5], "big")
             length = struct.unpack_from("<I", raw, at + 14)[0]
-            found[key] = Located(packed >> _OFFSET_BITS,
-                                 packed & ((1 << _OFFSET_BITS) - 1), length)
+            found[key] = Located(packed >> _OFFSET_BITS, packed & ((1 << _OFFSET_BITS) - 1), length)
             at += _INDEX_ENTRY
         return found
 
@@ -275,9 +278,11 @@ class EpsilonStorage:
         Returns:
             Id to encoding key, for the ids the storage can address.
         """
-        wanted = {fid: key for fid in file_ids
-                  if (key := self.remote.root.keys.get(fid)) is not None
-                  and fid not in self._keys}
+        wanted = {
+            fid: key
+            for fid in file_ids
+            if (key := self.remote.root.keys.get(fid)) is not None and fid not in self._keys
+        }
         if wanted:
             resolved = find_encoding_keys(self.remote.encoding, set(wanted.values()))
             for fid, content_key in wanted.items():
@@ -305,8 +310,7 @@ class EpsilonStorage:
         install has no copy, the reader falls back to its own way of getting
         them, which is correct and merely expensive.
         """
-        wanted = {key for key in self._keys.values()
-                  if not self.local.holds(key)} - self._mapped
+        wanted = {key for key in self._keys.values() if not self.local.holds(key)} - self._mapped
         if not wanted:
             return
         # Merged rather than built once: each walk resolves its own parents, so
@@ -320,8 +324,7 @@ class EpsilonStorage:
             # implementation of the ranged read that uses it.
             existing = self.remote._archives or {}  # pylint: disable=protected-access
             self.remote._archives = existing | found  # pylint: disable=protected-access
-            print(f"  archive map: {len(found):,} of {len(wanted):,} located "
-                  f"from the install, nothing downloaded")
+            print(f"  archive map: {len(found):,} of {len(wanted):,} located from the install, nothing downloaded")
         else:
             self.remote.archives()
 
@@ -415,12 +418,12 @@ class EpsilonStorage:
                 self._located[key] = where
                 end = where.offset + min(where.size, cap) - 1
                 blob = self.remote._get(  # pylint: disable=protected-access
-                    self.remote.cdn.data_url(where.archive),
-                    headers={"Range": f"bytes={where.offset}-{end}"})
+                    self.remote.cdn.data_url(where.archive), headers={"Range": f"bytes={where.offset}-{end}"}
+                )
             else:
                 blob = self.remote._get(  # pylint: disable=protected-access
-                    self.remote.cdn.data_url(key.hex()),
-                    headers={"Range": f"bytes=0-{cap - 1}"})
+                    self.remote.cdn.data_url(key.hex()), headers={"Range": f"bytes=0-{cap - 1}"}
+                )
         except (LookupError, OSError, ValueError):
             return None
         return decode_blte_prefix(blob)
@@ -461,7 +464,7 @@ def decode_blte_prefix(blob: bytes) -> bytes:
         if position + compressed > len(blob):
             out += _decode_prefix_chunk(blob[position:])
             break
-        out += _decode_prefix_chunk(blob[position:position + compressed])
+        out += _decode_prefix_chunk(blob[position : position + compressed])
         position += compressed
     return bytes(out)
 
@@ -502,9 +505,9 @@ def chunks(raw: bytes, *, reversed_tags: bool = False) -> Iterator[tuple[bytes, 
     """
     at, size = 0, len(raw)
     while at + 8 <= size:
-        tag = raw[at:at + 4]
+        tag = raw[at : at + 4]
         length = struct.unpack_from("<I", raw, at + 4)[0]
-        body = raw[at + 8:at + 8 + length]
+        body = raw[at + 8 : at + 8 + length]
         if len(body) < length:
             return
         yield (tag[::-1] if reversed_tags else tag), body

@@ -111,11 +111,11 @@ def latest_release(api: str) -> tuple[str, str]:
     request = urllib.request.Request(api, headers={"User-Agent": "epsilook-build"})
     with urllib.request.urlopen(request, timeout=60) as response:
         release = json.load(response)
-    assets = {asset["name"]: asset["browser_download_url"]
-              for asset in release["assets"]}
+    assets = {asset["name"]: asset["browser_download_url"] for asset in release["assets"]}
     if LISTFILE_ASSET not in assets:
-        raise LookupError(f"release {release['tag_name']} carries no "
-                          f"{LISTFILE_ASSET} (it has {', '.join(sorted(assets))})")
+        raise LookupError(
+            f"release {release['tag_name']} carries no {LISTFILE_ASSET} (it has {', '.join(sorted(assets))})"
+        )
     return release["tag_name"], assets[LISTFILE_ASSET]
 
 
@@ -130,7 +130,8 @@ def listfile_source() -> Source:
         name="listfile (wowdev/wow-listfile)",
         origin=Origin(LISTFILE_RELEASE_API, f"the {LISTFILE_ASSET} asset"),
         dest=LISTFILE_DIR / LISTFILE_ASSET,
-        fetch=Revalidated(resolve=latest_release, token_file=RELEASE_TOKEN))
+        fetch=Revalidated(resolve=latest_release, token_file=RELEASE_TOKEN),
+    )
 
 
 def release_tag() -> str:
@@ -141,8 +142,7 @@ def release_tag() -> str:
     answer rather than a failure: a build reading a vendored listfile has no
     release to name.
     """
-    return (RELEASE_TOKEN.read_text(encoding="utf-8").strip()
-            if RELEASE_TOKEN.exists() else "")
+    return RELEASE_TOKEN.read_text(encoding="utf-8").strip() if RELEASE_TOKEN.exists() else ""
 
 
 def supplement_source() -> Source:

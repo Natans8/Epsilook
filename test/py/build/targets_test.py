@@ -29,7 +29,8 @@ def test_every_declared_read_is_a_field_the_build_can_derive() -> None:
         for name in section.reads:
             assert name in CONTEXT_FIELDS, f"{section.name} reads {name!r}"
             assert name == "build" or hasattr(pipeline.Derivations, name), (
-                f"{section.name} reads {name!r}, which no derivation produces")
+                f"{section.name} reads {name!r}, which no derivation produces"
+            )
 
 
 def test_every_module_selects_at_least_one_section() -> None:
@@ -73,9 +74,9 @@ MANIFEST = support.ROOT / "site" / "data" / PACK / "manifest.json"
 
 
 @pytest.mark.skipif(
-    not os.environ.get("EPSILOOK_MODULE_TARGETS")
-    or not (CACHE_DIR / PACK).is_dir() or not MANIFEST.exists(),
-    reason="set EPSILOOK_MODULE_TARGETS=1 with a warm cache; it builds a pack")
+    not os.environ.get("EPSILOOK_MODULE_TARGETS") or not (CACHE_DIR / PACK).is_dir() or not MANIFEST.exists(),
+    reason="set EPSILOOK_MODULE_TARGETS=1 with a warm cache; it builds a pack",
+)
 def test_building_text_alone_reproduces_the_shipped_text_modules() -> None:
     """The end-to-end proof, opt-in because it is a real build.
 
@@ -83,8 +84,7 @@ def test_building_text_alone_reproduces_the_shipped_text_modules() -> None:
     bytes: if a skipped derivation had mattered, the name would move.
     """
     shipped = json.loads(MANIFEST.read_text(encoding="utf-8"))
-    _modules, manifest = pipeline.modules(PACK, "Shadowlands 9.2.7",
-                                          location="data/modules", want=("text",))
+    _modules, manifest = pipeline.modules(PACK, "Shadowlands 9.2.7", location="data/modules", want=("text",))
     built = manifest["locales"]
     assert isinstance(built, dict)
     for code, kinds in shipped["locales"].items():

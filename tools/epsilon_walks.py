@@ -211,8 +211,7 @@ def terrain_names(storage: Reads, floor: int) -> dict[int, str]:
         File id to path, for the client's terrain and minimap files.
     """
     names: dict[int, str] = {}
-    for directory, wdt in tqdm(custom_maps(storage, floor), desc="custom maps",
-                               unit="map"):
+    for directory, wdt in tqdm(custom_maps(storage, floor), desc="custom maps", unit="map"):
         raw = storage.read(wdt)
         if not raw:
             continue
@@ -227,8 +226,7 @@ def terrain_names(storage: Reads, floor: int) -> dict[int, str]:
                 ids = struct.unpack_from(f"<{_MPHD_SLOTS}I", body, 0)
                 for extension, fid in zip(MAP_FILE_SLOTS, ids[1:]):
                     if fid > floor:
-                        names[fid] = (f"world/maps/{directory}/"
-                                      f"{directory}.{extension}")
+                        names[fid] = f"world/maps/{directory}/{directory}.{extension}"
                 continue
             if tag != b"MAID":
                 continue
@@ -238,8 +236,7 @@ def terrain_names(storage: Reads, floor: int) -> dict[int, str]:
                 ids = struct.unpack_from("<8I", body, cell * _TILE_ENTRY)
                 for slot, fid in enumerate(ids):
                     if fid > floor and slot in TILE_SLOTS:
-                        names[fid] = TILE_SLOTS[slot].format(
-                            stem=stem, directory=directory, x=x, y=y)
+                        names[fid] = TILE_SLOTS[slot].format(stem=stem, directory=directory, x=x, y=y)
     return names
 
 
@@ -258,8 +255,7 @@ MAX_MODEL_NAME = 512
 slicing an arbitrary megabyte out of the file and calling it a name."""
 
 
-def heads_of(storage: Reads, ids: list[int], *, label: str,
-             local_only: bool = True) -> dict[int, bytes]:
+def heads_of(storage: Reads, ids: list[int], *, label: str, local_only: bool = True) -> dict[int, bytes]:
     """The start of every one of these files, from disk and then the service.
 
     Both routes that name a file from its own bytes read a header, so the tail
@@ -302,8 +298,10 @@ def heads_of(storage: Reads, ids: list[int], *, label: str,
 
     # Said out loud before it starts, as the parentage walks do: this is
     # somebody else's service and a pass of this width is a decision.
-    print(f"  {label}: {len(remote):,} files are not on disk and will be "
-          f"requested from the service, capped to their heads")
+    print(
+        f"  {label}: {len(remote):,} files are not on disk and will be "
+        f"requested from the service, capped to their heads"
+    )
     # Before going wide, never during: the fallback index every miss needs is
     # built lazily and is not thread safe, so a concurrent first read has each
     # worker build its own.
@@ -317,8 +315,7 @@ def heads_of(storage: Reads, ids: list[int], *, label: str,
     fetch = read_head if read_head is not None else storage.read
     with ThreadPoolExecutor(max_workers=WORKERS) as pool:
         pending = {pool.submit(fetch, fid): fid for fid in remote}
-        for done in tqdm(as_completed(pending), total=len(pending),
-                         desc=f"{label} (network)", unit="file"):
+        for done in tqdm(as_completed(pending), total=len(pending), desc=f"{label} (network)", unit="file"):
             raw = done.result()
             if raw:
                 found[pending[done]] = raw
@@ -355,7 +352,7 @@ def model_name(raw: bytes | None) -> str | None:
     _version, length, offset = MD20_HEADER.unpack_from(body, start)
     if not 0 < length < MAX_MODEL_NAME or offset + length > len(body):
         return None
-    found = body[offset:offset + length].split(b"\x00")[0]
+    found = body[offset : offset + length].split(b"\x00")[0]
     text = found.decode("ascii", "replace").strip()
     # Some models name a texture here rather than themselves. That is a real
     # string about a different file, so taking it would name the model after
@@ -368,19 +365,18 @@ def model_name(raw: bytes | None) -> str | None:
     text = text.replace(chr(92), "/")
     marker = text.lower().rfind(".mpq/")
     if marker != -1:
-        text = text[marker + 5:]
+        text = text[marker + 5 :]
     elif "/" in text or ":" in text:
         text = text.rsplit("/", 1)[-1]
     # The name usually carries its own extension, and the caller adds one.
     for suffix in (".m2", ".mdx"):
         if text.lower().endswith(suffix):
-            text = text[:-len(suffix)]
+            text = text[: -len(suffix)]
             break
     return text.strip("/ ") or None
 
 
-def model_self_names(storage: Reads, unnamed: set[int],
-                     *, local_only: bool = True) -> dict[int, str]:
+def model_self_names(storage: Reads, unnamed: set[int], *, local_only: bool = True) -> dict[int, str]:
     """Models named by the name they carry, for the ones nothing else reaches.
 
     Args:
@@ -391,8 +387,7 @@ def model_self_names(storage: Reads, unnamed: set[int],
     Returns:
         File id to path.
     """
-    heads = heads_of(storage, sorted(unnamed), label="model names",
-                     local_only=local_only)
+    heads = heads_of(storage, sorted(unnamed), label="model names", local_only=local_only)
     found: dict[int, str] = {}
     retry: list[int] = []
     for fid, raw in heads.items():
@@ -407,12 +402,10 @@ def model_self_names(storage: Reads, unnamed: set[int],
     # whole file yields. Which ones cannot be known without asking, so the
     # cheap read runs first and only its failures are paid for in full.
     if retry and not local_only:
-        print(f"  model names: {len(retry):,} models reported no name from their "
-              f"head and are being re-read whole")
+        print(f"  model names: {len(retry):,} models reported no name from their head and are being re-read whole")
         with ThreadPoolExecutor(max_workers=WORKERS) as pool:
             pending = {pool.submit(storage.read, fid): fid for fid in retry}
-            for done in tqdm(as_completed(pending), total=len(pending),
-                             desc="model names (whole)", unit="file"):
+            for done in tqdm(as_completed(pending), total=len(pending), desc="model names (whole)", unit="file"):
                 whole = done.result()
                 name = model_name(whole) if whole else None
                 if name:
@@ -464,9 +457,15 @@ def world_model_id(raw: bytes | None) -> int | None:
     return None
 
 
-def _bracketed_retail(storage: Reads, roots: list[int], stock: dict[int, str],
-                      known: dict[int, int], wanted: set[int], *,
-                      local_only: bool) -> dict[int, int]:
+def _bracketed_retail(
+    storage: Reads,
+    roots: list[int],
+    stock: dict[int, str],
+    known: dict[int, int],
+    wanted: set[int],
+    *,
+    local_only: bool,
+) -> dict[int, int]:
     """Retail roots for the ids the install does not already account for.
 
     Reading all fifty thousand roots to find a handful is a poor trade, and it
@@ -498,10 +497,11 @@ def _bracketed_retail(storage: Reads, roots: list[int], stock: dict[int, str],
         candidates.update(f for f in roots if low <= f <= high and f not in seen)
     if not candidates:
         return {}
-    print(f"  reskin: {len(wanted)} ids are not on disk; {len(candidates):,} "
-          f"retail roots bracket them, of {len(roots) - len(seen):,} unread")
-    raws = heads_of(storage, sorted(candidates), label="reskin: retail (network)",
-                    local_only=False)
+    print(
+        f"  reskin: {len(wanted)} ids are not on disk; {len(candidates):,} "
+        f"retail roots bracket them, of {len(roots) - len(seen):,} unread"
+    )
+    raws = heads_of(storage, sorted(candidates), label="reskin: retail (network)", local_only=False)
     found: dict[int, int] = {}
     for fid, raw in raws.items():
         got = world_model_id(raw)
@@ -511,8 +511,9 @@ def _bracketed_retail(storage: Reads, roots: list[int], stock: dict[int, str],
     return found
 
 
-def reskin_names(storage: Reads, unnamed: set[int], stock: dict[int, str],
-                 *, local_only: bool = True) -> dict[int, str]:
+def reskin_names(
+    storage: Reads, unnamed: set[int], stock: dict[int, str], *, local_only: bool = True
+) -> dict[int, str]:
     """World models named by the retail model they were reskinned from.
 
     Nothing in the client references these files -- they are not doodads of any
@@ -555,12 +556,9 @@ def reskin_names(storage: Reads, unnamed: set[int], stock: dict[int, str],
         return {}
 
     names: dict[int, str] = {}
-    heads = heads_of(storage, sorted(unnamed), label="reskin: custom roots",
-                     local_only=local_only)
-    declared = {found for raw in heads.values()
-                if (found := world_model_id(raw)) is not None}
-    retail |= _bracketed_retail(storage, roots, stock, retail,
-                                declared - set(retail), local_only=local_only)
+    heads = heads_of(storage, sorted(unnamed), label="reskin: custom roots", local_only=local_only)
+    declared = {found for raw in heads.values() if (found := world_model_id(raw)) is not None}
+    retail |= _bracketed_retail(storage, roots, stock, retail, declared - set(retail), local_only=local_only)
 
     for fid, raw in heads.items():
         found = world_model_id(raw)
@@ -610,8 +608,9 @@ TEXTURE_TILE_SUFFIX = "_tex0.adt"
 instead, and the rest record neither."""
 
 
-def ground_texture_names(storage: Reads, known: dict[int, str], unnamed: set[int],
-                         *, local_only: bool = True) -> dict[int, str]:
+def ground_texture_names(
+    storage: Reads, known: dict[int, str], unnamed: set[int], *, local_only: bool = True
+) -> dict[int, str]:
     """Textures named by the map whose terrain paints with them.
 
     The parentage walks reach a texture through the model that uses it, and a
@@ -628,8 +627,7 @@ def ground_texture_names(storage: Reads, known: dict[int, str], unnamed: set[int
     Returns:
         File id to path.
     """
-    tiles = sorted(fid for fid, path in known.items()
-                   if path.lower().endswith(TEXTURE_TILE_SUFFIX))
+    tiles = sorted(fid for fid, path in known.items() if path.lower().endswith(TEXTURE_TILE_SUFFIX))
     if not tiles:
         return {}
     raws = heads_of(storage, tiles, label="ground textures", local_only=local_only)
@@ -644,12 +642,12 @@ def ground_texture_names(storage: Reads, known: dict[int, str], unnamed: set[int
                 found = struct.unpack_from("<I", data, at)[0]
                 if found in unnamed:
                     painted.setdefault(found, directory)
-    return {fid: f"{DERIVED_ROOT}/{GROUND_BUCKET}/{where}/{fid}.blp"
-            for fid, where in painted.items()}
+    return {fid: f"{DERIVED_ROOT}/{GROUND_BUCKET}/{where}/{fid}.blp" for fid, where in painted.items()}
 
 
-def placement_names(storage: Reads, known: dict[int, str], unnamed: set[int],
-                    *, local_only: bool = True) -> dict[int, str]:
+def placement_names(
+    storage: Reads, known: dict[int, str], unnamed: set[int], *, local_only: bool = True
+) -> dict[int, str]:
     """World models named by the map whose terrain places them.
 
     A tile records what stands on it by file id. For a model nothing else
@@ -670,8 +668,7 @@ def placement_names(storage: Reads, known: dict[int, str], unnamed: set[int],
     Returns:
         File id to path.
     """
-    tiles = sorted(fid for fid, path in known.items()
-                   if path.lower().endswith(OBJECT_TILE_SUFFIXES))
+    tiles = sorted(fid for fid, path in known.items() if path.lower().endswith(OBJECT_TILE_SUFFIXES))
     if not tiles:
         return {}
     raws = heads_of(storage, tiles, label="placements", local_only=local_only)
@@ -689,16 +686,19 @@ def placement_names(storage: Reads, known: dict[int, str], unnamed: set[int],
                 found = struct.unpack_from("<I", data, at)[0]
                 if found in unnamed:
                     placed.setdefault(found, directory)
-    return {fid: f"{DERIVED_ROOT}/{PLACED_BUCKET}/{where}/{fid}.wmo"
-            for fid, where in placed.items()}
+    return {fid: f"{DERIVED_ROOT}/{PLACED_BUCKET}/{where}/{fid}.wmo" for fid, where in placed.items()}
 
 
 CUSTOMIZATION_BUCKET = "chrcustomization"
 """Where a character-customization texture's derived path sits."""
 
-CUSTOMIZATION_TABLES = ("TextureFileData", "ChrCustomizationMaterial",
-                        "ChrCustomizationElement", "ChrCustomizationChoice",
-                        "ChrCustomizationOption")
+CUSTOMIZATION_TABLES = (
+    "TextureFileData",
+    "ChrCustomizationMaterial",
+    "ChrCustomizationElement",
+    "ChrCustomizationChoice",
+    "ChrCustomizationOption",
+)
 """The chain from a texture to what it customises. Required; without all five
 there is no name."""
 
@@ -723,12 +723,10 @@ def wearers(tables: dict[str, Table | None]) -> dict[int, str]:
         Character model id to a path segment naming its wearer, empty when the
         client does not carry the tables that say.
     """
-    models, mapping, races = (tables.get("ChrModel"), tables.get("ChrRaceXChrModel"),
-                              tables.get("ChrRaces"))
+    models, mapping, races = (tables.get("ChrModel"), tables.get("ChrRaceXChrModel"), tables.get("ChrRaces"))
     if models is None or mapping is None or races is None:
         return {}
-    sex = {model: SEXES.get(value, "") for model, value
-           in models.named("ID", "Sex").items()}
+    sex = {model: SEXES.get(value, "") for model, value in models.named("ID", "Sex").items()}
     named = races.named("ID", "ClientFileString")
     # Keyed on the model, because a race has one model per sex and keying the
     # other way would keep whichever row came last and lose the other.
@@ -793,8 +791,7 @@ def customization_names(storage: Reads, floor: int) -> dict[int, str]:
         material_of[resource] = min(material, material_of.get(resource, material))
 
     choice_of: dict[int, int] = {}
-    for material_text, choice_text in elements.values("ChrCustomizationMaterialID",
-                                                      "ChrCustomizationChoiceID"):
+    for material_text, choice_text in elements.values("ChrCustomizationMaterialID", "ChrCustomizationChoiceID"):
         try:
             material, choice = int(material_text), int(choice_text)
         except ValueError:
@@ -861,8 +858,9 @@ def _model_children(raw: bytes) -> dict[bytes, list[tuple[int, str]]]:
                 animation, variation, fid = struct.unpack_from("<HHI", body, at)
                 found[tag].append((fid, f"{animation:04d}-{variation:02d}"))
         else:
-            found[tag] = [(fid, f"{index:02d}") for index, fid
-                          in enumerate(struct.unpack_from(f"<{len(body) // 4}I", body))]
+            found[tag] = [
+                (fid, f"{index:02d}") for index, fid in enumerate(struct.unpack_from(f"<{len(body) // 4}I", body))
+            ]
     return found
 
 
@@ -895,9 +893,17 @@ digits, which the listfile bears out for very nearly every published group.
 """
 
 
-def walk_parents(storage: Reads, known: dict[int, str], unnamed: set[int],
-                 *, suffix: str, reader, kinds, local_only: bool,
-                 label: str) -> Walk:
+def walk_parents(
+    storage: Reads,
+    known: dict[int, str],
+    unnamed: set[int],
+    *,
+    suffix: str,
+    reader,
+    kinds,
+    local_only: bool,
+    label: str,
+) -> Walk:
     """Every unnamed file reachable from a parent that already has a name.
 
     Claims are gathered before any path is built, because the shape a child gets
@@ -917,8 +923,7 @@ def walk_parents(storage: Reads, known: dict[int, str], unnamed: set[int],
     Returns:
         What the walk found.
     """
-    parents = sorted(fid for fid, path in known.items()
-                     if path.lower().endswith(suffix))
+    parents = sorted(fid for fid, path in known.items() if path.lower().endswith(suffix))
     storage.encoding_keys(parents)
     here = [fid for fid in parents if storage.holds_locally(fid)]
     remote = [fid for fid in parents if not storage.holds_locally(fid)]
@@ -944,15 +949,13 @@ def walk_parents(storage: Reads, known: dict[int, str], unnamed: set[int],
         # Said out loud before it starts. This is somebody else's service, run
         # for players rather than for tooling, and a walk of this width is a
         # decision rather than a detail of how a default happens to be set.
-        print(f"  {label}: {len(remote):,} files are not on disk and will be "
-              f"requested from the service")
+        print(f"  {label}: {len(remote):,} files are not on disk and will be requested from the service")
         # Before going wide, never during: the fallback index every miss needs
         # is built lazily, so a concurrent first read has each worker build it.
         storage.prepare_network()
         with ThreadPoolExecutor(max_workers=WORKERS) as pool:
             pending = {pool.submit(storage.read, fid): fid for fid in remote}
-            for done in tqdm(as_completed(pending), total=len(pending),
-                             desc=f"{label} (network)", unit="file"):
+            for done in tqdm(as_completed(pending), total=len(pending), desc=f"{label} (network)", unit="file"):
                 collect(pending[done], done.result())
 
     names: dict[int, str] = {}
@@ -974,10 +977,11 @@ def walk_parents(storage: Reads, known: dict[int, str], unnamed: set[int],
             # what carries the meaning.
             names[child] = f"{DERIVED_ROOT}/{kind.bucket}/{stem}/{child}.{kind.extension}"
     if unreadable:
-        print(f"  {label}: {unreadable:,} of {len(here) + len(remote):,} parents "
-              f"could not be read; their children stay unnamed")
-    return Walk(names=names, read=read,
-                skipped=len(remote) if local_only else 0, unreadable=unreadable)
+        print(
+            f"  {label}: {unreadable:,} of {len(here) + len(remote):,} parents "
+            f"could not be read; their children stay unnamed"
+        )
+    return Walk(names=names, read=read, skipped=len(remote) if local_only else 0, unreadable=unreadable)
 
 
 TERRAIN_CHUNKS = (b"MHDR", b"MCNK", b"MCIN")
@@ -1033,20 +1037,32 @@ def classify(raw: bytes) -> str:
     return "chunked, unrecognised"
 
 
-def model_children(storage: Reads, known: dict[int, str],
-                   unnamed: set[int], *, local_only: bool = True) -> Walk:
+def model_children(storage: Reads, known: dict[int, str], unnamed: set[int], *, local_only: bool = True) -> Walk:
     """Skins, textures and animations, from the models that use them."""
-    return walk_parents(storage, known, unnamed, suffix=".m2",
-                        reader=_model_children, kinds=MODEL_CHILDREN,
-                        local_only=local_only, label="models")
+    return walk_parents(
+        storage,
+        known,
+        unnamed,
+        suffix=".m2",
+        reader=_model_children,
+        kinds=MODEL_CHILDREN,
+        local_only=local_only,
+        label="models",
+    )
 
 
-def world_model_children(storage: Reads, known: dict[int, str],
-                         unnamed: set[int], *, local_only: bool = True) -> Walk:
+def world_model_children(storage: Reads, known: dict[int, str], unnamed: set[int], *, local_only: bool = True) -> Walk:
     """Group geometry and material textures, from the world models that use them."""
-    return walk_parents(storage, known, unnamed, suffix=".wmo",
-                        reader=_world_model_children, kinds=WORLD_MODEL_CHILDREN,
-                        local_only=local_only, label="world models")
+    return walk_parents(
+        storage,
+        known,
+        unnamed,
+        suffix=".wmo",
+        reader=_world_model_children,
+        kinds=WORLD_MODEL_CHILDREN,
+        local_only=local_only,
+        label="world models",
+    )
 
 
 NEIGHBOUR_BUCKET = "near"
@@ -1094,8 +1110,7 @@ Measured: within one id claims 54.6% of the block and within sixteen claims
 stops a file being named after art it merely outlived.
 """
 
-MAP_PREFIXES = ("world/maps/", f"{DERIVED_ROOT}/{PLACED_BUCKET}/",
-                f"{DERIVED_ROOT}/{GROUND_BUCKET}/")
+MAP_PREFIXES = ("world/maps/", f"{DERIVED_ROOT}/{PLACED_BUCKET}/", f"{DERIVED_ROOT}/{GROUND_BUCKET}/")
 """Every path shape that says which map a file belongs to.
 
 A map is named three ways by three routes -- its own tiles, the models its
@@ -1109,7 +1124,7 @@ def map_of(path: str) -> str | None:
     lowered = path.lower()
     for prefix in MAP_PREFIXES:
         if lowered.startswith(prefix):
-            return lowered[len(prefix):].split("/", 1)[0]
+            return lowered[len(prefix) :].split("/", 1)[0]
     return None
 
 
@@ -1166,8 +1181,9 @@ suffix for those would be the one guess this route cannot mark as one.
 """
 
 
-def neighbour_names(storage: Reads, known: dict[int, str], unnamed: set[int],
-                    *, local_only: bool = True) -> dict[int, str]:
+def neighbour_names(
+    storage: Reads, known: dict[int, str], unnamed: set[int], *, local_only: bool = True
+) -> dict[int, str]:
     """Files named by the art they were delivered alongside.
 
     The last resort, and the only route here that names a file from no
@@ -1202,8 +1218,7 @@ def neighbour_names(storage: Reads, known: dict[int, str], unnamed: set[int],
     # `--only` seeds from the last full run -- so the exclusion is what keeps a
     # re-run idempotent rather than compounding.
     produced = (f"{DERIVED_ROOT}/{NEIGHBOUR_BUCKET}/", f"{DERIVED_ROOT}/{ICON_BUCKET}/")
-    source = {fid: path for fid, path in known.items()
-              if not path.lower().startswith(produced)}
+    source = {fid: path for fid, path in known.items() if not path.lower().startswith(produced)}
 
     neighbours = sorted(source)
     if not neighbours:
@@ -1217,8 +1232,7 @@ def neighbour_names(storage: Reads, known: dict[int, str], unnamed: set[int],
             buckets[fid] = f"{NEIGHBOUR_BUCKET}/{owner}"
             continue
         at = bisect.bisect_left(neighbours, fid)
-        gap, neighbour = min((abs(fid - near), near)
-                             for near in neighbours[max(at - 1, 0):at + 1])
+        gap, neighbour = min((abs(fid - near), near) for near in neighbours[max(at - 1, 0) : at + 1])
         directory = source[neighbour].replace("\\", "/").rpartition("/")[0]
         grouped = GROUPED_DIRECTORIES.get(directory.lower())
         if grouped:
@@ -1227,8 +1241,9 @@ def neighbour_names(storage: Reads, known: dict[int, str], unnamed: set[int],
             trimmed = directory.removeprefix(f"{DERIVED_ROOT}/")
             buckets[fid] = f"{NEIGHBOUR_BUCKET}/{trimmed}"
 
-    raws = heads_of(storage, sorted(buckets), label="neighbours",
-                    local_only=local_only)
-    return {fid: f"{DERIVED_ROOT}/{bucket}/{fid}.{extension}"
-            for fid, bucket in buckets.items()
-            if (extension := KIND_EXTENSIONS.get(classify(raws.get(fid) or b"")))}
+    raws = heads_of(storage, sorted(buckets), label="neighbours", local_only=local_only)
+    return {
+        fid: f"{DERIVED_ROOT}/{bucket}/{fid}.{extension}"
+        for fid, bucket in buckets.items()
+        if (extension := KIND_EXTENSIONS.get(classify(raws.get(fid) or b"")))
+    }

@@ -68,6 +68,7 @@ PARALLEL = "parallel"  # measured and recorded, never moves a spell
 @dataclass(frozen=True)
 class Archive:
     """A build held in the wow.tools DBC archive, named by its member filename."""
+
     member: str
 
     @property
@@ -78,6 +79,7 @@ class Archive:
 @dataclass(frozen=True)
 class Pack:
     """A game version Epsilook already ships a pack for."""
+
     version: str
 
     @property
@@ -98,6 +100,7 @@ class Vendored:
     Refresh or replace one with:
         python tools/expansions.py --vendor <dump.dbc> --key <key>
     """
+
     archive: str
     member: str
     origin: str
@@ -117,6 +120,7 @@ class Source:
 @dataclass(frozen=True)
 class Expansion:
     """One rung. Every per-expansion difference is a field here."""
+
     key: str  # stable id, and the `xpac:` search value
     label: str  # "Wrath of the Lich King"
     short: str  # "WotLK" — the text form, for tooltips/export
@@ -145,47 +149,77 @@ class Expansion:
 # ---------------------------------------------------------------------------
 LADDER: list[Expansion] = [
     Expansion(
-        key="vanilla", label="Classic", short="Vanilla", major=1, max_level=60,
+        key="vanilla",
+        label="Classic",
+        short="Vanilla",
+        major=1,
+        max_level=60,
         aliases=("classic", "vanilla", "1"),
         wowhead="classic",
         sources=(
             Source(Archive("Spell.1.12.1.5875 (Retail) de4b8b4c6f5aab7901f196030cc8aec7.dbc")),
-            Source(Pack("1.15.9"), PARALLEL,
-                   "Classic Era is a modern rebuild — it carries thousands of "
-                   "spells the 1.12.1 client never had, so it cannot date one"),
+            Source(
+                Pack("1.15.9"),
+                PARALLEL,
+                "Classic Era is a modern rebuild — it carries thousands of "
+                "spells the 1.12.1 client never had, so it cannot date one",
+            ),
         ),
     ),
     Expansion(
-        key="tbc", label="The Burning Crusade", short="TBC", major=2, max_level=70,
+        key="tbc",
+        label="The Burning Crusade",
+        short="TBC",
+        major=2,
+        max_level=70,
         aliases=("tbc", "bc", "burning crusade", "2"),
         wowhead="tbc",
         sources=(Source(Archive("Spell.2.4.3.8606 (Retail) 497e7d555537366dab10d691c210d25a.dbc")),),
     ),
     Expansion(
-        key="wotlk", label="Wrath of the Lich King", short="WotLK", major=3, max_level=80,
+        key="wotlk",
+        label="Wrath of the Lich King",
+        short="WotLK",
+        major=3,
+        max_level=80,
         aliases=("wotlk", "wrath", "lich king", "3"),
         wowhead="wotlk",
         sources=(
             Source(Archive("Spell.3.3.5.12340 (Retail) 543b9fe61355b6a77a01714d52fea2e5.dbc")),
-            Source(Pack("3.4.3"), PARALLEL,
-                   "WotLK Classic is a faithful rebuild — it differs from 3.3.5 "
-                   "by well under 1%, but it is still a rebuild"),
+            Source(
+                Pack("3.4.3"),
+                PARALLEL,
+                "WotLK Classic is a faithful rebuild — it differs from 3.3.5 "
+                "by well under 1%, but it is still a rebuild",
+            ),
         ),
     ),
     Expansion(
-        key="cata", label="Cataclysm", short="Cata", major=4, max_level=85,
+        key="cata",
+        label="Cataclysm",
+        short="Cata",
+        major=4,
+        max_level=85,
         aliases=("cata", "cataclysm", "4"),
         wowhead="cata",
         sources=(Source(Archive("Spell.4.3.4.15595 (Retail) 78045add38a9ef6eb5c803c6a2b6dd1e.dbc")),),
     ),
     Expansion(
-        key="mop", label="Mists of Pandaria", short="MoP", major=5, max_level=90,
+        key="mop",
+        label="Mists of Pandaria",
+        short="MoP",
+        major=5,
+        max_level=90,
         aliases=("mop", "mists", "pandaria", "5"),
         wowhead="mop",
         sources=(Source(Archive("Spell.5.4.8.18273 (Retail) 870c173a4809e69acea3a01520b3d09d.dbc")),),
     ),
     Expansion(
-        key="wod", label="Warlords of Draenor", short="WoD", major=6, max_level=100,
+        key="wod",
+        label="Warlords of Draenor",
+        short="WoD",
+        major=6,
+        max_level=100,
         aliases=("wod", "warlords", "draenor", "6"),
         # THE ONE RUNG NO PUBLIC ARCHIVE COVERS. The wow.tools mirror carries no
         # "Retail" build before 8.x, and the bulk dumps holding the 6.x build
@@ -195,24 +229,73 @@ LADDER: list[Expansion] = [
         # a test spell cut before launch which returns in Legion. That is the
         # signature of a real retail client, and it also bounds the whole
         # PTR-vs-retail question at one row.
-        sources=(Source(Vendored("wod-6.2.4-spell.7z", "spell.dbc",
-                                 "https://www.wowmodding.net/files/file/318-wod-624-db2-files/"
-                                 " (sign-in required) -> dbfilesclient/spell.dbc"),
-                        ORIGIN, "retail 6.2.4 client dump, vendored"),),
+        sources=(
+            Source(
+                Vendored(
+                    "wod-6.2.4-spell.7z",
+                    "spell.dbc",
+                    "https://www.wowmodding.net/files/file/318-wod-624-db2-files/"
+                    " (sign-in required) -> dbfilesclient/spell.dbc",
+                ),
+                ORIGIN,
+                "retail 6.2.4 client dump, vendored",
+            ),
+        ),
     ),
-    Expansion(key="legion", label="Legion", short="Legion", major=7, max_level=110,
-              aliases=("legion", "7"), sources=(Source(Pack("7.3.5")),)),
-    Expansion(key="bfa", label="Battle for Azeroth", short="BfA", major=8, max_level=120,
-              aliases=("bfa", "battle for azeroth", "azeroth", "8"),
-              sources=(Source(Pack("8.3.7")),)),
-    Expansion(key="shadowlands", label="Shadowlands", short="SL", major=9, max_level=60,
-              aliases=("sl", "shadowlands", "9"), sources=(Source(Pack("9.2.7")),)),
-    Expansion(key="dragonflight", label="Dragonflight", short="DF", major=10, max_level=70,
-              aliases=("df", "dragonflight", "10"), sources=(Source(Pack("10.2.7")),)),
-    Expansion(key="tww", label="The War Within", short="TWW", major=11, max_level=80,
-              aliases=("tww", "war within", "11"), sources=(Source(Pack("11.2.7")),)),
-    Expansion(key="midnight", label="Midnight", short="Midnight", major=12, max_level=90,
-              aliases=("mn", "midnight", "12"), sources=(Source(Pack("12.0.7")),)),
+    Expansion(
+        key="legion",
+        label="Legion",
+        short="Legion",
+        major=7,
+        max_level=110,
+        aliases=("legion", "7"),
+        sources=(Source(Pack("7.3.5")),),
+    ),
+    Expansion(
+        key="bfa",
+        label="Battle for Azeroth",
+        short="BfA",
+        major=8,
+        max_level=120,
+        aliases=("bfa", "battle for azeroth", "azeroth", "8"),
+        sources=(Source(Pack("8.3.7")),),
+    ),
+    Expansion(
+        key="shadowlands",
+        label="Shadowlands",
+        short="SL",
+        major=9,
+        max_level=60,
+        aliases=("sl", "shadowlands", "9"),
+        sources=(Source(Pack("9.2.7")),),
+    ),
+    Expansion(
+        key="dragonflight",
+        label="Dragonflight",
+        short="DF",
+        major=10,
+        max_level=70,
+        aliases=("df", "dragonflight", "10"),
+        sources=(Source(Pack("10.2.7")),),
+    ),
+    Expansion(
+        key="tww",
+        label="The War Within",
+        short="TWW",
+        major=11,
+        max_level=80,
+        aliases=("tww", "war within", "11"),
+        sources=(Source(Pack("11.2.7")),),
+    ),
+    Expansion(
+        key="midnight",
+        label="Midnight",
+        short="Midnight",
+        major=12,
+        max_level=90,
+        aliases=("mn", "midnight", "12"),
+        sources=(Source(Pack("12.0.7")),),
+    ),
 ]
 
 
@@ -248,10 +331,12 @@ def write_vendored(dump: Path, key: str) -> None:
     shutil.copyfile(dump, staged)
     out = SOURCES / dest.archive
     out.unlink(missing_ok=True)
-    subprocess.run(["7z", "a", "-t7z", "-mx=9", "-m0=lzma2", str(out), str(staged)],
-                   check=True, stdout=subprocess.DEVNULL)
-    print(f"wrote {out.relative_to(REPO)}  ({out.stat().st_size / 1024 / 1024:.1f} MB, "
-          f"{len(ids):,} ids from {dump.name})")
+    subprocess.run(
+        ["7z", "a", "-t7z", "-mx=9", "-m0=lzma2", str(out), str(staged)], check=True, stdout=subprocess.DEVNULL
+    )
+    print(
+        f"wrote {out.relative_to(REPO)}  ({out.stat().st_size / 1024 / 1024:.1f} MB, {len(ids):,} ids from {dump.name})"
+    )
 
 
 def _wdbc_ids(blob: bytes) -> set[int]:
@@ -283,20 +368,25 @@ def ids_of(where: Archive | Pack | Vendored) -> set[int]:
     if isinstance(where, Vendored):
         src = SOURCES / where.archive
         if not src.exists():
-            raise SystemExit(f"missing {src}\n  it is committed — restore it from git,"
-                             f"\n  or rebuild it from: {where.origin}")
+            raise SystemExit(
+                f"missing {src}\n  it is committed — restore it from git,\n  or rebuild it from: {where.origin}"
+            )
         out = CACHE_DIR / "vendor" / where.member
         if not out.exists():
             out.parent.mkdir(parents=True, exist_ok=True)
-            subprocess.run(["7z", "e", str(src), f"-o{out.parent}", where.member, "-y"],
-                           check=True, stdout=subprocess.DEVNULL)
+            subprocess.run(
+                ["7z", "e", str(src), f"-o{out.parent}", where.member, "-y"], check=True, stdout=subprocess.DEVNULL
+            )
         return _wdbc_ids(out.read_bytes())
 
     out = CACHE_DIR / "builds" / where.member
     if not out.exists():
         out.parent.mkdir(parents=True, exist_ok=True)
-        subprocess.run(["7z", "e", str(_archive_7z()), f"-o{out.parent}",
-                        where.member, "-y"], check=True, stdout=subprocess.DEVNULL)
+        subprocess.run(
+            ["7z", "e", str(_archive_7z()), f"-o{out.parent}", where.member, "-y"],
+            check=True,
+            stdout=subprocess.DEVNULL,
+        )
     return _wdbc_ids(out.read_bytes())
 
 
@@ -318,24 +408,29 @@ def restated() -> dict:
     derived = {rung["key"]: rung for rung in data["ladder"]}
     missing = [xp.key for xp in LADDER if xp.key not in derived]
     if missing:
-        raise SystemExit(f"no committed ids for {', '.join(missing)} — "
-                         f"run without --restate to derive them")
+        raise SystemExit(f"no committed ids for {', '.join(missing)} — run without --restate to derive them")
 
     ladder = []
     for xp in LADDER:
         was = derived[xp.key]
-        ladder.append({
-            "key": xp.key, "label": xp.label, "short": xp.short,
-            "major": xp.major, "maxLevel": xp.max_level,
-            "aliases": list(xp.aliases), "wowhead": xp.wowhead,
-            **({"caveat": xp.caveat} if xp.caveat else {}),
-            **({"tint": xp.tint} if xp.tint else {}),
-            # The derived half, carried through exactly as it was measured.
-            "sources": was["sources"], "total": was["total"],
-            "introduced": was["introduced"],
-        })
-        print(f"  {xp.label:<24} max level {xp.max_level:>3}"
-              f"  {was['introduced']:>7,} spells kept")
+        ladder.append(
+            {
+                "key": xp.key,
+                "label": xp.label,
+                "short": xp.short,
+                "major": xp.major,
+                "maxLevel": xp.max_level,
+                "aliases": list(xp.aliases),
+                "wowhead": xp.wowhead,
+                **({"caveat": xp.caveat} if xp.caveat else {}),
+                **({"tint": xp.tint} if xp.tint else {}),
+                # The derived half, carried through exactly as it was measured.
+                "sources": was["sources"],
+                "total": was["total"],
+                "introduced": was["introduced"],
+            }
+        )
+        print(f"  {xp.label:<24} max level {xp.max_level:>3}  {was['introduced']:>7,} spells kept")
     return {"ladder": ladder, "ids": data["ids"]}
 
 
@@ -349,34 +444,45 @@ def build(report: bool = False) -> dict:
         origin_ids: set[int] = set()
         for s in xp.sources:
             ids = ids_of(s.where)
-            srcs.append({"ref": s.where.ref, "role": s.role,
-                         "total": len(ids), **({"note": s.note} if s.note else {})})
+            srcs.append({"ref": s.where.ref, "role": s.role, "total": len(ids), **({"note": s.note} if s.note else {})})
             if s.role == ORIGIN:
                 origin_ids |= ids
 
         fresh = origin_ids - seen
         seen |= origin_ids
         era_of.update(dict.fromkeys(fresh, xp.key))
-        rungs.append({
-            "key": xp.key, "label": xp.label, "short": xp.short,
-            "major": xp.major, "maxLevel": xp.max_level,
-            "aliases": list(xp.aliases), "wowhead": xp.wowhead,
-            **({"caveat": xp.caveat} if xp.caveat else {}),
-            **({"tint": xp.tint} if xp.tint else {}),
-            "sources": srcs, "total": len(origin_ids), "introduced": len(fresh),
-        })
+        rungs.append(
+            {
+                "key": xp.key,
+                "label": xp.label,
+                "short": xp.short,
+                "major": xp.major,
+                "maxLevel": xp.max_level,
+                "aliases": list(xp.aliases),
+                "wowhead": xp.wowhead,
+                **({"caveat": xp.caveat} if xp.caveat else {}),
+                **({"tint": xp.tint} if xp.tint else {}),
+                "sources": srcs,
+                "total": len(origin_ids),
+                "introduced": len(fresh),
+            }
+        )
         # ASCII only: this prints to a cp1252 console on Windows.
-        print(f"  {xp.label:<24} {len(origin_ids):>7,} spells  {len(fresh):>7,} new"
-              + ("   (!) " + xp.caveat if xp.caveat else ""))
+        print(
+            f"  {xp.label:<24} {len(origin_ids):>7,} spells  {len(fresh):>7,} new"
+            + ("   (!) " + xp.caveat if xp.caveat else "")
+        )
 
         if report:
             for s in xp.sources:
                 if s.role != PARALLEL:
                     continue
                 other = ids_of(s.where)
-                print(f"      parallel {s.where.ref}: {len(other):,} spells, "
-                      f"{len(other - origin_ids):,} it adds, "
-                      f"{len(origin_ids - other):,} it lacks")
+                print(
+                    f"      parallel {s.where.ref}: {len(other):,} spells, "
+                    f"{len(other - origin_ids):,} it adds, "
+                    f"{len(origin_ids - other):,} it lacks"
+                )
 
     by_era: dict[str, list[int]] = {xp.key: [] for xp in LADDER}
     for sid, key in era_of.items():
@@ -387,17 +493,17 @@ def build(report: bool = False) -> dict:
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description=__doc__,
-                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--verify", action="store_true",
-                    help="rebuild and compare with the committed file, writing nothing")
-    ap.add_argument("--report", action="store_true",
-                    help="also measure each parallel source against its rung")
-    ap.add_argument("--restate", action="store_true",
-                    help="rewrite only what LADDER declares (labels, words, "
-                         "level caps), keeping the committed spell ids")
-    ap.add_argument("--vendor", metavar="DUMP",
-                    help="distil a client dump (.dbc) into build/sources/ and exit")
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument(
+        "--verify", action="store_true", help="rebuild and compare with the committed file, writing nothing"
+    )
+    ap.add_argument("--report", action="store_true", help="also measure each parallel source against its rung")
+    ap.add_argument(
+        "--restate",
+        action="store_true",
+        help="rewrite only what LADDER declares (labels, words, level caps), keeping the committed spell ids",
+    )
+    ap.add_argument("--vendor", metavar="DUMP", help="distil a client dump (.dbc) into build/sources/ and exit")
     ap.add_argument("--key", help="the LADDER key --vendor is writing for")
     args = ap.parse_args()
 
@@ -429,8 +535,10 @@ def main() -> int:
     # repo change — the same rule tools/rebuild.py follows for the packs.
     with gzip.GzipFile(OUT, "wb", mtime=0) as f:
         f.write(text.encode("utf-8"))
-    print(f"\nwrote {OUT.relative_to(REPO)}  ({OUT.stat().st_size / 1024:.0f} KB, "
-          f"{sum(len(v) for v in data['ids'].values()):,} spells)")
+    print(
+        f"\nwrote {OUT.relative_to(REPO)}  ({OUT.stat().st_size / 1024:.0f} KB, "
+        f"{sum(len(v) for v in data['ids'].values()):,} spells)"
+    )
     return 0
 
 

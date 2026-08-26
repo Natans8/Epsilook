@@ -44,8 +44,7 @@ def read_item_models(tables: Tables) -> ItemModels:
     recolour.
     """
     items = ItemModels()
-    for item_id, display, quality in tables.rows(
-            "ItemSearchName", ["ID", "Display_lang", "OverallQualityID"]):
+    for item_id, display, quality in tables.rows("ItemSearchName", ["ID", "Display_lang", "OverallQualityID"]):
         if display:
             items.name[to_int(item_id)] = display
             items.quality[to_int(item_id)] = to_int(quality)
@@ -53,25 +52,23 @@ def read_item_models(tables: Tables) -> ItemModels:
     # A resources id names several files when the model ships with levels of
     # detail; the lowest file id is the base model.
     resource_fid: dict[int, int] = {}
-    for file_id, resource_id in tables.rows(
-            "ModelFileData", ["FileDataID", "ModelResourcesID"]):
+    for file_id, resource_id in tables.rows("ModelFileData", ["FileDataID", "ModelResourcesID"]):
         resource, file = to_int(resource_id), to_int(file_id)
         if resource and file and file < resource_fid.get(resource, file + 1):
             resource_fid[resource] = file
 
     # Slot 0 is the main model, slot 1 the second component of a paired item.
     display_resources: dict[int, tuple[int, int]] = {}
-    for display_id, first, second in tables.rows(
-            "ItemDisplayInfo", ["ID", "ModelResourcesID_0", "ModelResourcesID_1"]):
+    for display_id, first, second in tables.rows("ItemDisplayInfo", ["ID", "ModelResourcesID_0", "ModelResourcesID_1"]):
         display_resources[to_int(display_id)] = (to_int(first), to_int(second))
 
     appearances: dict[int, tuple[int, int]] = {}
     for appearance_id, display_id, icon in tables.rows(
-            "ItemAppearance", ["ID", "ItemDisplayInfoID", "DefaultIconFileDataID"]):
+        "ItemAppearance", ["ID", "ItemDisplayInfoID", "DefaultIconFileDataID"]
+    ):
         appearances[to_int(appearance_id)] = (to_int(display_id), to_int(icon))
 
-    for item_id, appearance_id in tables.rows(
-            "ItemModifiedAppearance", ["ItemID", "ItemAppearanceID"]):
+    for item_id, appearance_id in tables.rows("ItemModifiedAppearance", ["ItemID", "ItemAppearanceID"]):
         item, appearance = to_int(item_id), to_int(appearance_id)
         if not item or appearance not in appearances:
             continue
@@ -79,9 +76,14 @@ def read_item_models(tables: Tables) -> ItemModels:
         if icon_file and item not in items.icon_fid:
             items.icon_fid[item] = icon_file
         if item not in items.model_fid:
-            file = next((resource_fid[resource]
-                         for resource in display_resources.get(display_info, ())
-                         if resource_fid.get(resource)), 0)
+            file = next(
+                (
+                    resource_fid[resource]
+                    for resource in display_resources.get(display_info, ())
+                    if resource_fid.get(resource)
+                ),
+                0,
+            )
             if file:
                 items.model_fid[item] = file
     return items

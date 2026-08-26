@@ -92,8 +92,7 @@ class Overlay:
 
     def __post_init__(self) -> None:
         if self.columns and self.key not in self.columns:
-            raise ValueError(f"overlay {self.table}: the key {self.key!r} is not "
-                             f"among the mapped columns")
+            raise ValueError(f"overlay {self.table}: the key {self.key!r} is not among the mapped columns")
 
     def spelling(self, column: str) -> str | None:
         """What this source calls a base column, or None if it supplies none.
@@ -104,8 +103,11 @@ class Overlay:
         return column if not self.columns else self.columns.get(column)
 
 
-def reconcile(overlays: Mapping[str, Overlay], kept: Mapping[str, Sequence[str]],
-              excused: frozenset[tuple[str, str]] = frozenset()) -> list[str]:
+def reconcile(
+    overlays: Mapping[str, Overlay],
+    kept: Mapping[str, Sequence[str]],
+    excused: frozenset[tuple[str, str]] = frozenset(),
+) -> list[str]:
     """Ways an overlay map and the distiller's column list could have drifted.
 
     Two declarations, neither derivable from the other: only the overlay map
@@ -133,20 +135,19 @@ def reconcile(overlays: Mapping[str, Overlay], kept: Mapping[str, Sequence[str]]
         if not overlay.columns:
             continue
         if overlay.table not in kept:
-            problems.append(f"{base} is overlaid from {overlay.table}, which the "
-                            f"distiller does not keep")
+            problems.append(f"{base} is overlaid from {overlay.table}, which the distiller does not keep")
             continue
         available = set(kept[overlay.table])
         for column, spelling in overlay.columns.items():
             if spelling not in available:
-                problems.append(f"{base}.{column} reads {overlay.table}.{spelling}, "
-                                f"which the distiller does not keep")
+                problems.append(f"{base}.{column} reads {overlay.table}.{spelling}, which the distiller does not keep")
         judged = {overlay.judged_on} if overlay.judged_on else set()
         for spelling in available - judged - set(overlay.columns.values()):
             if (overlay.table, spelling) in excused:
                 continue
-            problems.append(f"{overlay.table}.{spelling} is distilled but no base "
-                            f"column reads it, and it is not excused")
+            problems.append(
+                f"{overlay.table}.{spelling} is distilled but no base column reads it, and it is not excused"
+            )
     for table in set(kept) - {overlay.table for overlay in overlays.values()}:
         problems.append(f"{table} is distilled but overlays nothing")
     return problems
@@ -167,8 +168,9 @@ class OverlaidTables:
     source: Tables | None = None
     """Where the revisions come from; `None` means every table passes through."""
 
-    _buffered: dict[tuple[str, tuple[str, ...]], dict[str, tuple[str, dict[str, str]]]] = \
-        field(default_factory=dict, init=False, repr=False, compare=False)
+    _buffered: dict[tuple[str, tuple[str, ...]], dict[str, tuple[str, dict[str, str]]]] = field(
+        default_factory=dict, init=False, repr=False, compare=False
+    )
     """Each buffered overlay read, by (base table, columns asked).
 
     A translated export restates every row of a large table, and the routes
@@ -186,8 +188,9 @@ class OverlaidTables:
         """The base's column names. The overlay's spellings are its own."""
         return self.base.header(table)
 
-    def _revisions(self, source: Tables, overlay: Overlay,
-                   columns: Sequence[str]) -> dict[str, tuple[str, dict[str, str]]]:
+    def _revisions(
+        self, source: Tables, overlay: Overlay, columns: Sequence[str]
+    ) -> dict[str, tuple[str, dict[str, str]]]:
         """The overlay's rows for one table, keyed by the joinable key value.
 
         Each entry keeps the key's own text, which an added row comes out
@@ -207,10 +210,8 @@ class OverlaidTables:
         reach for when one of those arrives. `rows` keeps each buffer it builds,
         so the limit is paid once per (table, columns) rather than per read.
         """
-        supplied = [column for column in columns
-                    if overlay.spelling(column) is not None and column != overlay.key]
-        asked = [overlay.spelling(column) or column
-                 for column in (overlay.key, *supplied)]
+        supplied = [column for column in columns if overlay.spelling(column) is not None and column != overlay.key]
+        asked = [overlay.spelling(column) or column for column in (overlay.key, *supplied)]
         if overlay.judged_on:
             asked.append(overlay.judged_on)
 
@@ -233,8 +234,7 @@ class OverlaidTables:
             if overlay.restates:
                 # Nothing but space counts as nothing: the value is kept as the
                 # source spelled it, and only the test looks past the padding.
-                revision = {column: value for column, value in revision.items()
-                            if value.strip()}
+                revision = {column: value for column, value in revision.items() if value.strip()}
             out[key] = (row[0], revision)
         return out
 
@@ -249,16 +249,14 @@ class OverlaidTables:
         source, overlay = self.source, self.overlays.get(table)
         # A build that predates a table reads it as empty by declaration;
         # without this test every revision row would come out as an addition.
-        if overlay is None or source is None or not self.base.available(table) \
-                or not source.available(overlay.table):
+        if overlay is None or source is None or not self.base.available(table) or not source.available(overlay.table):
             yield from self.base.rows(table, columns)
             return
 
         buffered = (table, tuple(columns))
         revisions = self._buffered.get(buffered)
         if revisions is None:
-            revisions = self._buffered.setdefault(
-                buffered, self._revisions(source, overlay, columns))
+            revisions = self._buffered.setdefault(buffered, self._revisions(source, overlay, columns))
         if not revisions:
             # An overlay ships only the rows it revised, so a table it revised
             # none of still leaves a header-only file behind.
@@ -278,8 +276,7 @@ class OverlaidTables:
                 yield row[:width]
                 continue
             seen.add(key)
-            yield tuple(found[1].get(column, value)
-                        for column, value in zip(wanted, row))
+            yield tuple(found[1].get(column, value) for column, value in zip(wanted, row))
 
         if overlay.restates:
             return

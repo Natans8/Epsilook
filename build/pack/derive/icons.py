@@ -39,9 +39,7 @@ class IconIndex:
     """Each spell's 1-based index into `names`, or `NO_ICON`."""
 
 
-def build_icon_index(spells: Sequence[int],
-                     icon_fid: Mapping[int, int],
-                     paths: Mapping[int, str]) -> IconIndex:
+def build_icon_index(spells: Sequence[int], icon_fid: Mapping[int, int], paths: Mapping[int, str]) -> IconIndex:
     """Reduce every spell's icon to an index into one deduped name table.
 
     A name can outlive a file id: the same name resolves through several ids
@@ -99,8 +97,9 @@ def icon_name(path: str) -> str:
     return path.rsplit("/", 1)[-1].rsplit(".", 1)[0].lower()
 
 
-def build_item_icons(items: Sequence[int], icon_fid: Mapping[int, int],
-                     paths: Mapping[int, str]) -> tuple[list[str], list[int]]:
+def build_item_icons(
+    items: Sequence[int], icon_fid: Mapping[int, int], paths: Mapping[int, str]
+) -> tuple[list[str], list[int]]:
     """The item icon table, and each item's 1-based place in it.
 
     The same shape as the spell icon index and for the same reason: a handful

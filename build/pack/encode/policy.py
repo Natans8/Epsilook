@@ -36,25 +36,28 @@ from ..model.section import Cardinality, Encoding
 # the default argument of every function that takes one, so a stray write here
 # would not be a local mistake -- it would restate what the whole build packs,
 # for every later call in the process.
-FEWEST_BYTES: Mapping[Cardinality, Encoding] = MappingProxyType({
-    Cardinality.TOTAL: Encoding.DENSE,
-    # A partial column pads rather than skips: the filler compresses to nearly
-    # nothing, and the row indexes that would replace it do not.
-    Cardinality.PARTIAL: Encoding.DENSE,
-    Cardinality.SHARED: Encoding.DEDUP,
-})
+FEWEST_BYTES: Mapping[Cardinality, Encoding] = MappingProxyType(
+    {
+        Cardinality.TOTAL: Encoding.DENSE,
+        # A partial column pads rather than skips: the filler compresses to nearly
+        # nothing, and the row indexes that would replace it do not.
+        Cardinality.PARTIAL: Encoding.DENSE,
+        Cardinality.SHARED: Encoding.DEDUP,
+    }
+)
 """What ships: the smallest artifact, measured."""
 
-FEWEST_ENTRIES: Mapping[Cardinality, Encoding] = MappingProxyType({
-    Cardinality.TOTAL: Encoding.DENSE,
-    Cardinality.PARTIAL: Encoding.SPARSE,
-    Cardinality.SHARED: Encoding.DEDUP,
-})
+FEWEST_ENTRIES: Mapping[Cardinality, Encoding] = MappingProxyType(
+    {
+        Cardinality.TOTAL: Encoding.DENSE,
+        Cardinality.PARTIAL: Encoding.SPARSE,
+        Cardinality.SHARED: Encoding.DEDUP,
+    }
+)
 """The fewest values for a reader to walk, at a cost in bytes."""
 
 
-def layout_of(kind: Cardinality,
-              policy: Mapping[Cardinality, Encoding] = FEWEST_BYTES) -> Encoding:
+def layout_of(kind: Cardinality, policy: Mapping[Cardinality, Encoding] = FEWEST_BYTES) -> Encoding:
     """The layout one kind of column gets under `policy`.
 
     Raises:

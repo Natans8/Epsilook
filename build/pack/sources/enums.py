@@ -52,16 +52,14 @@ def load_local_enum(name: str) -> dict[int, Any]:
 
 def enum_ids_where(mapping: dict[int, Any], handler: str) -> set[int]:
     """Select the enum values whose metadata dict carries this handler."""
-    return {k for k, v in mapping.items()
-            if isinstance(v, dict) and v.get("handler") == handler}
+    return {k for k, v in mapping.items() if isinstance(v, dict) and v.get("handler") == handler}
 
 
 def enum_id_where(mapping: dict[int, Any], handler: str) -> int:
     """Select the one enum value with this handler; error unless exactly one."""
     ids = enum_ids_where(mapping, handler)
     if len(ids) != 1:
-        sys.exit(f"error: enums expected exactly one value for handler "
-                 f"'{handler}', got {sorted(ids)}")
+        sys.exit(f"error: enums expected exactly one value for handler '{handler}', got {sorted(ids)}")
     return next(iter(ids))
 
 
@@ -86,7 +84,7 @@ def read_enum_names(name: str, version: str) -> dict[int, str]:
     for line in enum_file(name).read_text(encoding="utf-8").splitlines():
         line = line.split("//", 1)[0].strip()
         if line.startswith("(BUILD "):
-            guard, _, line = line[len("(BUILD "):].partition(")")
+            guard, _, line = line[len("(BUILD ") :].partition(")")
             line = line.strip()
 
             def in_range(rng: str) -> bool:
@@ -97,7 +95,7 @@ def read_enum_names(name: str, version: str) -> dict[int, str]:
                 lo, _, hi = rng.strip().partition("-")
                 lo_t = tuple(int(p) for p in lo.split("."))
                 hi_t = tuple(int(p) for p in hi.split(".")) if hi else lo_t
-                return lo_t <= ver[:len(lo_t)] and ver[:len(hi_t)] <= hi_t
+                return lo_t <= ver[: len(lo_t)] and ver[: len(hi_t)] <= hi_t
 
             if not any(in_range(r) for r in guard.split(",")):
                 continue
@@ -109,7 +107,6 @@ def read_enum_names(name: str, version: str) -> dict[int, str]:
     return names
 
 
-
 def enum_sources() -> list[Source]:
     """The name lists that are fetched rather than checked in.
 
@@ -118,10 +115,14 @@ def enum_sources() -> list[Source]:
     name upstream has since fixed.
     """
     return [
-        Fetched(name="animation names (wow.tools)", origin=Origin(ANIMS_JS_URL),
-                dest=ANIMS_FILE, fetch=Volatile()),
-        *(Fetched(name=f"enum names, {name} (wowdev/WoWDBDefs)",
-                  origin=Origin(WOWDBDEFS_ENUM_URL.format(name=name)),
-                  dest=enum_file(name), fetch=Volatile())
-          for name in ENUM_FILES),
+        Fetched(name="animation names (wow.tools)", origin=Origin(ANIMS_JS_URL), dest=ANIMS_FILE, fetch=Volatile()),
+        *(
+            Fetched(
+                name=f"enum names, {name} (wowdev/WoWDBDefs)",
+                origin=Origin(WOWDBDEFS_ENUM_URL.format(name=name)),
+                dest=enum_file(name),
+                fetch=Volatile(),
+            )
+            for name in ENUM_FILES
+        ),
     ]

@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-from pack.routes.vehicles import (PASSENGER_ROLE_NAMES,
-                                  SEAT_PASSENGER_ANIM_COLUMNS,
-                                  read_vehicle_seats)
+from pack.routes.vehicles import PASSENGER_ROLE_NAMES, SEAT_PASSENGER_ANIM_COLUMNS, read_vehicle_seats
 from support import BuildTables
 
 VEHICLE = """\
@@ -37,8 +35,7 @@ def test_the_two_animation_sets_stay_apart(tables: BuildTables) -> None:
     assert seats.vehicle_anims[1] == {30, 31}
 
 
-def test_a_rider_animation_carries_the_role_it_plays_in(
-        tables: BuildTables) -> None:
+def test_a_rider_animation_carries_the_role_it_plays_in(tables: BuildTables) -> None:
     """Entering and sitting are different acts, so the column a rider
     animation came from is kept rather than unioned away."""
     seats = read_vehicle_seats(tables(Vehicle=VEHICLE, VehicleSeat=VEHICLE_SEAT))
@@ -46,12 +43,10 @@ def test_a_rider_animation_carries_the_role_it_plays_in(
     assert seats.passenger_anims[1] == {(20, 0), (21, 1)}
 
 
-def test_one_animation_in_two_roles_is_two_entries(
-        tables: BuildTables) -> None:
+def test_one_animation_in_two_roles_is_two_entries(tables: BuildTables) -> None:
     """Which act an animation belongs to is the question being asked, so the
     same animation entered and seated stays two answers."""
-    seat = ("ID,AttachmentID,EnterAnimStart,RideAnimLoop\n"
-            "10,0,20,20\n")
+    seat = "ID,AttachmentID,EnterAnimStart,RideAnimLoop\n10,0,20,20\n"
     seats = read_vehicle_seats(tables(Vehicle=VEHICLE, VehicleSeat=seat))
     assert seats.passenger_anims[1] == {(20, 0), (20, 1)}
 

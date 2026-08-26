@@ -45,7 +45,6 @@ LINK_KIND_BY_AURA = {
     328: "on power level",  # TRIGGER_SPELL_ON_POWER_PCT
     495: "when it expires",  # TRIGGER_SPELL_ON_EXPIRE
     406: "on a key",  # KEYBOUND_OVERRIDE (the keybind route shows the key itself)
-
     # (b) one relationship under several spellings.
     284: "linked",  # LINKED
     285: "linked",  # LINKED_2
@@ -64,7 +63,6 @@ LINK_KIND_BY_EFFECT = {
     64: "on cast",  # TRIGGER_SPELL
     142: "on cast",  # TRIGGER_SPELL_WITH_VALUE
     151: "on cast",  # TRIGGER_SPELL_2
-
     # (b) one relationship under several spellings.
     32: "as a missile",  # TRIGGER_MISSILE
     148: "as a missile",  # TRIGGER_MISSILE_SPELL_WITH_VALUE
@@ -95,8 +93,7 @@ LINK_KIND_BY_EFFECT = {
 }
 
 
-def link_kind_word(effect: int, aura: int, effect_names: Mapping[int, str],
-                   aura_names: Mapping[int, str]) -> str:
+def link_kind_word(effect: int, aura: int, effect_names: Mapping[int, str], aura_names: Mapping[int, str]) -> str:
     """The word one edge prints, from the effect or aura that owns it.
 
     An APPLY_AURA row is described by its AURA -- the effect says only "applies
@@ -112,9 +109,7 @@ def link_kind_word(effect: int, aura: int, effect_names: Mapping[int, str],
     N`, never the empty string, which would render a note-shaped hole.
     """
     if aura:
-        return (LINK_KIND_BY_AURA.get(aura)
-                or aura_names.get(aura, "").lower().replace("_", " ")
-                or f"aura {aura}")
-    return (LINK_KIND_BY_EFFECT.get(effect)
-            or effect_names.get(effect, "").lower().replace("_", " ")
-            or f"effect {effect}")
+        return LINK_KIND_BY_AURA.get(aura) or aura_names.get(aura, "").lower().replace("_", " ") or f"aura {aura}"
+    return (
+        LINK_KIND_BY_EFFECT.get(effect) or effect_names.get(effect, "").lower().replace("_", " ") or f"effect {effect}"
+    )

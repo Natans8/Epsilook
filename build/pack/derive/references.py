@@ -16,8 +16,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 
-from ..routes import (CreatureModels, FxPayloads, GameObjectData, ItemModels,
-                      MountData, SpellEffectRows)
+from ..routes import CreatureModels, FxPayloads, GameObjectData, ItemModels, MountData, SpellEffectRows
 from ..routes.models import MODEL_CAT_DISPLAY, MODEL_CAT_ITEM
 from .displays import ResolvedDisplays
 from .walk import SpellVisuals
@@ -70,11 +69,17 @@ class References:
         return self.assets | self.icons
 
 
-def collect_references(visuals: SpellVisuals, effects: SpellEffectRows,
-                       fx: FxPayloads, displays: ResolvedDisplays,
-                       mounts: MountData, objects: GameObjectData,
-                       items: ItemModels, creatures: CreatureModels,
-                       spell_icons: Mapping[int, int]) -> References:
+def collect_references(
+    visuals: SpellVisuals,
+    effects: SpellEffectRows,
+    fx: FxPayloads,
+    displays: ResolvedDisplays,
+    mounts: MountData,
+    objects: GameObjectData,
+    items: ItemModels,
+    creatures: CreatureModels,
+    spell_icons: Mapping[int, int],
+) -> References:
     """Gather every file id the build must resolve, split by what names it.
 
     Args:
@@ -98,8 +103,9 @@ def collect_references(visuals: SpellVisuals, effects: SpellEffectRows,
     # The two halves of the screen route meet here: an aura applies one with no
     # visual involved, a kit applies one with no aura. Unioned where they are
     # read, so neither pass writes into the other's bundle.
-    found.screens = {row for source in (effects.screens.ids, visuals.screens)
-                     for rows in source.values() for row in rows}
+    found.screens = {
+        row for source in (effects.screens.ids, visuals.screens) for rows in source.values() for row in rows
+    }
 
     # The models bucket is the largest the walk produces, and both a model's
     # own file and the inventory icon an item pill shows come out of it, so it
@@ -130,8 +136,7 @@ def collect_references(visuals: SpellVisuals, effects: SpellEffectRows,
         found.displays.add(row.display)
 
     found.mount_displays = sorted({display for _spell, display in mounts.links})
-    found.assets.update(file for display in found.mount_displays
-                        if (file := mounts.fid.get(display, 0)))
+    found.assets.update(file for display in found.mount_displays if (file := mounts.fid.get(display, 0)))
     found.displays.update(found.mount_displays)
     found.displays.discard(0)
     # A display's skins are textures like a chain's: named so a reader can see
@@ -140,10 +145,9 @@ def collect_references(visuals: SpellVisuals, effects: SpellEffectRows,
         found.assets.update(creatures.display_skins.get(display, ()))
 
     found.object_rows = sorted(
-        (spell, entry) for spell, entries in effects.objects.ids.items()
-        for entry in entries if entry in objects.name)
-    found.assets.update(file for entry in found.objects
-                        if (file := objects.fid.get(entry, 0)))
+        (spell, entry) for spell, entries in effects.objects.ids.items() for entry in entries if entry in objects.name
+    )
+    found.assets.update(file for entry in found.objects if (file := objects.fid.get(entry, 0)))
 
     found.icons.update(spell_icons.values())
     found.icons.discard(0)

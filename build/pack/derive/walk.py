@@ -20,10 +20,8 @@ from collections.abc import Callable, Container, Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
-from ..routes import (FxPayloads, KitEffects, SpellEffectRows, VisualGraph,
-                      VisualMissiles)
-from ..routes.models import (MODEL_CAT_MISSILE, SCALE_UNIT, UNPLACED,
-                             AttachModel)
+from ..routes import FxPayloads, KitEffects, SpellEffectRows, VisualGraph, VisualMissiles
+from ..routes.models import MODEL_CAT_MISSILE, SCALE_UNIT, UNPLACED, AttachModel
 from ..targets import merge_masked, resolve_target_mask
 
 Bucket = defaultdict[int, dict[Any, int]]
@@ -138,10 +136,15 @@ the walk rather than to a section.
 """
 
 
-def walk_spells(spell_names: Container[int], graph: VisualGraph,
-                missiles: Mapping[int, VisualMissiles], kits: KitEffects,
-                soundkit_files: Mapping[int, set[int]], fx: FxPayloads,
-                effects: SpellEffectRows) -> SpellVisuals:
+def walk_spells(
+    spell_names: Container[int],
+    graph: VisualGraph,
+    missiles: Mapping[int, VisualMissiles],
+    kits: KitEffects,
+    soundkit_files: Mapping[int, set[int]],
+    fx: FxPayloads,
+    effects: SpellEffectRows,
+) -> SpellVisuals:
     """Walk every spell's visuals once, unioning what each one reaches.
 
     Args:
@@ -165,17 +168,14 @@ def walk_spells(spell_names: Container[int], graph: VisualGraph,
     # spell-visual-kit triple in the build, so anything constant across it is
     # worth lifting out -- and the shared pair tuples also stop each spell's
     # bucket keying on its own equal-but-distinct copies.
-    pairs = {kit: [(kit, file) for file in files]
-             for kit, files in soundkit_files.items()}
-    families = [(bucket.of_kit(kits), bucket.of_spell(vis))
-                for bucket in KIT_BUCKETS]
+    pairs = {kit: [(kit, file) for file in files] for kit, files in soundkit_files.items()}
+    families = [(bucket.of_kit(kits), bucket.of_spell(vis)) for bucket in KIT_BUCKETS]
 
     for spell, visuals in graph.spell_visuals.items():
         if spell not in spell_names:
             vis.orphans += 1
             continue
-        aimed = (effects.aura_target_bits.get(spell, 0),
-                 effects.cast_target_bits.get(spell, 0))
+        aimed = (effects.aura_target_bits.get(spell, 0), effects.cast_target_bits.get(spell, 0))
         for visual, extra in visuals.items():
             _walk_missiles(vis, spell, missiles.get(visual), pairs, extra)
             # The visual's own animation-event sound hangs off the visual
@@ -184,17 +184,16 @@ def walk_spells(spell_names: Container[int], graph: VisualGraph,
             # without a sound does not conjure the spell an empty bucket.
             if soundkit := graph.visual_sounds.get(visual, 0):
                 merge_masked(vis.sounds[spell], pairs.get(soundkit, ()), extra)
-            _walk_kits(vis, spell, visual, graph, kits, pairs, families,
-                       aimed, extra)
+            _walk_kits(vis, spell, visual, graph, kits, pairs, families, aimed, extra)
 
     _fold_chain_sounds(vis, fx, pairs)
     _fold_effect_sounds(vis, effects, pairs)
     return vis
 
 
-def _walk_missiles(vis: SpellVisuals, spell: int,
-                   launched: VisualMissiles | None,
-                   pairs: SoundPairs, mask: int) -> None:
+def _walk_missiles(
+    vis: SpellVisuals, spell: int, launched: VisualMissiles | None, pairs: SoundPairs, mask: int
+) -> None:
     """Collect one visual's missile sets.
 
     Missile content has no `SpellVisualEvent` row, so it carries only whatever
@@ -204,20 +203,40 @@ def _walk_missiles(vis: SpellVisuals, spell: int,
     """
     if launched is None:
         return
-    merge_masked(vis.models[spell],
-                 (AttachModel(shot.file, MODEL_CAT_MISSILE, shot.source,
-                              shot.destination, 0, shot.motion, UNPLACED,
-                              SCALE_UNIT, shot.effect)
-                  for shot in launched.models), mask)
+    merge_masked(
+        vis.models[spell],
+        (
+            AttachModel(
+                shot.file,
+                MODEL_CAT_MISSILE,
+                shot.source,
+                shot.destination,
+                0,
+                shot.motion,
+                UNPLACED,
+                SCALE_UNIT,
+                shot.effect,
+            )
+            for shot in launched.models
+        ),
+        mask,
+    )
     merge_masked(vis.animkits[spell], launched.animkits, mask)
     for soundkit in launched.soundkits:
         merge_masked(vis.sounds[spell], pairs.get(soundkit, ()), mask)
 
 
-def _walk_kits(vis: SpellVisuals, spell: int, visual: int, graph: VisualGraph,
-               kits: KitEffects, pairs: SoundPairs,
-               families: list[tuple[dict[int, set[Any]], Bucket]],
-               aimed: tuple[int, int], extra: int) -> None:
+def _walk_kits(
+    vis: SpellVisuals,
+    spell: int,
+    visual: int,
+    graph: VisualGraph,
+    kits: KitEffects,
+    pairs: SoundPairs,
+    families: list[tuple[dict[int, set[Any]], Bucket]],
+    aimed: tuple[int, int],
+    extra: int,
+) -> None:
     """Collect every kit one visual names, into every family.
 
     The kit's two phase masks are folded into one first, because "the target"
@@ -250,8 +269,7 @@ def _walk_kits(vis: SpellVisuals, spell: int, visual: int, graph: VisualGraph,
             vis.camos.add(spell)
 
 
-def _fold_effect_sounds(vis: SpellVisuals, effects: SpellEffectRows,
-                        pairs: SoundPairs) -> None:
+def _fold_effect_sounds(vis: SpellVisuals, effects: SpellEffectRows, pairs: SoundPairs) -> None:
     """Fold the sound an effect plays outright into the spell's sounds.
 
     A spell can play a sound without any visual doing it: `PLAY_SOUND` and
@@ -264,8 +282,7 @@ def _fold_effect_sounds(vis: SpellVisuals, effects: SpellEffectRows,
         merge_masked(vis.sounds[spell], pairs.get(soundkit, ()), mask)
 
 
-def _fold_chain_sounds(vis: SpellVisuals, fx: FxPayloads,
-                       pairs: SoundPairs) -> None:
+def _fold_chain_sounds(vis: SpellVisuals, fx: FxPayloads, pairs: SoundPairs) -> None:
     """Fold each drawn chain's own sound into the spell's sounds.
 
     A chain carries a sound kit of its own, which belongs in the sounds family

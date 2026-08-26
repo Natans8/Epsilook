@@ -51,8 +51,8 @@ entry,name,modelid1,modelid2,modelid3,modelid4
 def test_a_display_resolves_through_two_hops(tables: BuildTables) -> None:
     """Several displays share one model, so the file id lives a table down."""
     creatures = read_creature_models(
-        tables(CreatureDisplayInfo=CREATURE_DISPLAY_INFO,
-               CreatureModelData=CREATURE_MODEL_DATA), None)
+        tables(CreatureDisplayInfo=CREATURE_DISPLAY_INFO, CreatureModelData=CREATURE_MODEL_DATA), None
+    )
     assert creatures.fid_for_display(50) == 7000
     assert creatures.fid_for_display(51) == 7001
 
@@ -63,24 +63,22 @@ def test_a_displays_skins_are_read_by_name_in_slot_order(tables: BuildTables) ->
     nothing is absent rather than empty, and one texture in two slots is one
     skin."""
     creatures = read_creature_models(
-        tables(CreatureDisplayInfo=CREATURE_DISPLAY_INFO_SKINNED,
-               CreatureModelData=CREATURE_MODEL_DATA), None)
+        tables(CreatureDisplayInfo=CREATURE_DISPLAY_INFO_SKINNED, CreatureModelData=CREATURE_MODEL_DATA), None
+    )
     assert creatures.display_skins == {50: (7100, 7101), 52: (7102,)}
 
 
-def test_a_display_table_without_skin_columns_reads_as_unpainted(
-        tables: BuildTables) -> None:
+def test_a_display_table_without_skin_columns_reads_as_unpainted(tables: BuildTables) -> None:
     creatures = read_creature_models(
-        tables(CreatureDisplayInfo=CREATURE_DISPLAY_INFO,
-               CreatureModelData=CREATURE_MODEL_DATA), None)
+        tables(CreatureDisplayInfo=CREATURE_DISPLAY_INFO, CreatureModelData=CREATURE_MODEL_DATA), None
+    )
     assert creatures.display_skins == {}
 
 
-def test_a_display_whose_model_has_no_file_resolves_to_nothing(
-        tables: BuildTables) -> None:
+def test_a_display_whose_model_has_no_file_resolves_to_nothing(tables: BuildTables) -> None:
     creatures = read_creature_models(
-        tables(CreatureDisplayInfo=CREATURE_DISPLAY_INFO,
-               CreatureModelData=CREATURE_MODEL_DATA), None)
+        tables(CreatureDisplayInfo=CREATURE_DISPLAY_INFO, CreatureModelData=CREATURE_MODEL_DATA), None
+    )
     assert creatures.fid_for_display(52) == 0
     assert creatures.fid_for_display(999) == 0
 
@@ -88,8 +86,8 @@ def test_a_display_whose_model_has_no_file_resolves_to_nothing(
 def test_without_a_server_dump_the_models_still_resolve(tables: BuildTables) -> None:
     """Only the naming half degrades."""
     creatures = read_creature_models(
-        tables(CreatureDisplayInfo=CREATURE_DISPLAY_INFO,
-               CreatureModelData=CREATURE_MODEL_DATA), None)
+        tables(CreatureDisplayInfo=CREATURE_DISPLAY_INFO, CreatureModelData=CREATURE_MODEL_DATA), None
+    )
     assert creatures.names == {}
     assert creatures.displays == {}
     assert creatures.fid_for_display(50) == 7000
@@ -98,43 +96,38 @@ def test_without_a_server_dump_the_models_still_resolve(tables: BuildTables) -> 
 def test_a_name_is_trimmed(tables: BuildTables) -> None:
     """The dump reader decodes faithfully, so the trim happens in the route."""
     creatures = read_creature_models(
-        tables(CreatureDisplayInfo=CREATURE_DISPLAY_INFO,
-               CreatureModelData=CREATURE_MODEL_DATA),
-        tables(creature_template=CREATURE_TEMPLATE,
-               creature_template_model=CREATURE_TEMPLATE_MODEL))
+        tables(CreatureDisplayInfo=CREATURE_DISPLAY_INFO, CreatureModelData=CREATURE_MODEL_DATA),
+        tables(creature_template=CREATURE_TEMPLATE, creature_template_model=CREATURE_TEMPLATE_MODEL),
+    )
     assert creatures.names == {300: "Sunwell Guardian"}
 
 
 def test_displays_come_out_in_slot_order(tables: BuildTables) -> None:
     """The first is the one the pill shows, so source order is not enough."""
     creatures = read_creature_models(
-        tables(CreatureDisplayInfo=CREATURE_DISPLAY_INFO,
-               CreatureModelData=CREATURE_MODEL_DATA),
-        tables(creature_template=CREATURE_TEMPLATE,
-               creature_template_model=CREATURE_TEMPLATE_MODEL))
+        tables(CreatureDisplayInfo=CREATURE_DISPLAY_INFO, CreatureModelData=CREATURE_MODEL_DATA),
+        tables(creature_template=CREATURE_TEMPLATE, creature_template_model=CREATURE_TEMPLATE_MODEL),
+    )
     assert creatures.displays == {300: [(0, 50), (1, 51)]}
 
 
-def test_the_legacy_column_shape_yields_the_same_displays(
-        tables: BuildTables) -> None:
+def test_the_legacy_column_shape_yields_the_same_displays(tables: BuildTables) -> None:
     """In the legacy shape the column position is the slot, so an empty column
     is a skipped slot rather than a display of zero."""
     creatures = read_creature_models(
-        tables(CreatureDisplayInfo=CREATURE_DISPLAY_INFO,
-               CreatureModelData=CREATURE_MODEL_DATA),
-        tables(creature_template=CREATURE_TEMPLATE_LEGACY))
+        tables(CreatureDisplayInfo=CREATURE_DISPLAY_INFO, CreatureModelData=CREATURE_MODEL_DATA),
+        tables(creature_template=CREATURE_TEMPLATE_LEGACY),
+    )
     assert creatures.displays == {300: [(0, 50), (2, 51)]}
 
 
-def test_a_dump_carrying_no_display_columns_degrades_rather_than_failing(
-        tables: BuildTables) -> None:
+def test_a_dump_carrying_no_display_columns_degrades_rather_than_failing(tables: BuildTables) -> None:
     """A release with neither the display table nor the legacy columns keeps
     its names and loses only the morphs."""
     creatures = read_creature_models(
-        tables(CreatureDisplayInfo=CREATURE_DISPLAY_INFO,
-               CreatureModelData=CREATURE_MODEL_DATA),
-        tables(absent=TDB_OPTIONAL_TABLES, defaults=TDB_OPTIONAL_COLUMNS,
-               creature_template=CREATURE_TEMPLATE))
+        tables(CreatureDisplayInfo=CREATURE_DISPLAY_INFO, CreatureModelData=CREATURE_MODEL_DATA),
+        tables(absent=TDB_OPTIONAL_TABLES, defaults=TDB_OPTIONAL_COLUMNS, creature_template=CREATURE_TEMPLATE),
+    )
     assert creatures.displays == {}
     assert creatures.names == {300: "Sunwell Guardian"}
 
@@ -154,22 +147,25 @@ def test_totem_displays_are_deduplicated_and_ordered(tables: BuildTables) -> Non
     """Two races sharing a model is one display, and the order is the display's
     rather than the race's, since no race travels with it."""
     creatures = read_creature_models(
-        tables(CreatureDisplayInfo=CREATURE_DISPLAY_INFO,
-               CreatureModelData=CREATURE_MODEL_DATA),
-        tables(creature_template=CREATURE_TEMPLATE,
-               creature_template_model=CREATURE_TEMPLATE_MODEL,
-               spell_totem_model=SPELL_TOTEM_MODEL))
+        tables(CreatureDisplayInfo=CREATURE_DISPLAY_INFO, CreatureModelData=CREATURE_MODEL_DATA),
+        tables(
+            creature_template=CREATURE_TEMPLATE,
+            creature_template_model=CREATURE_TEMPLATE_MODEL,
+            spell_totem_model=SPELL_TOTEM_MODEL,
+        ),
+    )
     assert creatures.totem_displays == {2484: (50, 51, 52)}
 
 
-def test_a_release_without_the_totem_table_reads_as_no_totems(
-        tables: BuildTables) -> None:
+def test_a_release_without_the_totem_table_reads_as_no_totems(tables: BuildTables) -> None:
     """Declared optional, so a dump lacking it degrades to the one display the
     summoned creature carries rather than failing the build."""
     creatures = read_creature_models(
-        tables(CreatureDisplayInfo=CREATURE_DISPLAY_INFO,
-               CreatureModelData=CREATURE_MODEL_DATA),
-        tables(absent={"spell_totem_model": TDB_OPTIONAL_TABLES["spell_totem_model"]},
-               creature_template=CREATURE_TEMPLATE,
-               creature_template_model=CREATURE_TEMPLATE_MODEL))
+        tables(CreatureDisplayInfo=CREATURE_DISPLAY_INFO, CreatureModelData=CREATURE_MODEL_DATA),
+        tables(
+            absent={"spell_totem_model": TDB_OPTIONAL_TABLES["spell_totem_model"]},
+            creature_template=CREATURE_TEMPLATE,
+            creature_template_model=CREATURE_TEMPLATE_MODEL,
+        ),
+    )
     assert creatures.totem_displays == {}

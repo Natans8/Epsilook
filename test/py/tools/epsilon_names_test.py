@@ -13,44 +13,59 @@ from pathlib import Path
 
 import pytest
 
-from epsilon_names import (bucket_of, clean, derived_path, icon_names,
-                           object_names, read_saved_table, split_extension,
-                           unescape)
+from epsilon_names import (
+    bucket_of,
+    clean,
+    derived_path,
+    icon_names,
+    object_names,
+    read_saved_table,
+    split_extension,
+    unescape,
+)
 
 FLOOR = 18_000_000
 
 
-@pytest.mark.parametrize("body, expected", [
-    (r"plain", "plain"),
-    (r"trailing\r", "trailing\r"),
-    (r"a\\b", r"a\b"),
-    (r"say \"this\"", 'say "this"'),
-    (r"\65\66", "AB"),
-])
+@pytest.mark.parametrize(
+    "body, expected",
+    [
+        (r"plain", "plain"),
+        (r"trailing\r", "trailing\r"),
+        (r"a\\b", r"a\b"),
+        (r"say \"this\"", 'say "this"'),
+        (r"\65\66", "AB"),
+    ],
+)
 def test_unescape_resolves_lua_escapes(body: str, expected: str) -> None:
     assert unescape(body) == expected
 
 
-@pytest.mark.parametrize("reported, expected", [
-    ("chest02.m2\r", "chest02.m2"),
-    ("foo.m2 [Door]", "foo.m2"),
-    ("[BFA 801-820]  buildingtile_worgen_woodfence_01.m2",
-     "buildingtile_worgen_woodfence_01.m2"),
-    ("[9270100] chest02.m2", "chest02.m2"),
-    ("[9270100] [SL 9.0] thing.m2", "thing.m2"),
-    (r"world\expansion05\doodads\thing.m2", "world/expansion05/doodads/thing.m2"),
-])
+@pytest.mark.parametrize(
+    "reported, expected",
+    [
+        ("chest02.m2\r", "chest02.m2"),
+        ("foo.m2 [Door]", "foo.m2"),
+        ("[BFA 801-820]  buildingtile_worgen_woodfence_01.m2", "buildingtile_worgen_woodfence_01.m2"),
+        ("[9270100] chest02.m2", "chest02.m2"),
+        ("[9270100] [SL 9.0] thing.m2", "thing.m2"),
+        (r"world\expansion05\doodads\thing.m2", "world/expansion05/doodads/thing.m2"),
+    ],
+)
 def test_clean_strips_what_is_not_part_of_the_name(reported: str, expected: str) -> None:
     assert clean(reported) == expected
 
 
-@pytest.mark.parametrize("name, stem, extension", [
-    ("chest02.m2", "chest02", "m2"),
-    ("EPS_Gilneas_towerpost_v1", "EPS_Gilneas_towerpost_v1", "wmo"),
-    ("eps_timegarden_fern_a02.m2.m2", "eps_timegarden_fern_a02", "m2"),
-    ("buildingtile_7du_wall_courtroom04_.m2", "buildingtile_7du_wall_courtroom04", "m2"),
-    ("buildingtile_uldum_loamysoil .m2", "buildingtile_uldum_loamysoil", "m2"),
-])
+@pytest.mark.parametrize(
+    "name, stem, extension",
+    [
+        ("chest02.m2", "chest02", "m2"),
+        ("EPS_Gilneas_towerpost_v1", "EPS_Gilneas_towerpost_v1", "wmo"),
+        ("eps_timegarden_fern_a02.m2.m2", "eps_timegarden_fern_a02", "m2"),
+        ("buildingtile_7du_wall_courtroom04_.m2", "buildingtile_7du_wall_courtroom04", "m2"),
+        ("buildingtile_uldum_loamysoil .m2", "buildingtile_uldum_loamysoil", "m2"),
+    ],
+)
 def test_split_extension(name: str, stem: str, extension: str) -> None:
     assert split_extension(name) == (stem, extension)
 
@@ -60,18 +75,21 @@ def test_a_name_with_no_extension_is_called_a_world_model() -> None:
     assert split_extension("emptywmo_draenei_medical")[1] == "wmo"
 
 
-@pytest.mark.parametrize("stem, bucket, sub", [
-    ("buildingtile_ce_lavawall2", "buildingtile", None),
-    ("buildingplane_thing", "buildingplane", None),
-    ("emptywmo_draenei_medical", "emptywmo", None),
-    ("laketile_891_backup", "watertile", None),
-    ("oceantile_3_magma", "watertile", None),
-    ("EPS_Gilneas_garrison_towerpost_v1", "object", "gilneas"),
-    ("eps_snowtree01", "object", "snowtree01"),
-    ("EPS_buildingtile_stormwind_wall", "object", "buildingtile/stormwind"),
-    ("EPS_oceantile_deep_thing", "object", "watertile/deep"),
-    ("loner", "object", None),
-])
+@pytest.mark.parametrize(
+    "stem, bucket, sub",
+    [
+        ("buildingtile_ce_lavawall2", "buildingtile", None),
+        ("buildingplane_thing", "buildingplane", None),
+        ("emptywmo_draenei_medical", "emptywmo", None),
+        ("laketile_891_backup", "watertile", None),
+        ("oceantile_3_magma", "watertile", None),
+        ("EPS_Gilneas_garrison_towerpost_v1", "object", "gilneas"),
+        ("eps_snowtree01", "object", "snowtree01"),
+        ("EPS_buildingtile_stormwind_wall", "object", "buildingtile/stormwind"),
+        ("EPS_oceantile_deep_thing", "object", "watertile/deep"),
+        ("loner", "object", None),
+    ],
+)
 def test_bucket_of(stem: str, bucket: str, sub: str | None) -> None:
     assert bucket_of(stem) == (bucket, sub)
 
@@ -86,8 +104,7 @@ def test_tiles_and_planes_stay_separate_buckets() -> None:
 
 
 def test_derived_path_places_a_bare_name_under_the_derived_root() -> None:
-    assert derived_path("EPS_Gilneas_garrison_stair_v1") == (
-        "epsilon/object/gilneas/EPS_Gilneas_garrison_stair_v1.wmo")
+    assert derived_path("EPS_Gilneas_garrison_stair_v1") == ("epsilon/object/gilneas/EPS_Gilneas_garrison_stair_v1.wmo")
 
 
 def test_a_reported_path_is_kept_as_the_client_gave_it() -> None:
@@ -101,10 +118,11 @@ def test_ids_below_the_floor_are_not_this_client_to_name() -> None:
 
 def test_two_bare_names_deriving_one_path_keep_their_file_ids() -> None:
     """Otherwise one asset would silently take the other's name."""
-    rows = object_names({FLOOR + 1: "[BFA 801-820] buildingtile_a.m2\r",
-                         FLOOR + 2: "buildingtile_a.m2\r"}, FLOOR)
-    assert sorted(rows.values()) == [f"epsilon/buildingtile/buildingtile_a_{FLOOR + 1}.m2",
-                                     f"epsilon/buildingtile/buildingtile_a_{FLOOR + 2}.m2"]
+    rows = object_names({FLOOR + 1: "[BFA 801-820] buildingtile_a.m2\r", FLOOR + 2: "buildingtile_a.m2\r"}, FLOOR)
+    assert sorted(rows.values()) == [
+        f"epsilon/buildingtile/buildingtile_a_{FLOOR + 1}.m2",
+        f"epsilon/buildingtile/buildingtile_a_{FLOOR + 2}.m2",
+    ]
 
 
 def test_a_lone_bare_name_keeps_the_plain_path() -> None:
@@ -112,7 +130,7 @@ def test_a_lone_bare_name_keeps_the_plain_path() -> None:
     assert rows == {FLOOR + 1: "epsilon/buildingtile/buildingtile_a.m2"}
 
 
-SAVED_VARIABLES = '''
+SAVED_VARIABLES = """
 EpsilonDumpDB = {
 \t["gobCount"] = 3,
 \t["gob"] = {
@@ -127,7 +145,7 @@ EpsilonDumpDB = {
 \t\t["12"] = "Fireball",
 \t},
 }
-'''
+"""
 
 
 @pytest.fixture(name="saved")
@@ -139,8 +157,7 @@ def saved_variables(tmp_path: Path) -> Path:
 
 
 def test_read_saved_table_reads_one_flat_section(saved: Path) -> None:
-    assert read_saved_table(saved, "gob") == {"18000001": "first.m2\r",
-                                              "18000002": "second.wmo\r"}
+    assert read_saved_table(saved, "gob") == {"18000001": "first.m2\r", "18000002": "second.wmo\r"}
 
 
 def test_read_saved_table_stops_at_the_section_it_was_asked_for(saved: Path) -> None:
@@ -155,16 +172,15 @@ def test_a_section_of_bare_numbers_reads_as_values_not_as_nothing(saved: Path) -
     """The client hands the addon a name as a string and an id as a number, and
     the writer passes both through. Matching only the quoted form makes a whole
     section look like an empty table."""
-    assert read_saved_table(saved, "gobDisplay") == {"-141417": "19301810",
-                                                     "-141482": "19301809"}
+    assert read_saved_table(saved, "gobDisplay") == {"-141417": "19301810", "-141482": "19301809"}
 
 
-ICON_LIBRARY = '''
+ICON_LIBRARY = """
 local icons = LibRPMedia:NewDatabase("icons", DATABASE_VERSION);
     file = {101,102,103,104},
     name = LibRPMedia:LoadFrontCodedStringList({0,"spell_fire_flame",11,"frost",0,"ability_rogue"})
 local music = LibRPMedia:NewDatabase("music", DATABASE_VERSION);
-'''
+"""
 
 
 def test_icon_names_decodes_the_front_coded_list(tmp_path: Path) -> None:
@@ -205,6 +221,7 @@ class CatalogueStorage:
 
     def read(self, file_id: int, *, local_only: bool = False) -> bytes | None:
         from epsilon_names import OBJECT_CATALOGUE  # pylint: disable=import-outside-toplevel
+
         return self.raw if file_id == OBJECT_CATALOGUE else None
 
 
@@ -213,8 +230,7 @@ def test_the_shipped_catalogue_is_read_without_a_capture() -> None:
     from epsilon_names import read_object_dump  # pylint: disable=import-outside-toplevel
 
     storage = CatalogueStorage(b"106679;altarofstorms.wmo\n18000012;EPS_Thing.wmo\n")
-    assert read_object_dump(cached=None, storage=storage) == {
-        106679: "altarofstorms.wmo", 18000012: "EPS_Thing.wmo"}
+    assert read_object_dump(cached=None, storage=storage) == {106679: "altarofstorms.wmo", 18000012: "EPS_Thing.wmo"}
 
 
 def test_a_catalogue_row_keeps_the_bytes_it_was_written_with() -> None:

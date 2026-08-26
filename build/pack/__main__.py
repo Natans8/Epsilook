@@ -138,54 +138,78 @@ def write_modules(modules: list[Module]) -> int:
 def main() -> None:
     """Build the pack named on the command line and write it."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--version", required=True,
-                        help="the game build to pack, e.g. 9.2.7.45745")
+    parser.add_argument("--version", required=True, help="the game build to pack, e.g. 9.2.7.45745")
     parser.add_argument("--label", help="the name the version picker shows")
-    parser.add_argument("--id", dest="pack_id",
-                        help="the pack's identity, when it differs from the "
-                             "build -- a test line sharing a patch with live")
-    parser.add_argument("--locale", action="append", default=[], metavar="CODE",
-                        help="a language this client publishes, repeatable; "
-                             "the default one is built whether or not it is "
-                             "named. Omit to build every declared language, "
-                             "which is right for any Blizzard build")
-    parser.add_argument("--client", default="", metavar="KEY",
-                        choices=["", *pipeline.client_keys()],
-                        help="read this build's tables out of a private "
-                             "client's own storage rather than a published "
-                             "export, e.g. epsilon")
-    parser.add_argument("--provider", default="csv",
-                        choices=sorted(pipeline.PROVIDERS),
-                        help="which implementation reads the tables. Peers: "
-                             "both produce the same pack, and `sql` is how "
-                             "that stays true")
-    parser.add_argument("--module", action="append", default=[], metavar="NAME",
-                        help="build only the named artifact module, repeatable. "
-                             "Everything else -- module entries, counts, "
-                             "absence -- is carried forward from the pack's "
-                             "existing manifest, so what is written is still "
-                             "a whole pack")
-    parser.add_argument("--refresh", action="store_true",
-                        help="re-fetch every source even where a cached copy "
-                             "would do")
-    parser.add_argument("--hidden", action="store_true",
-                        help="reachable only by an explicit version url, so "
-                             "nobody downloads it without asking for it")
-    parser.add_argument("--default", dest="is_default", action="store_true",
-                        help="serve this pack when the url names no version, "
-                             "clearing the flag on every other entry")
-    parser.add_argument("--timing", action="store_true",
-                        help="print where the build's time went, phase by "
-                             "phase, once it finishes")
-    parser.add_argument("--sources-only", action="store_true",
-                        help="fetch this build's sources and stop, so that "
-                             "builds sharing them can then run at once")
+    parser.add_argument(
+        "--id",
+        dest="pack_id",
+        help="the pack's identity, when it differs from the build -- a test line sharing a patch with live",
+    )
+    parser.add_argument(
+        "--locale",
+        action="append",
+        default=[],
+        metavar="CODE",
+        help="a language this client publishes, repeatable; "
+        "the default one is built whether or not it is "
+        "named. Omit to build every declared language, "
+        "which is right for any Blizzard build",
+    )
+    parser.add_argument(
+        "--client",
+        default="",
+        metavar="KEY",
+        choices=["", *pipeline.client_keys()],
+        help="read this build's tables out of a private "
+        "client's own storage rather than a published "
+        "export, e.g. epsilon",
+    )
+    parser.add_argument(
+        "--provider",
+        default="csv",
+        choices=sorted(pipeline.PROVIDERS),
+        help="which implementation reads the tables. Peers: "
+        "both produce the same pack, and `sql` is how "
+        "that stays true",
+    )
+    parser.add_argument(
+        "--module",
+        action="append",
+        default=[],
+        metavar="NAME",
+        help="build only the named artifact module, repeatable. "
+        "Everything else -- module entries, counts, "
+        "absence -- is carried forward from the pack's "
+        "existing manifest, so what is written is still "
+        "a whole pack",
+    )
+    parser.add_argument(
+        "--refresh", action="store_true", help="re-fetch every source even where a cached copy would do"
+    )
+    parser.add_argument(
+        "--hidden",
+        action="store_true",
+        help="reachable only by an explicit version url, so nobody downloads it without asking for it",
+    )
+    parser.add_argument(
+        "--default",
+        dest="is_default",
+        action="store_true",
+        help="serve this pack when the url names no version, clearing the flag on every other entry",
+    )
+    parser.add_argument(
+        "--timing", action="store_true", help="print where the build's time went, phase by phase, once it finishes"
+    )
+    parser.add_argument(
+        "--sources-only",
+        action="store_true",
+        help="fetch this build's sources and stop, so that builds sharing them can then run at once",
+    )
     args = parser.parse_args()
 
     locales = locales_named(args.locale)
     if args.sources_only:
-        pipeline.acquire(args.version, refresh=args.refresh, locales=locales,
-                         client=args.client)
+        pipeline.acquire(args.version, refresh=args.refresh, locales=locales, client=args.client)
         return
 
     started = time.perf_counter()
@@ -195,27 +219,32 @@ def main() -> None:
     if args.module and not destination.exists():
         # A partial manifest would replace a whole pack with a partial one, so
         # there has to be a whole one to complete.
-        sys.exit(f"error: {destination} does not exist; a partial build "
-                 f"completes a pack that has already been built whole")
+        sys.exit(
+            f"error: {destination} does not exist; a partial build completes a pack that has already been built whole"
+        )
 
-    modules, manifest = pipeline.modules(args.version, label,
-                                         refresh=args.refresh, pack_id=pack_id,
-                                         location=MODULE_LOCATION,
-                                         locales=locales, client=args.client,
-                                         provider=pipeline.PROVIDERS[args.provider],
-                                         want=tuple(args.module))
+    modules, manifest = pipeline.modules(
+        args.version,
+        label,
+        refresh=args.refresh,
+        pack_id=pack_id,
+        location=MODULE_LOCATION,
+        locales=locales,
+        client=args.client,
+        provider=pipeline.PROVIDERS[args.provider],
+        want=tuple(args.module),
+    )
     if args.module:
         existing = json.loads(destination.read_text(encoding="utf-8"))
         manifest = carry_forward(
-            manifest, existing, frozenset(args.module),
-            {section.name: section.module for section in SECTIONS})
+            manifest, existing, frozenset(args.module), {section.name: section.module for section in SECTIONS}
+        )
         log(f"  carried the other modules forward from {destination.name}")
 
     with phase("write modules"):
         written = write_modules(modules)
     shared = len(modules) - written
-    log(f"Wrote {written} module(s) to {MODULE_DIR}"
-        + (f", {shared} already shared" if shared else ""))
+    log(f"Wrote {written} module(s) to {MODULE_DIR}" + (f", {shared} already shared" if shared else ""))
 
     destination.parent.mkdir(parents=True, exist_ok=True)
     # Bytes rather than text, and the same bytes that get hashed. `write_text`
@@ -230,9 +259,7 @@ def main() -> None:
     if not isinstance(stated, dict):
         raise TypeError("the manifest's meta is not a mapping")
     built = str(stated["built"])
-    versions.update(ROSTER, versions.entry(
-        pack_id, label, built, payload,
-        hidden=args.hidden, default=args.is_default))
+    versions.update(ROSTER, versions.entry(pack_id, label, built, payload, hidden=args.hidden, default=args.is_default))
     log(f"Updated {ROSTER}")
 
     if args.timing:

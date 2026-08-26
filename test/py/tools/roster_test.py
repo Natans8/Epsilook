@@ -51,8 +51,7 @@ def test_packs_sharing_a_build_are_told_apart_by_their_line() -> None:
 def test_a_line_that_never_shares_a_build_needs_no_mark() -> None:
     """A mark on a pack nothing collides with would put a word in a url for
     no reason, and the id is the one thing a bump must not move."""
-    shared = {p.build for p in PACKS if
-              sum(1 for other in PACKS if other.build == p.build) > 1}
+    shared = {p.build for p in PACKS if sum(1 for other in PACKS if other.build == p.build) > 1}
     for pack in PACKS:
         if pack.build not in shared:
             assert not pack.mark, f"{pack.key} is marked but shares no build"

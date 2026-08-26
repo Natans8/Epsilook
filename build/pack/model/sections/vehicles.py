@@ -14,7 +14,7 @@ from collections.abc import Callable
 from ...derive import Reads, spell_rows
 from ...measure import numeric_domain
 from ..registry import register
-from ..section import (Domain, Section, SectionColumns, size)
+from ..section import Domain, Section, SectionColumns, size
 
 
 def seats(reads: Reads) -> SectionColumns:
@@ -23,12 +23,13 @@ def seats(reads: Reads) -> SectionColumns:
     An empty attachment means the seat row was missing or its attachment
     unset, which is a different thing from a seat that sits nowhere.
     """
-    return {"vehicleIds": [vehicle for vehicle, _name in reads.rows.seats],
-            "attachments": [name for _vehicle, name in reads.rows.seats]}
+    return {
+        "vehicleIds": [vehicle for vehicle, _name in reads.rows.seats],
+        "attachments": [name for _vehicle, name in reads.rows.seats],
+    }
 
 
-def ridden(which: str, id_column: str,
-           bounded: bool = True) -> Callable[[Reads], SectionColumns]:
+def ridden(which: str, id_column: str, bounded: bool = True) -> Callable[[Reads], SectionColumns]:
     """One of the animation sets a spell reaches through its vehicle.
 
     Args:
@@ -45,59 +46,64 @@ def ridden(which: str, id_column: str,
 
     def produce(reads: Reads) -> SectionColumns:
         limit = len(reads.declared.anim_names) if bounded else None
-        rows = spell_rows(getattr(reads.vehicles, which), reads.rows.vehicles,
-                          limit)
-        return {"spellIds": [row[0] for row in rows],
-                id_column: [row[1] for row in rows]}
+        rows = spell_rows(getattr(reads.vehicles, which), reads.rows.vehicles, limit)
+        return {"spellIds": [row[0] for row in rows], id_column: [row[1] for row in rows]}
 
     return produce
 
 
-VEHICLES = register(Section(
-    name="vehicles",
-    doc="How many seats each reached vehicle has.",
-    module="core",
-    produce=lambda reads: {
-        "vehicleIds": list(reads.rows.vehicle_ids),
-        "seats": [len(reads.vehicles.seats[vehicle])
-                  for vehicle in reads.rows.vehicle_ids]},
-    columns=("vehicleIds", "seats"),
-    reads=("rows", "vehicles"),
-    needs=("Vehicle", "VehicleSeat"),
-    counts=(size("vehicles", "vehicleIds"),),
-))
+VEHICLES = register(
+    Section(
+        name="vehicles",
+        doc="How many seats each reached vehicle has.",
+        module="core",
+        produce=lambda reads: {
+            "vehicleIds": list(reads.rows.vehicle_ids),
+            "seats": [len(reads.vehicles.seats[vehicle]) for vehicle in reads.rows.vehicle_ids],
+        },
+        columns=("vehicleIds", "seats"),
+        reads=("rows", "vehicles"),
+        needs=("Vehicle", "VehicleSeat"),
+        counts=(size("vehicles", "vehicleIds"),),
+    )
+)
 
-VEHICLE_SEATS = register(Section(
-    name="vehicleSeats",
-    doc="One row per seat, naming where on the model it sits.",
-    module="core",
-    produce=seats,
-    columns=("vehicleIds", "attachments"),
-    reads=("rows",),
-    needs=("Vehicle", "VehicleSeat"),
-    counts=(size("vehicleSeats", "vehicleIds"),),
-    domains=(Domain("seat", lambda columns, _r: numeric_domain(
-        Counter(columns["vehicleIds"]).values())),),
-))
+VEHICLE_SEATS = register(
+    Section(
+        name="vehicleSeats",
+        doc="One row per seat, naming where on the model it sits.",
+        module="core",
+        produce=seats,
+        columns=("vehicleIds", "attachments"),
+        reads=("rows",),
+        needs=("Vehicle", "VehicleSeat"),
+        counts=(size("vehicleSeats", "vehicleIds"),),
+        domains=(Domain("seat", lambda columns, _r: numeric_domain(Counter(columns["vehicleIds"]).values())),),
+    )
+)
 
-SPELL_VEHICLE_ANIMS = register(Section(
-    name="spellVehicleAnims",
-    doc="The vehicle's own animations, which are not the rider's.",
-    module="core",
-    produce=ridden("vehicle_anims", "animIds"),
-    columns=("spellIds", "animIds"),
-    reads=("rows", "vehicles", "declared"),
-    needs=("Vehicle", "VehicleSeat"),
-    counts=(size("spellVehicleAnims", "spellIds"),),
-))
+SPELL_VEHICLE_ANIMS = register(
+    Section(
+        name="spellVehicleAnims",
+        doc="The vehicle's own animations, which are not the rider's.",
+        module="core",
+        produce=ridden("vehicle_anims", "animIds"),
+        columns=("spellIds", "animIds"),
+        reads=("rows", "vehicles", "declared"),
+        needs=("Vehicle", "VehicleSeat"),
+        counts=(size("spellVehicleAnims", "spellIds"),),
+    )
+)
 
-SPELL_VEHICLE_ANIMKITS = register(Section(
-    name="spellVehicleAnimKits",
-    doc="The anim kits a seat names, which resolve like any other kit.",
-    module="core",
-    produce=ridden("animkits", "animKitIds", bounded=False),
-    columns=("spellIds", "animKitIds"),
-    reads=("rows", "vehicles"),
-    needs=("Vehicle", "VehicleSeat"),
-    counts=(size("spellVehicleAnimKits", "spellIds"),),
-))
+SPELL_VEHICLE_ANIMKITS = register(
+    Section(
+        name="spellVehicleAnimKits",
+        doc="The anim kits a seat names, which resolve like any other kit.",
+        module="core",
+        produce=ridden("animkits", "animKitIds", bounded=False),
+        columns=("spellIds", "animKitIds"),
+        reads=("rows", "vehicles"),
+        needs=("Vehicle", "VehicleSeat"),
+        counts=(size("spellVehicleAnimKits", "spellIds"),),
+    )
+)

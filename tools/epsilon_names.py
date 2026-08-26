@@ -32,8 +32,9 @@ Overridable by environment because it is the one input that is a fact of the
 machine rather than of the repository, and the pipeline is otherwise portable.
 """
 
-ICON_LIBRARY = (INSTALL / "_retail_" / "Interface" / "AddOns" / "EpsilonLib"
-                / "Lib" / "LibRPMedia" / "LibRPMedia-Retail-1.0.lua")
+ICON_LIBRARY = (
+    INSTALL / "_retail_" / "Interface" / "AddOns" / "EpsilonLib" / "Lib" / "LibRPMedia" / "LibRPMedia-Retail-1.0.lua"
+)
 """The client's own generated copy of the icon database.
 
 It is a Lua source file rather than data, but the two arrays this reads are
@@ -63,8 +64,18 @@ _TAG = re.compile(r"^\[[^\]]*\]\s*")
 
 _LUA_ESCAPE = re.compile(r"\\(\d{1,3}|.)")
 
-_LUA_ESCAPES = {"r": "\r", "n": "\n", "t": "\t", "a": "\a", "b": "\b",
-                "f": "\f", "v": "\v", "\\": "\\", '"': '"', "'": "'"}
+_LUA_ESCAPES = {
+    "r": "\r",
+    "n": "\n",
+    "t": "\t",
+    "a": "\a",
+    "b": "\b",
+    "f": "\f",
+    "v": "\v",
+    "\\": "\\",
+    '"': '"',
+    "'": "'",
+}
 
 _FALLBACK_EXTENSION = "wmo"
 """What a name with no extension is given.
@@ -112,6 +123,7 @@ def unescape(text: str) -> str:
     Returns:
         The string the client actually stored.
     """
+
     def replace(match: re.Match[str]) -> str:
         body = match.group(1)
         if body.isdigit():
@@ -149,10 +161,9 @@ def read_saved_table(path: Path, section: str) -> dict[str, str]:
         return {}
     start = at + len(opening)
     end = text.find("\n\t},", start)
-    body = text[start:end if end > 0 else len(text)]
+    body = text[start : end if end > 0 else len(text)]
     found = {}
-    for key, quoted, bare in re.findall(
-            r'\["([^"]+)"\]\s*=\s*(?:"((?:[^"\\]|\\.)*)"|([^,\n{]+))', body):
+    for key, quoted, bare in re.findall(r'\["([^"]+)"\]\s*=\s*(?:"((?:[^"\\]|\\.)*)"|([^,\n{]+))', body):
         found[key] = unescape(quoted) if bare == "" else bare.strip()
     return found
 
@@ -204,8 +215,7 @@ def read_catalogue(storage: object, file_id: int) -> dict[int, str]:
     return rows
 
 
-def read_object_dump(cached: Path | None = None,
-                     storage: object | None = None) -> dict[int, str]:
+def read_object_dump(cached: Path | None = None, storage: object | None = None) -> dict[int, str]:
     """The gameobject-display catalogue: file id to the name the client reports.
 
     Prefers the list the client ships, because reading it costs nothing and
@@ -231,11 +241,11 @@ def read_object_dump(cached: Path | None = None,
         if section:
             return {int(fid): name for fid, name in section.items()}
     if cached is not None and cached.exists():
-        return {int(fid): name
-                for fid, name in json.loads(cached.read_text(encoding="utf-8")).items()}
+        return {int(fid): name for fid, name in json.loads(cached.read_text(encoding="utf-8")).items()}
     raise FileNotFoundError(
         f"no gameobject catalogue: file {OBJECT_CATALOGUE} unreadable, no live "
-        f"capture, and no cached copy (looked for {cached})")
+        f"capture, and no cached copy (looked for {cached})"
+    )
 
 
 def clean(name: str) -> str:

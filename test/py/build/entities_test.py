@@ -31,8 +31,7 @@ CreatureDisplayInfoID,MountID
 52,12
 """
 
-CREATURES = CreatureModels(display_model={50: 900, 51: 901, 52: 902},
-                           model_fid={900: 8000, 901: 8001})
+CREATURES = CreatureModels(display_model={50: 900, 51: 901, 52: 902}, model_fid={900: 8000, 901: 8001})
 
 GAMEOBJECT_TEMPLATE = """\
 entry,name,displayId,type
@@ -54,64 +53,58 @@ ID,Name_lang,CreatureDisplayID_0,CreatureDisplayID_1,CreatureDisplayID_2,Creatur
 
 
 def test_the_ordinary_press_gets_no_word(tables: BuildTables) -> None:
-    overrides = read_keybound_overrides(
-        tables(SpellKeyboundOverride=SPELL_KEYBOUND_OVERRIDE))
+    overrides = read_keybound_overrides(tables(SpellKeyboundOverride=SPELL_KEYBOUND_OVERRIDE))
     assert overrides[2].when == ""
     assert overrides[1].when == "mid-air"
 
 
 def test_an_unknown_type_names_its_number(tables: BuildTables) -> None:
-    assert read_keybound_overrides(
-        tables(SpellKeyboundOverride=SPELL_KEYBOUND_OVERRIDE))[3].when == "type 7"
+    assert read_keybound_overrides(tables(SpellKeyboundOverride=SPELL_KEYBOUND_OVERRIDE))[3].when == "type 7"
 
 
-def test_an_override_keeps_a_spell_this_build_does_not_ship(
-        tables: BuildTables) -> None:
-    assert read_keybound_overrides(
-        tables(SpellKeyboundOverride=SPELL_KEYBOUND_OVERRIDE))[3].spell == 999
+def test_an_override_keeps_a_spell_this_build_does_not_ship(tables: BuildTables) -> None:
+    assert read_keybound_overrides(tables(SpellKeyboundOverride=SPELL_KEYBOUND_OVERRIDE))[3].spell == 999
 
 
 def test_a_mount_reaches_every_display_it_wears(tables: BuildTables) -> None:
     """Faction and gender variants, so several per mount."""
-    mounts = read_mounts(tables(Mount=MOUNT, MountXDisplay=MOUNT_X_DISPLAY),
-                         {100: "Summon Ram", 101: "Summon Nothing"}, CREATURES)
+    mounts = read_mounts(
+        tables(Mount=MOUNT, MountXDisplay=MOUNT_X_DISPLAY), {100: "Summon Ram", 101: "Summon Nothing"}, CREATURES
+    )
     assert mounts.links == [(100, 50), (100, 51), (101, 52)]
 
 
-def test_a_mount_whose_spell_this_build_lacks_is_skipped(
-        tables: BuildTables) -> None:
+def test_a_mount_whose_spell_this_build_lacks_is_skipped(tables: BuildTables) -> None:
     """The spell list decides a build's population."""
-    mounts = read_mounts(tables(Mount=MOUNT, MountXDisplay=MOUNT_X_DISPLAY),
-                         {100: "Summon Ram", 101: "Summon Nothing"}, CREATURES)
+    mounts = read_mounts(
+        tables(Mount=MOUNT, MountXDisplay=MOUNT_X_DISPLAY), {100: "Summon Ram", 101: "Summon Nothing"}, CREATURES
+    )
     assert all(spell != 999 for spell, _ in mounts.links)
 
 
-def test_a_mount_display_resolves_without_a_server_dump(
-        tables: BuildTables) -> None:
+def test_a_mount_display_resolves_without_a_server_dump(tables: BuildTables) -> None:
     """Both halves are client data."""
-    mounts = read_mounts(tables(Mount=MOUNT, MountXDisplay=MOUNT_X_DISPLAY),
-                         {100: "Summon Ram", 101: "Summon Nothing"}, CREATURES)
+    mounts = read_mounts(
+        tables(Mount=MOUNT, MountXDisplay=MOUNT_X_DISPLAY), {100: "Summon Ram", 101: "Summon Nothing"}, CREATURES
+    )
     assert mounts.name[50] == "Swift Ram"
     assert mounts.fid[50] == 8000
     assert mounts.fid[52] == 0
 
 
-def test_an_object_resolves_its_model_through_its_display(
-        tables: BuildTables) -> None:
+def test_an_object_resolves_its_model_through_its_display(tables: BuildTables) -> None:
     objects = read_gameobjects(
         tables(GameObjectDisplayInfo=GAME_OBJECT_DISPLAY_INFO),
-        tables(absent=TDB_OPTIONAL_TABLES, defaults=TDB_OPTIONAL_COLUMNS,
-               gameobject_template=GAMEOBJECT_TEMPLATE))
+        tables(absent=TDB_OPTIONAL_TABLES, defaults=TDB_OPTIONAL_COLUMNS, gameobject_template=GAMEOBJECT_TEMPLATE),
+    )
     assert objects.name[200] == "Campfire"
     assert objects.fid == {200: 8100, 201: 0}
     assert objects.type[200] == 5
 
 
-def test_without_a_server_dump_an_object_has_nothing(
-        tables: BuildTables) -> None:
+def test_without_a_server_dump_an_object_has_nothing(tables: BuildTables) -> None:
     """The display id the model needs is itself server-side."""
-    objects = read_gameobjects(
-        tables(GameObjectDisplayInfo=GAME_OBJECT_DISPLAY_INFO), None)
+    objects = read_gameobjects(tables(GameObjectDisplayInfo=GAME_OBJECT_DISPLAY_INFO), None)
     assert (objects.name, objects.fid, objects.type) == ({}, {}, {})
 
 
@@ -128,21 +121,23 @@ def test_a_form_keeps_its_displays_in_slot_order(tables: BuildTables) -> None:
     assert forms.displays[3] == [50, 51]
 
 
-def test_a_build_predating_the_form_table_ships_no_forms(
-        tables: BuildTables) -> None:
+def test_a_build_predating_the_form_table_ships_no_forms(tables: BuildTables) -> None:
     """Reading the header to learn the array's shape must not turn a declared
     absence into a failed build."""
     forms = read_shapeshift_forms(tables())
     assert (forms.names, forms.displays) == ({}, {})
 
 
-def test_a_form_display_array_may_have_collapsed_to_a_scalar(
-        tables: BuildTables) -> None:
+def test_a_form_display_array_may_have_collapsed_to_a_scalar(tables: BuildTables) -> None:
     """The header states which spelling a build uses, so one reader serves
     both."""
-    forms = read_shapeshift_forms(tables(SpellShapeshiftForm="""\
+    forms = read_shapeshift_forms(
+        tables(
+            SpellShapeshiftForm="""\
 ID,Name_lang,CreatureDisplayID
 1,Bear Form,50
 2,Shadowform,0
-"""))
+"""
+        )
+    )
     assert forms.displays == {1: [50], 2: []}

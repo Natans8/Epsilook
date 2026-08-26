@@ -39,12 +39,14 @@ EFFECT_PLAY_MUSIC = 132
 EFFECT_PLAYS_SOUND = frozenset({EFFECT_PLAY_SOUND, EFFECT_PLAY_MUSIC})
 """Plays a sound kit outright, with no visual behind it. misc0 is the kit."""
 
-EFFECT_SPAWN_OBJECT = frozenset({
-    50,  # TRANS_DOOR
-    76,  # SUMMON_OBJECT_WILD
-    104,  # SUMMON_OBJECT_SLOT1
-    171,  # SUMMON_PERSONAL_GAMEOBJECT
-})
+EFFECT_SPAWN_OBJECT = frozenset(
+    {
+        50,  # TRANS_DOOR
+        76,  # SUMMON_OBJECT_WILD
+        104,  # SUMMON_OBJECT_SLOT1
+        171,  # SUMMON_PERSONAL_GAMEOBJECT
+    }
+)
 """Spawns a gameobject: misc0 is a `gameobject_template` entry.
 
 The four differ in slot and lifetime, never in what the misc value means.
@@ -84,11 +86,19 @@ AURA_KEYBOUND_OVERRIDE = 406
 """misc0 is a `SpellKeyboundOverride`."""
 
 SPEED_AURAS = {
-    31: "run", 129: "run", 171: "run",
-    32: "mounted", 130: "mounted", 172: "mounted",
+    31: "run",
+    129: "run",
+    171: "run",
+    32: "mounted",
+    130: "mounted",
+    172: "mounted",
     58: "swim",
-    206: "flight", 207: "flight", 208: "flight",
-    209: "flight", 210: "flight", 211: "flight",
+    206: "flight",
+    207: "flight",
+    208: "flight",
+    209: "flight",
+    210: "flight",
+    211: "flight",
     33: "all",
 }
 """The movement-speed auras, mapped to the movement each one scales.
@@ -163,26 +173,21 @@ class MiscPayload:
         """
         build = tuple(int(part) for part in version.split("."))
         return self.effects | frozenset(
-            effect for effect, reused_in in self.retired.items()
-            if build[:len(reused_in)] < reused_in)
+            effect for effect, reused_in in self.retired.items() if build[: len(reused_in)] < reused_in
+        )
 
 
 MISC_PAYLOADS: tuple[MiscPayload, ...] = (
     MiscPayload(lambda rows: rows.morphs, aura=AURA_TRANSFORM),
     MiscPayload(lambda rows: rows.forms, aura=AURA_SHAPESHIFT),
     MiscPayload(lambda rows: rows.vehicles, aura=AURA_SET_VEHICLE_ID),
-    MiscPayload(lambda rows: rows.invis, aura=AURA_MOD_INVISIBILITY,
-                zero_is_a_value=True),
-    MiscPayload(lambda rows: rows.detect, aura=AURA_MOD_INVISIBILITY_DETECT,
-                zero_is_a_value=True),
-    MiscPayload(lambda rows: rows.screens, aura=AURA_SCREEN_EFFECT,
-                roster="screens"),
-    MiscPayload(lambda rows: rows.keybinds, aura=AURA_KEYBOUND_OVERRIDE,
-                roster="keybounds"),
+    MiscPayload(lambda rows: rows.invis, aura=AURA_MOD_INVISIBILITY, zero_is_a_value=True),
+    MiscPayload(lambda rows: rows.detect, aura=AURA_MOD_INVISIBILITY_DETECT, zero_is_a_value=True),
+    MiscPayload(lambda rows: rows.screens, aura=AURA_SCREEN_EFFECT, roster="screens"),
+    MiscPayload(lambda rows: rows.keybinds, aura=AURA_KEYBOUND_OVERRIDE, roster="keybounds"),
     MiscPayload(lambda rows: rows.altnames, aura=AURA_OVERRIDE_NAME),
     MiscPayload(lambda rows: rows.anim_sets, aura=AURA_ANIM_REPLACEMENT_SET),
-    MiscPayload(lambda rows: rows.objects, effects=EFFECT_SPAWN_OBJECT,
-                retired=REUSED_SPAWN_OBJECT_EFFECTS),
+    MiscPayload(lambda rows: rows.objects, effects=EFFECT_SPAWN_OBJECT, retired=REUSED_SPAWN_OBJECT_EFFECTS),
 )
 """Every payload whose misc value is a reference, declared once.
 
@@ -192,10 +197,15 @@ their row differently and stay written out in the reader.
 """
 
 SPELL_EFFECT_COLUMNS = [
-    "SpellID", "Effect", "EffectAura",
-    "EffectMiscValue_0", "EffectMiscValue_1",
-    "ImplicitTarget_0", "ImplicitTarget_1",
-    "EffectBasePoints", "EffectBasePointsF",
+    "SpellID",
+    "Effect",
+    "EffectAura",
+    "EffectMiscValue_0",
+    "EffectMiscValue_1",
+    "ImplicitTarget_0",
+    "ImplicitTarget_1",
+    "EffectBasePoints",
+    "EffectBasePointsF",
     "EffectTriggerSpell",
 ]
 """The columns this route reads, in the order it unpacks them.
@@ -218,9 +228,11 @@ def implicit_target_bits(version: str) -> Mapping[int, int]:
     Returns:
         Implicit-target id to target bit, omitting the ids that name no anchor.
     """
-    return {target_id: bit
-            for target_id, name in read_enum_names("Target", version).items()
-            if (bit := implicit_target_bit(name))}
+    return {
+        target_id: bit
+        for target_id, name in read_enum_names("Target", version).items()
+        if (bit := implicit_target_bit(name))
+    }
 
 
 @dataclass(frozen=True)
@@ -297,8 +309,7 @@ class MaskedIds:
         The row order each of these sections builds its parallel columns
         against, so it is derived once here rather than by each of them.
         """
-        return sorted({payload for payloads in self.ids.values()
-                       for payload in payloads})
+        return sorted({payload for payloads in self.ids.values() for payload in payloads})
 
 
 @dataclass
@@ -410,8 +421,14 @@ class SpellEffectRows:
     """Spell to the union over all its effects: what the whole spell aims at."""
 
 
-def _record(payload: MiscPayload | None, rows: SpellEffectRows, spell: int,
-            misc: int, mask: int, rosters: Mapping[str, Container[int]]) -> bool:
+def _record(
+    payload: MiscPayload | None,
+    rows: SpellEffectRows,
+    spell: int,
+    misc: int,
+    mask: int,
+    rosters: Mapping[str, Container[int]],
+) -> bool:
     """Record one misc value against the payload its selector chose.
 
     Args:
@@ -451,14 +468,16 @@ def read_summon_control(tables: Tables) -> dict[int, int]:
         Summon-properties id to control value, which says whether the summon is
         a guardian, a pet, possessed, or uncontrolled.
     """
-    return {to_int(row_id): to_int(control) for row_id, control
-            in tables.rows("SummonProperties", ["ID", "Control"])}
+    return {to_int(row_id): to_int(control) for row_id, control in tables.rows("SummonProperties", ["ID", "Control"])}
 
 
-def read_spell_effect_rows(tables: Tables, spell_names: Container[int],
-                           rosters: Mapping[str, Container[int]],
-                           target_bits: Mapping[int, int],
-                           version: str) -> SpellEffectRows:
+def read_spell_effect_rows(
+    tables: Tables,
+    spell_names: Container[int],
+    rosters: Mapping[str, Container[int]],
+    target_bits: Mapping[int, int],
+    version: str,
+) -> SpellEffectRows:
     """Read `SpellEffect` once and split it into every payload it feeds.
 
     Args:
@@ -484,11 +503,9 @@ def read_spell_effect_rows(tables: Tables, spell_names: Container[int],
     rows = SpellEffectRows()
     control = read_summon_control(tables)
     if missing := {p.roster for p in MISC_PAYLOADS if p.roster} - set(rosters):
-        raise KeyError(f"MISC_PAYLOADS names rosters nobody supplied: "
-                       f"{sorted(missing)}")
+        raise KeyError(f"MISC_PAYLOADS names rosters nobody supplied: {sorted(missing)}")
     by_aura = {p.aura: p for p in MISC_PAYLOADS if p.aura}
-    by_effect = {effect: p
-                 for p in MISC_PAYLOADS for effect in p.selects(version)}
+    by_effect = {effect: p for p in MISC_PAYLOADS for effect in p.selects(version)}
 
     for row in tables.rows("SpellEffect", SPELL_EFFECT_COLUMNS):
         spell = to_int(row[0])
@@ -511,25 +528,20 @@ def read_spell_effect_rows(tables: Tables, spell_names: Container[int],
 
         # The whole-spell views resolve_target_mask reads: every effect, and
         # the apply-aura effects on their own.
-        rows.cast_target_bits[spell] = \
-            rows.cast_target_bits.get(spell, NO_TARGET) | mask
+        rows.cast_target_bits[spell] = rows.cast_target_bits.get(spell, NO_TARGET) | mask
         if effect == EFFECT_APPLY_AURA:
-            rows.aura_target_bits[spell] = \
-                rows.aura_target_bits.get(spell, NO_TARGET) | mask
+            rows.aura_target_bits[spell] = rows.aura_target_bits.get(spell, NO_TARGET) | mask
 
         # The two selectors are asked separately rather than under one shared
         # guard, because a row's effect and its aura are independent and a
         # roster declared for one must not veto the other.
-        consumed_aura = _record(by_aura.get(aura), rows, spell, misc0, mask,
-                                rosters)
-        consumed_effect = _record(by_effect.get(effect), rows, spell, misc0,
-                                  mask, rosters)
+        consumed_aura = _record(by_aura.get(aura), rows, spell, misc0, mask, rosters)
+        consumed_effect = _record(by_effect.get(effect), rows, spell, misc0, mask, rosters)
 
         if effect == EFFECT_SUMMON and misc0 > 0:
             rows.summons.setdefault(spell, set()).add((misc0, control.get(misc1, 0)))
             key = (spell, misc0)
-            rows.summon_targets[key] = \
-                rows.summon_targets.get(key, NO_TARGET) | mask
+            rows.summon_targets[key] = rows.summon_targets.get(key, NO_TARGET) | mask
             consumed_effect = True
         if effect in EFFECT_PLAYS_SOUND and misc0 > 0:
             key = (spell, misc0)
@@ -548,14 +560,12 @@ def read_spell_effect_rows(tables: Tables, spell_names: Container[int],
         if amount and (movement := SPEED_AURAS.get(aura)) is not None:
             rows.speeds.setdefault(spell, set()).add((movement, amount))
             change = (spell, movement, amount)
-            rows.speed_targets[change] = \
-                rows.speed_targets.get(change, NO_TARGET) | mask
+            rows.speed_targets[change] = rows.speed_targets.get(change, NO_TARGET) | mask
             consumed_aura = True
         if amount and aura in SCALE_AURAS:
             rows.scales.setdefault(spell, set()).add(amount)
             sized = (spell, amount)
-            rows.scale_targets[sized] = \
-                rows.scale_targets.get(sized, NO_TARGET) | mask
+            rows.scale_targets[sized] = rows.scale_targets.get(sized, NO_TARGET) | mask
             consumed_aura = True
 
         # The row is recorded whole whether or not either half was consumed, so
@@ -564,7 +574,7 @@ def read_spell_effect_rows(tables: Tables, spell_names: Container[int],
         # this row produced rather than by a second list of consumed values, so
         # a new axis flags its own selector the moment it is declared above.
         if effect or aura:
-            rows.mechanics.add(EffectRow(spell, effect, aura, first, second,
-                                         misc0, misc1,
-                                         consumed_effect, consumed_aura))
+            rows.mechanics.add(
+                EffectRow(spell, effect, aura, first, second, misc0, misc1, consumed_effect, consumed_aura)
+            )
     return rows

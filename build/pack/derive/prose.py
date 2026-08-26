@@ -54,8 +54,9 @@ class CookedText:
     """
 
 
-def cook_text(templates: SpellText, values: DescriptionValues, names: SpellNames,
-              locale: TextLocale = ENGLISH) -> CookedText:
+def cook_text(
+    templates: SpellText, values: DescriptionValues, names: SpellNames, locale: TextLocale = ENGLISH
+) -> CookedText:
     """Cook every template belonging to a spell the pack lists.
 
     Args:
@@ -69,19 +70,25 @@ def cook_text(templates: SpellText, values: DescriptionValues, names: SpellNames
         something. A template that resolves to nothing is not a spell with an
         empty description: it is a spell with none.
     """
-    cooker = DescriptionCooker(templates.descriptions, templates.auras,
-                               names.names, values, templates.variables, locale)
+    cooker = DescriptionCooker(
+        templates.descriptions, templates.auras, names.names, values, templates.variables, locale
+    )
 
     def cooked(source: Mapping[int, str]) -> dict[int, str]:
-        return {spell: prose for spell, template in source.items()
-                if spell in names.names and (prose := cooker.cook(spell, template))}
+        return {
+            spell: prose
+            for spell, template in source.items()
+            if spell in names.names and (prose := cooker.cook(spell, template))
+        }
 
-    text = CookedText(descriptions=cooked(templates.descriptions),
-                      auras=cooked(templates.auras),
-                      encounters=cooked(templates.notes))
+    text = CookedText(
+        descriptions=cooked(templates.descriptions), auras=cooked(templates.auras), encounters=cooked(templates.notes)
+    )
     text.resolved = cooker.stats["resolved"]
     text.elided = cooker.stats["elided"]
-    log(f"  {len(text.descriptions):,} descriptions, {len(text.auras):,} aura "
+    log(
+        f"  {len(text.descriptions):,} descriptions, {len(text.auras):,} aura "
         f"texts, {len(text.encounters):,} encounter notes "
-        f"({text.resolved:,} values resolved, {text.elided:,} elided)")
+        f"({text.resolved:,} values resolved, {text.elided:,} elided)"
+    )
     return text

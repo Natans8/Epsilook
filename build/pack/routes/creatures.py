@@ -66,8 +66,7 @@ def read_creature_displays(world: Tables, into: dict[int, list[tuple[int, int]]]
     where the column position stands in for the slot; later releases give them
     their own table. A release with neither leaves morphs unresolved.
     """
-    source = next(((table, columns) for table, columns in CREATURE_DISPLAY_SOURCES
-                   if world.available(table)), None)
+    source = next(((table, columns) for table, columns in CREATURE_DISPLAY_SOURCES if world.available(table)), None)
     if source is None:
         log("  TDB: no creature-display source in this release -- morphs stay unresolved")
         return
@@ -92,12 +91,10 @@ def read_totem_displays(world: Tables, into: dict[int, tuple[int, ...]]) -> None
         log("  TDB: no spell_totem_model in this release -- totems keep one display")
         return
     found: dict[int, list[int]] = {}
-    for spell, _race, display in world.rows(
-            "spell_totem_model", ["SpellID", "RaceID", "DisplayID"]):
+    for spell, _race, display in world.rows("spell_totem_model", ["SpellID", "RaceID", "DisplayID"]):
         if display_id := to_int(display):
             found.setdefault(to_int(spell), []).append(display_id)
-    into.update((spell, tuple(sorted(set(displays))))
-                for spell, displays in found.items())
+    into.update((spell, tuple(sorted(set(displays)))) for spell, displays in found.items())
 
 
 SKIN_COLUMN = "TextureVariationFileDataID_"
@@ -107,9 +104,8 @@ varies by build, so they are read by name off the header rather than declared.""
 
 def skin_columns(tables: Tables) -> list[str]:
     """The texture-variation columns this build's display table has, in slot order."""
-    found = [column for column in tables.header("CreatureDisplayInfo")
-             if column.startswith(SKIN_COLUMN)]
-    return sorted(found, key=lambda column: int(column[len(SKIN_COLUMN):]))
+    found = [column for column in tables.header("CreatureDisplayInfo") if column.startswith(SKIN_COLUMN)]
+    return sorted(found, key=lambda column: int(column[len(SKIN_COLUMN) :]))
 
 
 def read_creature_models(tables: Tables, world: Tables | None) -> CreatureModels:
@@ -126,12 +122,10 @@ def read_creature_models(tables: Tables, world: Tables | None) -> CreatureModels
             creatures.names[to_int(entry)] = name.strip()
         displays: dict[int, list[tuple[int, int]]] = {}
         read_creature_displays(world, displays)
-        creatures.displays = {creature: sorted(rows)
-                              for creature, rows in displays.items()}
+        creatures.displays = {creature: sorted(rows) for creature, rows in displays.items()}
         read_totem_displays(world, creatures.totem_displays)
 
-    for display_id, model_id, *skins in tables.rows(
-            "CreatureDisplayInfo", ["ID", "ModelID", *skin_columns(tables)]):
+    for display_id, model_id, *skins in tables.rows("CreatureDisplayInfo", ["ID", "ModelID", *skin_columns(tables)]):
         creatures.display_model[to_int(display_id)] = to_int(model_id)
         # One texture named in two slots is one skin; the order is the slots'.
         if painted := tuple(dict.fromkeys(fid for fid in map(to_int, skins) if fid)):

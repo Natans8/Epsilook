@@ -37,15 +37,15 @@ def read_gameobjects(tables: Tables, world: Tables | None) -> GameObjectData:
         return objects
     displays: dict[int, int] = {}
     for entry_id, name, display_id, type_id in world.rows(
-            "gameobject_template", ["entry", "name", "displayId", "type"]):
+        "gameobject_template", ["entry", "name", "displayId", "type"]
+    ):
         entry = to_int(entry_id)
         objects.name[entry] = (name or "").strip()
         objects.type[entry] = to_int(type_id)
         displays[entry] = to_int(display_id)
 
     files: dict[int, int] = {}
-    for display_id, file_id in tables.rows(
-            "GameObjectDisplayInfo", ["ID", "FileDataID"]):
+    for display_id, file_id in tables.rows("GameObjectDisplayInfo", ["ID", "FileDataID"]):
         files[to_int(display_id)] = to_int(file_id)
     objects.fid = {entry: files.get(display, 0) for entry, display in displays.items()}
     return objects

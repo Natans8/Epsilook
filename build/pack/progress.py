@@ -134,8 +134,10 @@ def report(total: float) -> None:
         log(f"{name.ljust(width)}  {seconds:9.2f}  {share:6.1f}%{mark}")
     log(f"{'-' * width}  {'-' * 9}  {'-' * 7}")
     log(f"{'measured'.ljust(width)}  {measured:9.2f}  {measured / total * 100 if total else 0:6.1f}%")
-    log(f"{'unaccounted'.ljust(width)}  {total - measured:9.2f}  "
-        f"{(total - measured) / total * 100 if total else 0:6.1f}%")
+    log(
+        f"{'unaccounted'.ljust(width)}  {total - measured:9.2f}  "
+        f"{(total - measured) / total * 100 if total else 0:6.1f}%"
+    )
     log(f"{'total'.ljust(width)}  {total:9.2f}  {100.0:6.1f}%")
 
     for phase_name, inside in _DETAIL.items():
@@ -144,9 +146,10 @@ def report(total: float) -> None:
         log("")
         log(f"{phase_name} — {len(inside)} items, {spent:.2f}s, slowest first:")
         for item, seconds in ranked[:DETAIL_ROWS]:
-            log(f"  {item.ljust(width - 2)}  {seconds:9.2f}  "
-                f"{seconds / spent * 100 if spent else 0:6.1f}%")
+            log(f"  {item.ljust(width - 2)}  {seconds:9.2f}  {seconds / spent * 100 if spent else 0:6.1f}%")
         if len(ranked) > DETAIL_ROWS:
             rest = sum(seconds for _item, seconds in ranked[DETAIL_ROWS:])
-            log(f"  {f'... {len(ranked) - DETAIL_ROWS} more'.ljust(width - 2)}  "
-                f"{rest:9.2f}  {rest / spent * 100 if spent else 0:6.1f}%")
+            log(
+                f"  {f'... {len(ranked) - DETAIL_ROWS} more'.ljust(width - 2)}  "
+                f"{rest:9.2f}  {rest / spent * 100 if spent else 0:6.1f}%"
+            )

@@ -77,6 +77,6 @@ def load_visual_effect_names() -> VisualEffectNames:
     if not len(ids) == len(names) == len(stems):
         raise ValueError(
             f"{VISUAL_EFFECT_NAMES_FILE.name}: {len(ids)} ids, {len(names)} names "
-            f"and {len(stems)} stems -- the columns are not parallel")
-    return {int(effect): VisualEffectName(name, stem)
-            for effect, name, stem in zip(ids, names, stems)}
+            f"and {len(stems)} stems -- the columns are not parallel"
+        )
+    return {int(effect): VisualEffectName(name, stem) for effect, name, stem in zip(ids, names, stems)}

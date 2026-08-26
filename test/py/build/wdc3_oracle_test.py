@@ -57,8 +57,8 @@ DEFINITIONS = CACHE_DIR / "dbd"
 CASC_URL = "https://wago.tools/api/casc/{fid}?version=" + BUILD_TEXT
 
 pytestmark = pytest.mark.skipif(
-    not os.environ.get("EPSILOOK_DB2_ORACLE"),
-    reason="fetches one db2 per table; set EPSILOOK_DB2_ORACLE to run")
+    not os.environ.get("EPSILOOK_DB2_ORACLE"), reason="fetches one db2 per table; set EPSILOOK_DB2_ORACLE to run"
+)
 
 
 @pytest.fixture(name="file_ids", scope="session")
@@ -79,8 +79,7 @@ def fetch_db2(table: str, fid: int) -> bytes:
     dest = DB2_CACHE / f"{table}.db2"
     for attempt in range(3):
         try:
-            if not download(CASC_URL.format(fid=fid), dest, refresh=False,
-                            optional=True):
+            if not download(CASC_URL.format(fid=fid), dest, refresh=False, optional=True):
                 pytest.skip(f"{table} is not published for {BUILD_TEXT}")
             return dest.read_bytes()
         except OSError as exc:
@@ -114,8 +113,7 @@ def same_huge_float(left: str, right: str) -> bool:
     comparison noticing a rounding rule that is simply wrong.
     """
     try:
-        pair: list[float] = [struct.unpack("<f", struct.pack("<f", float(text)))[0]
-                             for text in (left, right)]
+        pair: list[float] = [struct.unpack("<f", struct.pack("<f", float(text)))[0] for text in (left, right)]
     except (ValueError, OverflowError):
         return False
     return pair[0] == pair[1] and abs(pair[0]) >= 1e15
@@ -127,19 +125,20 @@ def unreadable_rows(data: wdc3.Db2, size: int) -> int:
     Their records and their copies both count: a copy is an exported row in its
     own right, so a skipped section withholds more rows than it has records.
     """
-    return sum(section.record_count + section.copy_table_count
-               for section in data.sections if not section.readable(size))
+    return sum(
+        section.record_count + section.copy_table_count for section in data.sections if not section.readable(size)
+    )
 
 
 def tables() -> list[str]:
     """Every table the build reads, which is what the oracle has to cover."""
     from pack.sources.wago import TABLES
+
     return sorted({"SpellName", *TABLES})
 
 
 @pytest.mark.parametrize("table", tables())
-def test_the_reader_reproduces_the_published_export(
-        table: str, file_ids: dict[str, int]) -> None:
+def test_the_reader_reproduces_the_published_export(table: str, file_ids: dict[str, int]) -> None:
     """Decode the published db2; every row must match the published CSV."""
     header, export = export_rows(table)
     if not export:
@@ -150,46 +149,42 @@ def test_the_reader_reproduces_the_published_export(
     definition = dbd.load(table, DEFINITIONS)
     if definition is None:
         pytest.skip(f"{table} has no definition")
-    data = wdc3.Db2(fetch_db2(table, file_ids[table.lower()]),
-                    epsilon_tables.schema_for(definition, BUILD))
+    data = wdc3.Db2(fetch_db2(table, file_ids[table.lower()]), epsilon_tables.schema_for(definition, BUILD))
     decoded = list(data.rows())
     columns = data.columns
 
     assert len(columns) == len(header), (
         f"{table}: {len(columns)} columns decoded against {len(header)} "
         f"exported, so every value comparison below would be meaningless\n"
-        f"  decoded  {columns}\n  exported {header}")
+        f"  decoded  {columns}\n  exported {header}"
+    )
     # A name the export does not share with the definitions is one the
     # definitions have since supplied, so comparing it compares their vintages
     # rather than the decoding. Asked of the definition rather than matched
     # against the shape of a placeholder, which would also excuse a schema
     # sliding by one column past such a position.
     renamed = {name for name in header if name not in definition.columns}
-    disagree = [(mine, theirs) for mine, theirs in zip(columns, header)
-                if mine != theirs and theirs not in renamed]
-    assert not disagree, (
-        f"{table}: the decoded column order is not the export's: "
-        + "; ".join(f"{theirs!r} decoded as {mine!r}"
-                    for mine, theirs in disagree))
+    disagree = [(mine, theirs) for mine, theirs in zip(columns, header) if mine != theirs and theirs not in renamed]
+    assert not disagree, f"{table}: the decoded column order is not the export's: " + "; ".join(
+        f"{theirs!r} decoded as {mine!r}" for mine, theirs in disagree
+    )
 
     at = data.id_position()
     expected = {row[at]: row for row in export}
     got = {row[at]: row for row in decoded}
 
     invented = got.keys() - expected.keys()
-    assert not invented, (
-        f"{table}: {len(invented)} decoded row(s) are not in the export, "
-        f"first {sorted(invented)[:5]}")
+    assert not invented, f"{table}: {len(invented)} decoded row(s) are not in the export, first {sorted(invented)[:5]}"
 
     withheld = unreadable_rows(data, len(data.blob))
     absent = expected.keys() - got.keys()
     assert len(absent) <= withheld, (
         f"{table}: {len(absent)} row(s) missing but only {withheld} sit in "
         f"sections this reader cannot open, so {len(absent) - withheld} were "
-        f"lost while decoding a readable section")
+        f"lost while decoding a readable section"
+    )
 
-    floats = {name for column in data.declared if column.spec.kind == "float"
-              for name in column.spec.spellings()}
+    floats = {name for column in data.declared if column.spec.kind == "float" for name in column.spec.spellings()}
     wrong: dict[str, tuple[str, str, str]] = {}
     for key in expected.keys() & got.keys():
         want, mine = expected[key], got[key]
@@ -201,8 +196,6 @@ def test_the_reader_reproduces_the_published_export(
             if name in floats and same_huge_float(want[index], mine[index]):
                 continue
             wrong[name] = (key, want[index], mine[index])
-    assert not wrong, (
-        f"{table}: {len(wrong)} column(s) decode to something the export does "
-        f"not hold: " + "; ".join(
-            f"{name} at id {key}: export {want!r}, decoded {mine!r}"
-            for name, (key, want, mine) in sorted(wrong.items())))
+    assert not wrong, f"{table}: {len(wrong)} column(s) decode to something the export does not hold: " + "; ".join(
+        f"{name} at id {key}: export {want!r}, decoded {mine!r}" for name, (key, want, mine) in sorted(wrong.items())
+    )

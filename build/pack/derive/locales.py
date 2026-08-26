@@ -75,8 +75,7 @@ def locale_of(code: str) -> Locale:
     for locale in LOCALES:
         if locale.code == code:
             return locale
-    raise KeyError(f"no locale is declared for {code!r}; declared: "
-                   + ", ".join(locale.code for locale in LOCALES))
+    raise KeyError(f"no locale is declared for {code!r}; declared: " + ", ".join(locale.code for locale in LOCALES))
 
 
 def locales_named(codes: Sequence[str]) -> tuple[Locale, ...]:

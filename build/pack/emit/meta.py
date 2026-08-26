@@ -109,8 +109,7 @@ a half-deployed change loud instead of subtly wrong.
 """
 
 
-def counts_of(section: Section, columns: SectionColumns,
-              context: DeriveContext) -> dict[str, int]:
+def counts_of(section: Section, columns: SectionColumns, context: DeriveContext) -> dict[str, int]:
     """Every `meta.counts` entry one section contributes."""
     reads = context.reads(section.reads)
     counted: dict[str, int] = {}
@@ -122,8 +121,7 @@ def counts_of(section: Section, columns: SectionColumns,
     return counted
 
 
-def domains_of(section: Section, columns: SectionColumns,
-               context: DeriveContext) -> dict[str, Mapping[str, object]]:
+def domains_of(section: Section, columns: SectionColumns, context: DeriveContext) -> dict[str, Mapping[str, object]]:
     """Every `meta.domains` entry one section contributes.
 
     A domain that measures to nothing is left out rather than shipped empty: an
@@ -131,14 +129,16 @@ def domains_of(section: Section, columns: SectionColumns,
     different thing from one whose values are all zero.
     """
     reads = context.reads(section.reads)
-    return {declared.key: ({**measured, "unit": declared.unit}
-                           if declared.unit else measured)
-            for declared in section.domains
-            if (measured := declared.compute(columns, reads)) is not None}
+    return {
+        declared.key: ({**measured, "unit": declared.unit} if declared.unit else measured)
+        for declared in section.domains
+        if (measured := declared.compute(columns, reads)) is not None
+    }
 
 
-def gathered(produced: Mapping[str, SectionColumns], context: DeriveContext
-             ) -> tuple[dict[str, int], dict[str, Mapping[str, object]]]:
+def gathered(
+    produced: Mapping[str, SectionColumns], context: DeriveContext
+) -> tuple[dict[str, int], dict[str, Mapping[str, object]]]:
     """The counts and domains of every section that shipped.
 
     Registry order, which groups a section's counts with the section they
@@ -163,10 +163,15 @@ def gathered(produced: Mapping[str, SectionColumns], context: DeriveContext
     return counted, measured
 
 
-def meta(build: Build, label: str, listfile_tag: str,
-         counts: Mapping[str, int],
-         domains: Mapping[str, Mapping[str, object]], *,
-         degraded: Mapping[str, list[str]] | None = None) -> dict[str, object]:
+def meta(
+    build: Build,
+    label: str,
+    listfile_tag: str,
+    counts: Mapping[str, int],
+    domains: Mapping[str, Mapping[str, object]],
+    *,
+    degraded: Mapping[str, list[str]] | None = None,
+) -> dict[str, object]:
     """The pack's own header.
 
     The counts and domains are the default language's, because that is the pass

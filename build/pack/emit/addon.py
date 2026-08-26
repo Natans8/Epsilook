@@ -71,20 +71,28 @@ over bytes the client has just read anyway.
 """
 
 AXES: Mapping[str, str] = {
-    "model": ("modelRows morphs creatureDisplays displaySkins mounts shapeshifts "
-              "shapeshiftDisplays summons summonControlNames objects files "
-              "modelCatNames equippedSlots items itemIconNames "
-              "itemQualityNames vehicles vehicleSeats"),
+    "model": (
+        "modelRows morphs creatureDisplays displaySkins mounts shapeshifts "
+        "shapeshiftDisplays summons summonControlNames objects files "
+        "modelCatNames equippedSlots items itemIconNames "
+        "itemQualityNames vehicles vehicleSeats"
+    ),
     "sound": "soundRows soundKitNames soundTypes",
-    "anim": ("animRows animNames animKitAnims animKitAnimBoneset bonesetNames "
-             "animEmoteOneshots animEmoteLoops spellVehicleAnims "
-             "spellVehicleAnimKits"),
-    "fx": ("fxRows fxChains fxTextures dissolves dissolveTextures glows "
-           "shadowies ghostMats tints screens screenTextures anchorNames "
-           "attachmentNames missileMotions"),
-    "mech": ("mechRows spellDelivery spellRanges areas keybinds "
-             "linkKindNames effectNames auraNames implicitTargetNames "
-             "implicitTargetBits targetNames speedModeNames spellAttrs"),
+    "anim": (
+        "animRows animNames animKitAnims animKitAnimBoneset bonesetNames "
+        "animEmoteOneshots animEmoteLoops spellVehicleAnims "
+        "spellVehicleAnimKits"
+    ),
+    "fx": (
+        "fxRows fxChains fxTextures dissolves dissolveTextures glows "
+        "shadowies ghostMats tints screens screenTextures anchorNames "
+        "attachmentNames missileMotions"
+    ),
+    "mech": (
+        "mechRows spellDelivery spellRanges areas keybinds "
+        "linkKindNames effectNames auraNames implicitTargetNames "
+        "implicitTargetBits targetNames speedModeNames spellAttrs"
+    ),
     "spell": "spells expansions iconNames iconFids",
     "text": "spellText",
     "misc": "rowVocabs",
@@ -98,9 +106,7 @@ instead for what it makes resident, so it groups by what one search touches:
 a query naming no model never loads the model file.
 """
 
-AXIS_OF: Mapping[str, str] = {name: axis
-                              for axis, names in AXES.items()
-                              for name in names.split()}
+AXIS_OF: Mapping[str, str] = {name: axis for axis, names in AXES.items() for name in names.split()}
 """The axis one section belongs to, by section name."""
 
 SUPPLIED_BY: Mapping[str, str] = {
@@ -216,8 +222,9 @@ def whole(value: object) -> int:
     if not isinstance(value, (int, float, str)):
         raise TypeError(f"{value!r} is not a number a column can carry")
     if isinstance(value, float) and not value.is_integer():
-        raise ValueError(f"{value!r} is fractional in a whole-number column; "
-                         f"the column's first value decided it was whole")
+        raise ValueError(
+            f"{value!r} is fractional in a whole-number column; the column's first value decided it was whole"
+        )
     return int(value)
 
 
@@ -289,17 +296,13 @@ class Blob:
         largest member.
         """
         if not values:
-            return {"kind": "int", "at": self.at + 1, "n": 0,
-                    "width": 1, "base": 0}
+            return {"kind": "int", "at": self.at + 1, "n": 0, "width": 1, "base": 0}
         low, high = min(values), max(values)
         width = digits_for(high - low)
-        start = self.append(b"".join(spelled(value - low, width)
-                                     for value in values))
-        return {"kind": "int", "at": start, "n": len(values),
-                "width": width, "base": low}
+        start = self.append(b"".join(spelled(value - low, width) for value in values))
+        return {"kind": "int", "at": start, "n": len(values), "width": width, "base": low}
 
-    def strings(self, values: Sequence[str],
-                kind: str = "text") -> dict[str, object]:
+    def strings(self, values: Sequence[str], kind: str = "text") -> dict[str, object]:
         """Write a column of text and describe it.
 
         The text is concatenated with no separator and indexed by one more
@@ -310,8 +313,12 @@ class Blob:
         """
         encoded = [value.encode("utf-8") for value in values]
         start = self.append(b"".join(encoded))
-        return {"kind": kind, "at": start, "n": len(values),
-                "index": self.numbers(running(len(cell) for cell in encoded))}
+        return {
+            "kind": kind,
+            "at": start,
+            "n": len(values),
+            "index": self.numbers(running(len(cell) for cell in encoded)),
+        }
 
     def column(self, values: object) -> dict[str, object]:
         """Write one produced column, whatever shape it arrived in.
@@ -334,21 +341,19 @@ class Blob:
             # the keys stay in the header where a reader can ask for one by
             # name. Both are small in the header; only the first could be
             # large, and that is the one that does not go there.
-            if values and all(isinstance(sub, (Mapping, list, tuple))
-                              for sub in values.values()):
+            if values and all(isinstance(sub, (Mapping, list, tuple)) for sub in values.values()):
                 # `columns` rather than `of`, which a deduped column already
                 # uses for its index. One key meaning a table of columns in
                 # one kind and a single column in another is readable only
                 # while you remember which kind you are looking at.
-                return {"kind": "group",
-                        "columns": {str(key): self.column(sub)
-                                    for key, sub in values.items()}}
-            return {"kind": "map",
-                    "keys": self.column([str(key) for key in values]),
-                    "values": self.column(list(values.values()))}
+                return {"kind": "group", "columns": {str(key): self.column(sub) for key, sub in values.items()}}
+            return {
+                "kind": "map",
+                "keys": self.column([str(key) for key in values]),
+                "values": self.column(list(values.values())),
+            }
         if not isinstance(values, Sequence) or isinstance(values, str):
-            raise TypeError(f"a column is a sequence or a mapping, not "
-                            f"{type(values).__name__}")
+            raise TypeError(f"a column is a sequence or a mapping, not {type(values).__name__}")
         head = next((value for value in values if value is not None), None)
         if head is None:
             # Nothing says what the column holds, but its length is still a
@@ -357,10 +362,12 @@ class Blob:
             return self.numbers([0] * len(values))
         if isinstance(head, (list, tuple)):
             rows = [list(row or ()) for row in values]
-            return {"kind": "list", "n": len(rows),
-                    "index": self.numbers(running(len(row) for row in rows)),
-                    "values": self.column([item for row in rows
-                                           for item in row])}
+            return {
+                "kind": "list",
+                "n": len(rows),
+                "index": self.numbers(running(len(row) for row in rows)),
+                "values": self.column([item for row in rows for item in row]),
+            }
         if isinstance(head, bool):
             return self.numbers([int(bool(value)) for value in values])
         if isinstance(head, int):
@@ -369,11 +376,9 @@ class Blob:
             # Their own spelling rather than a scaled whole number: five
             # columns in the pack carry a float, and a shared exponent would
             # be a mechanism the other four hundred would never use.
-            return self.strings([spelled_float(value) for value in values],
-                                kind="float")
+            return self.strings([spelled_float(value) for value in values], kind="float")
         if isinstance(head, str):
-            return self.strings([value if isinstance(value, str) else ""
-                                 for value in values])
+            return self.strings([value if isinstance(value, str) else "" for value in values])
         raise TypeError(f"no spelling for {type(head).__name__}")
 
     def encoded(self, shipped: object, layout: Encoding) -> dict[str, object]:
@@ -393,19 +398,22 @@ class Blob:
                 raise ValueError(
                     f"a {layout.value} column ships a mapping, not "
                     f"{type(shipped).__name__}; the registry and the pack "
-                    f"disagree about how this column was laid out")
+                    f"disagree about how this column was laid out"
+                )
             if layout is Encoding.DEDUP:
-                return {"kind": "dedup", "pool": self.column(shipped["text"]),
-                        "of": self.column(shipped["of"])}
-            return {"kind": "sparse", "at": self.column(shipped["at"]),
-                    "is": self.column(shipped["is"])}
+                return {"kind": "dedup", "pool": self.column(shipped["text"]), "of": self.column(shipped["of"])}
+            return {"kind": "sparse", "at": self.column(shipped["at"]), "is": self.column(shipped["is"])}
         return self.column(shipped)
 
 
-def described(section: Section, payload: object, blob: Blob, *,
-              variation: Variation = Variation.FULL,
-              policy: Mapping[Cardinality, Encoding] = FEWEST_BYTES
-              ) -> dict[str, object]:
+def described(
+    section: Section,
+    payload: object,
+    blob: Blob,
+    *,
+    variation: Variation = Variation.FULL,
+    policy: Mapping[Cardinality, Encoding] = FEWEST_BYTES,
+) -> dict[str, object]:
     """One section written into the blob, as the header describing it.
 
     A section that ships bare is named by the single column it declares, so a
@@ -424,13 +432,14 @@ def described(section: Section, payload: object, blob: Blob, *,
     elif isinstance(payload, Mapping):
         items = list(payload.items())
     else:
-        raise ValueError(f"{section.name} declares columns but shipped a "
-                         f"{type(payload).__name__}")
-    return {"columns": {str(name): blob.encoded(values,
-                                                layout_for(section, str(name),
-                                                           policy))
-                        for name, values in items
-                        if ships(section.name, str(name), variation)}}
+        raise ValueError(f"{section.name} declares columns but shipped a {type(payload).__name__}")
+    return {
+        "columns": {
+            str(name): blob.encoded(values, layout_for(section, str(name), policy))
+            for name, values in items
+            if ships(section.name, str(name), variation)
+        }
+    }
 
 
 NAMESPACE = "Epsilook"
@@ -497,8 +506,7 @@ def rendered(value: object) -> str:
     if isinstance(value, str):
         return quoted(value)
     if isinstance(value, Mapping):
-        return "{" + ",".join(f"[{quoted(str(key))}]={rendered(sub)}"
-                              for key, sub in value.items()) + "}"
+        return "{" + ",".join(f"[{quoted(str(key))}]={rendered(sub)}" for key, sub in value.items()) + "}"
     if isinstance(value, Sequence):
         return "{" + ",".join(rendered(item) for item in value) + "}"
     raise TypeError(f"no Lua spelling for {type(value).__name__}")
@@ -522,11 +530,11 @@ def wrapped(payload: bytes) -> bytes:
             every offset past it would address the wrong byte.
     """
     if b"\r" in payload:
-        raise ValueError("the blob holds a carriage return, which Lua would "
-                         "rewrite; every offset after it would be wrong")
+        raise ValueError(
+            "the blob holds a carriage return, which Lua would rewrite; every offset after it would be wrong"
+        )
     level = 0
-    while (b"]" + b"=" * level + b"]" in payload
-           or b"[" + b"=" * level + b"[" in payload):
+    while b"]" + b"=" * level + b"]" in payload or b"[" + b"=" * level + b"[" in payload:
         level += 1
     opened = b"[" + b"=" * level + b"[\n"
     closed = b"]" + b"=" * level + b"]"
@@ -534,8 +542,7 @@ def wrapped(payload: bytes) -> bytes:
     # emitted source runs to megabytes. The level is chosen over the whole
     # payload and then used for every piece: a cut can only remove a bracket
     # sequence from a piece, never introduce one, so one level clears them all.
-    pieces = [payload[at: at + LINE_LIMIT]
-              for at in range(0, len(payload), LINE_LIMIT)] or [b""]
+    pieces = [payload[at : at + LINE_LIMIT] for at in range(0, len(payload), LINE_LIMIT)] or [b""]
     if len(pieces) == 1:
         return opened + pieces[0] + closed
     joined = (closed + b",\n" + opened).join(pieces)
@@ -567,21 +574,24 @@ class Chunk:
     """What lands in the directory, by file name."""
 
 
-def toc_file(title: str, notes: str, *, version: str, pack: str,
-             demand: bool, sources: Sequence[str]) -> bytes:
+def toc_file(title: str, notes: str, *, version: str, pack: str, demand: bool, sources: Sequence[str]) -> bytes:
     """One addon's toc, as the client reads it.
 
     The interface number is taken from the build being packed rather than from
     a constant, so a pack of another client's tables advertises that client.
     """
-    lines = [f"## Interface: {interface_version(version)}",
-             f"## Title: {title}",
-             f"## Notes: {notes}",
-             f"## Version: {pack}",
-             *(["## LoadOnDemand: 1"] if demand else []),
-             f"## X-Epsilook-Pack: {pack}",
-             f"## X-Epsilook-Format: {ADDON_FORMAT}",
-             "", *sources, ""]
+    lines = [
+        f"## Interface: {interface_version(version)}",
+        f"## Title: {title}",
+        f"## Notes: {notes}",
+        f"## Version: {pack}",
+        *(["## LoadOnDemand: 1"] if demand else []),
+        f"## X-Epsilook-Pack: {pack}",
+        f"## X-Epsilook-Format: {ADDON_FORMAT}",
+        "",
+        *sources,
+        "",
+    ]
     return "\n".join(lines).encode("utf-8")
 
 
@@ -592,12 +602,10 @@ def preamble(pack: str) -> str:
     One place, because every reader depends on what these lines do, and a
     header spelled per file is a header that drifts.
     """
-    return (f"-- Generated from pack {pack}. Do not edit.\n"
-            f"{NAMESPACE} = {NAMESPACE} or {{}}\n")
+    return f"-- Generated from pack {pack}. Do not edit.\n{NAMESPACE} = {NAMESPACE} or {{}}\n"
 
 
-def assignment(axis: str, header: Mapping[str, object],
-               blob: bytes, pack: str) -> bytes:
+def assignment(axis: str, header: Mapping[str, object], blob: bytes, pack: str) -> bytes:
     """One axis file: the header as a table, then the blob beside it.
 
     The blob is a second statement rather than a field inside the first, so
@@ -608,38 +616,50 @@ def assignment(axis: str, header: Mapping[str, object],
     # A local alias for the global, which is the convention wherever one is
     # read more than once: a global read goes through the environment table
     # and a local is a stack slot.
-    opening = (preamble(pack)
-               + f"{NAMESPACE}.{PAYLOAD} = {NAMESPACE}.{PAYLOAD} or {{}}\n"
-               f"local held = {NAMESPACE}.{PAYLOAD}\n"
-               f"held[{quoted(axis)}] = {rendered(header)}\n"
-               f"held[{quoted(axis)}].blob = ").encode("utf-8")
+    opening = (
+        preamble(pack) + f"{NAMESPACE}.{PAYLOAD} = {NAMESPACE}.{PAYLOAD} or {{}}\n"
+        f"local held = {NAMESPACE}.{PAYLOAD}\n"
+        f"held[{quoted(axis)}] = {rendered(header)}\n"
+        f"held[{quoted(axis)}].blob = "
+    ).encode("utf-8")
     return opening + wrapped(blob) + b"\n"
 
 
-def axis_source(axis: str, holds: Sequence[Section],
-                produced: Mapping[str, object], *, pack: str, built: str,
-                variation: Variation,
-                policy: Mapping[Cardinality, Encoding] = FEWEST_BYTES) -> bytes:
+def axis_source(
+    axis: str,
+    holds: Sequence[Section],
+    produced: Mapping[str, object],
+    *,
+    pack: str,
+    built: str,
+    variation: Variation,
+    policy: Mapping[Cardinality, Encoding] = FEWEST_BYTES,
+) -> bytes:
     """Every section of one axis, as the file carrying them."""
     blob = Blob()
-    described_all = ((section.name,
-                      described(section, produced[section.name], blob,
-                                variation=variation, policy=policy))
-                     for section in holds)
+    described_all = (
+        (section.name, described(section, produced[section.name], blob, variation=variation, policy=policy))
+        for section in holds
+    )
     # A section every one of whose columns the client supplies contributes no
     # column at all, and an entry holding an empty set of them would read as a
     # section that came out empty rather than one deliberately left to the
     # game.
-    sections = {name: entry for name, entry in described_all
-                if entry["columns"]}
-    header = {"format": ADDON_FORMAT, "pack": pack, "built": built,
-              "axis": axis, "variation": variation.value,
-              "sections": sections}
+    sections = {name: entry for name, entry in described_all if entry["columns"]}
+    header = {
+        "format": ADDON_FORMAT,
+        "pack": pack,
+        "built": built,
+        "axis": axis,
+        "variation": variation.value,
+        "sections": sections,
+    }
     return assignment(axis, header, blob.payload(), pack)
 
 
-def index_source(axes: Sequence[str], *, pack: str, built: str,
-                 variation: Variation, absent: Sequence[str] = ()) -> bytes:
+def index_source(
+    axes: Sequence[str], *, pack: str, built: str, variation: Variation, absent: Sequence[str] = ()
+) -> bytes:
     """The file saying what the rest of them hold.
 
     The peer of the browser's manifest, answering the same two questions:
@@ -648,11 +668,15 @@ def index_source(axes: Sequence[str], *, pack: str, built: str,
     the supply table names is missing from the payload on purpose, and the
     reader is meant to ask the client for it instead of reporting a gap.
     """
-    header = {"format": ADDON_FORMAT, "pack": pack, "built": built,
-              "variation": variation.value, "axes": list(axes),
-              "supplied": (dict(SUPPLIED_BY) if variation is Variation.LEAN
-                           else {}),
-              "absent": list(absent)}
+    header = {
+        "format": ADDON_FORMAT,
+        "pack": pack,
+        "built": built,
+        "variation": variation.value,
+        "axes": list(axes),
+        "supplied": (dict(SUPPLIED_BY) if variation is Variation.LEAN else {}),
+        "absent": list(absent),
+    }
     return (preamble(pack) + f"{NAMESPACE}.index = {rendered(header)}\n").encode("utf-8")
 
 
@@ -673,11 +697,18 @@ def schema_source(schema: Mapping[str, object], pack: str) -> bytes:
     return (preamble(pack) + f"{NAMESPACE}.{SCHEMA} = {rendered(schema)}\n").encode("utf-8")
 
 
-def chunks(sections: Sequence[Section], produced: Mapping[str, object], *,
-           pack: str, version: str, built: str, variation: Variation,
-           schema: Mapping[str, object],
-           absent: Sequence[str] = (),
-           policy: Mapping[Cardinality, Encoding] = FEWEST_BYTES) -> Chunk:
+def chunks(
+    sections: Sequence[Section],
+    produced: Mapping[str, object],
+    *,
+    pack: str,
+    version: str,
+    built: str,
+    variation: Variation,
+    schema: Mapping[str, object],
+    absent: Sequence[str] = (),
+    policy: Mapping[Cardinality, Encoding] = FEWEST_BYTES,
+) -> Chunk:
     """The one addon directory a variation of the data ships as.
 
     Args:
@@ -709,25 +740,23 @@ def chunks(sections: Sequence[Section], produced: Mapping[str, object], *,
     for section in sections:
         if section.name not in produced:
             continue
-        if not any(ships(section.name, column, variation)
-                   for column in section.columns):
+        if not any(ships(section.name, column, variation) for column in section.columns):
             continue
         axis = AXIS_OF.get(section.name)
         if axis is None:
-            raise KeyError(f"{section.name} belongs to no axis; name it in "
-                           f"AXES or the addon can never read it")
+            raise KeyError(f"{section.name} belongs to no axis; name it in AXES or the addon can never read it")
         holding.setdefault(axis, []).append(section)
 
     ordered = [axis for axis in AXES if axis in holding]
-    files = {"index.lua": index_source(ordered, pack=pack, built=built,
-                                       variation=variation, absent=absent),
-             "schema.lua": schema_source(schema, pack)}
+    files = {
+        "index.lua": index_source(ordered, pack=pack, built=built, variation=variation, absent=absent),
+        "schema.lua": schema_source(schema, pack),
+    }
     for axis in ordered:
-        files[f"{axis}.lua"] = axis_source(axis, holding[axis], produced,
-                                           pack=pack, built=built,
-                                           variation=variation, policy=policy)
-    toc = toc_file("Epsilook Data", "Search data for Epsilook.",
-                   version=version, pack=pack,
-                   demand=True, sources=list(files))
-    return Chunk(addon=ADDON_PREFIX, files={f"{ADDON_PREFIX}.toc": toc,
-                                            **files})
+        files[f"{axis}.lua"] = axis_source(
+            axis, holding[axis], produced, pack=pack, built=built, variation=variation, policy=policy
+        )
+    toc = toc_file(
+        "Epsilook Data", "Search data for Epsilook.", version=version, pack=pack, demand=True, sources=list(files)
+    )
+    return Chunk(addon=ADDON_PREFIX, files={f"{ADDON_PREFIX}.toc": toc, **files})

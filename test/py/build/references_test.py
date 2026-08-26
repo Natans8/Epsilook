@@ -5,10 +5,17 @@ from __future__ import annotations
 from pack.derive.displays import Display, ResolvedDisplays
 from pack.derive.references import References, collect_references
 from pack.derive.walk import SpellVisuals
-from pack.routes import (ChainEffect, CreatureModels, FxPayloads, GameObjectData, ItemModels,
-                         MountData, ScreenRow, SpellEffectRows)
-from pack.routes.models import (MODEL_CAT_DISPLAY, MODEL_CAT_ITEM,
-                                SCALE_UNIT, UNPLACED, AttachModel)
+from pack.routes import (
+    ChainEffect,
+    CreatureModels,
+    FxPayloads,
+    GameObjectData,
+    ItemModels,
+    MountData,
+    ScreenRow,
+    SpellEffectRows,
+)
+from pack.routes.models import MODEL_CAT_DISPLAY, MODEL_CAT_ITEM, SCALE_UNIT, UNPLACED, AttachModel
 from pack.targets import NO_TARGET
 
 
@@ -19,21 +26,30 @@ def visuals(**buckets: dict[int, dict[object, int]]) -> SpellVisuals:
     return found
 
 
-def collect(*, visuals: SpellVisuals | None = None,
-            effects: SpellEffectRows | None = None,
-            fx: FxPayloads | None = None,
-            displays: ResolvedDisplays | None = None,
-            mounts: MountData | None = None,
-            objects: GameObjectData | None = None,
-            items: ItemModels | None = None,
-            creatures: CreatureModels | None = None,
-            spell_icons: dict[int, int] | None = None) -> References:
+def collect(
+    *,
+    visuals: SpellVisuals | None = None,
+    effects: SpellEffectRows | None = None,
+    fx: FxPayloads | None = None,
+    displays: ResolvedDisplays | None = None,
+    mounts: MountData | None = None,
+    objects: GameObjectData | None = None,
+    items: ItemModels | None = None,
+    creatures: CreatureModels | None = None,
+    spell_icons: dict[int, int] | None = None,
+) -> References:
     """Run the collection with everything not under test left empty."""
     return collect_references(
-        visuals or SpellVisuals(), effects or SpellEffectRows(),
-        fx or FxPayloads(), displays or ResolvedDisplays(),
-        mounts or MountData(), objects or GameObjectData(),
-        items or ItemModels(), creatures or CreatureModels(), spell_icons or {})
+        visuals or SpellVisuals(),
+        effects or SpellEffectRows(),
+        fx or FxPayloads(),
+        displays or ResolvedDisplays(),
+        mounts or MountData(),
+        objects or GameObjectData(),
+        items or ItemModels(),
+        creatures or CreatureModels(),
+        spell_icons or {},
+    )
 
 
 def test_a_models_file_is_an_asset() -> None:
@@ -56,16 +72,16 @@ def test_a_sounds_file_is_an_asset_but_its_kit_is_not() -> None:
 
 def test_a_chains_textures_are_followed() -> None:
     """The walk collects the chain; its files live one table further in."""
-    found = collect(visuals=visuals(chains={100: {(3, 0, 0): NO_TARGET}}),
-                    fx=FxPayloads(chains={3: ChainEffect(0, 0, 0, 0,
-                                                        (701, 702), ())}))
+    found = collect(
+        visuals=visuals(chains={100: {(3, 0, 0): NO_TARGET}}),
+        fx=FxPayloads(chains={3: ChainEffect(0, 0, 0, 0, (701, 702), ())}),
+    )
     assert found.chains == {3}
     assert found.assets == {701, 702}
 
 
 def test_a_dissolves_textures_are_followed() -> None:
-    found = collect(visuals=visuals(dissolves={100: {5: NO_TARGET}}),
-                    fx=FxPayloads(dissolves={5: (1.0, (703,), 0)}))
+    found = collect(visuals=visuals(dissolves={100: {5: NO_TARGET}}), fx=FxPayloads(dissolves={5: (1.0, (703,), 0)}))
     assert found.assets == {703}
 
 
@@ -74,8 +90,7 @@ def test_a_screen_effects_textures_are_followed() -> None:
     walk, since an aura can apply one with no visual at all."""
     effects = SpellEffectRows()
     effects.screens.add(100, 9, NO_TARGET)
-    found = collect(effects=effects,
-                    fx=FxPayloads(screens={9: ScreenRow(textures=((704, 0),))}))
+    found = collect(effects=effects, fx=FxPayloads(screens={9: ScreenRow(textures=((704, 0),))}))
     assert found.screens == {9}
     assert found.assets == {704}
 
@@ -83,8 +98,7 @@ def test_a_screen_effects_textures_are_followed() -> None:
 def test_a_display_row_with_no_model_adds_nothing() -> None:
     """A display can resolve to no model, which is a row that renders without
     one rather than a file to look for."""
-    found = collect(displays=ResolvedDisplays(
-        creatures=[Display(1, 2, 800)], forms=[Display(3, 4, 0)]))
+    found = collect(displays=ResolvedDisplays(creatures=[Display(1, 2, 800)], forms=[Display(3, 4, 0)]))
     assert found.assets == {800}
 
 
@@ -93,12 +107,13 @@ def test_every_named_display_is_collected_and_its_skins_are_assets() -> None:
     once each; the textures a display paints are named like a chain's, and
     only for displays something reached."""
     found = collect(
-        visuals=visuals(models={100: {AttachModel(500, MODEL_CAT_DISPLAY, 0, 0, 6, 0,
-                                        UNPLACED, SCALE_UNIT): NO_TARGET}}),
-        displays=ResolvedDisplays(creatures=[Display(1, 2, 800)],
-                                  forms=[Display(3, 4, 0)]),
+        visuals=visuals(
+            models={100: {AttachModel(500, MODEL_CAT_DISPLAY, 0, 0, 6, 0, UNPLACED, SCALE_UNIT): NO_TARGET}}
+        ),
+        displays=ResolvedDisplays(creatures=[Display(1, 2, 800)], forms=[Display(3, 4, 0)]),
         mounts=MountData(links=[(100, 7)], fid={7: 900}),
-        creatures=CreatureModels(display_skins={2: (801, 802), 6: (803,), 99: (804,)}))
+        creatures=CreatureModels(display_skins={2: (801, 802), 6: (803,), 99: (804,)}),
+    )
     assert found.displays == {2, 4, 6, 7}
     assert found.assets == {500, 800, 801, 802, 803, 900}
 
@@ -115,8 +130,7 @@ def test_an_object_the_world_dump_cannot_name_is_dropped() -> None:
     effects = SpellEffectRows()
     effects.objects.add(100, 11, NO_TARGET)
     effects.objects.add(100, 12, NO_TARGET)
-    found = collect(effects=effects,
-                    objects=GameObjectData(name={11: "Brazier"}, fid={11: 901}))
+    found = collect(effects=effects, objects=GameObjectData(name={11: "Brazier"}, fid={11: 901}))
     assert found.object_rows == [(100, 11)]
     assert found.objects == [11]
     assert found.assets == {901}
@@ -133,9 +147,9 @@ def test_an_icon_stays_out_of_the_asset_set() -> None:
 def test_an_items_inventory_icon_joins_the_same_pass() -> None:
     """An item pill shows the icon the game shows in the bag."""
     found = collect(
-        visuals=visuals(models={100: {AttachModel(500, MODEL_CAT_ITEM, 0, 0, 77, 0,
-                                        UNPLACED, SCALE_UNIT): NO_TARGET}}),
-        items=ItemModels(icon_fid={77: 951}))
+        visuals=visuals(models={100: {AttachModel(500, MODEL_CAT_ITEM, 0, 0, 77, 0, UNPLACED, SCALE_UNIT): NO_TARGET}}),
+        items=ItemModels(icon_fid={77: 951}),
+    )
     assert found.icons == {951}
     assert found.assets == {500}
 
@@ -148,6 +162,8 @@ def test_an_unresolvable_icon_is_not_asked_about() -> None:
 def test_one_pass_resolves_both_sets() -> None:
     """The listfile is streamed once for the whole build, so the two sets are
     asked for together even though the pack treats them differently."""
-    found = collect(visuals=visuals(models={100: {AttachModel(500, 1, 0, 0, 0, 0, UNPLACED, SCALE_UNIT): NO_TARGET}}),
-                    spell_icons={100: 950})
+    found = collect(
+        visuals=visuals(models={100: {AttachModel(500, 1, 0, 0, 0, 0, UNPLACED, SCALE_UNIT): NO_TARGET}}),
+        spell_icons={100: 950},
+    )
     assert found.wanted == {500, 950}

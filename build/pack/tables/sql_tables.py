@@ -68,9 +68,13 @@ class SqlTables:
     the CSV where it lies, so attaching costs a header read.
     """
 
-    def __init__(self, directory: Path, *,
-                 absent_tables: dict[str, str] | None = None,
-                 defaults: dict[tuple[str, str], str] | None = None) -> None:
+    def __init__(
+        self,
+        directory: Path,
+        *,
+        absent_tables: dict[str, str] | None = None,
+        defaults: dict[tuple[str, str], str] | None = None,
+    ) -> None:
         """Serve the CSVs in `directory`.
 
         `absent_tables` and `defaults` fall back to the build-wide drift
@@ -112,24 +116,25 @@ class SqlTables:
             return
         attached = self._attach(table)
         if attached is None:
-            sys.exit(f"error: {table}.csv in {self.directory} is empty; it has no "
-                     f"header row, so the cached copy is incomplete")
+            sys.exit(
+                f"error: {table}.csv in {self.directory} is empty; it has no "
+                f"header row, so the cached copy is incomplete"
+            )
 
-        plan = project(table, [column.name for column in attached.columns], columns,
-                       defaults=self.defaults)
+        plan = project(table, [column.name for column in attached.columns], columns, defaults=self.defaults)
         # A row of no columns is still a row, and the plain reader yields one
         # empty tuple for each. SQL has no zero-column select, so the count is
         # what gets asked for and the shape is restored on the way out.
-        chosen = [sa.func.coalesce(attached.c[source], "")
-                  if source is not None else sa.literal(stand_in)
-                  for source, stand_in in zip(plan.sources, plan.stand_ins)]
+        chosen = [
+            sa.func.coalesce(attached.c[source], "") if source is not None else sa.literal(stand_in)
+            for source, stand_in in zip(plan.sources, plan.stand_ins)
+        ]
         # Named rather than inferred from the columns, because a request made
         # entirely of stand-ins references none of them: the table would drop
         # out of the FROM clause and the whole read would collapse to the one
         # row a bare SELECT of literals returns.
         statement = sa.select(*chosen or [sa.literal(1)]).select_from(attached)
-        sql = str(statement.compile(dialect=DIALECT,
-                                    compile_kwargs={"literal_binds": True}))
+        sql = str(statement.compile(dialect=DIALECT, compile_kwargs={"literal_binds": True}))
 
         # Its own cursor, because two routes may hold two reads of this source
         # open at once and one connection streams one result at a time.
@@ -147,8 +152,9 @@ class SqlTables:
             # promised it would not. Naming the table and the directory is what
             # an operator needs with sixty tables and twelve builds to choose
             # between, and the engine's own words say which row.
-            sys.exit(f"error: {table}.csv in {self.directory} could not be read; "
-                     f"the cached copy is incomplete\n  {error}")
+            sys.exit(
+                f"error: {table}.csv in {self.directory} could not be read; the cached copy is incomplete\n  {error}"
+            )
         finally:
             cursor.close()
 
@@ -179,12 +185,11 @@ class SqlTables:
             database.execute(
                 f'CREATE OR REPLACE VIEW "{table}" AS SELECT * FROM read_csv('
                 f"'{literal}', all_varchar = true, header = true, "
-                f"max_line_size = {MAX_LINE}, null_padding = false)")
+                f"max_line_size = {MAX_LINE}, null_padding = false)"
+            )
             described = database.execute(f'SELECT * FROM "{table}" LIMIT 0')
         except duckdb.Error:
             return None
-        relation = sa.Table(table, self._metadata,
-                            *[sa.Column(name, sa.Text)
-                              for name, *_ in described.description])
+        relation = sa.Table(table, self._metadata, *[sa.Column(name, sa.Text) for name, *_ in described.description])
         self._attached[table] = relation
         return relation

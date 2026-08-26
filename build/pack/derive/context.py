@@ -8,12 +8,29 @@ from typing import Any
 
 from ..build import Build
 from ..declarations import Declarations
-from ..routes import (AreaGates, CreatureModels, Delivery, FxPayloads,
-                      GameObjectData, ItemModels, KeyboundOverride, KitEffects,
-                      MissileMotion, ModelSources, MountData, ProcEffects,
-                      Reach, ShapeshiftForms, SpellEffectRows, SpellNames,
-                      SpellProperties, SpellText, VehicleSeats, VisualGraph,
-                      VisualMissiles)
+from ..routes import (
+    AreaGates,
+    CreatureModels,
+    Delivery,
+    FxPayloads,
+    GameObjectData,
+    ItemModels,
+    KeyboundOverride,
+    KitEffects,
+    MissileMotion,
+    ModelSources,
+    MountData,
+    ProcEffects,
+    Reach,
+    ShapeshiftForms,
+    SpellEffectRows,
+    SpellNames,
+    SpellProperties,
+    SpellText,
+    VehicleSeats,
+    VisualGraph,
+    VisualMissiles,
+)
 from .displays import ResolvedDisplays
 from .icons import IconIndex
 from .prose import CookedText
@@ -51,8 +68,7 @@ class Reads:
         if name in self._declared:
             return getattr(self._context, name)
         if any(existing.name == name for existing in fields(self._context)):
-            raise AttributeError(
-                f"{name!r} is not in this section's `reads`; declare it there")
+            raise AttributeError(f"{name!r} is not in this section's `reads`; declare it there")
         raise AttributeError(f"the derive context has no {name!r}")
 
 
@@ -105,8 +121,7 @@ class DeriveContext:
     soundkit_files: Mapping[int, set[int]] = field(default_factory=dict)
     animkit_anims: Mapping[int, set[int]] = field(default_factory=dict)
     animkit_bonesets: Mapping[int, dict[int, list[str]]] = field(default_factory=dict)
-    anim_replacements: Mapping[int, set[tuple[int, int]]] = field(
-        default_factory=dict)
+    anim_replacements: Mapping[int, set[tuple[int, int]]] = field(default_factory=dict)
     keybinds: Mapping[int, KeyboundOverride] = field(default_factory=dict)
     delivery: Sequence[Delivery] = ()
     reach: Sequence[Reach] = ()
@@ -168,8 +183,7 @@ class DeriveContext:
         position, so the ids, the counts and the order they were built in have
         to be one build's rather than two reads that agreed.
         """
-        return replace(self, **{name: getattr(spoken, name)
-                                for name in SPOKEN_FIELDS})
+        return replace(self, **{name: getattr(spoken, name) for name in SPOKEN_FIELDS})
 
 
 @dataclass(frozen=True)

@@ -39,6 +39,11 @@ dev = [
     # rather than failing to draw a bar.
     "tqdm",
     "types-tqdm",
+    # The formatter, and the only checker here that also writes. Pinned like the
+    # rest rather than run through `uvx`, which resolves whatever PyPI served
+    # that minute -- the point of this group is that a checker's version is a
+    # fact of the repository.
+    "ruff",
     "mypy",
     "pyflakes",
     "pylint",
@@ -69,6 +74,28 @@ pythonpath = ["build", "test/py", "tools"]
 norecursedirs = ["*.egg", ".*", "_darcs", "CVS", "dist", "node_modules", "venv"]
 addopts = "--quiet --no-header --import-mode=importlib"
 cache_dir = ".pytest_cache"
+
+# Formatting was an IDE action before this, which meant it could not run in CI,
+# could not run on a machine without PyCharm, and reported success without
+# proving a change. `ruff format --check` is a gate check.py can fail on, which
+# is what moves the rule out of prose and into something that fires.
+#
+# The style is black's, unmodified. Every knob ruff exposes was measured against
+# this tree first and none of them earned a setting: quote-style preserve moved
+# 52 lines of 25,092, skip-magic-trailing-comma moved none, and 100, 160 and 200
+# columns reformat exactly the same 181 files as 120 does.
+[tool.ruff]
+# The width the whole repository wraps at -- .pylintrc, the markdown and the
+# TypeScript sources all use it -- so Python is not the one tree carrying its
+# own number.
+line-length = 120
+
+# Ruff ships as a linter too, and enabling it is a separate call that has not
+# been taken: its defaults are 413 rules, they report 172 findings on a tree
+# that passes mypy, pyflakes and pylint, and 80 of those are import ordering
+# alone. Selecting nothing keeps the editor quiet about rules nothing gates.
+[tool.ruff.lint]
+select = []
 
 # Both caches are pinned to the repository root. Left to their defaults they
 # land relative to whatever directory the tool was invoked from, which puts

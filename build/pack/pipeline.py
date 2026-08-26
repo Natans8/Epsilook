@@ -29,44 +29,100 @@ from functools import cached_property
 
 from .build import Build
 from .declarations import Declarations
-from .derive import (CONTEXT_FIELDS, DEFAULT_LOCALE, LOCALES, CookedText,
-                     DeriveContext, IconIndex, Locale, PackRows, References,
-                     ResolvedDisplays, Spoken, SpellVisuals,
-                     build_icon_index, build_rows, collect_references, cook_text,
-                     locale_of, resolve_displays, walk_spells)
+from .derive import (
+    CONTEXT_FIELDS,
+    DEFAULT_LOCALE,
+    LOCALES,
+    CookedText,
+    DeriveContext,
+    IconIndex,
+    Locale,
+    PackRows,
+    References,
+    ResolvedDisplays,
+    Spoken,
+    SpellVisuals,
+    build_icon_index,
+    build_rows,
+    collect_references,
+    cook_text,
+    locale_of,
+    resolve_displays,
+    walk_spells,
+)
 from .drift import OPTIONAL_TABLES, TDB_OPTIONAL_TABLES
 from .emit.manifest import manifest
 from .emit.meta import gathered, meta
 from .emit.module import Module, absent_sections, assemble
-from .encode import (EMPTY_SLOT, FEWEST_BYTES, encode_column,
-                     encode_section, layout_for)
+from .encode import EMPTY_SLOT, FEWEST_BYTES, encode_column, encode_section, layout_for
 from .model import SECTIONS, Cardinality, Encoding, Section, SectionColumns
 from .progress import log, phase, step, timed
-from .routes import (AreaGates, CreatureModels, Delivery, FxPayloads,
-                     GameObjectData, ItemModels, KeyboundOverride, KitEffects,
-                     MissileMotion, ModelSources, MountData, ProcEffects,
-                     Reach, ShapeshiftForms, SpellEffectRows, SpellNames,
-                     SpellProperties, SpellText,
-                     VehicleSeats, VisualGraph, VisualMissiles,
-                     implicit_target_bits, read_anim_replacements,
-                     read_animkit_anims, read_animkit_bonesets,
-                     read_area_gates, read_creature_models, read_fx_payloads,
-                     read_gameobjects, read_item_models, read_keybound_overrides,
-                     read_kit_effects, read_missile_motions, read_missiles,
-                     read_model_sources, read_mounts, read_override_names,
-                     read_proc_effects, read_shapeshift_forms,
-                     read_soundkit_files, read_spell_attributes,
-                     read_spell_delivery, read_spell_effect_rows,
-                     read_spell_names, read_spell_properties, read_spell_reach,
-                     read_spell_text, read_spell_values, read_vehicle_seats,
-                     read_visual_graph,
-                     read_zone_maps, resolve_paths)
+from .routes import (
+    AreaGates,
+    CreatureModels,
+    Delivery,
+    FxPayloads,
+    GameObjectData,
+    ItemModels,
+    KeyboundOverride,
+    KitEffects,
+    MissileMotion,
+    ModelSources,
+    MountData,
+    ProcEffects,
+    Reach,
+    ShapeshiftForms,
+    SpellEffectRows,
+    SpellNames,
+    SpellProperties,
+    SpellText,
+    VehicleSeats,
+    VisualGraph,
+    VisualMissiles,
+    implicit_target_bits,
+    read_anim_replacements,
+    read_animkit_anims,
+    read_animkit_bonesets,
+    read_area_gates,
+    read_creature_models,
+    read_fx_payloads,
+    read_gameobjects,
+    read_item_models,
+    read_keybound_overrides,
+    read_kit_effects,
+    read_missile_motions,
+    read_missiles,
+    read_model_sources,
+    read_mounts,
+    read_override_names,
+    read_proc_effects,
+    read_shapeshift_forms,
+    read_soundkit_files,
+    read_spell_attributes,
+    read_spell_delivery,
+    read_spell_effect_rows,
+    read_spell_names,
+    read_spell_properties,
+    read_spell_reach,
+    read_spell_text,
+    read_spell_values,
+    read_vehicle_seats,
+    read_visual_graph,
+    read_zone_maps,
+    resolve_paths,
+)
 from .routes.anims import read_anim_emotes
 from .routes.sounds import read_kit_names, read_kit_types, sound_type_names
 from .routes.values import DescriptionValues
-from .sources import (ExpansionLadder, Sources, fetch_sources,
-                      load_expansions, load_local_enum, read_anim_names,
-                      read_enum_names)
+from .sources import (
+    ExpansionLadder,
+    Sources,
+    fetch_sources,
+    load_expansions,
+    load_local_enum,
+    read_anim_names,
+    read_enum_names,
+)
 from .sources.cache import CACHE_DIR
 from .sources.client import CLIENTS
 from .sources.gobs import read_gob_displays
@@ -74,9 +130,18 @@ from .sources.listfile import SUPPLEMENT, SUPPLEMENT_FLOOR, release_tag
 from .sources.scaling import read_scaling, scaling_source
 from .sources.tdb import TDB_TABLES, tdb_release
 from .sources.wago import LOCALIZED_TABLES
-from .tables import (CsvTables, ListfileTables, OverlaidTables, Provider,
-                     SqlTables, Tables, hotfix_overlays, locale_overlays,
-                     supplement_overlay, translated_exports)
+from .tables import (
+    CsvTables,
+    ListfileTables,
+    OverlaidTables,
+    Provider,
+    SqlTables,
+    Tables,
+    hotfix_overlays,
+    locale_overlays,
+    supplement_overlay,
+    translated_exports,
+)
 
 PROVIDERS: dict[str, Provider] = {"csv": CsvTables, "sql": SqlTables}
 """The implementations a build may be read through, by the name it is asked for.
@@ -94,8 +159,7 @@ class Providers:
     them itself would be making it again.
     """
 
-    def __init__(self, sources: Sources, *, build: int, locale: str = "",
-                 provider: Provider = CsvTables) -> None:
+    def __init__(self, sources: Sources, *, build: int, locale: str = "", provider: Provider = CsvTables) -> None:
         """Wire the providers for one build, in one language.
 
         Args:
@@ -121,8 +185,10 @@ class Providers:
             # it. Restating on top would have dropped it from the translated
             # pass alone, and the two halves of a section no longer line up.
             client = OverlaidTables(
-                base=client, overlays=translated_exports(LOCALIZED_TABLES),
-                source=provider(sources.locale_tables[locale]))
+                base=client,
+                overlays=translated_exports(LOCALIZED_TABLES),
+                source=provider(sources.locale_tables[locale]),
+            )
 
         self.base: Tables = client
         """The client's own tables, unrevised. What a printed number reads."""
@@ -137,16 +203,13 @@ class Providers:
                 # language they are read in is the server's too. Its own
                 # `*_locale` tables hold every language at once, and reading one
                 # is refusing the rest.
-                world = OverlaidTables(base=world, overlays=locale_overlays(locale),
-                                       source=world)
+                world = OverlaidTables(base=world, overlays=locale_overlays(locale), source=world)
             self.world = world
             # The hotfixes revise the client's own tables, so the overlay wraps
             # the build's provider rather than standing beside it: a route
             # reading `SpellEffect` cannot tell whether a row was revised, and
             # that is the point.
-            self.tables = OverlaidTables(base=client,
-                                         overlays=hotfix_overlays(build),
-                                         source=world)
+            self.tables = OverlaidTables(base=client, overlays=hotfix_overlays(build), source=world)
         # The community list names what Blizzard ships; the supplement names
         # what a private client added, and the two never claim the same id --
         # the overlay admits nothing below the floor a client allocates its own
@@ -156,7 +219,8 @@ class Providers:
         self.listfile: Tables = OverlaidTables(
             base=ListfileTables(sources.listfile),
             overlays=supplement_overlay(SUPPLEMENT_FLOOR),
-            source=ListfileTables(SUPPLEMENT))
+            source=ListfileTables(SUPPLEMENT),
+        )
 
     def named(self, fids: set[int]) -> set[int]:
         """Which of `fids` name a real asset.
@@ -196,10 +260,14 @@ class Derivations:
     still knows nothing about what else is being read.
     """
 
-    def __init__(self, providers: Providers, build: Build,
-                 ladder: ExpansionLadder,
-                 values: DescriptionValues,
-                 zone_maps: Mapping[int, int]) -> None:
+    def __init__(
+        self,
+        providers: Providers,
+        build: Build,
+        ladder: ExpansionLadder,
+        values: DescriptionValues,
+        zone_maps: Mapping[int, int],
+    ) -> None:
         """Hold what every derivation reads from, and derive nothing yet."""
         self.providers = providers
         self.build = build
@@ -248,8 +316,7 @@ class Derivations:
     @cached_property
     def models(self) -> ModelSources:
         with phase("read model sources"):
-            return read_model_sources(self.tables, self.creatures, self.items,
-                                      self.providers.named)
+            return read_model_sources(self.tables, self.creatures, self.items, self.providers.named)
 
     @cached_property
     def missiles(self) -> dict[int, VisualMissiles]:
@@ -319,10 +386,12 @@ class Derivations:
     def effects(self) -> SpellEffectRows:
         with phase("read spell effect rows"):
             return read_spell_effect_rows(
-                self.tables, self.names.names,
+                self.tables,
+                self.names.names,
                 {"screens": self.fx.screens, "keybounds": self.keybinds},
                 implicit_target_bits(self.build.version),
-                self.build.version)
+                self.build.version,
+            )
 
     @cached_property
     def alt_names(self) -> dict[int, str]:
@@ -379,9 +448,9 @@ class Derivations:
     @cached_property
     def visuals(self) -> SpellVisuals:
         with phase("walk_spells"):
-            return walk_spells(self.names.names, self.graph, self.missiles,
-                               self.kits, self.soundkit_files, self.fx,
-                               self.effects)
+            return walk_spells(
+                self.names.names, self.graph, self.missiles, self.kits, self.soundkit_files, self.fx, self.effects
+            )
 
     @cached_property
     def displays(self) -> ResolvedDisplays:
@@ -391,10 +460,17 @@ class Derivations:
     @cached_property
     def references(self) -> References:
         with phase("collect_references"):
-            return collect_references(self.visuals, self.effects, self.fx,
-                                      self.displays, self.mounts, self.objects,
-                                      self.items, self.creatures,
-                                      self.props.icon_fid)
+            return collect_references(
+                self.visuals,
+                self.effects,
+                self.fx,
+                self.displays,
+                self.mounts,
+                self.objects,
+                self.items,
+                self.creatures,
+                self.props.icon_fid,
+            )
 
     @cached_property
     def paths(self) -> dict[int, str]:
@@ -409,25 +485,34 @@ class Derivations:
         oneshots, loops = self.emotes
         with phase("read declarations"):
             return Declarations(
-                anim_names=self.anim_names, anim_emote_oneshots=oneshots,
-                anim_emote_loops=loops, gobs=read_gob_displays(),
-                expansions=rungs, era_of=era_of,
+                anim_names=self.anim_names,
+                anim_emote_oneshots=oneshots,
+                anim_emote_loops=loops,
+                gobs=read_gob_displays(),
+                expansions=rungs,
+                era_of=era_of,
                 effect_names=read_enum_names("SpellEffect", self.build.version),
                 aura_names=read_enum_names("SpellEffectAura", self.build.version),
                 target_names=read_enum_names("Target", self.build.version),
                 target_bits=implicit_target_bits(self.build.version),
                 item_quality_names=load_local_enum("item_quality"),
                 attachment_names=load_local_enum("m2_attachments"),
-                summon_control_names=load_local_enum("summon_properties_control"))
+                summon_control_names=load_local_enum("summon_properties_control"),
+            )
 
     @cached_property
     def rows(self) -> PackRows:
         # After the declarations, because the flattening names the edges between
         # spells and the words it names them with are resolved per build.
         with phase("build_rows"):
-            return build_rows(self.visuals, self.effects, self.vehicles,
-                              self.declared.effect_names,
-                              self.declared.aura_names, self.animkit_bonesets)
+            return build_rows(
+                self.visuals,
+                self.effects,
+                self.vehicles,
+                self.declared.effect_names,
+                self.declared.aura_names,
+                self.animkit_bonesets,
+            )
 
     @cached_property
     def icons(self) -> IconIndex:
@@ -475,8 +560,7 @@ def selected(want: Sequence[str] = ()) -> tuple[Section, ...]:
     known = {section.module for section in SECTIONS}
     unknown = sorted(set(want) - known)
     if unknown:
-        raise ValueError(f"no section ships in {', '.join(unknown)}; "
-                         f"the modules are {', '.join(sorted(known))}")
+        raise ValueError(f"no section ships in {', '.join(unknown)}; the modules are {', '.join(sorted(known))}")
     return tuple(section for section in SECTIONS if section.module in want)
 
 
@@ -491,11 +575,14 @@ def declared_reads(sections: Iterable[Section]) -> frozenset[str]:
     return frozenset(name for section in sections for name in section.reads)
 
 
-def read_all(providers: Providers, build: Build,
-             ladder: ExpansionLadder,
-             values: DescriptionValues,
-             zone_maps: Mapping[int, int],
-             wanted: Iterable[str] | None = None) -> DeriveContext:
+def read_all(
+    providers: Providers,
+    build: Build,
+    ladder: ExpansionLadder,
+    values: DescriptionValues,
+    zone_maps: Mapping[int, int],
+    wanted: Iterable[str] | None = None,
+) -> DeriveContext:
     """Derive what a section reads, and no more than that.
 
     `wanted` names the context fields the selected sections declared; anything
@@ -511,14 +598,17 @@ def read_all(providers: Providers, build: Build,
     derive = Derivations(providers, build, ladder, values, zone_maps)
     asked = DERIVED_FIELDS if wanted is None else DERIVED_FIELDS & set(wanted)
     log(f"Deriving {len(asked)} of {len(DERIVED_FIELDS)} context fields ...")
-    return DeriveContext(build=build,
-                         **{name: getattr(derive, name) for name in sorted(asked)})
+    return DeriveContext(build=build, **{name: getattr(derive, name) for name in sorted(asked)})
 
 
-def read_spoken(providers: Providers, locale: Locale, *,
-                altnames: Mapping[int, set[int]],
-                zone_maps: Mapping[int, int],
-                values: DescriptionValues) -> Spoken:
+def read_spoken(
+    providers: Providers,
+    locale: Locale,
+    *,
+    altnames: Mapping[int, set[int]],
+    zone_maps: Mapping[int, int],
+    values: DescriptionValues,
+) -> Spoken:
     """Read everything the language changes, and nothing else.
 
     The second half of `read_all`, and a much smaller one: nine routes carry
@@ -544,8 +634,7 @@ def read_spoken(providers: Providers, locale: Locale, *,
     """
     tables, world = providers.tables, providers.world
 
-    with step(f"read {locale.code} names",
-              f"Reading the tables the game writes in {locale.code} ..."):
+    with step(f"read {locale.code} names", f"Reading the tables the game writes in {locale.code} ..."):
         names = read_spell_names(tables)
         creatures = read_creature_models(tables, world)
         items = read_item_models(tables)
@@ -559,9 +648,18 @@ def read_spoken(providers: Providers, locale: Locale, *,
     with phase(f"cook {locale.code} descriptions"):
         prose = cook_text(templates, values, names, locale.text)
 
-    return Spoken(names=names, alt_names=alt_names, templates=templates,
-                  creatures=creatures, items=items, mounts=mounts,
-                  objects=objects, forms=forms, areas=areas, prose=prose)
+    return Spoken(
+        names=names,
+        alt_names=alt_names,
+        templates=templates,
+        creatures=creatures,
+        items=items,
+        mounts=mounts,
+        objects=objects,
+        forms=forms,
+        areas=areas,
+        prose=prose,
+    )
 
 
 def unavailable_tables(build: Build, world: Tables | None) -> frozenset[str]:
@@ -576,8 +674,7 @@ def unavailable_tables(build: Build, world: Tables | None) -> frozenset[str]:
     if world is None:
         absent |= set(TDB_TABLES["world"]) | set(TDB_OPTIONAL_TABLES)
     else:
-        absent |= {table for table in TDB_OPTIONAL_TABLES
-                   if not world.available(table)}
+        absent |= {table for table in TDB_OPTIONAL_TABLES if not world.available(table)}
     return frozenset(absent)
 
 
@@ -586,8 +683,9 @@ def switched_off(section: Section, unavailable: frozenset[str]) -> bool:
     return bool(set(section.needs) & unavailable)
 
 
-def degraded_sections(sections: Iterable[Section], produced: Container[str],
-                      unavailable: frozenset[str]) -> dict[str, list[str]]:
+def degraded_sections(
+    sections: Iterable[Section], produced: Container[str], unavailable: frozenset[str]
+) -> dict[str, list[str]]:
     """Which shipped sections are thinner than usual, and what thinned each.
 
     The difference `absentSections` cannot state: these sections ship, holding
@@ -595,15 +693,19 @@ def degraded_sections(sections: Iterable[Section], produced: Container[str],
     no server dump. Only the shipped ones are reported, since a section that is
     absent outright is already named where absence is.
     """
-    return {section.name: missing for section in sections
-            if section.name in produced
-            and (missing := sorted(set(section.degraded_without) & unavailable))}
+    return {
+        section.name: missing
+        for section in sections
+        if section.name in produced and (missing := sorted(set(section.degraded_without) & unavailable))
+    }
 
 
-def produce(context: DeriveContext, unavailable: frozenset[str],
-            policy: Mapping[Cardinality, Encoding] = FEWEST_BYTES,
-            sections: Sequence[Section] | None = None
-            ) -> tuple[dict[str, SectionColumns], dict[str, object]]:
+def produce(
+    context: DeriveContext,
+    unavailable: frozenset[str],
+    policy: Mapping[Cardinality, Encoding] = FEWEST_BYTES,
+    sections: Sequence[Section] | None = None,
+) -> tuple[dict[str, SectionColumns], dict[str, object]]:
     """Every section this build ships: what it produced, and what it encodes to.
 
     A section whose `needs` this build lacks is left out rather than shipped
@@ -631,8 +733,7 @@ def produce(context: DeriveContext, unavailable: frozenset[str],
     return columns, encoded
 
 
-def check_parallel(section: Section, spoken: SectionColumns,
-                   built: SectionColumns) -> None:
+def check_parallel(section: Section, spoken: SectionColumns, built: SectionColumns) -> None:
     """Fail unless a language pass produced the structure the build did.
 
     The two halves of a split section ship in different files and are joined by
@@ -652,17 +753,19 @@ def check_parallel(section: Section, spoken: SectionColumns,
                 raise ValueError(
                     f"{section.name}.{column}: the language pass produced "
                     f"{len(spoken[column])} entries against the build's "
-                    f"{len(built[column])}; the two would not line up")
+                    f"{len(built[column])}; the two would not line up"
+                )
         elif spoken[column] != built[column]:
             raise ValueError(
                 f"{section.name}.{column} is not language and came out "
                 f"different anyway; the language pass has moved something the "
-                f"pack joins on")
+                f"pack joins on"
+            )
 
 
-def produce_spoken(context: DeriveContext, built: Mapping[str, SectionColumns],
-                   policy: Mapping[Cardinality, Encoding] = FEWEST_BYTES
-                   ) -> dict[str, object]:
+def produce_spoken(
+    context: DeriveContext, built: Mapping[str, SectionColumns], policy: Mapping[Cardinality, Encoding] = FEWEST_BYTES
+) -> dict[str, object]:
     """Every section that ships language, re-produced in one, encoded.
 
     Which sections this build has is read off `built` rather than asked of the
@@ -691,10 +794,11 @@ def produce_spoken(context: DeriveContext, built: Mapping[str, SectionColumns],
         check_parallel(section, produced, built[section.name])
         with timed("encode language", section.name):
             encoded[section.name] = {
-                name: encode_column(produced[name],
-                                    layout_for(section, name, policy),
-                                    section.absent.get(name, EMPTY_SLOT))
-                for name in section.localizable}
+                name: encode_column(
+                    produced[name], layout_for(section, name, policy), section.absent.get(name, EMPTY_SLOT)
+                )
+                for name in section.localizable
+            }
     return encoded
 
 
@@ -704,8 +808,7 @@ def absent_tables(tables: Tables) -> list[str]:
     Reported up front so a thin pack reads as "the game had no such table yet"
     rather than as a build that broke.
     """
-    absent = sorted(table for table in OPTIONAL_TABLES
-                    if not tables.available(table))
+    absent = sorted(table for table in OPTIONAL_TABLES if not tables.available(table))
     if absent:
         log(f"Absent tables ({len(absent)}) — these features switch off:")
         for table in absent:
@@ -732,18 +835,19 @@ def level_cap(version: str, rungs: Sequence[Mapping[str, object]]) -> int:
     return 0
 
 
-def build_for(version: str, tables: Tables,
-              rungs: Sequence[Mapping[str, object]]) -> Build:
+def build_for(version: str, tables: Tables, rungs: Sequence[Mapping[str, object]]) -> Build:
     """The `Build` value for one pack, once its sources have been probed.
 
     What a build IS to the code, rather than the version string every layer
     used to look its own corner of the truth up from.
     """
     release = tdb_release(version)
-    return Build(version=version,
-                 tdb=release["tag"] if release else None,
-                 absent_tables=frozenset(absent_tables(tables)),
-                 max_level=level_cap(version, rungs))
+    return Build(
+        version=version,
+        tdb=release["tag"] if release else None,
+        absent_tables=frozenset(absent_tables(tables)),
+        max_level=level_cap(version, rungs),
+    )
 
 
 def beside_default(locales: Sequence[Locale]) -> list[str]:
@@ -756,11 +860,17 @@ def beside_default(locales: Sequence[Locale]) -> list[str]:
     return [locale.code for locale in locales if locale.code != DEFAULT_LOCALE]
 
 
-def packed(version: str, label: str, *, refresh: bool = False,
-           policy: Mapping[Cardinality, Encoding] = FEWEST_BYTES,
-           locales: Sequence[Locale] = LOCALES, client: str = "",
-           provider: Provider = CsvTables, want: Sequence[str] = ()
-           ) -> tuple[dict[str, object], dict[str, dict[str, object]]]:
+def packed(
+    version: str,
+    label: str,
+    *,
+    refresh: bool = False,
+    policy: Mapping[Cardinality, Encoding] = FEWEST_BYTES,
+    locales: Sequence[Locale] = LOCALES,
+    client: str = "",
+    provider: Provider = CsvTables,
+    want: Sequence[str] = (),
+) -> tuple[dict[str, object], dict[str, dict[str, object]]]:
     """Build one pack, from acquiring its sources to its encoded sections.
 
     Everything up to the point where the artifact takes a shape, which is the
@@ -810,8 +920,7 @@ def packed(version: str, label: str, *, refresh: bool = False,
     # provider is right for everything that asks what a spell IS; this asks
     # what number to print.
     with phase("read spell values"):
-        values = read_spell_values(providers.base, level=build.max_level,
-                                   scaling=scaling)
+        values = read_spell_values(providers.base, level=build.max_level, scaling=scaling)
     # An id derived by matching two translated names, so it is the build's
     # answer and every language is handed it. See `read_zone_maps`.
     with phase("read zone maps"):
@@ -832,8 +941,10 @@ def packed(version: str, label: str, *, refresh: bool = False,
     degraded = degraded_sections(chosen, encoded, unavailable)
     with phase("gather counts and domains"):
         counts, domains = gathered(columns, context)
-    log(f"  {len(encoded)} sections, {len(counts)} counts, {len(domains)} domains"
-        + (f", {len(degraded)} degraded" if degraded else ""))
+    log(
+        f"  {len(encoded)} sections, {len(counts)} counts, {len(domains)} domains"
+        + (f", {len(degraded)} degraded" if degraded else "")
+    )
 
     # Whatever landed beside the build's own tables IS the set of further
     # languages: acquisition asked for the ones the roster named and reports
@@ -842,19 +953,16 @@ def packed(version: str, label: str, *, refresh: bool = False,
     for code in sources.locale_tables:
         locale = locale_of(code)
         with phase("wire providers"):
-            spoken_providers = Providers(sources, build=build_id, locale=code,
-                                         provider=provider)
-        said = read_spoken(spoken_providers, locale, values=values,
-                           altnames=context.effects.altnames,
-                           zone_maps=zone_maps)
+            spoken_providers = Providers(sources, build=build_id, locale=code, provider=provider)
+        said = read_spoken(
+            spoken_providers, locale, values=values, altnames=context.effects.altnames, zone_maps=zone_maps
+        )
         produced[code] = produce_spoken(context.spoken_in(said), columns, policy)
         log(f"  {code}: {len(produced[code])} sections of language")
-    return meta(build, label, release_tag(), counts, domains,
-                degraded=degraded), produced
+    return meta(build, label, release_tag(), counts, domains, degraded=degraded), produced
 
 
-def acquire(version: str, *, refresh: bool = False,
-            locales: Sequence[Locale] = LOCALES, client: str = "") -> None:
+def acquire(version: str, *, refresh: bool = False, locales: Sequence[Locale] = LOCALES, client: str = "") -> None:
     """Fetch everything one build reads, and produce nothing.
 
     Acquisition separated from execution, so that builds may then run at the
@@ -874,12 +982,19 @@ def acquire(version: str, *, refresh: bool = False,
     scaling_source(version, CACHE_DIR).acquire(refresh)
 
 
-def modules(version: str, label: str, *, refresh: bool = False,
-            policy: Mapping[Cardinality, Encoding] = FEWEST_BYTES,
-            pack_id: str = "", location: str = "",
-            locales: Sequence[Locale] = LOCALES, client: str = "",
-            provider: Provider = CsvTables, want: Sequence[str] = ()
-            ) -> tuple[list[Module], dict[str, object]]:
+def modules(
+    version: str,
+    label: str,
+    *,
+    refresh: bool = False,
+    policy: Mapping[Cardinality, Encoding] = FEWEST_BYTES,
+    pack_id: str = "",
+    location: str = "",
+    locales: Sequence[Locale] = LOCALES,
+    client: str = "",
+    provider: Provider = CsvTables,
+    want: Sequence[str] = (),
+) -> tuple[list[Module], dict[str, object]]:
     """Build one pack as the module set it ships as.
 
     Args:
@@ -904,18 +1019,15 @@ def modules(version: str, label: str, *, refresh: bool = False,
         nothing here arranges the sharing, and nothing has to.
     """
     started = time.monotonic()
-    header, produced = packed(version, label, refresh=refresh, policy=policy,
-                              locales=locales, client=client, provider=provider,
-                              want=want)
-    assembled = [module for code, sections in produced.items()
-                 for module in assemble(SECTIONS, sections, locale=code)]
+    header, produced = packed(
+        version, label, refresh=refresh, policy=policy, locales=locales, client=client, provider=provider, want=want
+    )
+    assembled = [module for code, sections in produced.items() for module in assemble(SECTIONS, sections, locale=code)]
     # Off the build's own pass alone, over the sections that were asked for. A
     # further language produces the sections that ship language and no others,
     # so asking one what is absent would name every section that merely has
     # nothing to translate -- and a partial build left out whole modules on
     # purpose, so only the chosen sections can be reported at all.
     absent = absent_sections(selected(want), produced[DEFAULT_LOCALE])
-    log(f"  {len(produced[DEFAULT_LOCALE])} sections in {len(assembled)} modules "
-        f"[{time.monotonic() - started:.1f}s]")
-    return assembled, manifest(pack_id or version, assembled, header,
-                               absent=absent, location=location)
+    log(f"  {len(produced[DEFAULT_LOCALE])} sections in {len(assembled)} modules [{time.monotonic() - started:.1f}s]")
+    return assembled, manifest(pack_id or version, assembled, header, absent=absent, location=location)

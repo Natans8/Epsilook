@@ -39,7 +39,6 @@ LISTFILE = CACHE / "listfile" / LISTFILE_ASSET
 TAG_FILE = CACHE / "listfile" / "release-tag.txt"
 
 
-
 def pack_files(path: Path) -> tuple[dict[int, str], str]:
     """A pack's fid -> path table, and the listfile tag it was built against.
 
@@ -52,8 +51,7 @@ def pack_files(path: Path) -> tuple[dict[int, str], str]:
     # which stand in for "whatever the caster is holding" and name no asset. The
     # listfile cannot know them, and counting them as lost names reports every
     # pack as stale forever.
-    named = {int(fid): name for fid, name in zip(files["fids"], files["paths"])
-             if int(fid) > 0}
+    named = {int(fid): name for fid, name in zip(files["fids"], files["paths"]) if int(fid) > 0}
     return named, pack["meta"].get("listfileTag", "")
 
 
@@ -76,8 +74,7 @@ def listfile_names(wanted: set[int]) -> dict[int, str]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__,
-                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("version", nargs="?", help="pack id or a prefix of one (default: all)")
     args = parser.parse_args()
 
@@ -101,14 +98,16 @@ def main() -> int:
     stale = []
     for pack, _ in packs:
         named, built_against = tables[pack.id]
-        renamed = {fid for fid, name in named.items()
-                   if fid in current and current[fid] != name}
+        renamed = {fid for fid, name in named.items() if fid in current and current[fid] != name}
         gained = {fid for fid, name in named.items() if not name and fid in current}
         lost = {fid for fid, name in named.items() if name and fid not in current}
         moved = len(renamed | gained | lost)
         mark = f"{YELLOW}would change{RESET}" if moved else f"{GREEN}unaffected {RESET}"
-        detail = (f"{len(gained)} newly named, {len(renamed) - len(gained & renamed)} renamed, "
-                  f"{len(lost)} lost" if moved else "no name differs")
+        detail = (
+            f"{len(gained)} newly named, {len(renamed) - len(gained & renamed)} renamed, {len(lost)} lost"
+            if moved
+            else "no name differs"
+        )
         behind = "" if built_against == cached_tag else f"  {DIM}(built against {built_against}){RESET}"
         print(f"  {mark} {pack.id:20s} {len(named):>7,} fids  {detail}{behind}")
         if moved:
@@ -116,11 +115,12 @@ def main() -> int:
 
     print()
     if stale:
-        print(f"{YELLOW}{len(stale)} pack(s) would change{RESET} — "
-              f"python tools/rebuild.py {' '.join(stale)}")
+        print(f"{YELLOW}{len(stale)} pack(s) would change{RESET} — python tools/rebuild.py {' '.join(stale)}")
         return 0
-    print(f"{GREEN}no pack would change{RESET} — a rebuild would move only "
-          f"meta.listfileTag, so it is not worth the re-download")
+    print(
+        f"{GREEN}no pack would change{RESET} — a rebuild would move only "
+        f"meta.listfileTag, so it is not worth the re-download"
+    )
     return 0
 
 

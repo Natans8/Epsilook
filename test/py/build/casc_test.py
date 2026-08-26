@@ -21,8 +21,7 @@ from pathlib import Path
 
 import pytest
 
-from pack.sources.casc import (EPSILON, RETAIL, Blizzard, Cdn, Header, Root,
-                               SelfHosted, Storage)
+from pack.sources.casc import EPSILON, RETAIL, Blizzard, Cdn, Header, Root, SelfHosted, Storage
 from pack.sources.source import Gathered, Part
 from support import Network
 
@@ -82,18 +81,17 @@ def arrays(fids: Sequence[int], *, names: bool) -> bytes:
     return body
 
 
-def block_v1(fids: Sequence[int], *, flags: int = 0, locale: int = LOCALE_ENUS,
-             names: bool = True) -> bytes:
+def block_v1(fids: Sequence[int], *, flags: int = 0, locale: int = LOCALE_ENUS, names: bool = True) -> bytes:
     """One block in the older shape: content flags, then the locale mask."""
     return struct.pack("<III", len(fids), flags, locale) + arrays(fids, names=names)
 
 
-def block_v2(fids: Sequence[int], *, low: int = 0, high: int = 0, top: int = 0,
-             locale: int = LOCALE_ENUS, names: bool = True) -> bytes:
+def block_v2(
+    fids: Sequence[int], *, low: int = 0, high: int = 0, top: int = 0, locale: int = LOCALE_ENUS, names: bool = True
+) -> bytes:
     """One block in the newer shape: the locale mask first, then three fields
     where the older one had a single content flags word."""
-    return (struct.pack("<IIIIB", len(fids), locale, low, high, top)
-            + arrays(fids, names=names))
+    return struct.pack("<IIIIB", len(fids), locale, low, high, top) + arrays(fids, names=names)
 
 
 TOTAL = 4000000
@@ -116,16 +114,16 @@ def root_v1(*blocks: bytes, total: int | None = None, named: int = 0) -> bytes:
     checked against it. An older header needs that to exceed the size a newer
     header could state, so a root written here carries `BULK`.
     """
-    return (b"TSFM" + struct.pack("<II", counted(blocks) if total is None
-    else total, named) + b"".join(blocks))
+    return b"TSFM" + struct.pack("<II", counted(blocks) if total is None else total, named) + b"".join(blocks)
 
 
-def root_v2(*blocks: bytes, version: int = 2, total: int | None = None,
-            named: int = 0) -> bytes:
+def root_v2(*blocks: bytes, version: int = 2, total: int | None = None, named: int = 0) -> bytes:
     """A root whose header states its own length and its manifest version."""
-    return (b"TSFM" + struct.pack("<IIIII", 24, version,
-                                  counted(blocks) if total is None else total,
-                                  named, 0) + b"".join(blocks))
+    return (
+        b"TSFM"
+        + struct.pack("<IIIII", 24, version, counted(blocks) if total is None else total, named, 0)
+        + b"".join(blocks)
+    )
 
 
 BULK = block_v1(range(1000, 2100), locale=LOCALE_KOKR)
@@ -141,14 +139,12 @@ while an English reader keeps none of them.
 def test_config_url_is_not_the_path_the_document_advertises() -> None:
     """Both services advertise one config path and serve another."""
     cdn = Cdn("level3.blizzard.com")
-    assert cdn.config_url(DIGEST) == (
-        f"http://level3.blizzard.com/tpr/wow/config/bd/27/{DIGEST}")
+    assert cdn.config_url(DIGEST) == (f"http://level3.blizzard.com/tpr/wow/config/bd/27/{DIGEST}")
     assert "tpr/configs/data" not in cdn.config_url(DIGEST)
 
 
 def test_data_url_shards_on_the_first_two_byte_pairs() -> None:
-    assert Cdn("host", "tpr/wow").data_url("55921441") == (
-        "http://host/tpr/wow/data/55/92/55921441")
+    assert Cdn("host", "tpr/wow").data_url("55921441") == ("http://host/tpr/wow/data/55/92/55921441")
 
 
 def test_a_self_hosted_service_answers_for_its_own_content() -> None:
@@ -160,15 +156,12 @@ def test_a_self_hosted_service_answers_for_its_own_content() -> None:
 
 def test_a_self_hosted_service_keeps_its_product_in_the_versions_url() -> None:
     service = SelfHosted(host="tact.example.invalid", product="wow_classic")
-    assert service.versions_url == (
-        "http://tact.example.invalid/wow_classic/versions")
+    assert service.versions_url == ("http://tact.example.invalid/wow_classic/versions")
 
 
 def test_the_vendor_publishes_versions_on_the_version_service() -> None:
-    assert RETAIL.versions_url == (
-        "https://eu.version.battle.net/v2/products/wow/versions")
-    assert RETAIL.cdns_url == (
-        "https://eu.version.battle.net/v2/products/wow/cdns")
+    assert RETAIL.versions_url == ("https://eu.version.battle.net/v2/products/wow/versions")
+    assert RETAIL.cdns_url == ("https://eu.version.battle.net/v2/products/wow/cdns")
 
 
 def test_the_vendor_label_names_the_product() -> None:
@@ -184,14 +177,12 @@ def test_the_vendor_takes_the_region_row_and_its_first_host() -> None:
 
 def test_a_region_naming_several_hosts_takes_the_first() -> None:
     service = Blizzard(region="us")
-    assert service.cdn(canned(**{service.cdns_url: CDNS})).host == (
-        "level3.blizzard.com")
+    assert service.cdn(canned(**{service.cdns_url: CDNS})).host == ("level3.blizzard.com")
 
 
 def test_an_unpublished_region_falls_back_to_the_first_row() -> None:
     service = Blizzard(region="xx")
-    assert service.cdn(canned(**{service.cdns_url: CDNS})).host == (
-        "level3.blizzard.com")
+    assert service.cdn(canned(**{service.cdns_url: CDNS})).host == ("level3.blizzard.com")
 
 
 def test_a_document_naming_no_host_is_an_error() -> None:
@@ -218,8 +209,7 @@ def test_anything_else_is_not_a_root_file() -> None:
 
 
 def test_only_the_wanted_locale_is_kept() -> None:
-    root = Root.parse(root_v1(block_v1([5, 6, 9]),
-                              block_v1([5, 6], locale=LOCALE_KOKR), BULK))
+    root = Root.parse(root_v1(block_v1([5, 6, 9]), block_v1([5, 6], locale=LOCALE_KOKR), BULK))
     assert sorted(root.keys) == [5, 6, 9]
     assert root.blocks == 3
 
@@ -227,8 +217,7 @@ def test_only_the_wanted_locale_is_kept() -> None:
 def test_a_flagged_block_is_eight_bytes_narrower_per_record() -> None:
     """The stride is what the next block's ids depend on, so a second block
     reading correctly is the assertion."""
-    root = Root.parse(root_v1(block_v1([1, 2], flags=NO_NAME_HASH, names=False),
-                              block_v1([40, 41]), BULK))
+    root = Root.parse(root_v1(block_v1([1, 2], flags=NO_NAME_HASH, names=False), block_v1([40, 41]), BULK))
     assert sorted(root.keys) == [1, 2, 40, 41]
     assert root.keys[40] == key(40)
 
@@ -237,15 +226,13 @@ def test_a_root_naming_every_record_keeps_the_name_hashes() -> None:
     """The flag is not honoured where the header says nothing is unnamed, and
     a reader that skipped those bytes anyway would misread what follows."""
     every = counted([block_v1([1, 2]), block_v1([40, 41]), BULK])
-    root = Root.parse(root_v1(block_v1([1, 2], flags=NO_NAME_HASH),
-                              block_v1([40, 41]), BULK, named=every))
+    root = Root.parse(root_v1(block_v1([1, 2], flags=NO_NAME_HASH), block_v1([40, 41]), BULK, named=every))
     assert sorted(root.keys) == [1, 2, 40, 41]
     assert root.keys[40] == key(40)
 
 
 def test_the_newer_block_puts_the_locale_first() -> None:
-    root = Root.parse(root_v2(block_v2([5, 6, 9]),
-                              block_v2([70], locale=LOCALE_KOKR)))
+    root = Root.parse(root_v2(block_v2([5, 6, 9]), block_v2([70], locale=LOCALE_KOKR)))
     assert sorted(root.keys) == [5, 6, 9]
     assert root.header.version == 2
     assert root.blocks == 2
@@ -262,9 +249,7 @@ def test_a_walk_that_misses_the_declared_record_count_is_an_error() -> None:
 def test_the_newer_block_splits_the_content_flags_across_three_fields() -> None:
     """The flag reaches the stride from the second field, and the third is
     shifted into place rather than read where it sits."""
-    root = Root.parse(root_v2(block_v2([1, 2], high=NO_NAME_HASH, top=0x1,
-                                       names=False),
-                              block_v2([40, 41])))
+    root = Root.parse(root_v2(block_v2([1, 2], high=NO_NAME_HASH, top=0x1, names=False), block_v2([40, 41])))
     assert sorted(root.keys) == [1, 2, 40, 41]
     assert root.keys[40] == key(40)
 
@@ -292,18 +277,24 @@ def blte(payload: bytes) -> bytes:
 def encoding_file(pairs: dict[bytes, bytes]) -> bytes:
     """An encoding table of one page, mapping each content key to one
     encoding key."""
-    page = b"".join(bytes([1]) + b"\0" * 5 + content + encoding
-                    for content, encoding in pairs.items())
-    header = (b"EN" + bytes([1, 16, 16]) + struct.pack(">HH", PAGE // 1024, 4)
-              + struct.pack(">II", 1, 0) + bytes([0]) + struct.pack(">I", 0))
+    page = b"".join(bytes([1]) + b"\0" * 5 + content + encoding for content, encoding in pairs.items())
+    header = (
+        b"EN"
+        + bytes([1, 16, 16])
+        + struct.pack(">HH", PAGE // 1024, 4)
+        + struct.pack(">II", 1, 0)
+        + bytes([0])
+        + struct.pack(">I", 0)
+    )
     return header + b"\0" * 32 + page.ljust(PAGE, b"\0")
 
 
 def archive_index(located: dict[bytes, tuple[int, int]]) -> bytes:
     """An ordinary archive index: one block of entries, then the footer that
     says how to read it."""
-    block = b"".join(ekey + size.to_bytes(4, "big") + offset.to_bytes(4, "big")
-                     for ekey, (offset, size) in located.items())
+    block = b"".join(
+        ekey + size.to_bytes(4, "big") + offset.to_bytes(4, "big") for ekey, (offset, size) in located.items()
+    )
     footer = bytearray(28)
     footer[11] = PAGE // 1024
     footer[12] = 4
@@ -333,32 +324,28 @@ def _network(monkeypatch: pytest.MonkeyPatch) -> Network:
     contained = blte(PAYLOAD)
     cdn = Cdn("cdn.example.invalid")
 
-    network = Network({
-        RETAIL.versions_url:
-            "Region!STRING:0|BuildConfig!HEX:16|CDNConfig!HEX:16|"
+    network = Network(
+        {
+            RETAIL.versions_url: "Region!STRING:0|BuildConfig!HEX:16|CDNConfig!HEX:16|"
             "VersionsName!String:0\n"
             f"us|{'ff' * 16}|{cdn_config}|9.9.9.9\n"
             f"eu|{build}|{cdn_config}|1.0.0.1\n".encode(),
-        RETAIL.cdns_url:
-            "Name!STRING:0|Path!STRING:0|Hosts!STRING:0\n"
-            f"eu|{cdn.path}|{cdn.host}\n".encode(),
-        cdn.config_url(build):
-            f"root = {root_content.hex()}\n"
+            RETAIL.cdns_url: f"Name!STRING:0|Path!STRING:0|Hosts!STRING:0\neu|{cdn.path}|{cdn.host}\n".encode(),
+            cdn.config_url(build): f"root = {root_content.hex()}\n"
             f"encoding = {'00' * 16} {encoding_key.hex()}\n".encode(),
-        cdn.config_url(cdn_config): f"archives = {archive}\n".encode(),
-        cdn.data_url(encoding_key.hex()): blte(encoding_file({
-            root_content: root_key, file_content: file_key})),
-        cdn.data_url(root_key.hex()): blte(root_v1(block_v1([FID]), BULK)),
-        f"{cdn.data_url(archive)}.index":
-            archive_index({file_key: (AT, len(contained))}),
-        cdn.data_url(archive): b"\0" * AT + contained,
-    }, missing=403)
+            cdn.config_url(cdn_config): f"archives = {archive}\n".encode(),
+            cdn.data_url(encoding_key.hex()): blte(encoding_file({root_content: root_key, file_content: file_key})),
+            cdn.data_url(root_key.hex()): blte(root_v1(block_v1([FID]), BULK)),
+            f"{cdn.data_url(archive)}.index": archive_index({file_key: (AT, len(contained))}),
+            cdn.data_url(archive): b"\0" * AT + contained,
+        },
+        missing=403,
+    )
     monkeypatch.setattr(urllib.request, "urlopen", network.open)
     return network
 
 
-def test_the_whole_chain_reaches_a_file_the_archive_holds(
-        network: Network, tmp_path: Path) -> None:
+def test_the_whole_chain_reaches_a_file_the_archive_holds(network: Network, tmp_path: Path) -> None:
     """Versions, the region's row, the network, both configs, the encoding
     table, the root, and one file that is not served loose."""
     storage = Storage(RETAIL, cache=tmp_path / "cache")
@@ -366,8 +353,7 @@ def test_the_whole_chain_reaches_a_file_the_archive_holds(
     assert storage.open(FID) == PAYLOAD
 
 
-def test_a_loose_miss_answered_403_still_reaches_the_archive(
-        network: Network, tmp_path: Path) -> None:
+def test_a_loose_miss_answered_403_still_reaches_the_archive(network: Network, tmp_path: Path) -> None:
     """A reader keyed on 404 alone raises here rather than falling through,
     and on a network that archives almost everything that is every file."""
     storage = Storage(RETAIL, cache=tmp_path / "cache")
@@ -377,17 +363,14 @@ def test_a_loose_miss_answered_403_still_reaches_the_archive(
     assert any(url.endswith(".index") for url in network.asked)
 
 
-def test_the_archive_is_read_by_range_rather_than_whole(
-        network: Network, tmp_path: Path) -> None:
+def test_the_archive_is_read_by_range_rather_than_whole(network: Network, tmp_path: Path) -> None:
     storage = Storage(RETAIL, cache=tmp_path / "cache")
     storage.open(FID)
     archive = Cdn("cdn.example.invalid").data_url("ab" * 16)
-    assert network.ranged == [
-        (archive, f"bytes={AT}-{AT + len(blte(PAYLOAD)) - 1}")]
+    assert network.ranged == [(archive, f"bytes={AT}-{AT + len(blte(PAYLOAD)) - 1}")]
 
 
-def test_a_second_open_asks_the_network_for_nothing(
-        network: Network, tmp_path: Path) -> None:
+def test_a_second_open_asks_the_network_for_nothing(network: Network, tmp_path: Path) -> None:
     """Every fetched blob is cached under the service's own label, so the
     second run of anything costs nothing."""
     cache = tmp_path / "cache"
@@ -397,8 +380,7 @@ def test_a_second_open_asks_the_network_for_nothing(
     assert list(network.asked) == [RETAIL.versions_url, RETAIL.cdns_url]
 
 
-def test_a_storage_is_a_fetch_the_sources_layer_can_be_handed(
-        network: Network, tmp_path: Path) -> None:
+def test_a_storage_is_a_fetch_the_sources_layer_can_be_handed(network: Network, tmp_path: Path) -> None:
     """The blob policy satisfies `Fetch`, so a set of files in a content store
     is an ordinary `Gathered` rather than a second acquisition mechanism.
 
@@ -408,22 +390,25 @@ def test_a_storage_is_a_fetch_the_sources_layer_can_be_handed(
     standing up.
     """
     storage = Storage(RETAIL, cache=tmp_path / "cache")
-    source = Gathered(name="a content store", into=tmp_path / "tables",
-                      fetch=storage.blobs,
-                      parts=[Part(storage.blob(FILE_KEY), "the.db2")])
+    source = Gathered(
+        name="a content store",
+        into=tmp_path / "tables",
+        fetch=storage.blobs,
+        parts=[Part(storage.blob(FILE_KEY), "the.db2")],
+    )
 
-    assert [origin.describe() for origin in source.origins()] == [
-        Cdn("cdn.example.invalid").data_url(FILE_KEY.hex())]
+    assert [origin.describe() for origin in source.origins()] == [Cdn("cdn.example.invalid").data_url(FILE_KEY.hex())]
     assert source.acquire(False) == tmp_path / "tables"
     assert (tmp_path / "tables" / "the.db2").read_bytes() == blte(PAYLOAD)
 
 
-def test_a_blob_no_network_holds_is_absent_rather_than_a_failure(
-        network: Network, tmp_path: Path) -> None:
+def test_a_blob_no_network_holds_is_absent_rather_than_a_failure(network: Network, tmp_path: Path) -> None:
     """The same answer a build gets for a table its client predates."""
     storage = Storage(RETAIL, cache=tmp_path / "cache")
-    source = Gathered(name="a content store", into=tmp_path / "tables",
-                      fetch=storage.blobs,
-                      parts=[Part(storage.blob(key(99)), "nothing.db2",
-                                  optional=True)])
+    source = Gathered(
+        name="a content store",
+        into=tmp_path / "tables",
+        fetch=storage.blobs,
+        parts=[Part(storage.blob(key(99)), "nothing.db2", optional=True)],
+    )
     assert source.acquire(False) is None

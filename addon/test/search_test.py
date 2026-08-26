@@ -20,42 +20,127 @@ from support import LuaFunction, LuaRuntime, LuaTable, as_dict, as_list, lua_fun
 REPO = Path(__file__).resolve().parents[2]
 
 PROBES = [
-    "fireball", "name:fireball", 'name:"fire ball"', "name:=Fireball", "desc:kneel", "icon:frost", "id:133",
-    "id:133,134", "xpac:wotlk", "xpac:>legion", "model:missile", "model:fire", "model:*", "-model:*",
-    "model:>4", "model:4-8", "model:file=fire", "missile:motion=arc", "missile:target=caster", "model:mount",
-    "sound>2", "sound:fire", "anim:=0", "anim:kit", "fx:chain", "fx:glow", "scale:+50%", "scale:x1.5",
-    "scale:10-90", "tint:red", "mech:debuff", "mech:triggers", "cast>2s", "cast:instant", "channel:unlimited",
-    "spell:breaksmove", "spell:unbreakable", "fire -model:missile", "fire | frost", "name:fire model:missile",
-    "kit:150", "sound:kit=150", "effect:heal", "aura:dummy", "location:*", "summon:*", "speed:>+50%",
+    "fireball",
+    "name:fireball",
+    'name:"fire ball"',
+    "name:=Fireball",
+    "desc:kneel",
+    "icon:frost",
+    "id:133",
+    "id:133,134",
+    "xpac:wotlk",
+    "xpac:>legion",
+    "model:missile",
+    "model:fire",
+    "model:*",
+    "-model:*",
+    "model:>4",
+    "model:4-8",
+    "model:file=fire",
+    "missile:motion=arc",
+    "missile:target=caster",
+    "model:mount",
+    "sound>2",
+    "sound:fire",
+    "anim:=0",
+    "anim:kit",
+    "fx:chain",
+    "fx:glow",
+    "scale:+50%",
+    "scale:x1.5",
+    "scale:10-90",
+    "tint:red",
+    "mech:debuff",
+    "mech:triggers",
+    "cast>2s",
+    "cast:instant",
+    "channel:unlimited",
+    "spell:breaksmove",
+    "spell:unbreakable",
+    "fire -model:missile",
+    "fire | frost",
+    "name:fire model:missile",
+    "kit:150",
+    "sound:kit=150",
+    "effect:heal",
+    "aura:dummy",
+    "location:*",
+    "summon:*",
+    "speed:>+50%",
     # Row scopes: one row satisfies a conjunction; a count term is lifted out; negation refines.
-    "model:{fire missile}", "model:{fire -missile}", "model:{attach:chest fire}", "model:{missile}", "model:{}",
-    "model:{count>5 fire}", "model:{count > 5}", "missile:{from:chest}", "model:{fire | frost}",
-    "sound:{fire kit:150}", "spell:{name:fire desc:kneel}", "id:{133 134}", "xpac:{wotlk legion}",
-    "mech:{triggers caster}", "fx:{glow red}", "model:{fire missile", "anim:{kit count:>2}",
+    "model:{fire missile}",
+    "model:{fire -missile}",
+    "model:{attach:chest fire}",
+    "model:{missile}",
+    "model:{}",
+    "model:{count>5 fire}",
+    "model:{count > 5}",
+    "missile:{from:chest}",
+    "model:{fire | frost}",
+    "sound:{fire kit:150}",
+    "spell:{name:fire desc:kneel}",
+    "id:{133 134}",
+    "xpac:{wotlk legion}",
+    "mech:{triggers caster}",
+    "fx:{glow red}",
+    "model:{fire missile",
+    "anim:{kit count:>2}",
     # Reach: the two sentinel words, the flags, a near edge, and a flag conjoined with a value.
-    "range:40", "range:>100", "range:10-40", "range:self", "range:unlimited", "range:melee",
-    "range:weapon", "range:{min>10}", "range:{melee unlimited}", "spell:tracking",
+    "range:40",
+    "range:>100",
+    "range:10-40",
+    "range:self",
+    "range:unlimited",
+    "range:melee",
+    "range:weapon",
+    "range:{min>10}",
+    "range:{melee unlimited}",
+    "spell:tracking",
     # A unit written anywhere in a range is the phrase's own, so both engines must read the bare bound in it.
-    "cast:2-5ms", "cast:2ms-5", "scale:x2-50", "scale:10-90", "scale:2-5",
+    "cast:2-5ms",
+    "cast:2ms-5",
+    "scale:x2-50",
+    "scale:10-90",
+    "scale:2-5",
     # Quotes are strict: a quoted operand matches its characters as written, punctuation included, while the
     # bare spelling squashes punctuation away. Both engines must draw the same line.
-    'name:"-a"', 'name:"anti-magic"', "name:antimagic", 'name:"\\""', 'model:"fire missile"', 'desc:"you take"',
+    'name:"-a"',
+    'name:"anti-magic"',
+    "name:antimagic",
+    'name:"\\""',
+    'model:"fire missile"',
+    'desc:"you take"',
     # The escape shields the next character everywhere: no door, no negation, no phrase, no alternation.
-    "\\model:fire", "\\-fire", 'name:\\" fire', "model:fire\\|frost", "model:{a\\}b}",
+    "\\model:fire",
+    "\\-fire",
+    'name:\\" fire',
+    "model:fire\\|frost",
+    "model:{a\\}b}",
     # Sort directives: both engines must key, direct and tiebreak alike, id order included. The name probe pins
     # the single-kind subject rule (a subtext never keys), the cast probe the instant complement (no delivery row
     # keys nought, a nought cast keys nothing), the xpac probe the ladder rank, and the scope the sequence form.
-    "model:missile sort:-name", "fire sort:id", "model:* sort:-model",
-    "model:missile sort:name", "xpac:wotlk sort:cast", "model:missile sort:xpac",
+    "model:missile sort:-name",
+    "fire sort:id",
+    "model:* sort:-model",
+    "model:missile sort:name",
+    "xpac:wotlk sort:cast",
+    "model:missile sort:xpac",
     "model:missile sort:{-xpac name}",
     # The id column's scope alternates its bare values — every kind of the column is single — and a dangling
     # comma on a number token separates nothing within it.
-    "id:{133 134}", "id:{133, 134}",
+    "id:{133 134}",
+    "id:{133, 134}",
     # A comparison no property of a row-word claims is that row's count — the pair the braces spell — while a
     # property that claims it keeps its own reading. Both engines must draw the same line, glued and braced.
-    "model:{attach>2}", "model:attach>2", "model:{display>2}", "model:{missile>2}", "model:{attach count>2}",
+    "model:{attach>2}",
+    "model:attach>2",
+    "model:{display>2}",
+    "model:{missile>2}",
+    "model:{attach count>2}",
     # The attach kind's own top-level door, and the shared point word behind it.
-    "attach:horse", "attach:{point:chest}", "model:{attach file:wolf}",
+    "attach:horse",
+    "attach:{point:chest}",
+    "model:{attach file:wolf}",
 ]
 """Queries across every column and most types, each answered by both engines."""
 
@@ -232,8 +317,7 @@ def _head() -> str | None:
     """The commit the repository is on, or None where git cannot say -- which is
     not a failure, since the check it feeds can only ever be advisory."""
     try:
-        done = subprocess.run(["git", "rev-parse", "HEAD"], cwd=REPO,
-                              check=True, capture_output=True, text=True)
+        done = subprocess.run(["git", "rev-parse", "HEAD"], cwd=REPO, check=True, capture_output=True, text=True)
     except (OSError, subprocess.CalledProcessError):
         return None
     return done.stdout.strip()
@@ -249,13 +333,17 @@ def straddle_report(started_on: str | None, ended_on: str | None, found: int) ->
     """
     if started_on is None or started_on == ended_on:
         return None
-    return (f"the tree moved from {started_on[:8]} to {str(ended_on)[:8]} while the probes ran, so this compares "
-            f"an addon built from one tree against a web engine read from another. It is not a verdict either "
-            f"way, whatever it found: {found} disagreement(s). Run it again on a still tree.")
+    return (
+        f"the tree moved from {started_on[:8]} to {str(ended_on)[:8]} while the probes ran, so this compares "
+        f"an addon built from one tree against a web engine read from another. It is not a verdict either "
+        f"way, whatever it found: {found} disagreement(s). Run it again on a still tree."
+    )
 
 
-@pytest.mark.skipif(not os.environ.get("EPSILOOK_ADDON_ORACLE"),
-                    reason="set EPSILOOK_ADDON_ORACLE=1; runs the probe list through Node as well")
+@pytest.mark.skipif(
+    not os.environ.get("EPSILOOK_ADDON_ORACLE"),
+    reason="set EPSILOOK_ADDON_ORACLE=1; runs the probe list through Node as well",
+)
 def test_both_engines_answer_every_probe_alike(engine: LuaRuntime) -> None:
     """Counts and the first fifty ids, both, because two engines can agree on a
     count while disagreeing on which spells make it up.
@@ -272,8 +360,14 @@ def test_both_engines_answer_every_probe_alike(engine: LuaRuntime) -> None:
     disagreements = []
     for probe in PROBES:
         # The query comes after the option terminator: a probe may begin with a minus.
-        printed = subprocess.run(["node", "tools/query.mjs", f"--version={pack}", "--json", "--limit=50", "--", probe],
-                                 cwd=REPO, check=True, capture_output=True, text=True, encoding="utf-8")
+        printed = subprocess.run(
+            ["node", "tools/query.mjs", f"--version={pack}", "--json", "--limit=50", "--", probe],
+            cwd=REPO,
+            check=True,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
         web = json.loads(printed.stdout)
         web_count, web_ids = int(web["count"]), [int(v) for v in web["ids"]]
         our_count, our_ids = count(engine, probe), first(engine, probe, 50)

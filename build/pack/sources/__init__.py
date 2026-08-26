@@ -11,12 +11,10 @@ rather than merely located.
 from __future__ import annotations
 
 from .acquire import Roster, Sources, fetch_sources, source_roster
-from .enums import (enum_id_where, enum_ids_where, load_local_enum,
-                    read_anim_names, read_enum_names)
+from .enums import enum_id_where, enum_ids_where, load_local_enum, read_anim_names, read_enum_names
 from .expansions import ExpansionLadder, load_expansions
 from .source import Source
-from .visual_effect_names import (VisualEffectName, VisualEffectNames,
-                                  load_visual_effect_names)
+from .visual_effect_names import VisualEffectName, VisualEffectNames, load_visual_effect_names
 from .wago import SOUNDKITNAME_BUILD, TABLES
 
 # The seam and the roster, and deliberately not the kit they are built from:

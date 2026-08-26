@@ -25,8 +25,7 @@ def test_the_name_is_lowercased_because_it_is_a_url_key() -> None:
 def test_the_directory_test_folds_case_rather_than_assuming_one() -> None:
     """The listfile is taken with its own casing, so an icon whose path shouts
     must still be recognised as an icon."""
-    index = build_icon_index(
-        [100], {100: 500}, {500: "INTERFACE/ICONS/SPELL_HOLY_HEAL.BLP"})
+    index = build_icon_index([100], {100: 500}, {500: "INTERFACE/ICONS/SPELL_HOLY_HEAL.BLP"})
     assert index.names == ["spell_holy_heal"]
 
 
@@ -41,8 +40,8 @@ def test_the_first_file_id_to_claim_a_name_keeps_it() -> None:
     one build can share a base name from different folders. The picture is the
     same either way."""
     index = build_icon_index(
-        [100, 200], {100: 500, 200: 600},
-        {500: FROST, 600: "Interface/Icons/other/Spell_Frost_FrostBolt02.blp"})
+        [100, 200], {100: 500, 200: 600}, {500: FROST, 600: "Interface/Icons/other/Spell_Frost_FrostBolt02.blp"}
+    )
     assert index.names == ["spell_frost_frostbolt02"]
     assert index.fids == [500]
     assert index.spells == [1, 1]
@@ -69,7 +68,6 @@ def test_an_icon_whose_file_id_the_listfile_cannot_name_is_dropped() -> None:
 
 def test_the_spell_order_given_is_the_order_returned() -> None:
     """The indices are positional, so the caller's order is the contract."""
-    index = build_icon_index([200, 100], {100: 500, 200: 600},
-                             {500: FROST, 600: FIRE})
+    index = build_icon_index([200, 100], {100: 500, 200: 600}, {500: FROST, 600: FIRE})
     assert index.names == ["spell_fire_flamebolt", "spell_frost_frostbolt02"]
     assert index.spells == [1, 2]

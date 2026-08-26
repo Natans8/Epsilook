@@ -4,8 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from pack.routes.attributes import (WORD_BITS, attribute_bit,
-                                    read_spell_attributes, shipped_attributes)
+from pack.routes.attributes import WORD_BITS, attribute_bit, read_spell_attributes, shipped_attributes
 
 
 def test_a_bit_is_found_in_the_column_that_holds_it() -> None:
@@ -31,8 +30,7 @@ def test_every_shipped_flag_declares_a_handler() -> None:
 def test_a_spell_is_grouped_under_each_flag_it_carries() -> None:
     bit, meta = min(shipped_attributes().items())
     if meta.get("requires") is not None:
-        bit, meta = min((b, m) for b, m in shipped_attributes().items()
-                        if m.get("requires") is None)
+        bit, meta = min((b, m) for b, m in shipped_attributes().items() if m.get("requires") is None)
     column, offset = divmod(bit, WORD_BITS)
     words = tuple([0] * column + [1 << offset])
     grouped = read_spell_attributes({100: words, 200: (0,)})
@@ -42,8 +40,7 @@ def test_a_spell_is_grouped_under_each_flag_it_carries() -> None:
 def test_a_flag_that_requires_another_is_an_intersection() -> None:
     """The bit alone samples spells the word would be false of, so it counts
     only alongside the bit it declares."""
-    required = sorted(bit for bit, meta in shipped_attributes().items()
-                      if meta.get("requires") is not None)
+    required = sorted(bit for bit, meta in shipped_attributes().items() if meta.get("requires") is not None)
     if not required:
         return
     bit = required[0]
@@ -57,19 +54,20 @@ def test_a_flag_that_requires_another_is_an_intersection() -> None:
             packed[one // WORD_BITS] |= 1 << (one % WORD_BITS)
         return tuple(packed)
 
-    grouped = read_spell_attributes({
-        100: words(bit),           # the flag alone, which says nothing
-        200: words(bit, other),    # the intersection that does
-    })
+    grouped = read_spell_attributes(
+        {
+            100: words(bit),  # the flag alone, which says nothing
+            200: words(bit, other),  # the intersection that does
+        }
+    )
     assert grouped[str(meta["handler"])] == [200]
 
 
-def test_two_bits_sharing_a_handler_are_refused(
-        monkeypatch: pytest.MonkeyPatch) -> None:
+def test_two_bits_sharing_a_handler_are_refused(monkeypatch: pytest.MonkeyPatch) -> None:
     """The handler keys the output, so a duplicate would leave one bit's spells
     standing in for another's, with the section present and plausible."""
     import pack.routes.attributes as attributes
-    monkeypatch.setattr(attributes, "load_local_enum", lambda _name: {
-        1: {"handler": "same"}, 2: {"handler": "same"}})
+
+    monkeypatch.setattr(attributes, "load_local_enum", lambda _name: {1: {"handler": "same"}, 2: {"handler": "same"}})
     with pytest.raises(SystemExit):
         attributes.shipped_attributes()

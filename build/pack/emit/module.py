@@ -111,14 +111,12 @@ def serialize(payload: Mapping[str, object]) -> bytes:
                 handle.write(b",")
             handle.write(json.dumps(name, ensure_ascii=False).encode("utf-8"))
             handle.write(b":")
-            handle.write(json.dumps(section, ensure_ascii=False,
-                                    separators=(",", ":")).encode("utf-8"))
+            handle.write(json.dumps(section, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
         handle.write(b"}")
     return buf.getvalue()
 
 
-def absent_sections(sections: Sequence[Section],
-                    produced: Mapping[str, object]) -> list[str]:
+def absent_sections(sections: Sequence[Section], produced: Mapping[str, object]) -> list[str]:
     """The registered sections this build produced nothing for, sorted.
 
     The one answer to "what does this build lack": `assemble` leaves these out
@@ -156,18 +154,15 @@ def split(section: Section, payload: object) -> list[tuple[str, object]]:
     """
     if not section.localizable or not isinstance(payload, dict):
         return [(section.module, payload)]
-    spoken_module = (section.module if section.module in LOCALE_MODULES
-                     else LOCALE_MODULE)
+    spoken_module = section.module if section.module in LOCALE_MODULES else LOCALE_MODULE
     if spoken_module == section.module:
         # Already declared into a module that holds a language, so everything
         # in it is language and there is no structure half to leave behind.
         # Splitting it anyway would put two entries under one module name, and
         # the assembler would keep only the last.
         return [(section.module, payload)]
-    spoken = {name: column for name, column in payload.items()
-              if name in section.localizable}
-    rest = {name: column for name, column in payload.items()
-            if name not in section.localizable}
+    spoken = {name: column for name, column in payload.items() if name in section.localizable}
+    rest = {name: column for name, column in payload.items() if name not in section.localizable}
     placed: list[tuple[str, object]] = [(spoken_module, spoken)]
     # A section that is ALL language contributes nothing to its own module, and
     # shipping an empty object there would make a reader think it had checked.
@@ -176,8 +171,7 @@ def split(section: Section, payload: object) -> list[tuple[str, object]]:
     return placed
 
 
-def assemble(sections: Sequence[Section], produced: Mapping[str, object],
-             *, locale: str = "") -> list[Module]:
+def assemble(sections: Sequence[Section], produced: Mapping[str, object], *, locale: str = "") -> list[Module]:
     """Group produced sections into the modules that will be written.
 
     Args:
@@ -216,10 +210,12 @@ def assemble(sections: Sequence[Section], produced: Mapping[str, object],
 
     spoken = sorted(set(payloads) & set(LOCALE_MODULES))
     if spoken and not locale:
-        raise ValueError(f"assembled {', '.join(spoken)} without naming a "
-                         f"language; nothing downstream could say what is in them")
+        raise ValueError(
+            f"assembled {', '.join(spoken)} without naming a language; nothing downstream could say what is in them"
+        )
 
     with phase("serialize modules (json+gzip)"):
-        return [Module(name=name, payload=serialize(payload),
-                       locale=locale if name in LOCALE_MODULES else "")
-                for name, payload in payloads.items()]
+        return [
+            Module(name=name, payload=serialize(payload), locale=locale if name in LOCALE_MODULES else "")
+            for name, payload in payloads.items()
+        ]

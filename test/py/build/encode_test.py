@@ -28,8 +28,7 @@ COLUMNS: list[tuple[str, Column]] = [
 
 @pytest.mark.parametrize("encoding", list(Encoding))
 @pytest.mark.parametrize(("what", "values"), COLUMNS, ids=[name for name, _ in COLUMNS])
-def test_a_column_survives_its_layout(encoding: Encoding, what: str,
-                                      values: Column) -> None:
+def test_a_column_survives_its_layout(encoding: Encoding, what: str, values: Column) -> None:
     """Encode then decode is the identity, for every layout and every shape."""
     if isinstance(values, dict) and encoding is not Encoding.DENSE:
         pytest.skip(f"a {encoding.value} column is keyed by position, not by id")

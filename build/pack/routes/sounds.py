@@ -37,10 +37,11 @@ def read_kit_names(pinned: Tables, used: set[int]) -> list[tuple[int, str]]:
         pinned: the pinned build's tables, not the pack's own.
         used: the kit ids the pack actually reaches.
     """
-    return sorted((kit, name.strip()) for kit, name in (
-        (int(kit_id), name)
-        for kit_id, name in pinned.rows(SOUNDKIT_NAME_TABLE, ["ID", "Name"]))
-                  if name.strip() and kit in used)
+    return sorted(
+        (kit, name.strip())
+        for kit, name in ((int(kit_id), name) for kit_id, name in pinned.rows(SOUNDKIT_NAME_TABLE, ["ID", "Name"]))
+        if name.strip() and kit in used
+    )
 
 
 def read_soundkit_files(tables: Tables) -> dict[int, set[int]]:

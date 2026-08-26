@@ -73,9 +73,14 @@ wait grows rather than the rate.
 """
 
 
-def download(url: str, dest: Path, refresh: bool,
-             headers: Mapping[str, str] | None = None,
-             optional: bool = False, absent: tuple[int, ...] = ABSENT) -> bool:
+def download(
+    url: str,
+    dest: Path,
+    refresh: bool,
+    headers: Mapping[str, str] | None = None,
+    optional: bool = False,
+    absent: tuple[int, ...] = ABSENT,
+) -> bool:
     """Download url to dest unless it is already cached (or refresh is set).
 
     Args:
@@ -120,8 +125,7 @@ def download(url: str, dest: Path, refresh: bool,
             if e.code < BUSY or attempt == ATTEMPTS:
                 raise
             pause = BACKOFF * 2 ** (attempt - 1)
-            log(f"  busy     HTTP {e.code}; asking again in {pause:.0f}s "
-                f"({attempt} of {ATTEMPTS - 1})")
+            log(f"  busy     HTTP {e.code}; asking again in {pause:.0f}s ({attempt} of {ATTEMPTS - 1})")
             time.sleep(pause)
     tmp.replace(dest)
     log(f"  saved    {dest.name} ({dest.stat().st_size:,} bytes)")
@@ -164,14 +168,11 @@ class Pinned:
     absent: tuple[int, ...] = ABSENT
     """Which statuses this network says "not here" with. See `ABSENT`."""
 
-    def get(self, origin: Origin, dest: Path, refresh: bool,
-            optional: bool = False) -> bool:
+    def get(self, origin: Origin, dest: Path, refresh: bool, optional: bool = False) -> bool:
         """Download once, and reuse the cached copy on every later build."""
-        return download(origin.address, dest, refresh, optional=optional,
-                        absent=self.absent)
+        return download(origin.address, dest, refresh, optional=optional, absent=self.absent)
 
-    def get_many(self, parts: Sequence[Part], into: Path,
-                 refresh: bool) -> list[Path]:
+    def get_many(self, parts: Sequence[Part], into: Path, refresh: bool) -> list[Path]:
         """One request each: separate addresses share nothing to resolve."""
         return each(self, parts, into, refresh)
 
@@ -185,15 +186,13 @@ class Volatile:
     cached copy is kept only for a run with no network.
     """
 
-    def get(self, origin: Origin, dest: Path, refresh: bool,
-            optional: bool = False) -> bool:
+    def get(self, origin: Origin, dest: Path, refresh: bool, optional: bool = False) -> bool:
         """Fetch unconditionally, which is what makes this policy the one it is."""
         del refresh, optional  # nothing is conditional, so neither decides anything
         download_volatile(origin.address, dest)
         return True
 
-    def get_many(self, parts: Sequence[Part], into: Path,
-                 refresh: bool) -> list[Path]:
+    def get_many(self, parts: Sequence[Part], into: Path, refresh: bool) -> list[Path]:
         """One request each: separate addresses share nothing to resolve."""
         return each(self, parts, into, refresh)
 
@@ -208,20 +207,17 @@ class Tracked:
     whichever route came up short.
     """
 
-    def get(self, origin: Origin, dest: Path, refresh: bool,
-            optional: bool = False) -> bool:
+    def get(self, origin: Origin, dest: Path, refresh: bool, optional: bool = False) -> bool:
         """Confirm the file is in the checkout."""
         del origin, refresh  # the file is here or it is not; nothing is fetched
         if not dest.exists():
             if optional:
                 return False
-            sys.exit(f"error: {dest} is tracked in this repository and is not "
-                     f"there; the checkout is incomplete")
+            sys.exit(f"error: {dest} is tracked in this repository and is not there; the checkout is incomplete")
         log(f"  tracked  {dest.name} ({dest.stat().st_size:,} bytes)")
         return True
 
-    def get_many(self, parts: Sequence[Part], into: Path,
-                 refresh: bool) -> list[Path]:
+    def get_many(self, parts: Sequence[Part], into: Path, refresh: bool) -> list[Path]:
         """One check each: nothing is fetched, so nothing is shared."""
         return each(self, parts, into, refresh)
 
@@ -279,25 +275,24 @@ class Revalidated:
     reading the same token.
     """
 
-    def get_many(self, parts: Sequence[Part], into: Path,
-                 refresh: bool) -> list[Path]:
+    def get_many(self, parts: Sequence[Part], into: Path, refresh: bool) -> list[Path]:
         """One revalidation each: every part has its own publication."""
         return each(self, parts, into, refresh)
 
-    def get(self, origin: Origin, dest: Path, refresh: bool,
-            optional: bool = False) -> bool:
+    def get(self, origin: Origin, dest: Path, refresh: bool, optional: bool = False) -> bool:
         """Fetch the body only where the oracle says the publication moved."""
         del optional  # the oracle decides; an absence here is a failure, not a skip
-        remembered = (self.token_file.read_text(encoding="utf-8").strip()
-                      if self.token_file.exists() else "")
+        remembered = self.token_file.read_text(encoding="utf-8").strip() if self.token_file.exists() else ""
         have = cached(dest)
         try:
             token, address = self.resolve(origin.address)
         except (OSError, ValueError, LookupError) as exc:
             if not have:
                 raise
-            log(f"  WARNING  could not resolve {origin.describe()} ({exc}); "
-                f"using the cached copy (token {remembered or 'unknown'})")
+            log(
+                f"  WARNING  could not resolve {origin.describe()} ({exc}); "
+                f"using the cached copy (token {remembered or 'unknown'})"
+            )
             return True
         if refresh or not have or remembered != token:
             if remembered and remembered != token:
@@ -306,6 +301,5 @@ class Revalidated:
             self.token_file.parent.mkdir(parents=True, exist_ok=True)
             self.token_file.write_text(token, encoding="utf-8")
         else:
-            log(f"  current  {dest.name} (token {token}, "
-                f"{dest.stat().st_size:,} bytes)")
+            log(f"  current  {dest.name} (token {token}, {dest.stat().st_size:,} bytes)")
         return True

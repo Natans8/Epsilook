@@ -24,16 +24,18 @@ def text_column(runtime: LuaRuntime, values: list[str]) -> tuple[bytes, LuaTable
         at += len(cell)
         offsets.append(at)
     width = 1
-    while 64 ** width <= offsets[-1]:
+    while 64**width <= offsets[-1]:
         width += 1
     index = b"".join(
-        "".join(DIGITS[(offset // 64 ** place) % 64] for place in range(width - 1, -1, -1)).encode("ascii")
-        for offset in offsets)
+        "".join(DIGITS[(offset // 64**place) % 64] for place in range(width - 1, -1, -1)).encode("ascii")
+        for offset in offsets
+    )
     blob = b"".join(encoded) + index
     # Keys as bytes: the runtime passes strings through undecoded, so a text
     # key would reach Lua as a foreign object rather than as a string.
-    index_node = runtime.table_from({b"kind": b"int", b"at": 1 + offsets[-1], b"n": len(offsets),
-                                     b"width": width, b"base": 0})
+    index_node = runtime.table_from(
+        {b"kind": b"int", b"at": 1 + offsets[-1], b"n": len(offsets), b"width": width, b"base": 0}
+    )
     node = runtime.table_from({b"kind": b"text", b"at": 1, b"n": len(values), b"index": index_node})
     return blob, node
 
@@ -41,8 +43,9 @@ def text_column(runtime: LuaRuntime, values: list[str]) -> tuple[bytes, LuaTable
 def scanned(runtime: LuaRuntime, values: list[str], op: str, written: str) -> list[int]:
     """The rows of a text column a scan lands in."""
     blob, node = text_column(runtime, values)
-    hits = cast(LuaTable, lua_function(runtime, b"Epsilook.Match.ScanText")(blob, node, op.encode(),
-                                                                             written.encode("utf-8")))
+    hits = cast(
+        LuaTable, lua_function(runtime, b"Epsilook.Match.ScanText")(blob, node, op.encode(), written.encode("utf-8"))
+    )
     return sorted(int(str(k)) for k in hits.keys())
 
 

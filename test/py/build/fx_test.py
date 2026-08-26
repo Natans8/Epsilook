@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from pack.routes.fx import (TEX_MASK, TEX_OVERLAY, FxPayloads, expand_chain,
-                            read_blend_sets, read_fx_payloads)
+from pack.routes.fx import TEX_MASK, TEX_OVERLAY, FxPayloads, expand_chain, read_blend_sets, read_fx_payloads
 from support import BuildTables
 
 TEXTURE_BLEND_SET = """\
@@ -65,33 +64,35 @@ ID,BeamID,SourceAttachID,DestAttachID
 
 
 def payloads(tables: BuildTables) -> FxPayloads:
-    return read_fx_payloads(tables(
-        TextureBlendSet=TEXTURE_BLEND_SET, DissolveEffect=DISSOLVE_EFFECT,
-        FullScreenEffect=FULL_SCREEN_EFFECT, ScreenEffect=SCREEN_EFFECT,
-        SpellVisualScreenEffect=SPELL_VISUAL_SCREEN_EFFECT,
-        EdgeGlowEffect=EDGE_GLOW_EFFECT, ShadowyEffect=SHADOWY_EFFECT,
-        SpellChainEffects=SPELL_CHAIN_EFFECTS, BeamEffect=BEAM_EFFECT))
+    return read_fx_payloads(
+        tables(
+            TextureBlendSet=TEXTURE_BLEND_SET,
+            DissolveEffect=DISSOLVE_EFFECT,
+            FullScreenEffect=FULL_SCREEN_EFFECT,
+            ScreenEffect=SCREEN_EFFECT,
+            SpellVisualScreenEffect=SPELL_VISUAL_SCREEN_EFFECT,
+            EdgeGlowEffect=EDGE_GLOW_EFFECT,
+            ShadowyEffect=SHADOWY_EFFECT,
+            SpellChainEffects=SPELL_CHAIN_EFFECTS,
+            BeamEffect=BEAM_EFFECT,
+        )
+    )
 
 
-def test_a_blend_set_keeps_slot_order_and_drops_repeats(
-        tables: BuildTables) -> None:
+def test_a_blend_set_keeps_slot_order_and_drops_repeats(tables: BuildTables) -> None:
     """The order is what the renderer layers them in."""
-    assert read_blend_sets(tables(TextureBlendSet=TEXTURE_BLEND_SET)) == {
-        1: (100, 101), 2: (200,)}
+    assert read_blend_sets(tables(TextureBlendSet=TEXTURE_BLEND_SET)) == {1: (100, 101), 2: (200,)}
 
 
-def test_a_build_predating_the_blend_set_table_reads_nothing(
-        tables: BuildTables) -> None:
+def test_a_build_predating_the_blend_set_table_reads_nothing(tables: BuildTables) -> None:
     """Asking what shape an array field takes must not decide whether the
     build survives."""
     assert read_blend_sets(tables()) == {}
 
 
-def test_a_build_predating_the_fx_tables_yields_no_payloads(
-        tables: BuildTables) -> None:
+def test_a_build_predating_the_fx_tables_yields_no_payloads(tables: BuildTables) -> None:
     """All of them are declared optional, so the categories switch off."""
-    payloads = read_fx_payloads(tables(
-        SpellChainEffects=SPELL_CHAIN_EFFECTS, BeamEffect=BEAM_EFFECT))
+    payloads = read_fx_payloads(tables(SpellChainEffects=SPELL_CHAIN_EFFECTS, BeamEffect=BEAM_EFFECT))
     assert payloads.dissolves == {}
     assert payloads.glows == {}
     assert payloads.screens == {}
@@ -112,8 +113,7 @@ def test_the_vignette_survives(tables: BuildTables) -> None:
     assert payloads(tables).screens[31].mask == (0.25, 2.0, 1.5)
 
 
-def test_a_screen_with_no_full_screen_row_has_no_vignette(
-        tables: BuildTables) -> None:
+def test_a_screen_with_no_full_screen_row_has_no_vignette(tables: BuildTables) -> None:
     """A size of 0 is what says there is nothing to shape."""
     screen = payloads(tables).screens[32]
     assert screen.mask == (0.0, 0.0, 0.0)
@@ -122,8 +122,7 @@ def test_a_screen_with_no_full_screen_row_has_no_vignette(
 
 def test_the_two_texture_roles_are_kept_apart(tables: BuildTables) -> None:
     """A mask is meaningless untinted; an overlay is finished art."""
-    assert set(payloads(tables).screens[31].textures) == {
-        (300, TEX_OVERLAY), (100, TEX_MASK), (101, TEX_MASK)}
+    assert set(payloads(tables).screens[31].textures) == {(300, TEX_OVERLAY), (100, TEX_MASK), (101, TEX_MASK)}
 
 
 def test_a_file_in_both_roles_keeps_the_overlay(tables: BuildTables) -> None:

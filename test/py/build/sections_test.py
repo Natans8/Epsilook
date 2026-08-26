@@ -13,20 +13,69 @@ from pack.model import SECTIONS
 from pack.sources.tdb import TDB_TABLES
 
 REGISTERED_ORDER = (
-    "animKitAnims", "bonesetNames", "animKitAnimBoneset", "animNames",
-    "animEmoteOneshots", "animEmoteLoops", "iconNames", "iconFids", "files",
-    "morphs", "creatureDisplays", "displaySkins", "mounts", "shapeshifts",
+    "animKitAnims",
+    "bonesetNames",
+    "animKitAnimBoneset",
+    "animNames",
+    "animEmoteOneshots",
+    "animEmoteLoops",
+    "iconNames",
+    "iconFids",
+    "files",
+    "morphs",
+    "creatureDisplays",
+    "displaySkins",
+    "mounts",
+    "shapeshifts",
     "shapeshiftDisplays",
-    "summons", "summonControlNames", "objects", "expansions", "fxChains",
-    "fxTextures", "dissolves", "dissolveTextures", "glows", "shadowies",
-    "ghostMats", "tints", "anchorNames", "spellAttrs", "spellDelivery",
-    "spellRanges", "areas", "keybinds", "linkKindNames", "effectNames", "auraNames",
-    "implicitTargetNames", "implicitTargetBits", "missileMotions", "items",
-    "itemIconNames", "itemQualityNames", "attachmentNames", "modelCatNames",
-    "targetNames", "speedModeNames", "modelRows", "soundRows", "animRows",
-    "fxRows", "mechRows", "equippedSlots", "rowVocabs", "screens",
-    "screenTextures", "soundKitNames", "soundTypes", "spells", "spellText", "vehicles",
-    "vehicleSeats", "spellVehicleAnims", "spellVehicleAnimKits",
+    "summons",
+    "summonControlNames",
+    "objects",
+    "expansions",
+    "fxChains",
+    "fxTextures",
+    "dissolves",
+    "dissolveTextures",
+    "glows",
+    "shadowies",
+    "ghostMats",
+    "tints",
+    "anchorNames",
+    "spellAttrs",
+    "spellDelivery",
+    "spellRanges",
+    "areas",
+    "keybinds",
+    "linkKindNames",
+    "effectNames",
+    "auraNames",
+    "implicitTargetNames",
+    "implicitTargetBits",
+    "missileMotions",
+    "items",
+    "itemIconNames",
+    "itemQualityNames",
+    "attachmentNames",
+    "modelCatNames",
+    "targetNames",
+    "speedModeNames",
+    "modelRows",
+    "soundRows",
+    "animRows",
+    "fxRows",
+    "mechRows",
+    "equippedSlots",
+    "rowVocabs",
+    "screens",
+    "screenTextures",
+    "soundKitNames",
+    "soundTypes",
+    "spells",
+    "spellText",
+    "vehicles",
+    "vehicleSeats",
+    "spellVehicleAnims",
+    "spellVehicleAnimKits",
 )
 """Every section, in registration order, pinned on purpose.
 
@@ -56,16 +105,15 @@ def test_every_vocabulary_points_at_a_registered_section() -> None:
     columns = {section.name: set(section.columns) for section in SECTIONS}
     for name, where in VOCABULARIES.items():
         home = where["in"]
-        assert home in columns, (
-            f"vocabulary {name} lives in {home!r}, which no section declares")
+        assert home in columns, f"vocabulary {name} lives in {home!r}, which no section declares"
         for half in ("keys", "values"):
             if half in where:
                 assert where[half] in columns[home], (
-                    f"vocabulary {name} reads {home}.{where[half]}, which the "
-                    f"section does not produce")
+                    f"vocabulary {name} reads {home}.{where[half]}, which the section does not produce"
+                )
         assert "keys" not in where or "values" in where, (
-            f"vocabulary {name} names keys and no values, which is none of the "
-            f"three declared shapes")
+            f"vocabulary {name} names keys and no values, which is none of the three declared shapes"
+        )
 
 
 def test_every_needed_table_is_one_some_build_can_lack() -> None:
@@ -73,13 +121,12 @@ def test_every_needed_table_is_one_some_build_can_lack() -> None:
     so an entry no drift declaration covers is dead: a typo there means the
     section never switches off and nothing ever says so.
     """
-    absentable = (set(OPTIONAL_TABLES) | set(TDB_OPTIONAL_TABLES)
-                  | set(TDB_TABLES["world"]))
+    absentable = set(OPTIONAL_TABLES) | set(TDB_OPTIONAL_TABLES) | set(TDB_TABLES["world"])
     for section in SECTIONS:
         for table in (*section.needs, *section.degraded_without):
             assert table in absentable, (
-                f"{section.name} names {table!r}, which no drift declaration "
-                f"covers and so is never absent")
+                f"{section.name} names {table!r}, which no drift declaration covers and so is never absent"
+            )
 
 
 def test_every_family_resolves_through_a_declared_vocabulary() -> None:
@@ -88,6 +135,4 @@ def test_every_family_resolves_through_a_declared_vocabulary() -> None:
     for column, families in COLUMN_FAMILIES.items():
         for family in families:
             unknown = sorted(set(family.vocab.values()) - set(VOCABULARIES))
-            assert not unknown, (
-                f"{column}.{family.kind} resolves {', '.join(unknown)}, "
-                f"which no vocabulary declares")
+            assert not unknown, f"{column}.{family.kind} resolves {', '.join(unknown)}, which no vocabulary declares"

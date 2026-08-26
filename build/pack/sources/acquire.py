@@ -110,8 +110,7 @@ class Sources:
     """
 
 
-def source_roster(version: str, locales: Sequence[str] = (),
-                  client: str = "") -> Roster:
+def source_roster(version: str, locales: Sequence[str] = (), client: str = "") -> Roster:
     """What one build reads, declared without fetching any of it.
 
     Args:
@@ -124,18 +123,18 @@ def source_roster(version: str, locales: Sequence[str] = (),
             and nothing else: the listfile, the enums, the ladder and the
             server dump are the same wherever the tables came from.
     """
-    return Roster(tables=(client_tables_source(client, version) if client
-                          else tables_source(version)),
-                  pinned_tables=pinned_tables_source(),
-                  enums=enum_sources(),
-                  listfile=listfile_source(),
-                  supplement=supplement_source(),
-                  expansions=expansions_source(),
-                  visual_effect_names=visual_effect_names_source(),
-                  tdb=tdb_source(version),
-                  locale_tables={locale: locale_tables_source(version, locale)
-                                 for locale in locales},
-                  translations=tdb_locale_source(version) if locales else None)
+    return Roster(
+        tables=(client_tables_source(client, version) if client else tables_source(version)),
+        pinned_tables=pinned_tables_source(),
+        enums=enum_sources(),
+        listfile=listfile_source(),
+        supplement=supplement_source(),
+        expansions=expansions_source(),
+        visual_effect_names=visual_effect_names_source(),
+        tdb=tdb_source(version),
+        locale_tables={locale: locale_tables_source(version, locale) for locale in locales},
+        translations=tdb_locale_source(version) if locales else None,
+    )
 
 
 def acquired(source: Source, refresh: bool) -> Path | None:
@@ -151,8 +150,7 @@ def acquired(source: Source, refresh: bool) -> Path | None:
     return source.acquire(refresh)
 
 
-def fetch_sources(version: str, refresh: bool, locales: Sequence[str] = (),
-                  client: str = "") -> Sources:
+def fetch_sources(version: str, refresh: bool, locales: Sequence[str] = (), client: str = "") -> Sources:
     """Ensure every source this build needs is cached, and say where it is.
 
     Args:
@@ -181,24 +179,29 @@ def fetch_sources(version: str, refresh: bool, locales: Sequence[str] = (),
     acquired(roster.expansions, refresh)
     acquired(roster.visual_effect_names, refresh)
     if roster.tdb is None:
-        log(f"TDB: no release maps to {version}; the routes that need one "
-            f"degrade as declared")
+        log(f"TDB: no release maps to {version}; the routes that need one degrade as declared")
         tdb = None
     else:
         tdb = acquired(roster.tdb, refresh)
 
-    landed = {locale: path for locale, source in roster.locale_tables.items()
-              if (path := acquired(source, refresh)) is not None}
+    landed = {
+        locale: path
+        for locale, source in roster.locale_tables.items()
+        if (path := acquired(source, refresh)) is not None
+    }
     # Acquired for its effect: the distillation lands beside the release's own
     # tables, which `tdb` already points at.
     if roster.translations is not None:
         acquired(roster.translations, refresh)
 
     if tables is None or pinned_tables is None or listfile is None:
-        absent = [name for name, path in (("tables", tables),
-                                          ("sound-kit names", pinned_tables),
-                                          ("listfile", listfile)) if path is None]
-        sys.exit(f"error: {', '.join(absent)} came back absent for build "
-                 f"{version}; check the build id is one that was published")
-    return Sources(tables=tables, pinned_tables=pinned_tables,
-                   listfile=listfile, tdb=tdb, locale_tables=landed)
+        absent = [
+            name
+            for name, path in (("tables", tables), ("sound-kit names", pinned_tables), ("listfile", listfile))
+            if path is None
+        ]
+        sys.exit(
+            f"error: {', '.join(absent)} came back absent for build "
+            f"{version}; check the build id is one that was published"
+        )
+    return Sources(tables=tables, pinned_tables=pinned_tables, listfile=listfile, tdb=tdb, locale_tables=landed)

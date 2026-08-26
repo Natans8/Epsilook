@@ -99,10 +99,7 @@ try:
     # check goes red over an optional dependency of a development tool.
     import duckdb  # type: ignore[import-not-found]
 except ImportError:  # pragma: no cover - the one dependency, and it is optional
-    sys.exit(
-        "tools/dossier.py needs DuckDB, which pyproject.toml declares:\n"
-        "    uv run python tools/dossier.py"
-    )
+    sys.exit("tools/dossier.py needs DuckDB, which pyproject.toml declares:\n    uv run python tools/dossier.py")
 
 ROOT = Path(__file__).resolve().parent.parent
 DB_PATH = CACHE / "epsilook.duckdb"
@@ -121,6 +118,7 @@ TABLE_RE = re.compile(r'\{V}\."(\w+)"')
 
 
 # ------------------------------------------------------------------ the packs
+
 
 def packs() -> list[dict[str, Any]]:
     """site/data/versions.json - the same manifest tools/rebuild.py reads."""
@@ -184,8 +182,7 @@ def delivery_secs(ms: int) -> str:
 class Dossier:
     def __init__(self, pack: dict[str, Any]) -> None:
         if not DB_PATH.exists():
-            sys.exit(f"no exploration database at {DB_PATH}\n"
-                     f"build it first:  python tools/builddb.py")
+            sys.exit(f"no exploration database at {DB_PATH}\nbuild it first:  python tools/builddb.py")
         self.build: str = pack["id"]
         self.label: str = pack.get("label") or self.build
         self.ver = schema_name(self.build)
@@ -197,21 +194,32 @@ class Dossier:
         # the view is what makes every pack answer the same question, and it is
         # the same "do not re-derive what the tooling already resolved" rule the
         # build follows with SPELL_NAME_SOURCES.
-        self.schemas = {s for s, in self.con.execute(
-            "SELECT DISTINCT table_schema FROM information_schema.tables "
-            "WHERE table_name = 'spells'").fetchall()}
+        self.schemas = {
+            s
+            for (s,) in self.con.execute(
+                "SELECT DISTINCT table_schema FROM information_schema.tables WHERE table_name = 'spells'"
+            ).fetchall()
+        }
         if self.ver not in self.schemas:
             have = ", ".join(sorted(self.schemas))
-            sys.exit(f"{self.label} is not in {DB_PATH.name} (no schema {self.ver})\n"
-                     f"cached: {have}\n"
-                     f"add it:  python tools/builddb.py {'.'.join(self.build.split('.')[:3])}")
+            sys.exit(
+                f"{self.label} is not in {DB_PATH.name} (no schema {self.ver})\n"
+                f"cached: {have}\n"
+                f"add it:  python tools/builddb.py {'.'.join(self.build.split('.')[:3])}"
+            )
 
-        self.tables = {t.lower() for t, in self.con.execute(
-            "SELECT table_name FROM information_schema.tables WHERE table_schema = ?",
-            [self.ver]).fetchall()}
-        self.ref_tables = {t.lower() for t, in self.con.execute(
-            "SELECT table_name FROM information_schema.tables "
-            "WHERE table_schema = 'ref'").fetchall()}
+        self.tables = {
+            t.lower()
+            for (t,) in self.con.execute(
+                "SELECT table_name FROM information_schema.tables WHERE table_schema = ?", [self.ver]
+            ).fetchall()
+        }
+        self.ref_tables = {
+            t.lower()
+            for (t,) in self.con.execute(
+                "SELECT table_name FROM information_schema.tables WHERE table_schema = 'ref'"
+            ).fetchall()
+        }
         self.absent: set[str] = set()
 
         self.enum: dict[str, dict[int, str]] = {}
@@ -222,10 +230,11 @@ class Dossier:
         self.anim_emote = self._anim_emotes()
         self.gob_display = self._gob_displays()
         self.attach = dict(self._ref("SELECT attachment_id, name FROM ref.m2_attachment"))
-        self.kit_kind = {int(t): (n, note) for t, n, note in self._ref(
-            "SELECT effect_type, target_table, note FROM ref.kit_effect_type")}
-        self.proc_kind = {int(t): b for t, b in self._ref(
-            "SELECT type, becomes FROM ref.proc_type")}
+        self.kit_kind = {
+            int(t): (n, note)
+            for t, n, note in self._ref("SELECT effect_type, target_table, note FROM ref.kit_effect_type")
+        }
+        self.proc_kind = {int(t): b for t, b in self._ref("SELECT type, becomes FROM ref.proc_type")}
         self.motion = self._motion_names()
 
     # ------------------------------------------------------------------ helpers
@@ -262,16 +271,14 @@ class Dossier:
         built before that has the CSV in `.cache/<build>/` but no table.
         Both are read, newest first, because neither is guaranteed.
         """
-        got = {int(i): n for i, n in
-               self.q('SELECT "ID", "Name" FROM {V}."SpellMissileMotion"') if n}
+        got = {int(i): n for i, n in self.q('SELECT "ID", "Name" FROM {V}."SpellMissileMotion"') if n}
         if got:
             return got
         path = CACHE / self.build / "SpellMissileMotion.csv"
         if not path.exists():
             return {}
         with open(path, encoding="utf-8", errors="replace") as fh:
-            got = {int(r["ID"]): r["Name"] for r in csv.DictReader(fh)
-                   if r.get("ID", "").isdigit() and r.get("Name")}
+            got = {int(r["ID"]): r["Name"] for r in csv.DictReader(fh) if r.get("ID", "").isdigit() and r.get("Name")}
         if got:  # the CSV answered, so the missing table cost nothing to report
             self.absent.discard("SpellMissileMotion")
         return got
@@ -284,18 +291,20 @@ class Dossier:
         _motion_names, so a database built before the table existed still names
         its bits instead of printing bare indices.
         """
-        got = {int(b): {"name": n, "label": lb, "handler": h}
-               for b, n, lb, h in
-               self._ref("SELECT bit, name, label, handler FROM ref.spell_attribute")}
+        got = {
+            int(b): {"name": n, "label": lb, "handler": h}
+            for b, n, lb, h in self._ref("SELECT bit, name, label, handler FROM ref.spell_attribute")
+        }
         if got:
             return got
         path = ROOT / "build" / "enums" / "spell_attributes.json"
         if not path.exists():
             return {}
         data = json.loads(path.read_text(encoding="utf-8"))
-        got = {int(b): {"name": m["name"], "label": m.get("label", m["name"]),
-                        "handler": m.get("handler")}
-               for b, m in data["values"].items()}
+        got = {
+            int(b): {"name": m["name"], "label": m.get("label", m["name"]), "handler": m.get("handler")}
+            for b, m in data["values"].items()
+        }
         if got:
             self.absent.discard("ref.spell_attribute")
         return got
@@ -310,9 +319,13 @@ class Dossier:
             '       EXISTS(SELECT 1 FROM {V}."SpellXSpellVisual" x '
             '              WHERE x."SpellID" = n.spell_id) AS renders '
             'FROM {V}."spells" n LEFT JOIN {V}."Spell" s ON s."ID" = n.spell_id '
-            'WHERE lower(n.name) LIKE ? '
-            'ORDER BY (lower(n.name) = ?) DESC, length(n.name), n.spell_id '
-            'LIMIT ?', like, text.lower(), limit)
+            "WHERE lower(n.name) LIKE ? "
+            "ORDER BY (lower(n.name) = ?) DESC, length(n.name), n.spell_id "
+            "LIMIT ?",
+            like,
+            text.lower(),
+            limit,
+        )
         return found, int(total[0][0]) if total else 0
 
     # -------------------------------------------------------------- entities
@@ -321,10 +334,18 @@ class Dossier:
     # project records for `ref` -- so it is only ever resolved through this
     # table, never guessed from the number. {effect: (kind, which misc slot)}
     EFFECT_MISC = {
-        28: ("creature", 0), 56: ("creature", 0), 85: ("creature", 0),
-        188: ("creature", 0), 260: ("creature", 0), 199: ("creature", 0),
-        76: ("gameobject", 0), 104: ("gameobject", 0), 171: ("gameobject", 0),
-        86: ("gameobject", 0), 87: ("gameobject", 0), 88: ("gameobject", 0),
+        28: ("creature", 0),
+        56: ("creature", 0),
+        85: ("creature", 0),
+        188: ("creature", 0),
+        260: ("creature", 0),
+        199: ("creature", 0),
+        76: ("gameobject", 0),
+        104: ("gameobject", 0),
+        171: ("gameobject", 0),
+        86: ("gameobject", 0),
+        87: ("gameobject", 0),
+        88: ("gameobject", 0),
     }
     # TRANSFORM/MOUNTED TAKE A CREATURE **ENTRY**, NOT A DISPLAY ID, and the
     # first cut of this file had TRANSFORM wrong. It looked plausible --
@@ -355,17 +376,25 @@ class Dossier:
         if not entry:
             return None
         d: dict[str, Any] = {"entry": int(entry)}
-        r = self.q('SELECT name, modelid1, modelid2, modelid3, modelid4 '
-                   'FROM {V}."tdb_creature_template" WHERE entry=?', int(entry))
+        r = self.q(
+            'SELECT name, modelid1, modelid2, modelid3, modelid4 FROM {V}."tdb_creature_template" WHERE entry=?',
+            int(entry),
+        )
         if not r:
-            d["note"] = ("no TrinityCore world dump for this pack"
-                         if "tdb_creature_template" in self.absent
-                         else "not in the TDB world dump (spawns nothing in game)")
+            d["note"] = (
+                "no TrinityCore world dump for this pack"
+                if "tdb_creature_template" in self.absent
+                else "not in the TDB world dump (spawns nothing in game)"
+            )
             return d
         d["name"] = r[0][0]
-        ids = [x for x, in self.q('SELECT "CreatureDisplayID" FROM '
-                                  '{V}."tdb_creature_template_model" WHERE "CreatureID"=? '
-                                  'ORDER BY "Idx"', int(entry))]
+        ids = [
+            x
+            for (x,) in self.q(
+                'SELECT "CreatureDisplayID" FROM {V}."tdb_creature_template_model" WHERE "CreatureID"=? ORDER BY "Idx"',
+                int(entry),
+            )
+        ]
         ids = ids or [v for v in r[0][1:] if v]
         disp = [x for x in (self.creature_display(i) for i in ids) if x]
         if disp:
@@ -382,11 +411,14 @@ class Dossier:
         carry.
         """
         seen = {d["display_id"] for d in creature.get("displays") or []}
-        extra = [x for x, in self.q(
-            'SELECT DISTINCT "DisplayID" FROM {V}."tdb_spell_totem_model" '
-            'WHERE "SpellID"=? ORDER BY "DisplayID"', int(sid))]
-        gained = [d for d in (self.creature_display(i) for i in extra
-                              if int(i) not in seen) if d]
+        extra = [
+            x
+            for (x,) in self.q(
+                'SELECT DISTINCT "DisplayID" FROM {V}."tdb_spell_totem_model" WHERE "SpellID"=? ORDER BY "DisplayID"',
+                int(sid),
+            )
+        ]
+        gained = [d for d in (self.creature_display(i) for i in extra if int(i) not in seen) if d]
         if gained:
             creature.setdefault("displays", []).extend(gained)
             creature["totem_races"] = len(gained)
@@ -416,12 +448,13 @@ class Dossier:
         if not entry:
             return None
         d: dict[str, Any] = {"entry": int(entry)}
-        r = self.q('SELECT name, "displayId", type FROM {V}."tdb_gameobject_template" '
-                   'WHERE entry=?', int(entry))
+        r = self.q('SELECT name, "displayId", type FROM {V}."tdb_gameobject_template" WHERE entry=?', int(entry))
         if not r:
-            d["note"] = ("no TrinityCore world dump for this pack"
-                         if "tdb_gameobject_template" in self.absent
-                         else "not in the TDB world dump (spawns nothing in game)")
+            d["note"] = (
+                "no TrinityCore world dump for this pack"
+                if "tdb_gameobject_template" in self.absent
+                else "not in the TDB world dump (spawns nothing in game)"
+            )
             return d
         d["name"], did, d["type"] = r[0][0], r[0][1], r[0][2]
         d["type_name"] = self.enum.get("GameObjectType", {}).get(int(d["type"] or 0))
@@ -437,8 +470,9 @@ class Dossier:
         if not iid:
             return None
         d: dict[str, Any] = {"item_id": int(iid)}
-        r = self.q('SELECT "Display_lang","OverallQualityID","ItemLevel" '
-                   'FROM {V}."ItemSearchName" WHERE "ID"=?', int(iid))
+        r = self.q(
+            'SELECT "Display_lang","OverallQualityID","ItemLevel" FROM {V}."ItemSearchName" WHERE "ID"=?', int(iid)
+        )
         if r:
             d["name"], quality, d["item_level"] = r[0][0], r[0][1], r[0][2]
             d["quality"] = self.enum.get("ItemQuality", {}).get(int(quality or 0))
@@ -447,11 +481,9 @@ class Dossier:
             # every id -- quest and internal items are absent. Say so rather
             # than printing a name-shaped "?".
             d["note"] = "no row in ItemSearchName (quest/internal item)"
-        a = self.q('SELECT "ItemAppearanceID" FROM {V}."ItemModifiedAppearance" '
-                   'WHERE "ItemID"=?', int(iid))
+        a = self.q('SELECT "ItemAppearanceID" FROM {V}."ItemModifiedAppearance" WHERE "ItemID"=?', int(iid))
         if a and a[0][0]:
-            ap = self.q('SELECT "ItemDisplayInfoID" FROM {V}."ItemAppearance" '
-                        'WHERE "ID"=?', a[0][0])
+            ap = self.q('SELECT "ItemDisplayInfoID" FROM {V}."ItemAppearance" WHERE "ID"=?', a[0][0])
             if ap and ap[0][0]:
                 di = self.rows('SELECT * FROM {V}."ItemDisplayInfo" WHERE "ID"=?', ap[0][0])
                 if di:
@@ -468,10 +500,15 @@ class Dossier:
         return d
 
     RIDER_ANIM_COLUMNS = {
-        "EnterAnimStart": "enter", "EnterAnimLoop": "enter",
-        "RideAnimStart": "sit", "RideAnimLoop": "sit",
-        "RideUpperAnimStart": "sit", "RideUpperAnimLoop": "sit",
-        "ExitAnimStart": "exit", "ExitAnimLoop": "exit", "ExitAnimEnd": "exit",
+        "EnterAnimStart": "enter",
+        "EnterAnimLoop": "enter",
+        "RideAnimStart": "sit",
+        "RideAnimLoop": "sit",
+        "RideUpperAnimStart": "sit",
+        "RideUpperAnimLoop": "sit",
+        "ExitAnimStart": "exit",
+        "ExitAnimLoop": "exit",
+        "ExitAnimEnd": "exit",
     }
     """The rider's animation columns under the role each plays in.
 
@@ -501,9 +538,9 @@ class Dossier:
                     anim = int(s[0].get(column) or 0)
                     if anim > 0 and anim not in played.setdefault(role, []):
                         played[role].append(anim)
-                d["seats"].append({"seat_id": seat_id,
-                                   "attachment": self._attach(s[0].get("AttachmentID")),
-                                   "rider_anims": played})
+                d["seats"].append(
+                    {"seat_id": seat_id, "attachment": self._attach(s[0].get("AttachmentID")), "rider_anims": played}
+                )
         return d
 
     def shapeshift(self, fid: Any) -> dict[str, Any] | None:
@@ -514,10 +551,16 @@ class Dossier:
         if not r:
             return {"form_id": int(fid)}
         f = r[0]
-        return {"form_id": int(fid), "name": f.get("Name_lang"),
-                "creature_type": f.get("CreatureType"),
-                "displays": [self.creature_display(f.get(f"CreatureDisplayID_{i}"))
-                             for i in range(4) if f.get(f"CreatureDisplayID_{i}")]}
+        return {
+            "form_id": int(fid),
+            "name": f.get("Name_lang"),
+            "creature_type": f.get("CreatureType"),
+            "displays": [
+                self.creature_display(f.get(f"CreatureDisplayID_{i}"))
+                for i in range(4)
+                if f.get(f"CreatureDisplayID_{i}")
+            ],
+        }
 
     def mount(self, sid: int) -> dict[str, Any] | None:
         """A spell that IS a mount: Mount.SourceSpellID -> its displays."""
@@ -525,14 +568,18 @@ class Dossier:
         if not r:
             return None
         m = r[0]
-        disp = [self.creature_display(d) for d, in
-                self.q('SELECT "CreatureDisplayInfoID" FROM {V}."MountXDisplay" '
-                       'WHERE "MountID"=?', m["ID"])]
-        return {"mount_id": m["ID"], "name": m.get("Name_lang"),
-                "source_text": m.get("SourceText_lang"),
-                "special_kit_id": m.get("MountSpecialSpellVisualKitID") or None,
-                "special_rider_anim_kit": m.get("MountSpecialRiderAnimKitID") or None,
-                "displays": [d for d in disp if d]}
+        disp = [
+            self.creature_display(d)
+            for (d,) in self.q('SELECT "CreatureDisplayInfoID" FROM {V}."MountXDisplay" WHERE "MountID"=?', m["ID"])
+        ]
+        return {
+            "mount_id": m["ID"],
+            "name": m.get("Name_lang"),
+            "source_text": m.get("SourceText_lang"),
+            "special_kit_id": m.get("MountSpecialSpellVisualKitID") or None,
+            "special_rider_anim_kit": m.get("MountSpecialRiderAnimKitID") or None,
+            "displays": [d for d in disp if d],
+        }
 
     def animkit(self, akid: Any) -> dict[str, Any] | None:
         """AnimKit -> its ordered segments -> named animations."""
@@ -542,12 +589,17 @@ class Dossier:
         k = self.rows('SELECT * FROM {V}."AnimKit" WHERE "ID"=?', int(akid))
         if k:
             d["one_shot_duration_ms"] = k[0].get("OneShotDuration") or None
-        for s in self.rows('SELECT * FROM {V}."AnimKitSegment" '
-                           'WHERE "ParentAnimKitID"=? ORDER BY "OrderIndex"', int(akid)):
-            d["segments"].append({"order": s.get("OrderIndex"),
-                                  "anim": self._anim(s.get("AnimID")),
-                                  "speed": s.get("Speed"),
-                                  "start_time_ms": s.get("AnimStartTime")})
+        for s in self.rows(
+            'SELECT * FROM {V}."AnimKitSegment" WHERE "ParentAnimKitID"=? ORDER BY "OrderIndex"', int(akid)
+        ):
+            d["segments"].append(
+                {
+                    "order": s.get("OrderIndex"),
+                    "anim": self._anim(s.get("AnimID")),
+                    "speed": s.get("Speed"),
+                    "start_time_ms": s.get("AnimStartTime"),
+                }
+            )
         return d
 
     @staticmethod
@@ -556,8 +608,7 @@ class Dossier:
         if packed is None:
             return None
         p = int(packed) & 0xFFFFFF
-        return {"packed": int(packed), "r": (p >> 16) & 0xFF,
-                "g": (p >> 8) & 0xFF, "b": p & 0xFF, "hex": f"#{p:06x}"}
+        return {"packed": int(packed), "r": (p >> 16) & 0xFF, "g": (p >> 8) & 0xFF, "b": p & 0xFF, "hex": f"#{p:06x}"}
 
     def enum_ref(self, enum: str, v: Any) -> dict[str, Any] | None:
         """{value, name} if the enum knows it, else {value}."""
@@ -623,8 +674,10 @@ class Dossier:
             # say so rather than letting the two be mistaken for each other.
             "description_raw": (sp[0].get("Description_lang") if sp else None) or None,
             "aura_description_raw": (sp[0].get("AuraDescription_lang") if sp else None) or None,
-            "links": {"epsilook": EPSILOOK.format(build=self.build, id=sid),
-                      "wowhead": WOWHEAD.format(prefix=wowhead_prefix(self.build), id=sid)},
+            "links": {
+                "epsilook": EPSILOOK.format(build=self.build, id=sid),
+                "wowhead": WOWHEAD.format(prefix=wowhead_prefix(self.build), id=sid),
+            },
         }
 
     def era(self, sid: int) -> dict[str, Any]:
@@ -638,22 +691,25 @@ class Dossier:
         checked = [(b, lbl) for b, lbl in order if schema_name(b) in self.schemas]
         present = []
         for build, label in checked:
-            hit = self.con.execute(f'SELECT count(*) FROM "{schema_name(build)}"."spells" '
-                                   'WHERE spell_id = ?', [sid]).fetchone()
+            hit = self.con.execute(
+                f'SELECT count(*) FROM "{schema_name(build)}"."spells" WHERE spell_id = ?', [sid]
+            ).fetchone()
             if hit and hit[0]:
                 present.append(label)
         newest = checked[-1][1] if checked else None
-        return {"first_seen": present[0] if present else None,
-                "versions": present,
-                # The AUTHORITATIVE answer to the same question. "first_seen"
-                # above is only the oldest pack we happen to ship and cache —
-                # for anything pre-Legion that is a Classic re-release, which is
-                # a modern rebuild and cannot date a spell. This one comes from
-                # the original era clients via build/expansion_ids.json.gz.
-                "expansion": expansion_of(sid),
-                "packs_checked": len(checked),
-                "packs_known": len(order),
-                "retired": bool(present) and newest is not None and newest not in present}
+        return {
+            "first_seen": present[0] if present else None,
+            "versions": present,
+            # The AUTHORITATIVE answer to the same question. "first_seen"
+            # above is only the oldest pack we happen to ship and cache —
+            # for anything pre-Legion that is a Classic re-release, which is
+            # a modern rebuild and cannot date a spell. This one comes from
+            # the original era clients via build/expansion_ids.json.gz.
+            "expansion": expansion_of(sid),
+            "packs_checked": len(checked),
+            "packs_known": len(order),
+            "retired": bool(present) and newest is not None and newest not in present,
+        }
 
     def misc(self, sid: int) -> dict[str, Any] | None:
         r = self.rows('SELECT * FROM {V}."SpellMisc" WHERE "SpellID"=?', sid)
@@ -665,7 +721,9 @@ class Dossier:
         # high bits on the widest ones (TBC and MoP Classic both have 17).
         words = sorted(
             (int(k.split("_")[1]), int(m.get(k) or 0))
-            for k in m if k.startswith("Attributes_") and k.split("_")[1].isdigit())
+            for k in m
+            if k.startswith("Attributes_") and k.split("_")[1].isdigit()
+        )
         names = self._attr_names()
         attrs = []
         for w, v in words:
@@ -673,12 +731,17 @@ class Dossier:
                 if (v >> b) & 1:
                     index = w * 32 + b
                     meta = names.get(index, {})
-                    attrs.append({
-                        "word": w, "bit": b, "index": index,
-                        "name": meta.get("name"), "label": meta.get("label"),
-                        # set = this bit is one the pack ships as a pill
-                        "handler": meta.get("handler"),
-                    })
+                    attrs.append(
+                        {
+                            "word": w,
+                            "bit": b,
+                            "index": index,
+                            "name": meta.get("name"),
+                            "label": meta.get("label"),
+                            # set = this bit is one the pack ships as a pill
+                            "handler": meta.get("handler"),
+                        }
+                    )
         mask = int(m.get("SchoolMask") or 0)
         return {
             "schools": [SCHOOLS[b] for b in range(8) if (mask >> b) & 1],
@@ -722,11 +785,9 @@ class Dossier:
                 out["channel_ms"] = -1 if raw < 0 or raw > 100_000_000 else raw
             # the CHANNEL column, so SpellInterruptFlags — movement is bit 3
             # there, and bit 0 in the DIFFERENT enum the cast column uses
-            r = self.rows('SELECT * FROM {V}."SpellInterrupts" WHERE "SpellID"=? '
-                          'ORDER BY "DifficultyID"', sid)
+            r = self.rows('SELECT * FROM {V}."SpellInterrupts" WHERE "SpellID"=? ORDER BY "DifficultyID"', sid)
             for row in r:
-                cols = [int(row.get(k) or 0) for k in row
-                        if k.startswith("ChannelInterruptFlags")]
+                cols = [int(row.get(k) or 0) for k in row if k.startswith("ChannelInterruptFlags")]
                 if any((w >> 3) & 1 for w in cols[:1]):
                     out["breaks_on_move"] = True
                     break
@@ -774,22 +835,22 @@ class Dossier:
         `root` is reported because it is what Wowhead has a page for.
         """
         # asked directly rather than through _lookup_int, which keys on "ID"
-        r = self.rows('SELECT "RequiredAreasID" AS g FROM {V}."SpellCastingRequirements" '
-                      'WHERE "SpellID"=?', sid)
+        r = self.rows('SELECT "RequiredAreasID" AS g FROM {V}."SpellCastingRequirements" WHERE "SpellID"=?', sid)
         gid = int(r[0]["g"] or 0) if r else 0
         if not gid:
             return []
         out = []
         for row in self.rows(
-                'SELECT a."ID" AS id, a."AreaName_lang" AS name, a."ParentAreaID" AS parent '
-                'FROM {V}."AreaGroupMember" m JOIN {V}."AreaTable" a ON a."ID"=m."AreaID" '
-                'WHERE m."AreaGroupID"=? ORDER BY a."AreaName_lang"', gid):
+            'SELECT a."ID" AS id, a."AreaName_lang" AS name, a."ParentAreaID" AS parent '
+            'FROM {V}."AreaGroupMember" m JOIN {V}."AreaTable" a ON a."ID"=m."AreaID" '
+            'WHERE m."AreaGroupID"=? ORDER BY a."AreaName_lang"',
+            gid,
+        ):
             aid = int(row["id"])
             root, seen = aid, set()
             while root not in seen:
                 seen.add(root)
-                p = self.rows('SELECT "ParentAreaID" AS p FROM {V}."AreaTable" '
-                              'WHERE "ID"=?', root)
+                p = self.rows('SELECT "ParentAreaID" AS p FROM {V}."AreaTable" WHERE "ID"=?', root)
                 nxt = int(p[0]["p"] or 0) if p else 0
                 if not nxt:
                     break
@@ -807,10 +868,8 @@ class Dossier:
 
     def effects(self, sid: int) -> list[dict[str, Any]]:
         out = []
-        for e in self.rows('SELECT * FROM {V}."SpellEffect" WHERE "SpellID"=? '
-                           'ORDER BY "EffectIndex"', sid):
-            tg = [self.enum_ref("Target", e[k]) for k in ("ImplicitTarget_0", "ImplicitTarget_1")
-                  if e.get(k)]
+        for e in self.rows('SELECT * FROM {V}."SpellEffect" WHERE "SpellID"=? ORDER BY "EffectIndex"', sid):
+            tg = [self.enum_ref("Target", e[k]) for k in ("ImplicitTarget_0", "ImplicitTarget_1") if e.get(k)]
             eff, aura = int(e.get("Effect") or 0), int(e.get("EffectAura") or 0)
             misc = [e.get("EffectMiscValue_0"), e.get("EffectMiscValue_1")]
             row: dict[str, Any] = {
@@ -820,8 +879,7 @@ class Dossier:
                 "aura_period_ms": e.get("EffectAuraPeriod") or None,
                 "targets": tg,
                 "mechanic": e.get("EffectMechanic") or None,
-                "radius_index": [e[k] for k in ("EffectRadiusIndex_0", "EffectRadiusIndex_1")
-                                 if e.get(k)] or None,
+                "radius_index": [e[k] for k in ("EffectRadiusIndex_0", "EffectRadiusIndex_1") if e.get(k)] or None,
                 "base_points": e.get("EffectBasePointsF"),
                 "misc_values": misc,
                 "trigger_spell": self.spell_ref(e.get("EffectTriggerSpell")),
@@ -851,7 +909,8 @@ class Dossier:
                         "id": misc[1],
                         "control": self.enum_ref("SummonPropertiesControl", sp[0].get("Control")),
                         "title": sp[0].get("Title"),
-                        "slot": self.enum_ref("SummonPropertiesSlot", sp[0].get("Slot"))}
+                        "slot": self.enum_ref("SummonPropertiesSlot", sp[0].get("Slot")),
+                    }
             if e.get("EffectItemType"):
                 row["creates_item"] = self.item(e["EffectItemType"])
             out.append(row)
@@ -868,9 +927,7 @@ class Dossier:
         nesting 5243 and 5244, and used to report chain 100's.
         """
         seen: set[int] = set()
-        todo = [int(b) for b, in
-                self.q('SELECT "BeamID" FROM {V}."BeamEffect" WHERE "ID"=?', beam_effect_id)
-                if b]
+        todo = [int(b) for (b,) in self.q('SELECT "BeamID" FROM {V}."BeamEffect" WHERE "ID"=?', beam_effect_id) if b]
         while todo:
             cid = todo.pop()
             if cid in seen:
@@ -885,120 +942,133 @@ class Dossier:
 
     def kit(self, kid: Any) -> dict[str, Any]:
         out: dict[str, Any] = {"id": int(kid), "effects": [], "attachments": []}
-        for k in self.rows('SELECT * FROM {V}."SpellVisualKitEffect" '
-                           'WHERE "ParentSpellVisualKitID"=?', kid):
+        for k in self.rows('SELECT * FROM {V}."SpellVisualKitEffect" WHERE "ParentSpellVisualKitID"=?', kid):
             t = int(k["EffectType"])
             kind, _note = self.kit_kind.get(t, (f"type {t}", ""))
-            ent: dict[str, Any] = {"effect_type": t, "becomes": kind,
-                                   "effect_id": k["Effect"]}
+            ent: dict[str, Any] = {"effect_type": t, "becomes": kind, "effect_id": k["Effect"]}
             if t == 5:  # SoundKit
-                ent["sounds"] = [self.file_ref(f) for f, in self.q(
-                    'SELECT "FileDataID" FROM {V}."SoundKitEntry" WHERE "SoundKitID"=?',
-                    k["Effect"])]
+                ent["sounds"] = [
+                    self.file_ref(f)
+                    for (f,) in self.q('SELECT "FileDataID" FROM {V}."SoundKitEntry" WHERE "SoundKitID"=?', k["Effect"])
+                ]
                 # Blizzard's own name for the kit, where one exists. Universal
                 # table (ref), because no 9.x+ build ships SoundKitName at all —
                 # see builddb.ref.sound_kit_name.
                 ent["sound_kit_name"] = self.sound_kit_name(k["Effect"])
             elif t == 6:  # SpellVisualAnim
-                for a in self.rows('SELECT * FROM {V}."SpellVisualAnim" WHERE "ID"=?',
-                                   k["Effect"]):
+                for a in self.rows('SELECT * FROM {V}."SpellVisualAnim" WHERE "ID"=?', k["Effect"]):
                     ent["initial_anim"] = self._anim(a.get("InitialAnimID"))
                     ent["loop_anim"] = self._anim(a.get("LoopAnimID"))
                     ent["anim_kit"] = self.animkit(a.get("AnimKitID"))
             elif t == 1:  # SpellProceduralEffect -- dispatched AGAIN by Type
-                for p in self.rows('SELECT * FROM {V}."SpellProceduralEffect" WHERE "ID"=?',
-                                   k["Effect"]):
+                for p in self.rows('SELECT * FROM {V}."SpellProceduralEffect" WHERE "ID"=?', k["Effect"]):
                     ent.update(self.proc(p))
             elif t == 13:  # BeamEffect -> BeamID -> SpellChainEffects (+ nesting)
-                chains = [c for cid in self._chain_ids(k["Effect"])
-                          for c in self.rows(
-                        'SELECT * FROM {V}."SpellChainEffects" WHERE "ID"=?', cid)]
+                chains = [
+                    c
+                    for cid in self._chain_ids(k["Effect"])
+                    for c in self.rows('SELECT * FROM {V}."SpellChainEffects" WHERE "ID"=?', cid)
+                ]
                 if chains:
-                    ent["chain"] = [{
-                        "id": c["ID"],
-                        "colour": self.rgb((int(c["Red"] or 0) << 16)
-                                           | (int(c["Green"] or 0) << 8) | int(c["Blue"] or 0)),
-                        "alpha": c["Alpha"],
-                        "textures": [self.file_ref(c[f"TextureFileDataID_{i}"]) for i in range(3)
-                                     if c.get(f"TextureFileDataID_{i}")],
-                        "particle_texture": self.file_ref(c.get("TextureParticleFileDataID")),
-                        "sound_kit_id": c.get("SoundKitID") or None} for c in chains]
+                    ent["chain"] = [
+                        {
+                            "id": c["ID"],
+                            "colour": self.rgb(
+                                (int(c["Red"] or 0) << 16) | (int(c["Green"] or 0) << 8) | int(c["Blue"] or 0)
+                            ),
+                            "alpha": c["Alpha"],
+                            "textures": [
+                                self.file_ref(c[f"TextureFileDataID_{i}"])
+                                for i in range(3)
+                                if c.get(f"TextureFileDataID_{i}")
+                            ],
+                            "particle_texture": self.file_ref(c.get("TextureParticleFileDataID")),
+                            "sound_kit_id": c.get("SoundKitID") or None,
+                        }
+                        for c in chains
+                    ]
             elif t == 7:  # ShadowyEffect -- the ghost look, two packed colours
-                for s in self.rows('SELECT * FROM {V}."ShadowyEffect" WHERE "ID"=?',
-                                   k["Effect"]):
-                    ent["shadowy"] = {"primary": self.rgb(s.get("PrimaryColor")),
-                                      "secondary": self.rgb(s.get("SecondaryColor")),
-                                      "attach": self._attach(s.get("AttachPos")),
-                                      "duration": s.get("Duration")}
+                for s in self.rows('SELECT * FROM {V}."ShadowyEffect" WHERE "ID"=?', k["Effect"]):
+                    ent["shadowy"] = {
+                        "primary": self.rgb(s.get("PrimaryColor")),
+                        "secondary": self.rgb(s.get("SecondaryColor")),
+                        "attach": self._attach(s.get("AttachPos")),
+                        "duration": s.get("Duration"),
+                    }
             elif t == 8:  # SpellEffectEmission -> SpellVisualKitAreaModel -> model
-                for e2 in self.rows('SELECT * FROM {V}."SpellEffectEmission" WHERE "ID"=?',
-                                    k["Effect"]):
-                    am = self.rows('SELECT * FROM {V}."SpellVisualKitAreaModel" WHERE "ID"=?',
-                                   e2.get("AreaModelID"))
-                    ent["emission"] = {"rate": e2.get("EmissionRate"),
-                                       "model_scale": e2.get("ModelScale"),
-                                       "area_model": self.file_ref(am[0].get("ModelFileDataID"))
-                                       if am else None}
+                for e2 in self.rows('SELECT * FROM {V}."SpellEffectEmission" WHERE "ID"=?', k["Effect"]):
+                    am = self.rows('SELECT * FROM {V}."SpellVisualKitAreaModel" WHERE "ID"=?', e2.get("AreaModelID"))
+                    ent["emission"] = {
+                        "rate": e2.get("EmissionRate"),
+                        "model_scale": e2.get("ModelScale"),
+                        "area_model": self.file_ref(am[0].get("ModelFileDataID")) if am else None,
+                    }
             elif t == 11:  # DissolveEffect -> TextureBlendSet -> textures
-                for dv in self.rows('SELECT * FROM {V}."DissolveEffect" WHERE "ID"=?',
-                                    k["Effect"]):
-                    bs = self.rows('SELECT * FROM {V}."TextureBlendSet" WHERE "ID"=?',
-                                   dv.get("TextureBlendSetID"))
+                for dv in self.rows('SELECT * FROM {V}."DissolveEffect" WHERE "ID"=?', k["Effect"]):
+                    bs = self.rows('SELECT * FROM {V}."TextureBlendSet" WHERE "ID"=?', dv.get("TextureBlendSetID"))
                     ent["dissolve"] = {
                         "attach": self._attach(dv.get("AttachID")),
-                        "duration": dv.get("Duration"), "scale": dv.get("Scale"),
-                        "textures": [self.file_ref(bs[0][f"TextureFileDataID_{i}"])
-                                     for i in range(3)
-                                     if bs and bs[0].get(f"TextureFileDataID_{i}")]}
+                        "duration": dv.get("Duration"),
+                        "scale": dv.get("Scale"),
+                        "textures": [
+                            self.file_ref(bs[0][f"TextureFileDataID_{i}"])
+                            for i in range(3)
+                            if bs and bs[0].get(f"TextureFileDataID_{i}")
+                        ],
+                    }
             elif t == 12:  # EdgeGlowEffect -- the rim light
-                for g in self.rows('SELECT * FROM {V}."EdgeGlowEffect" WHERE "ID"=?',
-                                   k["Effect"]):
+                for g in self.rows('SELECT * FROM {V}."EdgeGlowEffect" WHERE "ID"=?', k["Effect"]):
                     ent["edge_glow"] = {
-                        "colour": self.rgb((int(g["GlowRed"] or 0) << 16)
-                                           | (int(g["GlowGreen"] or 0) << 8)
-                                           | int(g["GlowBlue"] or 0)),
-                        "alpha": g.get("GlowAlpha"), "duration": g.get("Duration")}
+                        "colour": self.rgb(
+                            (int(g["GlowRed"] or 0) << 16) | (int(g["GlowGreen"] or 0) << 8) | int(g["GlowBlue"] or 0)
+                        ),
+                        "alpha": g.get("GlowAlpha"),
+                        "duration": g.get("Duration"),
+                    }
             elif t == 17:  # BarrageEffect -> SpellVisualEffectName -> model
-                for br in self.rows('SELECT * FROM {V}."BarrageEffect" WHERE "ID"=?',
-                                    k["Effect"]):
-                    ven = self.rows('SELECT * FROM {V}."SpellVisualEffectName" WHERE "ID"=?',
-                                    br.get("SpellVisualEffectNameID"))
+                for br in self.rows('SELECT * FROM {V}."BarrageEffect" WHERE "ID"=?', k["Effect"]):
+                    ven = self.rows(
+                        'SELECT * FROM {V}."SpellVisualEffectName" WHERE "ID"=?', br.get("SpellVisualEffectNameID")
+                    )
                     ent["barrage"] = {
                         "attach": self._attach(br.get("AttachmentPoint")),
                         "count": [br.get("ModelCountMin"), br.get("ModelCountMax")],
-                        "cone_angle": br.get("ConeAngle"), "range": br.get("Range"),
-                        "model": self.file_ref(ven[0].get("ModelFileDataID")) if ven else None}
+                        "cone_angle": br.get("ConeAngle"),
+                        "range": br.get("Range"),
+                        "model": self.file_ref(ven[0].get("ModelFileDataID")) if ven else None,
+                    }
             elif t == 19:  # SpellVisualScreenEffect -> ScreenEffect -> FullScreenEffect
-                for sc in self.rows('SELECT * FROM {V}."SpellVisualScreenEffect" '
-                                    'WHERE "ID"=?', k["Effect"]):
+                for sc in self.rows('SELECT * FROM {V}."SpellVisualScreenEffect" WHERE "ID"=?', k["Effect"]):
                     ent["screen_effect"] = self.screen(sc.get("ScreenEffectID"))
             out["effects"].append(ent)
-        for a in self.rows('SELECT * FROM {V}."SpellVisualKitModelAttach" '
-                           'WHERE "ParentSpellVisualKitID"=?', kid):
-            ven = self.rows('SELECT * FROM {V}."SpellVisualEffectName" WHERE "ID"=?',
-                            a["SpellVisualEffectNameID"])
+        for a in self.rows('SELECT * FROM {V}."SpellVisualKitModelAttach" WHERE "ParentSpellVisualKitID"=?', kid):
+            ven = self.rows('SELECT * FROM {V}."SpellVisualEffectName" WHERE "ID"=?', a["SpellVisualEffectNameID"])
             v = ven[0] if ven else {}
-            out["attachments"].append({
-                "attach_point": self._attach(a.get("AttachmentID")),
-                "scale": a.get("Scale"),
-                # How the model sits at the point it hangs from, and what it
-                # animates there. The pack carries all of this per attached
-                # model, so a dossier that stopped at the scale described a
-                # placement the pack knows more about than it does.
-                "offset": self._vector(a, ("Offset_0", "Offset_1", "Offset_2")),
-                "rotation": self._vector(a, ("Yaw", "Pitch", "Roll")),
-                "anims": {"start": self._anim(a.get("StartAnimID")),
-                          "loop": self._anim(a.get("AnimID")),
-                          "end": self._anim(a.get("EndAnimID"))},
-                "positioner_id": a.get("PositionerID") or None,
-                "anim_kit": self.animkit(a.get("AnimKitID")),
-                "effect_name_id": a.get("SpellVisualEffectNameID"),
-                "model": self.file_ref(v.get("ModelFileDataID")),
-                "texture": self.file_ref(v.get("TextureFileDataID")),
-                "effect_name_type": self.enum_ref("SpellVisualEffectNameType", v.get("Type")),
-                "base_missile_speed": v.get("BaseMissileSpeed") or None,
-                "dissolve_effect_id": v.get("DissolveEffectID") or None,
-            })
+            out["attachments"].append(
+                {
+                    "attach_point": self._attach(a.get("AttachmentID")),
+                    "scale": a.get("Scale"),
+                    # How the model sits at the point it hangs from, and what it
+                    # animates there. The pack carries all of this per attached
+                    # model, so a dossier that stopped at the scale described a
+                    # placement the pack knows more about than it does.
+                    "offset": self._vector(a, ("Offset_0", "Offset_1", "Offset_2")),
+                    "rotation": self._vector(a, ("Yaw", "Pitch", "Roll")),
+                    "anims": {
+                        "start": self._anim(a.get("StartAnimID")),
+                        "loop": self._anim(a.get("AnimID")),
+                        "end": self._anim(a.get("EndAnimID")),
+                    },
+                    "positioner_id": a.get("PositionerID") or None,
+                    "anim_kit": self.animkit(a.get("AnimKitID")),
+                    "effect_name_id": a.get("SpellVisualEffectNameID"),
+                    "model": self.file_ref(v.get("ModelFileDataID")),
+                    "texture": self.file_ref(v.get("TextureFileDataID")),
+                    "effect_name_type": self.enum_ref("SpellVisualEffectNameType", v.get("Type")),
+                    "base_missile_speed": v.get("BaseMissileSpeed") or None,
+                    "dissolve_effect_id": v.get("DissolveEffectID") or None,
+                }
+            )
         return out
 
     def proc(self, p: dict[str, Any]) -> dict[str, Any]:
@@ -1011,15 +1081,18 @@ class Dossier:
         """
         t = int(p["Type"])
         vals = [p[f"Value_{i}"] for i in range(4)]
-        ent: dict[str, Any] = {"proc_type": t, "proc_meaning": self.proc_kind.get(t),
-                               "proc_values": vals}
+        ent: dict[str, Any] = {"proc_type": t, "proc_meaning": self.proc_kind.get(t), "proc_values": vals}
         if t in (0, 12, 26):  # chain / beam
             c = self.rows('SELECT * FROM {V}."SpellChainEffects" WHERE "ID"=?', vals[0])
             if c:
                 ent["chain_effect"] = {
                     "id": vals[0],
-                    "textures": [self.file_ref(c[0][f"TextureFileDataID_{i}"]) for i in range(3)
-                                 if c[0].get(f"TextureFileDataID_{i}")]}
+                    "textures": [
+                        self.file_ref(c[0][f"TextureFileDataID_{i}"])
+                        for i in range(3)
+                        if c[0].get(f"TextureFileDataID_{i}")
+                    ],
+                }
         elif t in (1, 22, 23):  # tint / CustomMaterial recolour
             ent["colour"] = self.rgb(vals[0] if t == 1 else vals[3])
         elif t == 2:
@@ -1041,8 +1114,12 @@ class Dossier:
             if wt:
                 ent["weapon_trail"] = {
                     "model": self.file_ref(wt[0].get("FileDataID")),
-                    "textures": [self.file_ref(wt[0][f"TextureFileDataID_{i}"]) for i in range(3)
-                                 if wt[0].get(f"TextureFileDataID_{i}")]}
+                    "textures": [
+                        self.file_ref(wt[0][f"TextureFileDataID_{i}"])
+                        for i in range(3)
+                        if wt[0].get(f"TextureFileDataID_{i}")
+                    ],
+                }
         return ent
 
     def screen(self, sid: Any) -> dict[str, Any] | None:
@@ -1056,17 +1133,14 @@ class Dossier:
         d["name"] = s[0].get("Name")
         d["sound_ambience_id"] = s[0].get("SoundAmbienceID") or None
         d["zone_music_id"] = s[0].get("ZoneMusicID") or None
-        f = self.rows('SELECT * FROM {V}."FullScreenEffect" WHERE "ID"=?',
-                      s[0].get("FullScreenEffectID"))
+        f = self.rows('SELECT * FROM {V}."FullScreenEffect" WHERE "ID"=?', s[0].get("FullScreenEffectID"))
         if f:
             x = f[0]
             d["full_screen"] = {
                 "saturation": x.get("Saturation"),
                 "gamma": [x.get("GammaRed"), x.get("GammaGreen"), x.get("GammaBlue")],
-                "colour_multiply": [x.get("ColorMultiplyRed"), x.get("ColorMultiplyGreen"),
-                                    x.get("ColorMultiplyBlue")],
-                "colour_addition": [x.get(f"ColorAddition{c}") for c in
-                                    ("Red", "Green", "Blue")],
+                "colour_multiply": [x.get("ColorMultiplyRed"), x.get("ColorMultiplyGreen"), x.get("ColorMultiplyBlue")],
+                "colour_addition": [x.get(f"ColorAddition{c}") for c in ("Red", "Green", "Blue")],
             }
         return d
 
@@ -1079,7 +1153,7 @@ class Dossier:
         """
         if not kit_id or int(kit_id) <= 0:
             return None
-        rows = self.q('SELECT name FROM ref.sound_kit_name WHERE sound_kit_id=?', int(kit_id))
+        rows = self.q("SELECT name FROM ref.sound_kit_name WHERE sound_kit_id=?", int(kit_id))
         return rows[0][0] if rows else None
 
     def _anim_emotes(self) -> dict[int, dict[str, int]]:
@@ -1107,6 +1181,7 @@ class Dossier:
         holds these columns as text, where the string "0" is true and an all-
         zero placement would have printed itself as one.
         """
+
         def nought(value: Any) -> bool:
             try:
                 return float(value) == 0.0
@@ -1168,35 +1243,39 @@ class Dossier:
                 "events": [],
                 "missiles": [],
             }
-            for ev in self.rows('SELECT * FROM {V}."SpellVisualEvent" '
-                                'WHERE "SpellVisualID"=? ORDER BY "StartEvent"', vid):
-                entry["events"].append({
-                    "starts_at": self.enum_ref("SpellVisualEventEvent", ev.get("StartEvent")),
-                    "ends_at": self.enum_ref("SpellVisualEventEvent", ev.get("EndEvent")),
-                    "target_type": self.enum_ref("SpellVisualEventTargetType", ev.get("TargetType")),
-                    "kit": self.kit(ev["SpellVisualKitID"]) if ev.get("SpellVisualKitID")
-                    else None,
-                })
+            for ev in self.rows(
+                'SELECT * FROM {V}."SpellVisualEvent" WHERE "SpellVisualID"=? ORDER BY "StartEvent"', vid
+            ):
+                entry["events"].append(
+                    {
+                        "starts_at": self.enum_ref("SpellVisualEventEvent", ev.get("StartEvent")),
+                        "ends_at": self.enum_ref("SpellVisualEventEvent", ev.get("EndEvent")),
+                        "target_type": self.enum_ref("SpellVisualEventTargetType", ev.get("TargetType")),
+                        "kit": self.kit(ev["SpellVisualKitID"]) if ev.get("SpellVisualKitID") else None,
+                    }
+                )
             mset = v.get("SpellVisualMissileSetID")
             if mset:
-                for m in self.rows('SELECT * FROM {V}."SpellVisualMissile" '
-                                   'WHERE "SpellVisualMissileSetID"=?', mset):
-                    ven = self.rows('SELECT * FROM {V}."SpellVisualEffectName" WHERE "ID"=?',
-                                    m["SpellVisualEffectNameID"])
+                for m in self.rows('SELECT * FROM {V}."SpellVisualMissile" WHERE "SpellVisualMissileSetID"=?', mset):
+                    ven = self.rows(
+                        'SELECT * FROM {V}."SpellVisualEffectName" WHERE "ID"=?', m["SpellVisualEffectNameID"]
+                    )
                     mv = ven[0] if ven else {}
                     motion_id = int(m.get("SpellMissileMotionID") or 0)
-                    entry["missiles"].append({
-                        "model": self.file_ref(mv.get("ModelFileDataID")),
-                        "texture": self.file_ref(mv.get("TextureFileDataID")),
-                        "flight_path": ({"id": motion_id,
-                                         "name": self.motion.get(motion_id)}
-                                        if motion_id else None),
-                        "from": self._attach(m.get("Attachment")),
-                        "to": self._attach(m.get("DestinationAttachment")),
-                        "speed": mv.get("BaseMissileSpeed") or None,
-                        "follow_ground": m.get("FollowGroundApproach") or None,
-                        "anim_kit": self.animkit(m.get("AnimKitID")),
-                    })
+                    entry["missiles"].append(
+                        {
+                            "model": self.file_ref(mv.get("ModelFileDataID")),
+                            "texture": self.file_ref(mv.get("TextureFileDataID")),
+                            "flight_path": (
+                                {"id": motion_id, "name": self.motion.get(motion_id)} if motion_id else None
+                            ),
+                            "from": self._attach(m.get("Attachment")),
+                            "to": self._attach(m.get("DestinationAttachment")),
+                            "speed": mv.get("BaseMissileSpeed") or None,
+                            "follow_ground": m.get("FollowGroundApproach") or None,
+                            "anim_kit": self.animkit(m.get("AnimKitID")),
+                        }
+                    )
             out.append(entry)
         return out
 
@@ -1206,9 +1285,11 @@ class Dossier:
         if not r:
             return None
         s = r[0]
-        return {"bar_order": s.get("StanceBarOrder"),
-                "mask": [s.get("ShapeshiftMask_0"), s.get("ShapeshiftMask_1")],
-                "exclude": [s.get("ShapeshiftExclude_0"), s.get("ShapeshiftExclude_1")]}
+        return {
+            "bar_order": s.get("StanceBarOrder"),
+            "mask": [s.get("ShapeshiftMask_0"), s.get("ShapeshiftMask_1")],
+            "exclude": [s.get("ShapeshiftExclude_0"), s.get("ShapeshiftExclude_1")],
+        }
 
     @staticmethod
     def assets(doc: dict[str, Any]) -> dict[str, Any]:
@@ -1241,9 +1322,15 @@ class Dossier:
         out: dict[str, Any] = {"models": [], "textures": [], "sounds": [], "other": []}
         for f in seen.values():
             p = (f.get("path") or "").lower()
-            k = ("models" if p.endswith(".m2") else
-                 "textures" if p.endswith(".blp") else
-                 "sounds" if p.endswith((".ogg", ".mp3", ".wav")) else "other")
+            k = (
+                "models"
+                if p.endswith(".m2")
+                else "textures"
+                if p.endswith(".blp")
+                else "sounds"
+                if p.endswith((".ogg", ".mp3", ".wav"))
+                else "other"
+            )
             out[k].append(f)
         out["counts"] = {k: len(v) for k, v in out.items() if k != "counts"}
         return out
@@ -1264,8 +1351,7 @@ class Dossier:
             "visuals": len(doc["visuals"]),
             "kits": sum(len(v["events"]) for v in doc["visuals"]),
             "missiles": sum(len(v["missiles"]) for v in doc["visuals"]),
-            "renders": doc["assets"]["counts"]["models"] > 0
-                       or doc["assets"]["counts"]["sounds"] > 0,
+            "renders": doc["assets"]["counts"]["models"] > 0 or doc["assets"]["counts"]["sounds"] > 0,
             "files": sum(v for v in doc["assets"]["counts"].values()),
         }
         # Reported LAST, so it covers every table any section tried to read.
@@ -1277,23 +1363,31 @@ class Dossier:
 def show(d: dict[str, Any], full: bool = False) -> None:
     cap = None if full else 4
     print(f"\n{'=' * 92}")
-    print(f"  {BOLD}{d['name']}{RESET}  [{d['id']}]"
-          + (f"  - {d['subtext']}" if d.get("subtext") else "")
-          + f"   {DIM}{d['pack']['label']}{RESET}")
+    print(
+        f"  {BOLD}{d['name']}{RESET}  [{d['id']}]"
+        + (f"  - {d['subtext']}" if d.get("subtext") else "")
+        + f"   {DIM}{d['pack']['label']}{RESET}"
+    )
     print(f"{'=' * 92}")
     print(f"  {d['links']['epsilook']}")
     e = d["era"]
-    era_note = "" if e["packs_checked"] == e["packs_known"] else \
-        f" (only {e['packs_checked']} of {e['packs_known']} packs cached)"
+    era_note = (
+        ""
+        if e["packs_checked"] == e["packs_known"]
+        else f" (only {e['packs_checked']} of {e['packs_known']} packs cached)"
+    )
     if e.get("expansion"):
         print(f"  added in {GOLD}{e['expansion']}{RESET}")
-    print(f"  first seen {GOLD}{e['first_seen'] or '?'}{RESET}"
-          f"  in {len(e['versions'])} packs{era_note}"
-          + (f"  {GOLD}[RETIRED]{RESET}" if e["retired"] else ""))
+    print(
+        f"  first seen {GOLD}{e['first_seen'] or '?'}{RESET}"
+        f"  in {len(e['versions'])} packs{era_note}" + (f"  {GOLD}[RETIRED]{RESET}" if e["retired"] else "")
+    )
     m = d["misc"] or {}
-    print(f"  school {', '.join(m.get('schools') or ['-'])}   "
-          f"{m.get('attribute_count', 0)} attribute flags   "
-          f"icon {(m.get('icon') or {}).get('path', '-')}")
+    print(
+        f"  school {', '.join(m.get('schools') or ['-'])}   "
+        f"{m.get('attribute_count', 0)} attribute flags   "
+        f"icon {(m.get('icon') or {}).get('path', '-')}"
+    )
     dl = m.get("delivery") or {}
     if dl:
         segs = []
@@ -1301,8 +1395,7 @@ def show(d: dict[str, Any], full: bool = False) -> None:
             segs.append(f"{delivery_secs(dl['cast_ms'])} sec cast")
         if dl.get("channelled"):
             ms = int(dl.get("channel_ms", 0))
-            segs.append("unlimited channel" if ms < 0
-                        else f"{delivery_secs(ms)} sec channel" if ms else "channel")
+            segs.append("unlimited channel" if ms < 0 else f"{delivery_secs(ms)} sec channel" if ms else "channel")
         if dl.get("breaks_on_move"):
             segs.append("breaks on move")
         # the sentinel ANNOTATES the answer, it does not replace it: these
@@ -1317,25 +1410,24 @@ def show(d: dict[str, Any], full: bool = False) -> None:
     areas = d.get("areas") or []
     if areas:
         names = [a["name"] or f"#{a['id']}" for a in areas]
-        print(f"  {GOLD}only in{RESET} {', '.join(names)}"
-              f"  {DIM}(area group {areas[0]['group']}){RESET}")
+        print(f"  {GOLD}only in{RESET} {', '.join(names)}  {DIM}(area group {areas[0]['group']}){RESET}")
     # The flags the app SHIPS as pills are called out by name, because they are
     # the ones that answer "why does this spell behave like that" — the rest are
     # a 449-bit haystack and stay behind --full.
     attrs = m.get("attributes") or []
     shipped = [a for a in attrs if a.get("handler")]
     if shipped:
-        print(f"  {GOLD}flags{RESET} " + ", ".join(
-            f"{a['name']} ({a['index']})" for a in shipped))
+        print(f"  {GOLD}flags{RESET} " + ", ".join(f"{a['name']} ({a['index']})" for a in shipped))
     if full and attrs:
         named = [a for a in attrs if a.get("name")]
         for i in range(0, len(named), 3):
-            print("    " + DIM + "  ".join(
-                f"{a['index']:>3} {a['name'][:26]:<26}" for a in named[i:i + 3]) + RESET)
+            print("    " + DIM + "  ".join(f"{a['index']:>3} {a['name'][:26]:<26}" for a in named[i : i + 3]) + RESET)
     s = d["summary"]
-    print(f"  {s['effects']} effects ({s['auras']} auras) - {s['visuals']} visuals, "
-          f"{s['kits']} kit events, {s['missiles']} missiles - "
-          f"{'RENDERS' if s['renders'] else 'renders NOTHING'}")
+    print(
+        f"  {s['effects']} effects ({s['auras']} auras) - {s['visuals']} visuals, "
+        f"{s['kits']} kit events, {s['missiles']} missiles - "
+        f"{'RENDERS' if s['renders'] else 'renders NOTHING'}"
+    )
     if d["absent_tables"]:
         print(f"  {DIM}absent from this pack: {', '.join(d['absent_tables'])}{RESET}")
 
@@ -1352,30 +1444,31 @@ def show(d: dict[str, Any], full: bool = False) -> None:
         ent = x.get("entity")
         if ent:
             nm = ent.get("name") or ent.get("note") or ent.get("form_id") or ""
-            head = (f"{ent['kind']} "
-                    f"{ent.get('entry', ent.get('display_id', ent.get('vehicle_id', '')))}")
+            head = f"{ent['kind']} {ent.get('entry', ent.get('display_id', ent.get('vehicle_id', '')))}"
             print(f"        -> {head}  {nm}")
-            for dsp in (ent.get("displays") or ([ent] if ent.get("model") else [])):
+            for dsp in ent.get("displays") or ([ent] if ent.get("model") else []):
                 if dsp.get("model"):
-                    print(f"           display {dsp.get('display_id', '?')}: "
-                          f"{dsp['model'].get('path', dsp['model']['fid'])}")
+                    print(
+                        f"           display {dsp.get('display_id', '?')}: "
+                        f"{dsp['model'].get('path', dsp['model']['fid'])}"
+                    )
             if ent.get("model"):
                 print(f"           model: {ent['model'].get('path', ent['model']['fid'])}")
             for seat in (ent.get("seats") or [])[:cap]:
-                print(f"           seat {seat['seat_id']} at "
-                      f"{(seat.get('attachment') or {}).get('name', '?')}")
+                print(f"           seat {seat['seat_id']} at {(seat.get('attachment') or {}).get('name', '?')}")
                 for role, anims in (seat.get("rider_anims") or {}).items():
-                    print(f"             rider {role}: "
-                          + ", ".join(str(anim) for anim in anims))
+                    print(f"             rider {role}: " + ", ".join(str(anim) for anim in anims))
         if x.get("summon_properties"):
             sp = x["summon_properties"]
-            print(f"        -> summon properties: "
-                  f"{(sp.get('control') or {}).get('name', '?')} / title {sp.get('title')}")
+            print(
+                f"        -> summon properties: {(sp.get('control') or {}).get('name', '?')} / title {sp.get('title')}"
+            )
         if x.get("creates_item"):
             it = x["creates_item"]
-            print(f"        -> creates item {it.get('item_id')}  "
-                  + (f"{it['name']}  [{it.get('quality', '?')}]" if it.get("name")
-                     else it.get("note", "unresolved")))
+            print(
+                f"        -> creates item {it.get('item_id')}  "
+                + (f"{it['name']}  [{it.get('quality', '?')}]" if it.get("name") else it.get("note", "unresolved"))
+            )
 
     print(f"\n  {BOLD}VISUAL CHAIN{RESET}")
     for v in d["visuals"]:
@@ -1385,22 +1478,30 @@ def show(d: dict[str, Any], full: bool = False) -> None:
             kinds = ", ".join(sorted({e2["becomes"] for e2 in k.get("effects", [])})) or "-"
             tt = ev.get("target_type") or {}
             tt_name = tt.get("name") or (f"tt{tt['value']}" if "value" in tt else "-")
-            print(f"      {(ev['starts_at'] or {}).get('name', '?'):>16} "
-                  f"-> {(ev['ends_at'] or {}).get('name', '?'):<16} kit {k.get('id', '-')}"
-                  f"  on {tt_name:<12} [{kinds}]  {len(k.get('attachments', []))} attach")
+            print(
+                f"      {(ev['starts_at'] or {}).get('name', '?'):>16} "
+                f"-> {(ev['ends_at'] or {}).get('name', '?'):<16} kit {k.get('id', '-')}"
+                f"  on {tt_name:<12} [{kinds}]  {len(k.get('attachments', []))} attach"
+            )
             for a in k.get("attachments", [])[:cap]:
                 if a.get("model"):
-                    print(f"{'':24}  {(a['attach_point'] or {}).get('name', '?')}: "
-                          f"{a['model'].get('path', a['model']['fid'])}")
+                    print(
+                        f"{'':24}  {(a['attach_point'] or {}).get('name', '?')}: "
+                        f"{a['model'].get('path', a['model']['fid'])}"
+                    )
         for mi in v["missiles"]:
             fp = (mi.get("flight_path") or {}).get("name") or "-"
-            print(f"      missile {(mi.get('model') or {}).get('path', '?')}"
-                  f"  {(mi.get('from') or {}).get('name', '?')} -> "
-                  f"{(mi.get('to') or {}).get('name', '?')}  [{fp}]")
+            print(
+                f"      missile {(mi.get('model') or {}).get('path', '?')}"
+                f"  {(mi.get('from') or {}).get('name', '?')} -> "
+                f"{(mi.get('to') or {}).get('name', '?')}  [{fp}]"
+            )
 
     a = d["assets"]
-    print(f"\n  {BOLD}ASSETS{RESET}  {a['counts']['models']} models, "
-          f"{a['counts']['textures']} textures, {a['counts']['sounds']} sounds")
+    print(
+        f"\n  {BOLD}ASSETS{RESET}  {a['counts']['models']} models, "
+        f"{a['counts']['textures']} textures, {a['counts']['sounds']} sounds"
+    )
     for k in ("models", "textures", "sounds", "other"):
         for x in a[k][:cap]:
             print(f"    {k[:-1]:8s} {x.get('path', x['fid'])}")
@@ -1409,8 +1510,10 @@ def show(d: dict[str, Any], full: bool = False) -> None:
 
 
 def show_matches(text: str, found: list[dict[str, Any]], total: int) -> None:
-    print(f"\n  {total} spell{'' if total == 1 else 's'} match {text!r}"
-          + (f", showing {len(found)}" if total > len(found) else ""))
+    print(
+        f"\n  {total} spell{'' if total == 1 else 's'} match {text!r}"
+        + (f", showing {len(found)}" if total > len(found) else "")
+    )
     for r in found:
         mark = "" if r["renders"] else f"  {DIM}(renders nothing){RESET}"
         sub = f"  - {r['subtext']}" if r["subtext"] else ""
@@ -1429,29 +1532,28 @@ def diff(a: dict[str, Any], b: dict[str, Any]) -> None:
         return {str(x.get("path", x["fid"])) for x in d["assets"][k]}
 
     def eff(d: dict[str, Any]) -> set[str]:
-        return {(e["effect"] or {}).get("name", "?")
-                + (f"/{e['aura']['name']}" if e.get("aura") and "name" in e["aura"] else "")
-                for e in d["effects"]}
+        return {
+            (e["effect"] or {}).get("name", "?")
+            + (f"/{e['aura']['name']}" if e.get("aura") and "name" in e["aura"] else "")
+            for e in d["effects"]
+        }
 
     def tgt(d: dict[str, Any]) -> set[str]:
         return {t.get("name", str(t["value"])) for e in d["effects"] for t in e["targets"]}
 
     def phases(d: dict[str, Any]) -> set[str]:
-        return {(ev["starts_at"] or {}).get("name", "?")
-                for v in d["visuals"] for ev in v["events"]}
+        return {(ev["starts_at"] or {}).get("name", "?") for v in d["visuals"] for ev in v["events"]}
 
     def attrs(d: dict[str, Any]) -> set[Any]:
         # Name where the decode has one, bare index where it does not, so a
         # difference reads as "one has PreventsAnim" rather than "one has 50".
-        return {x.get("name") or x["index"]
-                for x in (d["misc"] or {}).get("attributes", [])}
+        return {x.get("name") or x["index"] for x in (d["misc"] or {}).get("attributes", [])}
 
     print(f"\n{'=' * 96}")
     print(f"  {BOLD}{a['name']} [{a['id']}]   vs   {b['name']} [{b['id']}]{RESET}")
     print(f"{'=' * 96}")
     rows: list[tuple[str, set[Any], set[Any]]] = [
-        ("school", set((a["misc"] or {}).get("schools", [])),
-         set((b["misc"] or {}).get("schools", []))),
+        ("school", set((a["misc"] or {}).get("schools", [])), set((b["misc"] or {}).get("schools", []))),
         ("effects", eff(a), eff(b)),
         ("targets", tgt(a), tgt(b)),
         ("cast phases", phases(a), phases(b)),
@@ -1465,17 +1567,13 @@ def diff(a: dict[str, Any], b: dict[str, Any]) -> None:
         if not (sa or sb):
             continue
         j = len(both) / max(len(sa | sb), 1)
-        print(f"\n  {BOLD}{label.upper()}{RESET}   shared {len(both)}/{len(sa | sb)}  "
-              f"(Jaccard {j:.2f})")
+        print(f"\n  {BOLD}{label.upper()}{RESET}   shared {len(both)}/{len(sa | sb)}  (Jaccard {j:.2f})")
         if both:
-            print(f"    {GOLD}BOTH:{RESET}   "
-                  f"{', '.join(str(x)[:58] for x in sorted(both, key=str)[:6])}")
+            print(f"    {GOLD}BOTH:{RESET}   {', '.join(str(x)[:58] for x in sorted(both, key=str)[:6])}")
         if only_a:
-            print(f"    only {a['name'][:20]}: "
-                  f"{', '.join(str(x)[:52] for x in sorted(only_a, key=str)[:5])}")
+            print(f"    only {a['name'][:20]}: {', '.join(str(x)[:52] for x in sorted(only_a, key=str)[:5])}")
         if only_b:
-            print(f"    only {b['name'][:20]}: "
-                  f"{', '.join(str(x)[:52] for x in sorted(only_b, key=str)[:5])}")
+            print(f"    only {b['name'][:20]}: {', '.join(str(x)[:52] for x in sorted(only_b, key=str)[:5])}")
 
 
 # ------------------------------------------------------------------------- cli
@@ -1497,9 +1595,11 @@ def resolve(d: Dossier, words: list[str]) -> list[int]:
     if exact:
         if len(exact) > 1 or total > 1:
             others = ", ".join(str(r["id"]) for r in exact[1:6])
-            print(f"  {DIM}{total} spells match {text!r}; taking the lowest exact id"
-                  + (f" (also {others}{', ...' if len(exact) > 6 else ''})" if others else "")
-                  + f"{RESET}")
+            print(
+                f"  {DIM}{total} spells match {text!r}; taking the lowest exact id"
+                + (f" (also {others}{', ...' if len(exact) > 6 else ''})" if others else "")
+                + f"{RESET}"
+            )
         return [int(exact[0]["id"])]
     show_matches(text, found, total)
     sys.exit(f"\n{text!r} is not an exact spell name - pick an id from the list above")
@@ -1508,34 +1608,38 @@ def resolve(d: Dossier, words: list[str]) -> list[int]:
 def main() -> None:
     ap = argparse.ArgumentParser(
         description="Everything the data knows about one spell, followed to the leaves.",
-        epilog="reads .cache/epsilook.duckdb (build it with tools/builddb.py)")
+        epilog="reads .cache/epsilook.duckdb (build it with tools/builddb.py)",
+    )
     ap.add_argument("spell", nargs="*", help="spell ids, or a name to look up")
-    ap.add_argument("--version", metavar="V",
-                    help="pack to read, by build-id prefix (default: the manifest default)")
-    ap.add_argument("--json", nargs="?", const="-", metavar="PATH",
-                    help="emit JSON instead of the summary; bare = stdout")
-    ap.add_argument("--print", action="store_true", dest="readable",
-                    help="the readable summary as well as --json")
+    ap.add_argument("--version", metavar="V", help="pack to read, by build-id prefix (default: the manifest default)")
+    ap.add_argument(
+        "--json", nargs="?", const="-", metavar="PATH", help="emit JSON instead of the summary; bare = stdout"
+    )
+    ap.add_argument("--print", action="store_true", dest="readable", help="the readable summary as well as --json")
     ap.add_argument("--diff", action="store_true", help="compare exactly two spells")
     ap.add_argument("--full", action="store_true", help="do not truncate the lists")
-    ap.add_argument("--list", action="store_true", dest="list_only",
-                    help="list the name matches and stop")
+    ap.add_argument("--list", action="store_true", dest="list_only", help="list the name matches and stop")
     ap.add_argument("--packs", action="store_true", help="list the cached packs and stop")
     args = ap.parse_args()
 
     if args.packs:
         every = packs()
         con = duckdb.connect(str(DB_PATH), read_only=True) if DB_PATH.exists() else None
-        cached = {s for s, in con.execute(
-            "SELECT DISTINCT table_schema FROM information_schema.tables "
-            "WHERE table_name = 'spells'").fetchall()} if con else set()
-        print(f"\n  {DB_PATH}"
-              + ("" if con else f"  {DIM}(not built - run tools/builddb.py){RESET}"))
+        cached = (
+            {
+                s
+                for (s,) in con.execute(
+                    "SELECT DISTINCT table_schema FROM information_schema.tables WHERE table_name = 'spells'"
+                ).fetchall()
+            }
+            if con
+            else set()
+        )
+        print(f"\n  {DB_PATH}" + ("" if con else f"  {DIM}(not built - run tools/builddb.py){RESET}"))
         for e in every:
             here = schema_name(e["id"]) in cached
             flag = "default" if e.get("default") else ""
-            print(f"    {'*' if here else ' '} {e['id']:<20} {e['label']:<26}"
-                  f" {schema_name(e['id']):<15} {flag}")
+            print(f"    {'*' if here else ' '} {e['id']:<20} {e['label']:<26} {schema_name(e['id']):<15} {flag}")
         print(f"\n  {DIM}* = in the database; --version takes any id prefix{RESET}")
         return
 

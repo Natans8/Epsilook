@@ -98,9 +98,9 @@ def read_zone_maps(tables: Tables) -> dict[int, int]:
     Returns:
         Area id to the lowest matching `UiMapID`.
     """
-    return _match_zone_maps(tables, {to_int(area): name for area, name
-                                     in tables.rows("AreaTable",
-                                                    ["ID", "AreaName_lang"])})
+    return _match_zone_maps(
+        tables, {to_int(area): name for area, name in tables.rows("AreaTable", ["ID", "AreaName_lang"])}
+    )
 
 
 def _match_zone_maps(tables: Tables, names: dict[int, str]) -> dict[int, int]:
@@ -118,9 +118,11 @@ def _match_zone_maps(tables: Tables, names: dict[int, str]) -> dict[int, int]:
     Returns:
         Area id to the lowest matching `UiMapID`.
     """
-    zones = {to_int(uid): name for uid, name, kind
-             in tables.rows("UiMap", ["ID", "Name_lang", "Type"])
-             if to_int(kind) == UI_MAP_TYPE_ZONE}
+    zones = {
+        to_int(uid): name
+        for uid, name, kind in tables.rows("UiMap", ["ID", "Name_lang", "Type"])
+        if to_int(kind) == UI_MAP_TYPE_ZONE
+    }
     maps: dict[int, int] = {}
     for area_text, map_text in tables.rows("UiMapAssignment", ["AreaID", "UiMapID"]):
         area, ui_map = to_int(area_text), to_int(map_text)
@@ -144,21 +146,18 @@ def read_area_gates(tables: Tables, maps: Mapping[int, int]) -> AreaGates:
         nameless, which a handful of spells do.
     """
     members: dict[int, list[int]] = {}
-    for group_text, area_text in tables.rows(
-            "AreaGroupMember", ["AreaGroupID", "AreaID"]):
+    for group_text, area_text in tables.rows("AreaGroupMember", ["AreaGroupID", "AreaID"]):
         members.setdefault(to_int(group_text), []).append(to_int(area_text))
 
     names: dict[int, str] = {}
     parents: dict[int, int] = {}
-    for area_text, name, parent_text in tables.rows(
-            "AreaTable", ["ID", "AreaName_lang", "ParentAreaID"]):
+    for area_text, name, parent_text in tables.rows("AreaTable", ["ID", "AreaName_lang", "ParentAreaID"]):
         area = to_int(area_text)
         names[area] = name
         parents[area] = to_int(parent_text)
 
     gates = AreaGates()
-    for spell_text, group_text in tables.rows(
-            "SpellCastingRequirements", ["SpellID", "RequiredAreasID"]):
+    for spell_text, group_text in tables.rows("SpellCastingRequirements", ["SpellID", "RequiredAreasID"]):
         if not (group := to_int(group_text)):
             continue
         spell = to_int(spell_text)

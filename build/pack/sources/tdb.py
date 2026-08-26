@@ -16,8 +16,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import NamedTuple, Protocol, TextIO
 
-from ..drift import (TDB_CANDIDATE_TABLES, TDB_OPTIONAL_COLUMNS,
-                     TDB_OPTIONAL_TABLES)
+from ..drift import TDB_CANDIDATE_TABLES, TDB_OPTIONAL_COLUMNS, TDB_OPTIONAL_TABLES
 from ..progress import log
 from ..targets import VISUAL_REDIRECTS
 from .archive import read_member
@@ -98,8 +97,7 @@ another language.
 # rows by row id.
 TDB_TABLES = {
     "world": {
-        "creature_template": ["entry", "name",
-                              "modelid1", "modelid2", "modelid3", "modelid4"],
+        "creature_template": ["entry", "name", "modelid1", "modelid2", "modelid3", "modelid4"],
         "creature_template_model": ["CreatureID", "Idx", "CreatureDisplayID", "Probability"],
         # A spawn effect's misc0 is a gameobject_template entry. The client's
         # GameObjects.db2 uses a different keying, so the name and displayId
@@ -117,19 +115,41 @@ TDB_TABLES = {
         "spell_x_spell_visual": ["ID", "SpellID", "SpellVisualID"],
         # A hotfixed row replaces the wago row wholesale, so every column a
         # route reads has to be listed here or the overlay blanks it.
-        "spell_visual": ["ID", "SpellVisualMissileSetID", "RaidSpellVisualMissileSetID",
-                         "MissileAttachment", "MissileDestinationAttachment",
-                         "AnimEventSoundID", *VISUAL_REDIRECTS],
-        "spell_visual_missile": ["ID", "SpellVisualMissileSetID", "SpellVisualEffectNameID",
-                                 "SoundEntriesID", "AnimKitID", "SpellMissileMotionID",
-                                 "Attachment", "DestinationAttachment"],
+        "spell_visual": [
+            "ID",
+            "SpellVisualMissileSetID",
+            "RaidSpellVisualMissileSetID",
+            "MissileAttachment",
+            "MissileDestinationAttachment",
+            "AnimEventSoundID",
+            *VISUAL_REDIRECTS,
+        ],
+        "spell_visual_missile": [
+            "ID",
+            "SpellVisualMissileSetID",
+            "SpellVisualEffectNameID",
+            "SoundEntriesID",
+            "AnimKitID",
+            "SpellMissileMotionID",
+            "Attachment",
+            "DestinationAttachment",
+        ],
         "spell_visual_effect_name": ["ID", "ModelFileDataID"],
         # EffectBasePoints is the movement-speed percent, and every dump that
         # ships hotfixes spells it as an int even where the client exports only
         # the float.
-        "spell_effect": ["ID", "SpellID", "Effect", "EffectAura", "EffectMiscValue1",
-                         "EffectMiscValue2", "ImplicitTarget1", "ImplicitTarget2",
-                         "EffectBasePoints", "EffectTriggerSpell"],
+        "spell_effect": [
+            "ID",
+            "SpellID",
+            "Effect",
+            "EffectAura",
+            "EffectMiscValue1",
+            "EffectMiscValue2",
+            "ImplicitTarget1",
+            "ImplicitTarget2",
+            "EffectBasePoints",
+            "EffectTriggerSpell",
+        ],
         "spell_misc": ["ID", "SpellID", "DifficultyID", "SpellIconFileDataID"],
         "creature_display_info": ["ID", "ModelID"],
         "creature_model_data": ["ID", "FileDataID"],
@@ -138,8 +158,7 @@ TDB_TABLES = {
 
 # The stamp rides every hotfix table, so it is appended once here rather than
 # repeated above.
-TDB_TABLES["hotfixes"] = {table: [*columns, STAMP_COLUMN]
-                          for table, columns in TDB_TABLES["hotfixes"].items()}
+TDB_TABLES["hotfixes"] = {table: [*columns, STAMP_COLUMN] for table, columns in TDB_TABLES["hotfixes"].items()}
 
 LOCALE_COLUMN = "locale"
 """The column a ``*_locale`` row names the language it is written in.
@@ -165,13 +184,15 @@ shipping one language never distils them: the archive is a hundred megabytes
 and a re-scan is minutes, and completeness is compared per roster.
 """
 
-TDB_LOSSY_COLUMNS = frozenset({
-    # A FLOAT in a modern dump, so its text is printed rounded against the
-    # client's value. The oldest releases type the same column INT, where it is
-    # exact -- it is refused there too, so one column means one thing whichever
-    # release a build matched.
-    ("spell_effect", "EffectBasePoints"),
-})
+TDB_LOSSY_COLUMNS = frozenset(
+    {
+        # A FLOAT in a modern dump, so its text is printed rounded against the
+        # client's value. The oldest releases type the same column INT, where it is
+        # exact -- it is refused there too, so one column means one thing whichever
+        # release a build matched.
+        ("spell_effect", "EffectBasePoints"),
+    }
+)
 """Overlay columns whose text may be lossier than the client's own.
 
 Declared so the overlay can be composed without reading the dump, and checked
@@ -221,8 +242,10 @@ def tdb_column_index(table: str, column: str, schema: list[str]) -> int | None:
         return schema.index(column)
     if (table, column) in TDB_OPTIONAL_COLUMNS:
         return None
-    sys.exit(f"error: TDB table {table} has no column {column!r} and it is not "
-             f"declared in TDB_OPTIONAL_COLUMNS; schema = {schema}")
+    sys.exit(
+        f"error: TDB table {table} has no column {column!r} and it is not "
+        f"declared in TDB_OPTIONAL_COLUMNS; schema = {schema}"
+    )
 
 
 def check_lossy_declaration(table: str, schema: list[Column], keep: list[str]) -> None:
@@ -246,12 +269,13 @@ def check_lossy_declaration(table: str, schema: list[Column], keep: list[str]) -
             sys.exit(
                 f"error: {table}.{column} is typed {kinds[column].kind}, which "
                 f"a dump prints lossily, and it is not declared in "
-                f"TDB_LOSSY_COLUMNS")
+                f"TDB_LOSSY_COLUMNS"
+            )
 
 
-def distill_dump(lines: Iterable[str], name: str, want: Wanted,
-                 out_dir: Path, required: bool = True,
-                 overlay: bool = False) -> None:
+def distill_dump(
+    lines: Iterable[str], name: str, want: Wanted, out_dir: Path, required: bool = True, overlay: bool = False
+) -> None:
     """Write the wanted tables and columns of one SQL dump out as CSVs.
 
     A table with no ``INSERT`` still gets a header-only CSV. A row whose value
@@ -293,8 +317,12 @@ def distill_dump(lines: Iterable[str], name: str, want: Wanted,
                 keep = want[table]
                 names = [column.name for column in schemas[table]]
                 idx = [tdb_column_index(table, c, names) for c in keep]
-                handle = open(out_dir / f"{table}.csv", "w",  # pylint: disable=consider-using-with
-                              newline="", encoding="utf-8")
+                handle = open(
+                    out_dir / f"{table}.csv",
+                    "w",  # pylint: disable=consider-using-with
+                    newline="",
+                    encoding="utf-8",
+                )
                 handles.append(handle)
                 writer = csv.writer(handle)
                 writer.writerow(keep)
@@ -302,12 +330,13 @@ def distill_dump(lines: Iterable[str], name: str, want: Wanted,
             into_table = writers[table]
             for row in iter_insert_rows(line):
                 if len(row) != into_table.width:
-                    sys.exit(f"error: {table} row has {len(row)} values, "
-                             f"schema has {into_table.width}")
+                    sys.exit(f"error: {table} row has {len(row)} values, schema has {into_table.width}")
                 into_table.writer.writerow(
-                    [row[i] if i is not None
-                     else TDB_OPTIONAL_COLUMNS[(table, column)]
-                     for i, column in zip(into_table.columns, want[table])])
+                    [
+                        row[i] if i is not None else TDB_OPTIONAL_COLUMNS[(table, column)]
+                        for i, column in zip(into_table.columns, want[table])
+                    ]
+                )
     for open_file in handles:
         open_file.close()
     for table, keep in want.items():
@@ -426,8 +455,7 @@ class Distill:
         complete without the hotfix tables, and asking for them would leave it
         permanently undistilled.
         """
-        return {table: columns for kind in self.kinds
-                for table, columns in self.want[kind].items()}
+        return {table: columns for kind in self.kinds for table, columns in self.want[kind].items()}
 
     def complete(self, into: Path) -> bool:
         """Whether the cache already holds exactly these tables and columns."""
@@ -441,19 +469,17 @@ class Distill:
         survive the scan.
         """
         for kind in sorted((self.overlay & set(self.want)) - set(self.kinds)):
-            log(f"  no {kind} dump in this release: nothing revises what the "
-                f"client itself carries")
+            log(f"  no {kind} dump in this release: nothing revises what the client itself carries")
         for kind in self.kinds:
             member = self.members[kind]
             log(f"  distilling {member} ...")
             with read_member(located, member) as lines:
-                distill_dump(lines, member, self.want[kind], into,
-                             required=kind in self.required,
-                             overlay=kind in self.overlay)
+                distill_dump(
+                    lines, member, self.want[kind], into, required=kind in self.required, overlay=kind in self.overlay
+                )
 
 
-def tdb_extraction(release: Mapping[str, str], name: str,
-                   extract: Extract) -> Extracted:
+def tdb_extraction(release: Mapping[str, str], name: str, extract: Extract) -> Extracted:
     """One release's archive, and what is distilled out of it, as one source.
 
     The archive is cached in the directory the CSVs land in, so a release is
@@ -466,9 +492,12 @@ def tdb_extraction(release: Mapping[str, str], name: str,
     archive is exactly what somebody passes the flag to be rid of.
     """
     into = CACHE_DIR / tdb_dir_name(release["tag"])
-    archive = Fetched(name=f"TDB archive ({release['tag']})",
-                      origin=Origin(TDB_ASSET_URL.format(**release)),
-                      dest=into / release["asset"], fetch=Pinned())
+    archive = Fetched(
+        name=f"TDB archive ({release['tag']})",
+        origin=Origin(TDB_ASSET_URL.format(**release)),
+        dest=into / release["asset"],
+        fetch=Pinned(),
+    )
     return Extracted(name=name, inner=archive, extract=extract, into=into)
 
 
@@ -484,8 +513,8 @@ def tdb_source(version: str) -> Source | None:
         return None
     kinds = tuple(kind for kind in ("world", "hotfixes") if kind in release)
     return tdb_extraction(
-        release, f"TDB ({release['tag']})",
-        Distill(kinds=kinds, members={kind: release[kind] for kind in kinds}))
+        release, f"TDB ({release['tag']})", Distill(kinds=kinds, members={kind: release[kind] for kind in kinds})
+    )
 
 
 def tdb_locale_source(version: str) -> Source | None:
@@ -505,6 +534,7 @@ def tdb_locale_source(version: str) -> Source | None:
     if release is None:
         return None
     return tdb_extraction(
-        release, f"TDB translations ({release['tag']})",
-        Distill(kinds=("world",), members={"world": release["world"]},
-                want=TDB_LOCALE_TABLES, required=frozenset()))
+        release,
+        f"TDB translations ({release['tag']})",
+        Distill(kinds=("world",), members={"world": release["world"]}, want=TDB_LOCALE_TABLES, required=frozenset()),
+    )

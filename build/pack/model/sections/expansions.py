@@ -55,14 +55,15 @@ def era_counts(columns: SectionColumns, reads: Reads) -> dict[str, int]:
     return counted
 
 
-EXPANSIONS = register(Section(
-    name="expansions",
-    doc="The expansion ladder oldest first, which spells.eras indexes into.",
-    module="universal",
-    produce=expansions,
-    columns=("keys", "labels", "shorts", "majors", "maxLevels", "aliases",
-             "wowhead", "caveats"),
-    reads=("declared", "spell_ids"),
-    counts=(CountFamily(era_counts),),
-    scope=Scope.UNIVERSAL,
-))
+EXPANSIONS = register(
+    Section(
+        name="expansions",
+        doc="The expansion ladder oldest first, which spells.eras indexes into.",
+        module="universal",
+        produce=expansions,
+        columns=("keys", "labels", "shorts", "majors", "maxLevels", "aliases", "wowhead", "caveats"),
+        reads=("declared", "spell_ids"),
+        counts=(CountFamily(era_counts),),
+        scope=Scope.UNIVERSAL,
+    )
+)

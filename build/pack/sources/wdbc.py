@@ -109,20 +109,21 @@ def read(path: Path, definition: Definition, build: Build) -> list[dict[str, Any
     if declared != record_size:
         raise ValueError(
             f"{path.name}: {definition.table} layout for {build} describes a "
-            f"{declared}-byte record, the file holds {record_size}")
+            f"{declared}-byte record, the file holds {record_size}"
+        )
 
     body = HEADER
     if magic == WDB2:
         low, high = struct.unpack_from("<2I", raw, 32)
         body = WDB2_HEADER + ((high - low + 1) * INDEX_ENTRY if high else 0)
 
-    strings = raw[body + count * record_size:][:string_size]
+    strings = raw[body + count * record_size :][:string_size]
 
     def text(offset: int) -> str:
         if offset <= 0 or offset >= len(strings):
             return ""
         end = strings.find(b"\0", offset)
-        return strings[offset:end if end >= 0 else None].decode("utf-8", "replace")
+        return strings[offset : end if end >= 0 else None].decode("utf-8", "replace")
 
     rows: list[dict[str, Any]] = []
     for index in range(count):
@@ -130,8 +131,7 @@ def read(path: Path, definition: Definition, build: Build) -> list[dict[str, Any
         at = 0
         row: dict[str, Any] = {}
         for column in block.columns:
-            kind = (definition.columns[column.name].type
-                    if column.name in definition.columns else "int")
+            kind = definition.columns[column.name].type if column.name in definition.columns else "int"
             values: list[Any] = []
             for _ in range(column.array or 1):
                 if kind == "locstring":
@@ -149,8 +149,9 @@ def read(path: Path, definition: Definition, build: Build) -> list[dict[str, Any
                     # column as a large positive number rather than a negative
                     # one, and only for the values that go negative.
                     width = max((column.width or 32) // 8, 1)
-                    values.append(int.from_bytes(raw[base + at:base + at + width], "little",
-                                                 signed=not column.unsigned))
+                    values.append(
+                        int.from_bytes(raw[base + at : base + at + width], "little", signed=not column.unsigned)
+                    )
                     at += width
             row[column.name] = values if column.array else values[0]
         rows.append(row)

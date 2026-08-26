@@ -283,8 +283,7 @@ class Blizzard:
         here = [row for row in rows if row.get("Name") == self.region] or rows
         hosts = here[0].get("Hosts", "").split() if here else []
         if not hosts:
-            raise LookupError(
-                f"{self.cdns_url} names no host for region {self.region}")
+            raise LookupError(f"{self.cdns_url} names no host for region {self.region}")
         return Cdn(hosts[0], here[0].get("Path") or CONTENT_PATH)
 
 
@@ -373,7 +372,7 @@ def decode_blte(blob: bytes, *, skip_encrypted: bool = True) -> bytes:
     for _ in range(count):
         compressed = struct.unpack_from(">I", blob, at)[0]
         at += 24  # the compressed size, the decoded size, and a checksum
-        out += _decode_chunk(blob[position:position + compressed], skip_encrypted)
+        out += _decode_chunk(blob[position : position + compressed], skip_encrypted)
         position += compressed
     return bytes(out)
 
@@ -467,11 +466,11 @@ def _layout(blob: bytes) -> _EncodingLayout:
         page_bytes=struct.unpack_from(">H", blob, 5)[0] * 1024,
         pages=pages,
         index_at=index_at,
-        pages_at=index_at + pages * (content_key_size + 16))
+        pages_at=index_at + pages * (content_key_size + 16),
+    )
 
 
-def _page_holding(blob: bytes, layout: _EncodingLayout,
-                  target: bytes) -> int | None:
+def _page_holding(blob: bytes, layout: _EncodingLayout, target: bytes) -> int | None:
     """The one page that could hold a content key, or `None` if none can.
 
     The page index is sorted and names the first key of each page, so the page
@@ -483,15 +482,14 @@ def _page_holding(blob: bytes, layout: _EncodingLayout,
     while low < high:
         middle = (low + high) // 2
         at = layout.index_at + middle * layout.stride
-        if blob[at:at + layout.content_key_size] <= target:
+        if blob[at : at + layout.content_key_size] <= target:
             low = middle + 1
         else:
             high = middle
     return low - 1 if low else None
 
 
-def _key_in_page(blob: bytes, layout: _EncodingLayout, page: int,
-                 target: bytes) -> bytes | None:
+def _key_in_page(blob: bytes, layout: _EncodingLayout, page: int, target: bytes) -> bytes | None:
     """One page's entry for a content key, or `None` if the page lacks it."""
     at = layout.pages_at + page * layout.page_bytes
     end = at + layout.page_bytes
@@ -500,8 +498,8 @@ def _key_in_page(blob: bytes, layout: _EncodingLayout, page: int,
         if keys == 0:
             break  # the page is padding from here on
         first = at + 6 + layout.content_key_size
-        if blob[at + 6:first] == target:
-            return blob[first:first + layout.encoding_key_size]
+        if blob[at + 6 : first] == target:
+            return blob[first : first + layout.encoding_key_size]
         at = first + keys * layout.encoding_key_size
     return None
 
@@ -516,9 +514,9 @@ def _encoding_entries(blob: bytes) -> Iterator[tuple[bytes, bytes]]:
             keys = blob[at]
             if keys == 0:
                 break  # the page is padding from here on
-            content_key = blob[at + 6:at + 6 + layout.content_key_size]
+            content_key = blob[at + 6 : at + 6 + layout.content_key_size]
             first = at + 6 + layout.content_key_size
-            yield content_key, blob[first:first + layout.encoding_key_size]
+            yield content_key, blob[first : first + layout.encoding_key_size]
             at = first + keys * layout.encoding_key_size
 
 
@@ -643,12 +641,13 @@ class Root:
             for index, delta in enumerate(deltas):
                 file_id += delta + 1
                 position = content_keys + 16 * index
-                keys[file_id] = blob[position:position + 16]
+                keys[file_id] = blob[position : position + 16]
         if records != header.total:
             raise ValueError(
                 f"root manifest version {header.version} walked {records:,} "
                 f"records over {blocks:,} blocks, and the file declares "
-                f"{header.total:,}")
+                f"{header.total:,}"
+            )
         return cls(keys=keys, blocks=blocks, header=header)
 
 
@@ -716,8 +715,7 @@ class Stored:
     it costs an index per archive, and a build that never misses loose must
     not pay for it."""
 
-    def get(self, origin: Origin, dest: Path, refresh: bool,
-            optional: bool = False) -> bool:
+    def get(self, origin: Origin, dest: Path, refresh: bool, optional: bool = False) -> bool:
         """Put one blob at ``dest``, loose or ranged out of its archive.
 
         Args:
@@ -738,23 +736,20 @@ class Stored:
         """
         if not isinstance(origin, Blob):
             raise TypeError(f"{origin.address} names no content key")
-        if download(origin.address, dest, refresh, optional=True,
-                    absent=NOT_SERVED):
+        if download(origin.address, dest, refresh, optional=True, absent=NOT_SERVED):
             return True
 
         found = self.archives().get(origin.encoding_key)
         if found is None:
             if optional:
                 return False
-            raise LookupError(
-                f"{origin.encoding_key.hex()} is neither loose nor in any "
-                f"archive the network declares")
+            raise LookupError(f"{origin.encoding_key.hex()} is neither loose nor in any archive the network declares")
         end = found.offset + found.size - 1
-        return download(self.cdn.data_url(found.archive), dest, refresh,
-                        headers={"Range": f"bytes={found.offset}-{end}"})
+        return download(
+            self.cdn.data_url(found.archive), dest, refresh, headers={"Range": f"bytes={found.offset}-{end}"}
+        )
 
-    def get_many(self, parts: Sequence[Part], into: Path,
-                 refresh: bool) -> list[Path]:
+    def get_many(self, parts: Sequence[Part], into: Path, refresh: bool) -> list[Path]:
         """One at a time, over an index built once for all of them.
 
         The set has something to share and it is already shared: the archive
@@ -804,11 +799,9 @@ def read_index(blob: bytes) -> Iterator[tuple[bytes, int, int]]:
     while read < entries:
         at = (read // per_block) * block_bytes
         for _ in range(min(per_block, entries - read)):
-            key = blob[at:at + key_bytes]
-            size = int.from_bytes(blob[at + key_bytes:at + key_bytes + size_bytes],
-                                  "big")
-            offset = int.from_bytes(blob[at + key_bytes + size_bytes:at + width],
-                                    "big")
+            key = blob[at : at + key_bytes]
+            size = int.from_bytes(blob[at + key_bytes : at + key_bytes + size_bytes], "big")
+            offset = int.from_bytes(blob[at + key_bytes + size_bytes : at + width], "big")
             if int.from_bytes(key, "big"):
                 yield key, offset, size
             at += width
@@ -829,8 +822,7 @@ class Storage:
     pretends otherwise.
     """
 
-    def __init__(self, service: Service, *, cache: Path | None = None,
-                 locale: int = LOCALE_ENUS) -> None:
+    def __init__(self, service: Service, *, cache: Path | None = None, locale: int = LOCALE_ENUS) -> None:
         """Resolve the live build and load what addressing a file needs.
 
         Args:
@@ -843,8 +835,7 @@ class Storage:
         self.cache.mkdir(parents=True, exist_ok=True)
 
         versions = read_bpsv(self._document(service.versions_url))
-        row = next((r for r in versions if r.get("Region") == service.region),
-                   versions[0])
+        row = next((r for r in versions if r.get("Region") == service.region), versions[0])
         self.build = row.get("VersionsName", "")
         self.build_config_digest = row["BuildConfig"]
         self.cdn_config_digest = row["CDNConfig"]
@@ -852,8 +843,7 @@ class Storage:
         self._archives: dict[bytes, Located] | None = None
         self._archive_lock = threading.Lock()
         self.blobs = Stored(self.cdn, self.archives)
-        log(f"  {service.label}: build {self.build} on {self.cdn.host}, "
-            f"config {self.build_config_digest}")
+        log(f"  {service.label}: build {self.build} on {self.cdn.host}, config {self.build_config_digest}")
 
         self.build_config = read_config(self._config(self.build_config_digest))
         self.cdn_config = read_config(self._config(self.cdn_config_digest))
@@ -868,8 +858,7 @@ class Storage:
         root_key = find_encoding_keys(self.encoding, {root_content_key})
         if root_content_key not in root_key:
             raise LookupError("the root's content key is not in the encoding file")
-        self.root = Root.parse(
-            decode_blte(self._fetch(root_key[root_content_key])), locale)
+        self.root = Root.parse(decode_blte(self._fetch(root_key[root_content_key])), locale)
         log(f"  {len(self.root.keys):,} file ids, {self.root.blocks:,} blocks")
 
     def open(self, file_id: int) -> bytes:
@@ -916,8 +905,7 @@ class Storage:
         for file_id, content_key in content_keys.items():
             encoding_key = resolved.get(content_key)
             if encoding_key is not None:
-                out[file_id] = decode_blte(
-                    self._fetch(encoding_key))
+                out[file_id] = decode_blte(self._fetch(encoding_key))
         return out
 
     def _document(self, url: str) -> str:
@@ -956,8 +944,7 @@ class Storage:
 
     def blob(self, encoding_key: bytes) -> Blob:
         """Where one encoded file is, said without fetching it."""
-        return Blob(self.cdn.data_url(encoding_key.hex()),
-                    encoding_key=encoding_key)
+        return Blob(self.cdn.data_url(encoding_key.hex()), encoding_key=encoding_key)
 
     def archives(self) -> dict[bytes, Located]:
         """Every archived file the network declares, by encoding key.
@@ -999,11 +986,9 @@ class Storage:
             that is absent or is not an ordinary one.
         """
         dest = self.cache / f"{name}.index"
-        if not PINNED.get(Origin(f"{self.cdn.data_url(name)}.index"), dest,
-                          refresh=False, optional=True):
+        if not PINNED.get(Origin(f"{self.cdn.data_url(name)}.index"), dest, refresh=False, optional=True):
             return {}
-        return {key: Located(name, offset, size)
-                for key, offset, size in read_index(dest.read_bytes())}
+        return {key: Located(name, offset, size) for key, offset, size in read_index(dest.read_bytes())}
 
     def _get(self, url: str, headers: Mapping[str, str] | None = None) -> bytes:
         """One request, straight back, held nowhere.
@@ -1013,8 +998,7 @@ class Storage:
         it will not keep. Everything that lands on disk goes through a policy
         above.
         """
-        request = urllib.request.Request(url, headers={**USER_AGENT,
-                                                      **(headers or {})})
+        request = urllib.request.Request(url, headers={**USER_AGENT, **(headers or {})})
         with urllib.request.urlopen(request, timeout=600) as response:
             blob: bytes = response.read()
         return blob

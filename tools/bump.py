@@ -42,7 +42,6 @@ ASSET_RE = re.compile(r'((?:href|src)="[^"]*?(?:css|js)/[^"?/]+\?v=)([0-9a-z]+)(
 PARSE_RE = re.compile(r"^(\d{8})([a-z]*)$")
 
 
-
 def versions_in(html: str) -> set[str]:
     return {m.group(2) for m in ASSET_RE.finditer(html)}
 
@@ -66,19 +65,19 @@ def next_version(deployed: str, today: str) -> str:
     """The next string after `deployed`, given today's date."""
     m = PARSE_RE.match(deployed)
     if not m or m.group(1) != today:
-        return f"{today}a"          # a new day (or an unparseable old string)
+        return f"{today}a"  # a new day (or an unparseable old string)
     return f"{today}{next_suffix(m.group(2))}"
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description=__doc__,
-                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--base", default="origin/main", help="the deployed tree (default: origin/main)")
     ap.add_argument("--set", dest="explicit", help="use this exact string instead of computing one")
     ap.add_argument("--dry-run", action="store_true", help="report only, write nothing")
     ap.add_argument("--no-fetch", action="store_true", help="do not refresh origin/main first")
-    ap.add_argument("--force", action="store_true",
-                    help="bump even when the current string already differs from the deployed one")
+    ap.add_argument(
+        "--force", action="store_true", help="bump even when the current string already differs from the deployed one"
+    )
     args = ap.parse_args()
 
     pages = sorted(SITE.glob("*.html"))
@@ -88,8 +87,10 @@ def main() -> int:
         print("site/*.html reference no versioned assets", file=sys.stderr)
         return 1
     if len(current) > 1:
-        print(f"{YELLOW}site/ carries {len(current)} different strings "
-              f"({', '.join(sorted(current))}) - rewriting all of them{RESET}")
+        print(
+            f"{YELLOW}site/ carries {len(current)} different strings "
+            f"({', '.join(sorted(current))}) - rewriting all of them{RESET}"
+        )
 
     if not args.no_fetch and not args.explicit:
         remote, _, branch = args.base.partition("/")
@@ -101,8 +102,7 @@ def main() -> int:
         if deployed_html:
             deployed |= versions_in(deployed_html)
     if not deployed:
-        print(f"{YELLOW}cannot read the deployed ?v= from {args.base} - "
-              f"falling back to the local string{RESET}")
+        print(f"{YELLOW}cannot read the deployed ?v= from {args.base} - falling back to the local string{RESET}")
         deployed = set(current)
 
     # the NEWEST string on each side, never the lowest: with more than one page
@@ -118,16 +118,17 @@ def main() -> int:
     elif not changed and not args.force:
         # bumping costs every user a re-download of css and js; spend it only
         # on a deploy that actually changes them
-        print(f"{GREEN}nothing to do{RESET}  no css/src change against {args.base} "
-              f"{DIM}(still {now}){RESET}")
+        print(f"{GREEN}nothing to do{RESET}  no css/src change against {args.base} {DIM}(still {now}){RESET}")
         return 0
     elif not (current & deployed) and not args.force:
-        print(f"{GREEN}nothing to do{RESET}  local {now} already differs from "
-              f"deployed {was} {DIM}(this deploy is covered){RESET}")
+        print(
+            f"{GREEN}nothing to do{RESET}  local {now} already differs from "
+            f"deployed {was} {DIM}(this deploy is covered){RESET}"
+        )
         return 0
     else:
         new = next_version(was, dt.date.today().strftime("%Y%m%d"))
-        while new in current | deployed:            # never re-use a live string
+        while new in current | deployed:  # never re-use a live string
             new = next_version(new, new[:8])
 
     total, touched = 0, []
@@ -140,8 +141,7 @@ def main() -> int:
         total += count
         touched.append(page.name)
     verb = "would rewrite" if args.dry_run else "rewrote"
-    print(f"{GREEN}{was} -> {new}{RESET}  {DIM}{verb} {total} references "
-          f"in {', '.join(touched)}{RESET}")
+    print(f"{GREEN}{was} -> {new}{RESET}  {DIM}{verb} {total} references in {', '.join(touched)}{RESET}")
     return 0
 
 

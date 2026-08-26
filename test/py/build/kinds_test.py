@@ -25,8 +25,7 @@ that here is what keeps each test free of a source it does not need.
 """
 
 
-def family(kind: str, props: tuple[str, ...],
-           rows: Iterable[SpellRow], **extra: object) -> Family:
+def family(kind: str, props: tuple[str, ...], rows: Iterable[SpellRow], **extra: object) -> Family:
     """One family over a fixed list of pairs, ignoring the read context."""
     given = list(rows)
     return Family(kind=kind, props=props, rows=lambda _reads: given, **extra)  # type: ignore[arg-type]
@@ -34,8 +33,9 @@ def family(kind: str, props: tuple[str, ...],
 
 def test_a_row_repeated_across_spells_is_pooled_once() -> None:
     """The whole reason the table is smaller than the columns it replaced."""
-    rows = build_column([family("sound", ("file",), [(1, (7,)), (2, (7,)), (3, (7,))])],
-                        reads=NO_READS, spell_ids=[1, 2, 3])
+    rows = build_column(
+        [family("sound", ("file",), [(1, (7,)), (2, (7,)), (3, (7,))])], reads=NO_READS, spell_ids=[1, 2, 3]
+    )
     assert rows.pools["sound"].rows == 1
     assert rows.pools["sound"].columns == ([7],)
     assert rows.counts == [1, 1, 1]
@@ -45,8 +45,7 @@ def test_a_row_repeated_across_spells_is_pooled_once() -> None:
 def test_a_spell_with_no_rows_costs_one_zero() -> None:
     """Counts rather than offsets: the spells with nothing are what most of the
     column is, and they have to be free."""
-    rows = build_column([family("sound", ("file",), [(2, (7,))])],
-                        reads=NO_READS, spell_ids=[1, 2, 3])
+    rows = build_column([family("sound", ("file",), [(2, (7,))])], reads=NO_READS, spell_ids=[1, 2, 3])
     assert rows.counts == [0, 1, 0]
     assert rows.refs == [0]
 
@@ -55,9 +54,10 @@ def test_references_number_across_kinds_end_to_end() -> None:
     """One integer names both the kind and the row, which is what lets a spell's
     references be one flat array."""
     rows = build_column(
-        [family("loose", ("anim",), [(1, (4,)), (1, (5,))]),
-         family("pose", (), [(1, ())])],
-        reads=NO_READS, spell_ids=[1])
+        [family("loose", ("anim",), [(1, (4,)), (1, (5,))]), family("pose", (), [(1, ())])],
+        reads=NO_READS,
+        spell_ids=[1],
+    )
     assert rows.pools["loose"].rows == 2
     assert rows.pools["pose"].rows == 1
     # The pose pool starts where the loose pool ends.
@@ -67,8 +67,7 @@ def test_references_number_across_kinds_end_to_end() -> None:
 def test_a_valueless_kind_still_has_exactly_one_row() -> None:
     """A pose has no column to take a length from, and every spell that holds
     one refers to the same empty row."""
-    rows = build_column([family("pose", (), [(1, ()), (2, ()), (3, ())])],
-                        reads=NO_READS, spell_ids=[1, 2, 3])
+    rows = build_column([family("pose", (), [(1, ()), (2, ()), (3, ())])], reads=NO_READS, spell_ids=[1, 2, 3])
     assert rows.pools["pose"].rows == 1
     assert rows.pools["pose"].columns == ()
     assert rows.refs == [0, 0, 0]
@@ -76,9 +75,7 @@ def test_a_valueless_kind_still_has_exactly_one_row() -> None:
 
 def test_a_spells_references_are_sorted() -> None:
     """So equal runs sit together rather than arriving in walk order."""
-    rows = build_column(
-        [family("loose", ("anim",), [(1, (9,)), (1, (3,)), (1, (5,))])],
-        reads=NO_READS, spell_ids=[1])
+    rows = build_column([family("loose", ("anim",), [(1, (9,)), (1, (3,)), (1, (5,))])], reads=NO_READS, spell_ids=[1])
     assert rows.refs == sorted(rows.refs)
 
 
@@ -86,8 +83,7 @@ def test_every_pair_survives_the_pooling() -> None:
     """Pooling is a change of storage, never of content: as many references come
     out as pairs went in."""
     pairs = [(1, (7,)), (1, (8,)), (2, (7,)), (3, (9,)), (3, (7,))]
-    rows = build_column([family("sound", ("file",), pairs)],
-                        reads=NO_READS, spell_ids=[1, 2, 3])
+    rows = build_column([family("sound", ("file",), pairs)], reads=NO_READS, spell_ids=[1, 2, 3])
     assert len(rows.refs) == len(pairs)
     assert sum(rows.counts) == len(pairs)
 
@@ -95,8 +91,7 @@ def test_every_pair_survives_the_pooling() -> None:
 def test_a_column_holds_only_the_spells_it_was_given() -> None:
     """A family naming a spell the pack does not list contributes nothing, and
     does not shift the spells that follow."""
-    rows = build_column([family("sound", ("file",), [(1, (7,)), (99, (7,))])],
-                        reads=NO_READS, spell_ids=[1, 2])
+    rows = build_column([family("sound", ("file",), [(1, (7,)), (99, (7,))])], reads=NO_READS, spell_ids=[1, 2])
     assert rows.counts == [1, 0]
     assert len(rows.refs) == 1
 
@@ -111,8 +106,7 @@ def test_the_absent_marker_is_not_zero_where_zero_is_real() -> None:
 def test_the_pool_keeps_one_column_per_property(props: tuple[str, ...]) -> None:
     """Column-major, so the artifact ships like values together."""
     values = tuple(range(len(props)))
-    rows = build_column([family("k", props, [(1, values)])],
-                        reads=NO_READS, spell_ids=[1])
+    rows = build_column([family("k", props, [(1, values)])], reads=NO_READS, spell_ids=[1])
     assert len(rows.pools["k"].columns) == len(props)
     assert rows.pools["k"].props == props
 
@@ -121,10 +115,17 @@ def test_a_spanning_property_ships_a_column_per_component() -> None:
     """One property, several columns: what a reader means as one value and the
     artifact holds as three."""
     rows = build_column(
-        [family("attach", ("file", "offset"),
+        [
+            family(
+                "attach",
+                ("file", "offset"),
                 [(1, (7, 0, 0, 1000)), (2, (7, 0, 0, 2000))],
-                spans={"offset": ("x", "y", "z")})],
-        reads=NO_READS, spell_ids=[1, 2])
+                spans={"offset": ("x", "y", "z")},
+            )
+        ],
+        reads=NO_READS,
+        spell_ids=[1, 2],
+    )
     pool = rows.pools["attach"]
     assert pool.rows == 2, "the components are part of the row key"
     assert pool.values["file"] == [7, 7]
@@ -138,18 +139,26 @@ def test_a_spanning_property_may_not_resolve_through_a_vocabulary() -> None:
     """
     with pytest.raises(ValueError, match="has none to key"):
         build_column(
-            [family("attach", ("anim",), [(1, (0, 0, 0))],
+            [
+                family(
+                    "attach",
+                    ("anim",),
+                    [(1, (0, 0, 0))],
                     spans={"anim": ("start", "hold", "end")},
-                    vocab={"anim": "anims"})],
-            reads=NO_READS, spell_ids=[1])
+                    vocab={"anim": "anims"},
+                )
+            ],
+            reads=NO_READS,
+            spell_ids=[1],
+        )
 
 
 def test_a_carried_column_is_not_one_of_the_properties() -> None:
     """The whole point of the split: what the evaluator reads is exactly what
     the catalogue declares, and a bridge column cannot pass for a property."""
     rows = build_column(
-        [family("dissolve", ("texture",), [(1, (70, 40))], carried=("dissolve",))],
-        reads=NO_READS, spell_ids=[1])
+        [family("dissolve", ("texture",), [(1, (70, 40))], carried=("dissolve",))], reads=NO_READS, spell_ids=[1]
+    )
     pool = rows.pools["dissolve"]
     assert dict(pool.values) == {"texture": [70]}
     assert dict(pool.extras) == {"dissolve": [40]}
@@ -159,9 +168,10 @@ def test_a_carried_column_still_keys_the_row() -> None:
     """Two effects that look alike stay two rows, which is what keeps a pooled
     row and the legacy row it replaced one to one."""
     rows = build_column(
-        [family("dissolve", ("texture",),
-                [(1, (70, 40)), (1, (70, 41))], carried=("dissolve",))],
-        reads=NO_READS, spell_ids=[1])
+        [family("dissolve", ("texture",), [(1, (70, 40)), (1, (70, 41))], carried=("dissolve",))],
+        reads=NO_READS,
+        spell_ids=[1],
+    )
     assert rows.pools["dissolve"].rows == 2
     assert dict(rows.pools["dissolve"].extras) == {"dissolve": [40, 41]}
 
@@ -169,8 +179,7 @@ def test_a_carried_column_still_keys_the_row() -> None:
 def test_a_float_survives_the_pooling() -> None:
     """A size change and a movement change are signed percentages, and
     forty-four of them carry a fraction."""
-    rows = build_column([family("scale", ("amount",), [(1, (-99.5,))])],
-                        reads=NO_READS, spell_ids=[1])
+    rows = build_column([family("scale", ("amount",), [(1, (-99.5,))])], reads=NO_READS, spell_ids=[1])
     assert rows.pools["scale"].columns == ([-99.5],)
 
 
@@ -179,10 +188,18 @@ def test_a_pool_keeps_only_its_own_properties_vocabularies() -> None:
     pool is where the cut happens: a kind must not ship entries for properties
     it does not have."""
     rows = build_column(
-        [family("ground", ("file",), [(1, (7,))],
+        [
+            family(
+                "ground",
+                ("file",),
+                [(1, (7,))],
                 vocab={"file": "files", "motion": "motions"},
-                absent={"attach": ABSENT})],
-        reads=NO_READS, spell_ids=[1])
+                absent={"attach": ABSENT},
+            )
+        ],
+        reads=NO_READS,
+        spell_ids=[1],
+    )
     pool = rows.pools["ground"]
     assert dict(pool.vocab) == {"file": "files"}
     assert dict(pool.absent) == {}
@@ -193,18 +210,20 @@ def test_a_family_naming_an_undeclared_vocabulary_fails_the_build() -> None:
     the raw number, and every query on it answers nothing forever."""
     with pytest.raises(ValueError, match="nowhere"):
         build_column(
-            [family("tint", ("colour",), [(1, (5,))], vocab={"colour": "nowhere"})],
-            reads=NO_READS, spell_ids=[1])
+            [family("tint", ("colour",), [(1, (5,))], vocab={"colour": "nowhere"})], reads=NO_READS, spell_ids=[1]
+        )
 
 
 def test_a_count_reads_the_effect_rather_than_the_texture() -> None:
     """One dissolve painting two textures is two rows and one dissolve, and the
     count the section carried has always been the second."""
-    table = columns_of(build_column(
-        [family("dissolve", ("texture",),
-                [(1, (70, 40)), (1, (71, 40)), (2, (70, 40))],
-                carried=("dissolve",))],
-        reads=NO_READS, spell_ids=[1, 2]))
+    table = columns_of(
+        build_column(
+            [family("dissolve", ("texture",), [(1, (70, 40)), (1, (71, 40)), (2, (70, 40))], carried=("dissolve",))],
+            reads=NO_READS,
+            spell_ids=[1, 2],
+        )
+    )
     rows = list(walk(table))
     assert len(rows) == 3
     assert len(entries(rows, "dissolve", "dissolve")) == 2

@@ -72,12 +72,13 @@ def chosen(wanted: str) -> Path:
     """
     hits = select(wanted) if wanted else [pack for pack in PACKS if pack.default]
     if len(hits) != 1:
-        sys.exit(f"error: {wanted or 'the default'} matches {len(hits)} packs; "
-                 f"name one of {', '.join(pack.key for pack in PACKS)}")
+        sys.exit(
+            f"error: {wanted or 'the default'} matches {len(hits)} packs; "
+            f"name one of {', '.join(pack.key for pack in PACKS)}"
+        )
     pack_dir = DATA / hits[0].id
     if not (pack_dir / "manifest.json").exists():
-        sys.exit(f"error: {hits[0].id} is on the roster but not built; "
-                 f"run python tools/rebuild.py {hits[0].key} first")
+        sys.exit(f"error: {hits[0].id} is on the roster but not built; run python tools/rebuild.py {hits[0].key} first")
     return pack_dir
 
 
@@ -128,12 +129,10 @@ def install(variation: Variation, into: Path) -> int:
         sys.exit(f"error: {source} has not been built")
     if not into.is_dir():
         sys.exit(f"error: {into} is not a directory")
-    staged = [CODE_ADDON, *sorted(path for path in source.iterdir()
-                                  if path.is_dir())]
+    staged = [CODE_ADDON, *sorted(path for path in source.iterdir() if path.is_dir())]
     for directory in staged:
         if not directory.name.startswith(OWNED):
-            sys.exit(f"error: refusing to install {directory.name}, which is "
-                     f"not one of ours")
+            sys.exit(f"error: refusing to install {directory.name}, which is not one of ours")
     written = 0
     for directory in staged:
         landing = into / directory.name
@@ -149,8 +148,7 @@ def install(variation: Variation, into: Path) -> int:
     # by it.
     wanted = {directory.name for directory in staged}
     for stale in sorted(into.iterdir()):
-        if (stale.is_dir() and stale.name.startswith(OWNED)
-                and stale.name not in wanted):
+        if stale.is_dir() and stale.name.startswith(OWNED) and stale.name not in wanted:
             shutil.rmtree(stale)
             log(f"  removed {stale.name}, which this layout no longer builds")
     return written
@@ -170,21 +168,18 @@ def schema() -> dict[str, object]:
         SystemExit: Node is missing or the export failed, with its own message.
     """
     try:
-        subprocess.run(["node", "tools/build.mjs", "--cli"], cwd=ROOT,
-                       check=True)
-        printed = subprocess.run(["node", "tools/schema.mjs"], cwd=ROOT,
-                                 check=True, capture_output=True, text=True,
-                                 encoding="utf-8")
+        subprocess.run(["node", "tools/build.mjs", "--cli"], cwd=ROOT, check=True)
+        printed = subprocess.run(
+            ["node", "tools/schema.mjs"], cwd=ROOT, check=True, capture_output=True, text=True, encoding="utf-8"
+        )
     except FileNotFoundError:
-        sys.exit("error: node is not on the path; the schema export runs "
-                 "through the web engine")
+        sys.exit("error: node is not on the path; the schema export runs through the web engine")
     except subprocess.CalledProcessError as failed:
         sys.exit(f"error: the schema export failed ({failed.returncode})")
     return json.loads(printed.stdout)
 
 
-def build(pack_dir: Path, variation: Variation, declared: dict[str, object],
-          *, dry: bool) -> None:
+def build(pack_dir: Path, variation: Variation, declared: dict[str, object], *, dry: bool) -> None:
     """One variation of the addon data, from one shipped pack."""
     sections = packfile.load(pack_dir)
     meta = sections.pop("meta", {})
@@ -198,15 +193,19 @@ def build(pack_dir: Path, variation: Variation, declared: dict[str, object],
         # The pack id is not a version: two of them carry a tag, so falling
         # back to the directory name would fail while working out which
         # client to advertise, on exactly the packs this tool is built for.
-        sys.exit(f"error: {pack_dir.name} has no meta.version to read the "
-                 f"client interface number from")
-    built = chunks(SECTIONS, sections, pack=pack_dir.name, version=str(version),
-                   built=str(meta.get("built", "")), variation=variation,
-                   schema=declared,
-                   absent=tuple(manifest.get("absentSections", ())))
+        sys.exit(f"error: {pack_dir.name} has no meta.version to read the client interface number from")
+    built = chunks(
+        SECTIONS,
+        sections,
+        pack=pack_dir.name,
+        version=str(version),
+        built=str(meta.get("built", "")),
+        variation=variation,
+        schema=declared,
+        absent=tuple(manifest.get("absentSections", ())),
+    )
     total = sum(len(payload) for payload in built.files.values())
-    log(f"{variation.value}: {built.addon}, {len(built.files)} files, "
-        f"{total:,} bytes")
+    log(f"{variation.value}: {built.addon}, {len(built.files)} files, {total:,} bytes")
     for name, payload in built.files.items():
         log(f"    {name:26} {len(payload):>12,}")
     if dry:
@@ -219,26 +218,37 @@ def build(pack_dir: Path, variation: Variation, declared: dict[str, object],
 def main() -> None:
     """Build the variations named on the command line."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--pack", default="", metavar="PREFIX",
-                        help="which pack to read, by roster key or build "
-                             "prefix; defaults to the one the app serves, "
-                             "which is the client the addon runs on")
-    parser.add_argument("--variation", action="append", default=[],
-                        choices=[member.value for member in Variation],
-                        help="which variation to build, repeatable; both by "
-                             "default")
-    parser.add_argument("--list", dest="dry", action="store_true",
-                        help="report what would be written and write nothing")
-    parser.add_argument("--install", metavar="ADDONS", default="",
-                        help="copy one built variation into a client's addon "
-                             "folder, with the reader beside it. Only "
-                             "directories named for this addon are ever "
-                             "written or replaced")
+    parser.add_argument(
+        "--pack",
+        default="",
+        metavar="PREFIX",
+        help="which pack to read, by roster key or build "
+        "prefix; defaults to the one the app serves, "
+        "which is the client the addon runs on",
+    )
+    parser.add_argument(
+        "--variation",
+        action="append",
+        default=[],
+        choices=[member.value for member in Variation],
+        help="which variation to build, repeatable; both by default",
+    )
+    parser.add_argument(
+        "--list", dest="dry", action="store_true", help="report what would be written and write nothing"
+    )
+    parser.add_argument(
+        "--install",
+        metavar="ADDONS",
+        default="",
+        help="copy one built variation into a client's addon "
+        "folder, with the reader beside it. Only "
+        "directories named for this addon are ever "
+        "written or replaced",
+    )
     args = parser.parse_args()
 
     pack_dir = chosen(args.pack)
-    wanted = ([Variation(name) for name in args.variation]
-              or list(Variation))
+    wanted = [Variation(name) for name in args.variation] or list(Variation)
     log(f"Reading {pack_dir.name}")
     declared = schema()
     for variation in wanted:
@@ -246,9 +256,11 @@ def main() -> None:
 
     if args.install:
         if len(wanted) != 1:
-            sys.exit("error: --install takes one --variation; two of them "
-                     "share every addon name and the second would replace "
-                     "the first")
+            sys.exit(
+                "error: --install takes one --variation; two of them "
+                "share every addon name and the second would replace "
+                "the first"
+            )
         count = install(wanted[0], Path(args.install))
         log(f"Installed {count} addon(s) into {args.install}")
 

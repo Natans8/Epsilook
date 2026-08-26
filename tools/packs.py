@@ -164,14 +164,17 @@ class Flavour:
     """
 
 
-FLAVOURS: dict[str, Flavour] = {f.code: f for f in (
-    Flavour("wow"),
-    Flavour("wowt", mark="ptr"),
-    Flavour("wow_classic"),
-    Flavour("wow_classic_era"),
-    Flavour("wow_anniversary"),
-    Flavour("epsilon", mark="epsilon"),
-)}
+FLAVOURS: dict[str, Flavour] = {
+    f.code: f
+    for f in (
+        Flavour("wow"),
+        Flavour("wowt", mark="ptr"),
+        Flavour("wow_classic"),
+        Flavour("wow_classic_era"),
+        Flavour("wow_anniversary"),
+        Flavour("epsilon", mark="epsilon"),
+    )
+}
 """Every line the roster ships. A closed vocabulary, so a typo is a failed build
 rather than a pack nothing can find."""
 
@@ -302,15 +305,13 @@ PACKS: tuple[Pack, ...] = (
     Pack("shadowlands", "Shadowlands", "wow", "9.2.7.45745"),
     Pack("dragonflight", "Dragonflight", "wow", "10.2.7.55664"),
     Pack("tww", "The War Within", "wow", "11.2.7.65299"),
-
     # The client the audience actually plays, and the only pack carrying the
     # spells a private server added. It sits on Shadowlands' build, so `tag`
     # separates the two exactly as it separates the PTR line from live. Untracked
     # because no public service answers what build it is on: the build's own
     # acquisition checks the live service against this row and refuses to pack
     # a different one.
-    Pack("epsilon", "Epsilon", "epsilon", "9.2.7.45745",
-         default=True, locales=("enUS",), client="epsilon"),
+    Pack("epsilon", "Epsilon", "epsilon", "9.2.7.45745", default=True, locales=("enUS",), client="epsilon"),
 )
 
 # Exactly one default, and keys/builds are unique — a duplicate would make
@@ -431,8 +432,7 @@ def stale_cache() -> list[tuple[Path, int]]:
     # then the roster rather than the shape of a regex, and widening that
     # pattern cannot quietly start deleting a quarter of a gigabyte that no
     # download would bring back.
-    keep = (set(builds()) | {SOUNDKITNAME_BUILD}
-            | {f"{pack.build}-{pack.client}" for pack in PACKS if pack.client})
+    keep = set(builds()) | {SOUNDKITNAME_BUILD} | {f"{pack.build}-{pack.client}" for pack in PACKS if pack.client}
     keep_tdb = {tdb_tag(build) for build in builds()} - {""}
 
     stale = []
@@ -496,8 +496,7 @@ def fetch_bpsv(url: str) -> list[dict[str, str]]:
         us|96db...|d2a7...|68974|12.0.7.68974|5302...
     """
     try:
-        with urllib.request.urlopen(urllib.request.Request(url, headers=UA),
-                                    timeout=60) as response:
+        with urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=60) as response:
             body = response.read().decode("utf-8", errors="replace")
     except (urllib.error.URLError, OSError) as exc:
         print(f"could not reach {url}: {exc}", file=sys.stderr)
@@ -544,8 +543,7 @@ def wago_has(build: str) -> bool | None:
     """
     url = WAGO_PROBE_URL.format(build=build)
     try:
-        with urllib.request.urlopen(urllib.request.Request(url, headers=UA),
-                                    timeout=60) as response:
+        with urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=60) as response:
             return response.status == 200
     except urllib.error.HTTPError as exc:
         if exc.code == 404:
@@ -607,8 +605,10 @@ def bump(keys: list[str]) -> int:
             print(f"no pack named {key!r}", file=sys.stderr)
             return 1
         if not pack.tracked:
-            print(f"{key} is not tracked — the {pack.flavour} line moved on and no "
-                  f"longer ships this patch", file=sys.stderr)
+            print(
+                f"{key} is not tracked — the {pack.flavour} line moved on and no longer ships this patch",
+                file=sys.stderr,
+            )
             return 1
 
         live = live_build(pack.flavour)
@@ -619,18 +619,18 @@ def bump(keys: list[str]) -> int:
             print(f"{key:<13} already on {live}")
             continue
         if wago_has(live) is False:
-            print(f"{key:<13} {live} is not on wago yet — a rebuild would 404. "
-                  f"Not bumping.", file=sys.stderr)
+            print(f"{key:<13} {live} is not on wago yet — a rebuild would 404. Not bumping.", file=sys.stderr)
             return 1
 
         # Anchored on this pack's own Pack(...) row, so a build string that
         # happens to appear elsewhere in the file cannot be hit by accident.
-        pattern = re.compile(rf'(Pack\("{re.escape(key)}",[^)]*?")'
-                             rf'{re.escape(pack.build)}(")')
+        pattern = re.compile(
+            rf'(Pack\("{re.escape(key)}",[^)]*?")'
+            rf'{re.escape(pack.build)}(")'
+        )
         source, count = pattern.subn(rf"\g<1>{live}\g<2>", source, count=1)
         if count != 1:
-            print(f"{key}: could not locate its build string in {source_path.name}",
-                  file=sys.stderr)
+            print(f"{key}: could not locate its build string in {source_path.name}", file=sys.stderr)
             return 1
         changed.append((key, pack.build, live, tdb_tag(live)))
 
@@ -640,8 +640,7 @@ def bump(keys: list[str]) -> int:
     source_path.write_text(source, encoding="utf-8")
     for key, old, new, tag in changed:
         print(f"{key:<13} {old} -> {new}   [TDB: {tag or 'none'}]")
-    print(f"\nedited {source_path.name}. Now: python tools/rebuild.py "
-          f"{' '.join(k for k, *_ in changed)}")
+    print(f"\nedited {source_path.name}. Now: python tools/rebuild.py {' '.join(k for k, *_ in changed)}")
     return 0
 
 
@@ -653,18 +652,18 @@ def wow_products() -> set[str]:
     it is filtered to the WoW family — a new Classic flavour appears here the
     day it goes live, which is what makes --check self-detecting.
     """
-    return {row["Product"] for row in fetch_bpsv(SUMMARY_URL)
-            if row.get("Product", "").startswith("wow")}
+    return {row["Product"] for row in fetch_bpsv(SUMMARY_URL) if row.get("Product", "").startswith("wow")}
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description=__doc__,
-                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--check", action="store_true",
-                    help="ask Blizzard whether a newer build exists for each pack")
-    ap.add_argument("--bump", nargs="+", metavar="KEY",
-                    help="rewrite build= for these packs to the current live "
-                         "build (explicit only; nothing does this for you)")
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--check", action="store_true", help="ask Blizzard whether a newer build exists for each pack")
+    ap.add_argument(
+        "--bump",
+        nargs="+",
+        metavar="KEY",
+        help="rewrite build= for these packs to the current live build (explicit only; nothing does this for you)",
+    )
     args = ap.parse_args()
 
     if args.bump:
@@ -672,8 +671,7 @@ def main() -> int:
 
     behind = 0
     for pack in PACKS:
-        flags = " ".join(f for f, on in
-                         (("default", pack.default), ("hidden", pack.hidden)) if on)
+        flags = " ".join(f for f, on in (("default", pack.default), ("hidden", pack.hidden)) if on)
         line = f"{pack.key:<14} {pack.id:<17} {pack.label:<28} {flags}"
         if args.check and pack.tracked:
             available = live_build(pack.flavour)
@@ -696,8 +694,7 @@ def main() -> int:
         # itself if --check only ever looks at what we already track.
         published = wow_products()
         tracked = {p.flavour for p in PACKS if p.tracked}
-        unknown = sorted(p for p in published - tracked - set(IGNORED_PRODUCTS)
-                         if not is_internal(p))
+        unknown = sorted(p for p in published - tracked - set(IGNORED_PRODUCTS) if not is_internal(p))
         if unknown:
             print("\nUNRECOGNISED product line(s) — new, renamed, or region-locked:")
             for product in unknown:
@@ -706,8 +703,10 @@ def main() -> int:
             behind += len(unknown)
 
     if args.check and behind:
-        print(f"\n{behind} item(s) need attention. Edit the `build=` string in "
-              f"tools/packs.py, then: python tools/rebuild.py <key>")
+        print(
+            f"\n{behind} item(s) need attention. Edit the `build=` string in "
+            f"tools/packs.py, then: python tools/rebuild.py <key>"
+        )
     return 1 if (args.check and behind) else 0
 
 

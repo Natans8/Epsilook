@@ -9,11 +9,9 @@ from pack.emit.module import Module, absent_sections, assemble
 from pack.model.section import Section
 
 
-def a_section(name: str, module: str, *, columns: tuple[str, ...] = (),
-              localizable: tuple[str, ...] = ()) -> Section:
+def a_section(name: str, module: str, *, columns: tuple[str, ...] = (), localizable: tuple[str, ...] = ()) -> Section:
     """A section carrying only what emit reads off it."""
-    return Section(name=name, doc="", module=module, produce=lambda _: {},
-                   columns=columns, localizable=localizable)
+    return Section(name=name, doc="", module=module, produce=lambda _: {}, columns=columns, localizable=localizable)
 
 
 def a_spoken_section(name: str) -> Section:
@@ -23,8 +21,7 @@ def a_spoken_section(name: str) -> Section:
 
 def a_pack(locale: str = "enUS", name: str = "Steed") -> list[Module]:
     """One build's modules: a structure module and one language's names."""
-    return assemble([a_spoken_section("mounts")],
-                    {"mounts": {"ids": [1], "names": [name]}}, locale=locale)
+    return assemble([a_spoken_section("mounts")], {"mounts": {"ids": [1], "names": [name]}}, locale=locale)
 
 
 def spoken_only(locale: str, name: str) -> list[Module]:
@@ -39,8 +36,7 @@ def test_the_manifest_names_each_module_file_and_its_size() -> None:
     modules = assemble([a_section("animNames", "core")], {"animNames": ["Stand"]})
     entry = manifest("9.2.7.45745", modules)
     assert entry["pack"] == "9.2.7.45745"
-    assert entry["modules"] == {
-        "core": {"file": modules[0].filename, "bytes": len(modules[0].payload)}}
+    assert entry["modules"] == {"core": {"file": modules[0].filename, "bytes": len(modules[0].payload)}}
 
 
 def test_a_module_is_named_where_it_was_written() -> None:
@@ -67,8 +63,7 @@ def test_a_language_is_named_apart_from_the_structure() -> None:
     """Choosing a language is choosing one entry of `locales` and changes
     nothing about `modules`, which is what makes the structure fetched once.
     """
-    entry = manifest("9.2.7.45745",
-                     [*a_pack("enUS"), *spoken_only("ruRU", "Скакун")])
+    entry = manifest("9.2.7.45745", [*a_pack("enUS"), *spoken_only("ruRU", "Скакун")])
     modules, locales = entry["modules"], entry["locales"]
     assert isinstance(modules, dict) and isinstance(locales, dict)
     assert list(modules) == ["core"]
@@ -82,8 +77,7 @@ def test_two_languages_that_serialised_alike_name_one_file() -> None:
     not: a module is named by what is in it, and two languages holding the same
     words hold the same file.
     """
-    entry = manifest("1.15.9.69109",
-                     [*a_pack("enUS"), *spoken_only("ruRU", "Steed")])
+    entry = manifest("1.15.9.69109", [*a_pack("enUS"), *spoken_only("ruRU", "Steed")])
     locales = entry["locales"]
     assert isinstance(locales, dict)
     assert locales["enUS"]["names"]["file"] == locales["ruRU"]["names"]["file"]
@@ -117,28 +111,31 @@ def test_what_the_build_lacks_is_read_from_the_one_place_that_knows() -> None:
     """
     sections = [a_section("animNames", "core"), a_section("spellAreas", "universal")]
     produced: dict[str, object] = {"animNames": ["Stand"]}
-    entry = manifest("1.15.9.69109", assemble(sections, produced),
-                     absent=absent_sections(sections, produced))
+    entry = manifest("1.15.9.69109", assemble(sections, produced), absent=absent_sections(sections, produced))
     assert entry["absentSections"] == ["spellAreas"]
 
 
 WHOLE = {
     "pack": "9.2.7.45745",
-    "meta": {"format": 54, "built": "2026-08-01",
-             "counts": {"spells": 276332, "spellDescriptions": 128374},
-             "domains": {"casttime": {"min": 0}},
-             "degradedSections": {"morphs": ["creature_template"],
-                                  "spellText": ["SpellScaling"]}},
-    "modules": {"core": {"file": "core-aa.json.gz", "bytes": 7},
-                "universal": {"file": "universal-bb.json.gz", "bytes": 3}},
-    "locales": {"enUS": {"names": {"file": "names-cc.json.gz", "bytes": 2},
-                         "text": {"file": "text-dd.json.gz", "bytes": 4}}},
+    "meta": {
+        "format": 54,
+        "built": "2026-08-01",
+        "counts": {"spells": 276332, "spellDescriptions": 128374},
+        "domains": {"casttime": {"min": 0}},
+        "degradedSections": {"morphs": ["creature_template"], "spellText": ["SpellScaling"]},
+    },
+    "modules": {
+        "core": {"file": "core-aa.json.gz", "bytes": 7},
+        "universal": {"file": "universal-bb.json.gz", "bytes": 3},
+    },
+    "locales": {
+        "enUS": {"names": {"file": "names-cc.json.gz", "bytes": 2}, "text": {"file": "text-dd.json.gz", "bytes": 4}}
+    },
     "absentSections": ["keybinds", "spellText"],
 }
 """A whole pack's manifest, as a partial build would find it on disk."""
 
-HOME = {"keybinds": "core", "spellText": "text", "morphs": "core",
-        "spells": "core"}
+HOME = {"keybinds": "core", "spellText": "text", "morphs": "core", "spells": "core"}
 """Which module each section ships in, as the registry would answer."""
 
 
@@ -147,13 +144,19 @@ def test_a_partial_build_keeps_every_claim_about_what_it_did_not_touch() -> None
     counts and what is absent or thin in them are all still true and must all
     survive -- writing the partial manifest alone would replace a whole pack
     with a partial one."""
-    fresh = {"pack": "9.2.7.45745",
-             "meta": {"format": 54, "built": "2026-08-16",
-                      "counts": {"spellDescriptions": 130000},
-                      "domains": {}, "degradedSections": {}},
-             "modules": {},
-             "locales": {"enUS": {"text": {"file": "text-ee.json.gz", "bytes": 5}}},
-             "absentSections": []}
+    fresh = {
+        "pack": "9.2.7.45745",
+        "meta": {
+            "format": 54,
+            "built": "2026-08-16",
+            "counts": {"spellDescriptions": 130000},
+            "domains": {},
+            "degradedSections": {},
+        },
+        "modules": {},
+        "locales": {"enUS": {"text": {"file": "text-ee.json.gz", "bytes": 5}}},
+        "absentSections": [],
+    }
     merged = carry_forward(fresh, WHOLE, frozenset({"text"}), HOME)
     assert merged["modules"] == WHOLE["modules"]
     locales = merged["locales"]
@@ -176,13 +179,18 @@ def test_a_partial_build_keeps_every_claim_about_what_it_did_not_touch() -> None
 def test_a_rebuilt_module_speaks_for_itself() -> None:
     """Whatever the fresh pass says about a module it built replaces the old
     claim outright, absence included."""
-    fresh = {"pack": "9.2.7.45745",
-             "meta": {"format": 54, "counts": {}, "domains": {},
-                      "degradedSections": {"morphs": ["creature_template",
-                                                      "GameObjectDisplayInfo"]}},
-             "modules": {"core": {"file": "core-ff.json.gz", "bytes": 9}},
-             "locales": {"enUS": {"names": {"file": "names-gg.json.gz", "bytes": 1}}},
-             "absentSections": ["morphDisplays"]}
+    fresh = {
+        "pack": "9.2.7.45745",
+        "meta": {
+            "format": 54,
+            "counts": {},
+            "domains": {},
+            "degradedSections": {"morphs": ["creature_template", "GameObjectDisplayInfo"]},
+        },
+        "modules": {"core": {"file": "core-ff.json.gz", "bytes": 9}},
+        "locales": {"enUS": {"names": {"file": "names-gg.json.gz", "bytes": 1}}},
+        "absentSections": ["morphDisplays"],
+    }
     merged = carry_forward(fresh, WHOLE, frozenset({"core", "names"}), HOME)
     modules = merged["modules"]
     assert isinstance(modules, dict)
@@ -190,8 +198,7 @@ def test_a_rebuilt_module_speaks_for_itself() -> None:
     assert modules["universal"]["file"] == "universal-bb.json.gz"
     meta = merged["meta"]
     assert isinstance(meta, dict)
-    assert meta["degradedSections"]["morphs"] == ["creature_template",
-                                                  "GameObjectDisplayInfo"]
+    assert meta["degradedSections"]["morphs"] == ["creature_template", "GameObjectDisplayInfo"]
     # keybinds ships in the rebuilt core and the fresh pass did not call it
     # absent, so the carried claim is dropped; spellText's module was untouched.
     assert merged["absentSections"] == ["morphDisplays", "spellText"]
@@ -200,9 +207,11 @@ def test_a_rebuilt_module_speaks_for_itself() -> None:
 def test_the_rendered_manifest_parses_back_to_the_same_document() -> None:
     """The shape on disk is a presentation choice and nothing else: a reader
     must get the identical document however it was laid out."""
-    entry = manifest("9.2.7.45745", a_pack("enUS"),
-                     {"format": 54, "counts": {"spells": 276332, "morphs": 9},
-                      "domains": {"scale": {"min": -99, "max": 900}}})
+    entry = manifest(
+        "9.2.7.45745",
+        a_pack("enUS"),
+        {"format": 54, "counts": {"spells": 276332, "morphs": 9}, "domains": {"scale": {"min": -99, "max": 900}}},
+    )
     assert json.loads(rendered(entry)) == entry
 
 
@@ -211,13 +220,19 @@ def test_a_leaf_sits_on_one_line_and_the_skeleton_is_still_indented() -> None:
     must show one changed line per entry that moved -- not hundreds of lines of
     re-indented counts. The skeleton stays open so the file is still a document
     a person can skim."""
-    entry = manifest("9.2.7.45745", a_pack("enUS"),
-                     {"format": 54, "counts": {"spells": 276332, "morphs": 9},
-                      "domains": {"scale": {"min": -99}, "speed": {"min": 0}}})
+    entry = manifest(
+        "9.2.7.45745",
+        a_pack("enUS"),
+        {
+            "format": 54,
+            "counts": {"spells": 276332, "morphs": 9},
+            "domains": {"scale": {"min": -99}, "speed": {"min": 0}},
+        },
+    )
     lines = rendered(entry).splitlines()
-    counts, = (line for line in lines if '"counts"' in line)
+    (counts,) = (line for line in lines if '"counts"' in line)
     assert '"spells": 276332' in counts and '"morphs": 9' in counts
-    core, = (line for line in lines if '"core"' in line)
+    (core,) = (line for line in lines if '"core"' in line)
     assert '"file"' in core and '"bytes"' in core
     assert sum(1 for line in lines if '"min"' in line) == 2
     assert '"meta": {' in "\n".join(lines)

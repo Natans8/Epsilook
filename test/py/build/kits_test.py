@@ -5,9 +5,15 @@ from __future__ import annotations
 from pack.routes.attachments import NO_ATTACHMENT, NO_MOTION
 from pack.routes.fx import ChainEffect, FxPayloads, ScreenRow
 from pack.routes.kits import KitEffects, read_kit_effects
-from pack.routes.models import (MODEL_CAT_AREA, MODEL_CAT_BARRAGE,
-                                MODEL_CAT_TRAIL, SCALE_UNIT, UNPLACED,
-                                AttachModel, ModelSources)
+from pack.routes.models import (
+    MODEL_CAT_AREA,
+    MODEL_CAT_BARRAGE,
+    MODEL_CAT_TRAIL,
+    SCALE_UNIT,
+    UNPLACED,
+    AttachModel,
+    ModelSources,
+)
 from pack.routes.procedures import ProcEffects
 from pack.routes.sounds import read_kit_types, read_soundkit_files, sound_type_names
 from pack.sources import load_local_enum
@@ -43,24 +49,31 @@ ParentSpellVisualKitID,EffectType,Effect
 """
 
 MODELS = ModelSources(
-    attach_models={1: {AttachModel(8000, 0, 5, NO_ATTACHMENT, 0, NO_MOTION,
-                                   UNPLACED, SCALE_UNIT)}},
-    attach_anims={1: {17}}, attach_animkits={1: {42}},
-    emission_fid={20: 8300}, barrage_fid={30: 8400}, barrage_attach={30: 3})
+    attach_models={1: {AttachModel(8000, 0, 5, NO_ATTACHMENT, 0, NO_MOTION, UNPLACED, SCALE_UNIT)}},
+    attach_anims={1: {17}},
+    attach_animkits={1: {42}},
+    emission_fid={20: 8300},
+    barrage_fid={30: 8400},
+    barrage_attach={30: 3},
+)
 
 PROCS = ProcEffects(
-    chain={10: 70}, tints={11: 0xFF0000}, freezes={12},
-    models={13: AttachModel(8500, MODEL_CAT_TRAIL, NO_ATTACHMENT, NO_ATTACHMENT, 0,
-                            NO_MOTION, UNPLACED, SCALE_UNIT)},
-    anims={13: ((0, 12),)})
+    chain={10: 70},
+    tints={11: 0xFF0000},
+    freezes={12},
+    models={13: AttachModel(8500, MODEL_CAT_TRAIL, NO_ATTACHMENT, NO_ATTACHMENT, 0, NO_MOTION, UNPLACED, SCALE_UNIT)},
+    anims={13: ((0, 12),)},
+)
 
 FX = FxPayloads(
-    chains={70: ChainEffect(0, 0, 0, 0, (), (71,)),
-            71: ChainEffect(0, 0, 0, 0, (), ())},
+    chains={70: ChainEffect(0, 0, 0, 0, (), (71,)), 71: ChainEffect(0, 0, 0, 0, (), ())},
     beam_chain={80: (70, 1, 2)},
-    dissolves={400: (1.0, (), -1)}, glows={500: 0xFF0000},
+    dissolves={400: (1.0, (), -1)},
+    glows={500: 0xFF0000},
     shadowies={600: (0, 0, -1)},
-    screens={90: ScreenRow(name="Shaman - Hex")}, svse_screen={40: 90, 41: 99})
+    screens={90: ScreenRow(name="Shaman - Hex")},
+    svse_screen={40: 90, 41: 99},
+)
 
 SOUND_KIT_ENTRY = """\
 SoundKitID,FileDataID
@@ -73,18 +86,15 @@ SoundKitID,FileDataID
 
 def kits(tables: BuildTables) -> KitEffects:
     return read_kit_effects(
-        tables(SpellVisualAnim=SPELL_VISUAL_ANIM,
-               SpellVisualKitEffect=SPELL_VISUAL_KIT_EFFECT),
-        MODELS, PROCS, FX)
+        tables(SpellVisualAnim=SPELL_VISUAL_ANIM, SpellVisualKitEffect=SPELL_VISUAL_KIT_EFFECT), MODELS, PROCS, FX
+    )
 
 
-def test_the_attached_models_seed_the_buckets_the_walk_fills(
-        tables: BuildTables) -> None:
+def test_the_attached_models_seed_the_buckets_the_walk_fills(tables: BuildTables) -> None:
     """They arrive from a different table; the walk unions rather than
     replaces."""
     resolved = kits(tables)
-    assert AttachModel(8000, 0, 5, NO_ATTACHMENT, 0, NO_MOTION,
-                       UNPLACED, SCALE_UNIT) in resolved.models[1]
+    assert AttachModel(8000, 0, 5, NO_ATTACHMENT, 0, NO_MOTION, UNPLACED, SCALE_UNIT) in resolved.models[1]
     assert resolved.animkits[1] == {42, 700}
     assert resolved.visual_anims[1] == {17, 12}
 
@@ -94,33 +104,28 @@ def test_an_unset_animation_is_not_played(tables: BuildTables) -> None:
     assert kits(tables).visual_anims[1] == {17, 12}
 
 
-def test_a_procedure_reaches_the_bucket_it_was_sorted_into(
-        tables: BuildTables) -> None:
+def test_a_procedure_reaches_the_bucket_it_was_sorted_into(tables: BuildTables) -> None:
     """The second dispatch is a membership test, not a second decode."""
     resolved = kits(tables)
     assert resolved.tints[3] == {11}
     assert resolved.freezes == {4}
     assert resolved.models[5] == {
-        AttachModel(8500, MODEL_CAT_TRAIL, NO_ATTACHMENT, NO_ATTACHMENT, 0, NO_MOTION,
-                    UNPLACED, SCALE_UNIT)}
+        AttachModel(8500, MODEL_CAT_TRAIL, NO_ATTACHMENT, NO_ATTACHMENT, 0, NO_MOTION, UNPLACED, SCALE_UNIT)
+    }
     assert resolved.anims[5] == {(0, 12)}
 
 
-def test_a_procedure_chain_carries_no_attachment_pair(
-        tables: BuildTables) -> None:
+def test_a_procedure_chain_carries_no_attachment_pair(tables: BuildTables) -> None:
     """It has no beam row to take them from."""
-    assert kits(tables).chains[2] == {(70, NO_ATTACHMENT, NO_ATTACHMENT),
-                                      (71, NO_ATTACHMENT, NO_ATTACHMENT)}
+    assert kits(tables).chains[2] == {(70, NO_ATTACHMENT, NO_ATTACHMENT), (71, NO_ATTACHMENT, NO_ATTACHMENT)}
 
 
-def test_a_beam_passes_its_ends_down_to_the_chains_it_nests(
-        tables: BuildTables) -> None:
+def test_a_beam_passes_its_ends_down_to_the_chains_it_nests(tables: BuildTables) -> None:
     """Nested chains are segments of the same beam."""
     assert kits(tables).chains[6] == {(70, 1, 2), (71, 1, 2)}
 
 
-def test_a_row_pointing_at_a_payload_this_build_lacks_is_dropped(
-        tables: BuildTables) -> None:
+def test_a_row_pointing_at_a_payload_this_build_lacks_is_dropped(tables: BuildTables) -> None:
     """Not an error: an older build legitimately lacks the table."""
     resolved = kits(tables)
     assert resolved.dissolves[7] == {400}
@@ -128,15 +133,14 @@ def test_a_row_pointing_at_a_payload_this_build_lacks_is_dropped(
     assert 13 not in resolved.screens
 
 
-def test_the_emission_and_barrage_models_carry_their_categories(
-        tables: BuildTables) -> None:
+def test_the_emission_and_barrage_models_carry_their_categories(tables: BuildTables) -> None:
     resolved = kits(tables)
     assert resolved.models[10] == {
-        AttachModel(8300, MODEL_CAT_AREA, NO_ATTACHMENT, NO_ATTACHMENT, 0,
-                    NO_MOTION, UNPLACED, SCALE_UNIT)}
+        AttachModel(8300, MODEL_CAT_AREA, NO_ATTACHMENT, NO_ATTACHMENT, 0, NO_MOTION, UNPLACED, SCALE_UNIT)
+    }
     assert resolved.models[11] == {
-        AttachModel(8400, MODEL_CAT_BARRAGE, 3, NO_ATTACHMENT, 0, NO_MOTION,
-                    UNPLACED, SCALE_UNIT)}
+        AttachModel(8400, MODEL_CAT_BARRAGE, 3, NO_ATTACHMENT, 0, NO_MOTION, UNPLACED, SCALE_UNIT)
+    }
 
 
 def test_a_kit_or_effect_of_zero_is_skipped(tables: BuildTables) -> None:
@@ -147,8 +151,7 @@ def test_a_kit_or_effect_of_zero_is_skipped(tables: BuildTables) -> None:
 
 def test_a_sound_kit_keeps_every_file_it_plays(tables: BuildTables) -> None:
     """The client picks between variations, so all of them are the kit's."""
-    assert read_soundkit_files(
-        tables(SoundKitEntry=SOUND_KIT_ENTRY)) == {300: {9000, 9001}}
+    assert read_soundkit_files(tables(SoundKitEntry=SOUND_KIT_ENTRY)) == {300: {9000, 9001}}
 
 
 SOUND_KIT = """ID,SoundType
@@ -170,8 +173,37 @@ def test_a_kit_carries_what_it_is_for(tables: BuildTables) -> None:
     assert names[29] == "emotes" and names[1] == "spells"
     # Every value the roster's builds carry has a name, so no row loses its type
     # to a gap in the list.
-    assert set(names) >= {0, 1, 2, 3, 4, 6, 9, 10, 12, 13, 14, 16, 17, 19, 20,
-                          21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 50, 52, 53}
+    assert set(names) >= {
+        0,
+        1,
+        2,
+        3,
+        4,
+        6,
+        9,
+        10,
+        12,
+        13,
+        14,
+        16,
+        17,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        50,
+        52,
+        53,
+    }
 
 
 def test_every_effect_type_the_enum_defines_is_named() -> None:
@@ -189,8 +221,7 @@ def test_a_consumed_effect_type_says_where_it_points() -> None:
     table it reads. A type with neither is named but unrouted, which is a
     stated gap rather than a silent one."""
     declared = load_local_enum("spell_visual_kit_effect_types")
-    consumed = {value: payload for value, payload in declared.items()
-                if payload.get("handler")}
+    consumed = {value: payload for value, payload in declared.items() if payload.get("handler")}
     assert consumed
     assert all(payload.get("points_at") for payload in consumed.values())
     handlers = [payload["handler"] for payload in consumed.values()]

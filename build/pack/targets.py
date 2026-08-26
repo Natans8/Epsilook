@@ -32,8 +32,7 @@ about who sees the visual; the other two are client-setting variants nobody
 casts at anyone, so they carry no bit. A further redirect column is one line.
 """
 
-TARGET_BITS = {1: TARGET_CASTER, 2: TARGET_TARGET, 3: TARGET_AREA,
-               4: TARGET_NOT_CASTER, 5: TARGET_MISSILE_DEST}
+TARGET_BITS = {1: TARGET_CASTER, 2: TARGET_TARGET, 3: TARGET_AREA, 4: TARGET_NOT_CASTER, 5: TARGET_MISSILE_DEST}
 """`SpellVisualEvent.TargetType` to the bit it contributes to a row's mask.
 
 Unioned over every kit a spell reaches the content through, so a row playing on
@@ -73,13 +72,32 @@ IMPLICIT_PREFIX = "TARGET_"
 what the effect is anchored to."""
 
 IMPLICIT_HINTS = (
-    (TARGET_AREA, ("AREA", "CONE", "CLUMP", "RECT", "TRAJ", "DYNOBJ", "_LINE_",
-                   "GROUND", "RANDOM", "RADIUS", "FRONT", "BACK", "_LEFT",
-                   "_RIGHT", "MOVEMENT", "CENTROID")),
-    (TARGET_TARGET, ("TARGET", "NEARBY", "CHANNEL_TARGET", "LASTTARGET",
-                     "CHAINHEAL", "BATTLE_PET")),
-    (TARGET_CASTER, ("CASTER", "SRC", "PET", "MASTER", "SUMMONER", "VEHICLE",
-                     "PASSENGER", "OWN_CRITTER", "MINIPET", "HOME")),
+    (
+        TARGET_AREA,
+        (
+            "AREA",
+            "CONE",
+            "CLUMP",
+            "RECT",
+            "TRAJ",
+            "DYNOBJ",
+            "_LINE_",
+            "GROUND",
+            "RANDOM",
+            "RADIUS",
+            "FRONT",
+            "BACK",
+            "_LEFT",
+            "_RIGHT",
+            "MOVEMENT",
+            "CENTROID",
+        ),
+    ),
+    (TARGET_TARGET, ("TARGET", "NEARBY", "CHANNEL_TARGET", "LASTTARGET", "CHAINHEAL", "BATTLE_PET")),
+    (
+        TARGET_CASTER,
+        ("CASTER", "SRC", "PET", "MASTER", "SUMMONER", "VEHICLE", "PASSENGER", "OWN_CRITTER", "MINIPET", "HOME"),
+    ),
     (TARGET_AREA, ("DEST",)),
 )
 """Substrings that classify an implicit-target name, in the order tried.
@@ -111,15 +129,14 @@ def implicit_target_bit(name: str) -> int:
     upper = (name or "").upper()
     if not upper.startswith(IMPLICIT_PREFIX):
         return NO_TARGET
-    body = upper[len(IMPLICIT_PREFIX):]
+    body = upper[len(IMPLICIT_PREFIX) :]
     for bit, hints in IMPLICIT_HINTS:
         if any(hint in body for hint in hints):
             return bit
     return NO_TARGET
 
 
-def resolve_target_mask(aura_mask: int, other_mask: int,
-                        aura_bits: int, cast_bits: int) -> int:
+def resolve_target_mask(aura_mask: int, other_mask: int, aura_bits: int, cast_bits: int) -> int:
     """Fold a kit's two phase masks into the one its row ships with.
 
     A target bit becomes a caster bit wherever the matching test says the spell

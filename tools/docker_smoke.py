@@ -87,8 +87,9 @@ def fetch(url: str, accept_gzip: bool = False, method: str = "GET") -> Response:
 
 
 def docker(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(["docker", *args], cwd=ROOT, capture_output=True,
-                          encoding="utf-8", errors="replace", check=check)
+    return subprocess.run(
+        ["docker", *args], cwd=ROOT, capture_output=True, encoding="utf-8", errors="replace", check=check
+    )
 
 
 def free_port() -> int:
@@ -107,8 +108,7 @@ def wait_for_health(base: str, container: str, timeout: float = 60.0) -> str | N
                 return None
         except (urllib.error.URLError, ConnectionError, socket.timeout):
             pass
-        if docker("inspect", "-f", "{{.State.Running}}", container,
-                  check=False).stdout.strip() != "true":
+        if docker("inspect", "-f", "{{.State.Running}}", container, check=False).stdout.strip() != "true":
             logs = docker("logs", "--tail", "20", container, check=False)
             return f"container exited: {(logs.stdout + logs.stderr).strip()[:400]}"
         time.sleep(0.5)
@@ -132,9 +132,11 @@ def check_index(rep: Report, base: str) -> None:
         return
     # it carries the ?v= that busts everything else, so it must revalidate
     if "no-cache" not in resp.header("cache-control"):
-        rep.fail("index.html",
-                 f"cache-control is {resp.header('cache-control')!r}, want no-cache"
-                 " - a held index.html pins the site to an old deploy")
+        rep.fail(
+            "index.html",
+            f"cache-control is {resp.header('cache-control')!r}, want no-cache"
+            " - a held index.html pins the site to an old deploy",
+        )
         return
     rep.ok("index.html", f"{len(resp.body)} bytes, no-cache")
 
@@ -155,8 +157,7 @@ def check_assets(rep: Report, base: str) -> None:
             rep.fail(f"asset {path}", f"HTTP {resp.status}")
             continue
         if resp.header("cache-control") != IMMUTABLE:
-            rep.fail(f"asset {path}",
-                     f"cache-control is {resp.header('cache-control')!r}, want {IMMUTABLE!r}")
+            rep.fail(f"asset {path}", f"cache-control is {resp.header('cache-control')!r}, want {IMMUTABLE!r}")
             continue
         if resp.header("content-encoding") != "gzip":
             rep.fail(f"asset {path}", "not gzipped on the wire")
@@ -169,8 +170,7 @@ def check_assets(rep: Report, base: str) -> None:
         served = gzip.decompress(resp.body)
         local = SITE / path
         if local.exists() and served != local.read_bytes():
-            rep.fail(f"asset {path}",
-                     f"{len(served)} bytes served, {local.stat().st_size} on disk")
+            rep.fail(f"asset {path}", f"{len(served)} bytes served, {local.stat().st_size} on disk")
             continue
         saved = 100 - round(100 * len(resp.body) / len(served))
         matched = "matches disk" if local.exists() else "not built locally"
@@ -180,13 +180,14 @@ def check_assets(rep: Report, base: str) -> None:
 def check_security_headers(rep: Report, base: str) -> None:
     """add_header does not inherit: one added inside a location drops every
     header set on the server. So assert them where a location IS in play."""
-    wanted = {"x-content-type-options": "nosniff",
-              "referrer-policy": "strict-origin-when-cross-origin"}
+    wanted = {"x-content-type-options": "nosniff", "referrer-policy": "strict-origin-when-cross-origin"}
     probes = ["/", "/css/app.css", "/data/versions.json", "/healthz"]
-    missing = [f"{name} on {path}"
-               for path in probes
-               for name, value in wanted.items()
-               if fetch(f"{base}{path}").header(name) != value]
+    missing = [
+        f"{name} on {path}"
+        for path in probes
+        for name, value in wanted.items()
+        if fetch(f"{base}{path}").header(name) != value
+    ]
     if missing:
         rep.fail("security headers", "; ".join(missing[:3]))
     else:
@@ -200,9 +201,11 @@ def check_manifest(rep: Report, base: str) -> list[dict[str, Any]]:
         rep.fail("versions.json", f"HTTP {resp.status}")
         return []
     if "no-cache" not in resp.header("cache-control"):
-        rep.fail("versions.json",
-                 f"cache-control is {resp.header('cache-control')!r}, want no-cache"
-                 " - a held manifest hides every rebuilt pack")
+        rep.fail(
+            "versions.json",
+            f"cache-control is {resp.header('cache-control')!r}, want no-cache"
+            " - a held manifest hides every rebuilt pack",
+        )
         return []
     try:
         entries = json.loads(resp.body)
@@ -239,8 +242,9 @@ def check_packs(rep: Report, base: str, entries: list[dict[str, Any]]) -> None:
             problems.append(f"{name}: content-encoding {resp.header('content-encoding')}")
             continue
         if resp.header("content-length") != str(len(resp.body)):
-            problems.append(f"{name}: content-length {resp.header('content-length')!r}"
-                            f" but {len(resp.body)} bytes arrived")
+            problems.append(
+                f"{name}: content-length {resp.header('content-length')!r} but {len(resp.body)} bytes arrived"
+            )
             continue
         if not resp.body.startswith(b"\x1f\x8b"):
             problems.append(f"{name}: not gzip - {resp.body[:16]!r}")
@@ -253,8 +257,7 @@ def check_packs(rep: Report, base: str, entries: list[dict[str, Any]]) -> None:
     if problems:
         rep.fail("data packs", "; ".join(problems[:3]))
     else:
-        rep.ok("data packs",
-               f"{len(entries)} packs, {total / 1e6:.1f} MB, hashes match, no transport gzip")
+        rep.ok("data packs", f"{len(entries)} packs, {total / 1e6:.1f} MB, hashes match, no transport gzip")
 
 
 def check_not_found(rep: Report, base: str) -> None:
@@ -272,13 +275,15 @@ def check_not_found(rep: Report, base: str) -> None:
         rep.fail("404 page", "the body is not site/404.html")
         return
     if b"/Epsilook/css/app.css" not in resp.body:
-        rep.fail("404 page", "site/404.html no longer names /Epsilook/ - "
-                             "the prefix rewrite in docker/nginx.conf can go")
+        rep.fail(
+            "404 page", "site/404.html no longer names /Epsilook/ - the prefix rewrite in docker/nginx.conf can go"
+        )
         return
     aliased = fetch(f"{base}/Epsilook/css/app.css")
     if aliased.status != 200:
-        rep.fail("404 page", f"its stylesheet /Epsilook/css/app.css is HTTP {aliased.status}"
-                             " - the 404 page renders unstyled")
+        rep.fail(
+            "404 page", f"its stylesheet /Epsilook/css/app.css is HTTP {aliased.status} - the 404 page renders unstyled"
+        )
         return
     root = fetch(f"{base}/Epsilook/")
     if root.status != 200 or b"<title>Epsilook" not in root.body:
@@ -305,8 +310,7 @@ def check_app_boots(rep: Report, base: str) -> None:
     # `"use strict";(()=>{...})();` for it — an ESM build would start with an
     # import instead, and would be silently broken only on file://
     if b"(()=>" not in body[:200]:
-        rep.fail("bundle wiring",
-                 f"js/app.js does not open as an IIFE: {body[:60]!r}")
+        rep.fail("bundle wiring", f"js/app.js does not open as an IIFE: {body[:60]!r}")
         return
     rep.ok("bundle wiring", f"{len(body)} bytes of IIFE at the ?v= index.html asks for")
 
@@ -327,11 +331,9 @@ def build_image(rep: Report, image: str) -> bool:
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description=__doc__,
-                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--image", default="epsilook:smoke", help="image to build and/or run")
-    ap.add_argument("--no-build", action="store_true",
-                    help="run the image as it is (CI builds it in its own step)")
+    ap.add_argument("--no-build", action="store_true", help="run the image as it is (CI builds it in its own step)")
     ap.add_argument("--keep", action="store_true", help="leave the container running")
     ap.add_argument("--quiet", action="store_true", help="print only failures and warnings")
     args = ap.parse_args()
@@ -340,8 +342,7 @@ def main() -> int:
     try:
         docker("version", "--format", "{{.Server.Version}}")
     except (subprocess.CalledProcessError, FileNotFoundError):
-        print(f"{RED}docker is not available{RESET} - "
-              "start Docker Desktop, or run the rest with tools/check.py")
+        print(f"{RED}docker is not available{RESET} - start Docker Desktop, or run the rest with tools/check.py")
         return 1
 
     if not args.no_build and not build_image(rep, args.image):
@@ -350,8 +351,7 @@ def main() -> int:
     port = free_port()
     base = f"http://127.0.0.1:{port}"
     docker("rm", "-f", CONTAINER, check=False)
-    run = docker("run", "-d", "--name", CONTAINER, "-p", f"127.0.0.1:{port}:80",
-                 args.image, check=False)
+    run = docker("run", "-d", "--name", CONTAINER, "-p", f"127.0.0.1:{port}:80", args.image, check=False)
     if run.returncode != 0:
         rep.fail("docker run", (run.stdout + run.stderr).strip().splitlines()[-1])
         return 1
@@ -373,15 +373,13 @@ def main() -> int:
         check_app_boots(rep, base)
     finally:
         if args.keep:
-            print(f"\n{DIM}container {CONTAINER} left running on {base}"
-                  f" - docker rm -f {CONTAINER}{RESET}")
+            print(f"\n{DIM}container {CONTAINER} left running on {base} - docker rm -f {CONTAINER}{RESET}")
         else:
             docker("rm", "-f", CONTAINER, check=False)
 
     print()
     if rep.failed:
-        print(f"{RED}{rep.failed} check(s) failed{RESET}"
-              + (f", {rep.warned} warning(s)" if rep.warned else ""))
+        print(f"{RED}{rep.failed} check(s) failed{RESET}" + (f", {rep.warned} warning(s)" if rep.warned else ""))
         return 1
     print(f"{GREEN}the image serves Epsilook{RESET}")
     return 0

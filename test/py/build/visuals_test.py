@@ -34,9 +34,9 @@ SpellVisualID,SpellVisualKitID,TargetType,StartEvent
 
 
 def graph(tables: BuildTables) -> VisualGraph:
-    return read_visual_graph(tables(SpellXSpellVisual=SPELL_X_SPELL_VISUAL,
-                                    SpellVisual=SPELL_VISUAL,
-                                    SpellVisualEvent=SPELL_VISUAL_EVENT))
+    return read_visual_graph(
+        tables(SpellXSpellVisual=SPELL_X_SPELL_VISUAL, SpellVisual=SPELL_VISUAL, SpellVisualEvent=SPELL_VISUAL_EVENT)
+    )
 
 
 def test_a_seed_visual_carries_no_extra_bits() -> None:
@@ -51,8 +51,7 @@ def test_a_redirect_carries_the_bit_of_the_column_it_came_through() -> None:
 
 def test_a_redirect_reached_through_a_redirect_carries_both() -> None:
     """Chains longer than one hop are real."""
-    reached = expand_redirects(
-        {10}, {10: [(20, TARGET_CASTER)], 20: [(22, TARGET_MISSILE_DEST)]})
+    reached = expand_redirects({10}, {10: [(20, TARGET_CASTER)], 20: [(22, TARGET_MISSILE_DEST)]})
     assert reached[22] == TARGET_CASTER | TARGET_MISSILE_DEST
 
 
@@ -60,8 +59,7 @@ def test_a_cycle_terminates_at_the_fixpoint() -> None:
     """Both visuals carry both bits, since each really is reachable through the
     other's column. The loop stops because a mask only ever gains bits."""
     reached = expand_redirects({1}, {1: [(2, TARGET_CASTER)], 2: [(1, TARGET_TARGET)]})
-    assert reached == {1: TARGET_CASTER | TARGET_TARGET,
-                       2: TARGET_CASTER | TARGET_TARGET}
+    assert reached == {1: TARGET_CASTER | TARGET_TARGET, 2: TARGET_CASTER | TARGET_TARGET}
 
 
 def test_a_visual_naming_itself_is_dropped(tables: BuildTables) -> None:
@@ -69,18 +67,21 @@ def test_a_visual_naming_itself_is_dropped(tables: BuildTables) -> None:
     assert graph(tables).spell_visuals[101] == {12: NO_TARGET}
 
 
-def test_a_spell_reaches_every_visual_its_visuals_redirect_to(
-        tables: BuildTables) -> None:
+def test_a_spell_reaches_every_visual_its_visuals_redirect_to(tables: BuildTables) -> None:
     assert graph(tables).spell_visuals[100] == {
-        10: NO_TARGET, 11: NO_TARGET,
-        20: TARGET_CASTER, 21: TARGET_TARGET, 22: TARGET_CASTER}
+        10: NO_TARGET,
+        11: NO_TARGET,
+        20: TARGET_CASTER,
+        21: TARGET_TARGET,
+        22: TARGET_CASTER,
+    }
 
 
 def test_the_kit_edge_splits_the_mask_by_phase(tables: BuildTables) -> None:
-    """"Target" means a different unit in the two phases."""
+    """ "Target" means a different unit in the two phases."""
     assert graph(tables).visual_kits[10] == {
         900: (NO_TARGET, TARGET_CASTER | TARGET_TARGET),  # impact, two rows
-        901: (TARGET_CASTER, NO_TARGET),                  # aura start
+        901: (TARGET_CASTER, NO_TARGET),  # aura start
     }
 
 

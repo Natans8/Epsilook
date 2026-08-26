@@ -24,8 +24,7 @@ generated rather than hand-listed anywhere in the app.
 """
 
 
-def numeric_domain(values: Iterable[float],
-                   sentinels: Iterable[float] = ()) -> dict[str, Any] | None:
+def numeric_domain(values: Iterable[float], sentinels: Iterable[float] = ()) -> dict[str, Any] | None:
     """Everything derivable about one numeric axis in this pack.
 
     Args:
@@ -66,8 +65,7 @@ def numeric_domain(values: Iterable[float],
         # Rounded because these are floats: the gap between 25.2 and 25.4 comes
         # out of binary as 0.19999999999999996, and a control offering that as
         # its step is arithmetic noise leaking into the interface.
-        "step": round(min((later - earlier for earlier, later
-                           in zip(distinct, distinct[1:])), default=0), 6),
+        "step": round(min((later - earlier for earlier, later in zip(distinct, distinct[1:])), default=0), 6),
         "mode": mode,
         "modeShare": round(mode_count / len(kept), 4),
         "signed": low < 0,

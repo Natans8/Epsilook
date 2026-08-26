@@ -17,11 +17,23 @@ from typing import Any
 
 import pytest
 import support
-from pack.emit.addon import (ADDON_FORMAT, AXES, AXIS_OF, DIGITS,
-                             LINE_LIMIT,
-                             SUPPLIED_BY, Blob, Variation, chunks,
-                             digits_for, interface_version, rendered, spelled,
-                             supplies, wrapped)
+from pack.emit.addon import (
+    ADDON_FORMAT,
+    AXES,
+    AXIS_OF,
+    DIGITS,
+    LINE_LIMIT,
+    SUPPLIED_BY,
+    Blob,
+    Variation,
+    chunks,
+    digits_for,
+    interface_version,
+    rendered,
+    spelled,
+    supplies,
+    wrapped,
+)
 from pack.model import SECTIONS
 from pack.model.section import Layout
 
@@ -31,9 +43,13 @@ ROOT = support.ROOT
 
 SCHEMA: dict[str, Any] = {
     "format": 1,
-    "kinds": [{"id": "spell.name", "synonyms": [],
-               "props": [{"name": "text", "types": ["text"],
-                          "sentinels": [{"value": -1, "word": "unlimited"}]}]}],
+    "kinds": [
+        {
+            "id": "spell.name",
+            "synonyms": [],
+            "props": [{"name": "text", "types": ["text"], "sentinels": [{"value": -1, "word": "unlimited"}]}],
+        }
+    ],
 }
 """A schema small enough to read in a test, of the shape the web engine exports.
 
@@ -69,8 +85,7 @@ def round_trip(lua: Any, values: Any) -> Any:
     """
     blob = Blob()
     node = blob.column(values)
-    source = (b"Node = " + rendered(node).encode("utf-8") + b"\n"
-              b"Blob = " + wrapped(blob.payload()) + b"\n")
+    source = b"Node = " + rendered(node).encode("utf-8") + b"\nBlob = " + wrapped(blob.payload()) + b"\n"
     lua.execute(source)
     return unwrap(lua.eval(b"Reader.all(Blob, Node)"))
 
@@ -93,8 +108,7 @@ def unwrap(value: Any) -> Any:
         return []
     if keys == list(range(1, len(keys) + 1)):
         return [unwrap(value[key]) for key in keys]
-    return {(key.decode("utf-8") if isinstance(key, bytes) else key):
-            unwrap(value[key]) for key in keys}
+    return {(key.decode("utf-8") if isinstance(key, bytes) else key): unwrap(value[key]) for key in keys}
 
 
 def test_digits_round_trip() -> None:
@@ -154,8 +168,7 @@ def test_a_vocabulary_keyed_by_id_round_trips(lua: Any) -> None:
 
 def test_a_family_of_columns_round_trips(lua: Any) -> None:
     """A mapping whose values are columns keeps each one addressable."""
-    values = {"missile": {"file": [1, 2], "from": [-1, 4]},
-              "ground": {"file": [9], "from": [0]}}
+    values = {"missile": {"file": [1, 2], "from": [-1, 4]}, "ground": {"file": [9], "from": [0]}}
     assert round_trip(lua, values) == values
 
 
@@ -189,8 +202,7 @@ def test_a_long_payload_is_split_across_lines(lua: Any) -> None:
     an axis blob is twenty times that, so the source carries pieces and the
     client joins them.
     """
-    payload = bytes(DIGITS[at % 64].encode("ascii")[0]
-                    for at in range(LINE_LIMIT * 2 + 977))
+    payload = bytes(DIGITS[at % 64].encode("ascii")[0] for at in range(LINE_LIMIT * 2 + 977))
     source = b"local blob = " + wrapped(payload) + b"\nreturn blob\n"
     assert b"table.concat" in source
     assert max(len(line) for line in source.split(b"\n")) <= LINE_LIMIT + 8
@@ -249,8 +261,7 @@ def test_every_section_belongs_to_an_axis() -> None:
     the registry, not to this file: the way this is meant to fail is that
     somebody adds a route and finds out immediately.
     """
-    missing = sorted(section.name for section in SECTIONS
-                     if section.name not in AXIS_OF)
+    missing = sorted(section.name for section in SECTIONS if section.name not in AXIS_OF)
     assert not missing, f"sections belonging to no axis: {missing}"
 
 
@@ -272,8 +283,8 @@ def test_the_supply_table_names_real_columns() -> None:
         assert section in DECLARED, f"{key} names no section"
         if column:
             assert column in DECLARED[section].columns, (
-                f"{key} names no column of {section}; it has "
-                f"{DECLARED[section].columns}")
+                f"{key} names no column of {section}; it has {DECLARED[section].columns}"
+            )
 
 
 def test_lean_drops_what_the_client_supplies() -> None:
@@ -288,15 +299,21 @@ def test_a_section_with_no_axis_stops_the_emitter() -> None:
     """An unplaced section raises rather than quietly going missing."""
     section = next(iter(SECTIONS))
     with pytest.raises(KeyError, match="belongs to no axis"):
-        chunks([_renamed(section, "notAnAxisMember")],
-               {"notAnAxisMember": _empty_payload(section)},
-               pack="p", version="9.2.7.1", built="", variation=Variation.FULL,
-               schema=SCHEMA)
+        chunks(
+            [_renamed(section, "notAnAxisMember")],
+            {"notAnAxisMember": _empty_payload(section)},
+            pack="p",
+            version="9.2.7.1",
+            built="",
+            variation=Variation.FULL,
+            schema=SCHEMA,
+        )
 
 
 def _renamed(section: Any, name: str) -> Any:
     """The same record under another name, for a test that needs one."""
     from dataclasses import replace
+
     return replace(section, name=name)
 
 
@@ -309,8 +326,15 @@ def _empty_payload(section: Any) -> Any:
 
 def test_the_index_reports_the_format_and_the_supply(lua: Any) -> None:
     """The index says what exists and what was left to the game."""
-    built = chunks([], {}, pack="9.2.7-epsilon.45745", version="9.2.7.45745",
-                   built="2026-08-18", variation=Variation.LEAN, schema=SCHEMA)
+    built = chunks(
+        [],
+        {},
+        pack="9.2.7-epsilon.45745",
+        version="9.2.7.45745",
+        built="2026-08-18",
+        variation=Variation.LEAN,
+        schema=SCHEMA,
+    )
     lua.execute(built.files["index.lua"])
     index = unwrap(lua.globals()[b"Epsilook"][b"index"])
     assert index["format"] == ADDON_FORMAT
@@ -320,8 +344,7 @@ def test_the_index_reports_the_format_and_the_supply(lua: Any) -> None:
 
 def test_the_schema_file_loads_and_reads_back(lua: Any) -> None:
     """The declarations land under the global as the table they were exported as."""
-    built = chunks([], {}, pack="p", version="9.2.7.1", built="",
-                   variation=Variation.FULL, schema=SCHEMA)
+    built = chunks([], {}, pack="p", version="9.2.7.1", built="", variation=Variation.FULL, schema=SCHEMA)
     lua.execute(built.files["schema.lua"])
     held = unwrap(lua.globals()[b"Epsilook"][b"schema"])
     kind = held["kinds"][0]
@@ -340,9 +363,10 @@ def test_axes_are_declared_in_a_stable_order() -> None:
         assert names.split(), f"{axis} names no sections"
 
 
-@pytest.mark.skipif(not os.environ.get("EPSILOOK_ADDON_ORACLE"),
-                    reason="set EPSILOOK_ADDON_ORACLE=1; needs a built pack "
-                           "and reads every column of it through Lua")
+@pytest.mark.skipif(
+    not os.environ.get("EPSILOOK_ADDON_ORACLE"),
+    reason="set EPSILOOK_ADDON_ORACLE=1; needs a built pack and reads every column of it through Lua",
+)
 def test_the_whole_pack_round_trips_through_lua(lua: Any) -> None:
     """Every column of a real pack reads back as the pack carries it.
 
@@ -359,9 +383,15 @@ def test_the_whole_pack_round_trips_through_lua(lua: Any) -> None:
         pytest.skip(f"{pack_dir.name} is not built")
     sections = packfile.load(pack_dir)
     meta = sections.pop("meta", {})
-    built = chunks(SECTIONS, sections, pack=pack_dir.name,
-                   version=str(meta.get("version")), built=str(meta.get("built")),
-                   variation=Variation.FULL, schema=SCHEMA)
+    built = chunks(
+        SECTIONS,
+        sections,
+        pack=pack_dir.name,
+        version=str(meta.get("version")),
+        built=str(meta.get("built")),
+        variation=Variation.FULL,
+        schema=SCHEMA,
+    )
 
     checked = 0
     for name, source in built.files.items():
@@ -375,8 +405,7 @@ def test_the_whole_pack_round_trips_through_lua(lua: Any) -> None:
         blob = axis[b"blob"]
         for name, entry in unwrap(axis[b"sections"]).items():
             for column in entry["columns"]:
-                node = axis[b"sections"][name.encode("utf-8")][b"columns"][
-                    column.encode("utf-8")]
+                node = axis[b"sections"][name.encode("utf-8")][b"columns"][column.encode("utf-8")]
                 got = unwrap(lua.eval(b"Reader.all")(blob, node))
                 want = expected(sections[name], DECLARED[name], column)
                 assert got == want, f"{name}.{column} disagrees"
@@ -384,8 +413,7 @@ def test_the_whole_pack_round_trips_through_lua(lua: Any) -> None:
     # Every declared column of every section the pack ships, rather than a
     # threshold: a section that stopped being emitted would otherwise leave
     # the test passing on whatever was left.
-    wanted = sum(len(DECLARED[name].columns) for name in sections
-                 if name in DECLARED)
+    wanted = sum(len(DECLARED[name].columns) for name in sections if name in DECLARED)
     assert checked == wanted, f"read {checked} columns of {wanted}"
 
 

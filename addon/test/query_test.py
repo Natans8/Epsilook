@@ -34,9 +34,11 @@ def test_heads_come_from_the_schema(engine: LuaRuntime) -> None:
     assert found[0]["on"] == "kind" and found[0]["kind"] == "spell.name"
     clauses = cast(list[Record], tree["clauses"])
     assert clauses[1]["not"] is True and found[1]["kind"] == "model.missile"
-    assert found[2] == {"on": "column", "column": "sound",
-                        "test": {"is": "count", "value": {"op": "gt", "operand": {"type": "count", "value": 2,
-                                                                                    "written": "2"}}}}
+    assert found[2] == {
+        "on": "column",
+        "column": "sound",
+        "test": {"is": "count", "value": {"op": "gt", "operand": {"type": "count", "value": 2, "written": "2"}}},
+    }
     assert found[3]["on"] == "prop" and found[3]["ref"] == {"kind": "spell.spell", "prop": "cast"}
     assert cast(Record, cast(Record, found[3]["value"])["operand"])["value"] == 2000
     assert tree["groups"] == [[1, 2, 3], [4]]
@@ -182,4 +184,4 @@ def test_a_quoted_operand_is_written_back_quoted(engine: LuaRuntime) -> None:
     # The escape is shielded alongside the quote: shielding the quote alone
     # leaves the escape before it eating the closing one, and the phrase ends
     # early on text that is nothing but punctuation.
-    assert formatted(engine, r'name:\" fire') == r'name:"\\\"" fire'
+    assert formatted(engine, r"name:\" fire") == r'name:"\\\"" fire'

@@ -28,9 +28,11 @@ def spell_text(reads: Reads) -> SectionColumns:
     """Each body of prose, aligned to the spell list."""
     ids = reads.spell_ids
     prose = reads.prose
-    return {"descriptions": aligned(prose.descriptions, ids),
-            "auras": aligned(prose.auras, ids),
-            "encounters": aligned(prose.encounters, ids)}
+    return {
+        "descriptions": aligned(prose.descriptions, ids),
+        "auras": aligned(prose.auras, ids),
+        "encounters": aligned(prose.encounters, ids),
+    }
 
 
 def distinct(column: str) -> Callable[[SectionColumns, Reads], int]:
@@ -60,27 +62,35 @@ def carrying(column: str) -> Callable[[SectionColumns, Reads], int]:
     return count
 
 
-SPELL_TEXT = register(Section(
-    name="spellText",
-    doc="Every spell's cooked description, aura line and encounter note.",
-    module="text",
-    produce=spell_text,
-    columns=("descriptions", "auras", "encounters"),
-    # Every one of them is shared: a redirect cooks to the same prose as its
-    # target, so the distinct strings are far fewer than the spells carrying
-    # them.
-    cardinality={"descriptions": Cardinality.SHARED,
-                 "auras": Cardinality.SHARED,
-                 "encounters": Cardinality.SHARED},
-    reads=("spell_ids", "prose"),
-    degraded_without=("SpellDescriptionVariables", "SpellRadius", "SpellRange",
-                      "SpellTargetRestrictions", "SpellAuraOptions",
-                      "SpellScaling", "JournalEncounterSection"),
-    localizable=("descriptions", "auras", "encounters"),
-    counts=(Count("spellDescriptions", carrying("descriptions")),
+SPELL_TEXT = register(
+    Section(
+        name="spellText",
+        doc="Every spell's cooked description, aura line and encounter note.",
+        module="text",
+        produce=spell_text,
+        columns=("descriptions", "auras", "encounters"),
+        # Every one of them is shared: a redirect cooks to the same prose as its
+        # target, so the distinct strings are far fewer than the spells carrying
+        # them.
+        cardinality={"descriptions": Cardinality.SHARED, "auras": Cardinality.SHARED, "encounters": Cardinality.SHARED},
+        reads=("spell_ids", "prose"),
+        degraded_without=(
+            "SpellDescriptionVariables",
+            "SpellRadius",
+            "SpellRange",
+            "SpellTargetRestrictions",
+            "SpellAuraOptions",
+            "SpellScaling",
+            "JournalEncounterSection",
+        ),
+        localizable=("descriptions", "auras", "encounters"),
+        counts=(
+            Count("spellDescriptions", carrying("descriptions")),
             Count("descriptionTexts", distinct("descriptions")),
             Count("spellEncounterNotes", carrying("encounters")),
             Count("spellAuraTexts", carrying("auras")),
             Count("auraTexts", distinct("auras")),
-            Count("encounterTexts", distinct("encounters"))),
-))
+            Count("encounterTexts", distinct("encounters")),
+        ),
+    )
+)

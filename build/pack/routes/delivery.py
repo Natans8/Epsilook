@@ -95,14 +95,11 @@ def _breaks_on_move(tables: Tables, spells: SpellProperties) -> set[int]:
     """
     if not tables.available("SpellInterrupts"):
         return set()
-    moving = bit_test(
-        enum_id_where(load_local_enum(CHANNEL_INTERRUPT_ENUM), "moving"))
-    columns = array_columns(tables, "SpellInterrupts", "ChannelInterruptFlags",
-                            INTERRUPT_COLUMNS_MAX)
+    moving = bit_test(enum_id_where(load_local_enum(CHANNEL_INTERRUPT_ENUM), "moving"))
+    columns = array_columns(tables, "SpellInterrupts", "ChannelInterruptFlags", INTERRUPT_COLUMNS_MAX)
     breaks: set[int] = set()
     seen_base: set[int] = set()
-    for row in tables.rows("SpellInterrupts",
-                           ["SpellID", "DifficultyID", *columns]):
+    for row in tables.rows("SpellInterrupts", ["SpellID", "DifficultyID", *columns]):
         spell, difficulty = to_int(row[0]), to_int(row[1])
         base = difficulty == BASE_DIFFICULTY
         if spell not in spells.attribute_words or (spell in seen_base and not base):
@@ -119,8 +116,7 @@ def _breaks_on_move(tables: Tables, spells: SpellProperties) -> set[int]:
     return breaks
 
 
-def read_spell_delivery(tables: Tables,
-                        spells: SpellProperties) -> list[Delivery]:
+def read_spell_delivery(tables: Tables, spells: SpellProperties) -> list[Delivery]:
     """Read the cast time and channel of every spell that has either.
 
     `SpellCastTimes.Minimum` is deliberately ignored: it is the haste floor,
@@ -134,10 +130,8 @@ def read_spell_delivery(tables: Tables,
     Returns:
         One entry per spell with a cast time or a channel, sorted by spell.
     """
-    cast_of = {to_int(row[0]): to_int(row[1])
-               for row in tables.rows("SpellCastTimes", ["ID", "Base"])}
-    duration_of = {to_int(row[0]): to_int(row[1])
-                   for row in tables.rows("SpellDuration", ["ID", "Duration"])}
+    cast_of = {to_int(row[0]): to_int(row[1]) for row in tables.rows("SpellCastTimes", ["ID", "Base"])}
+    duration_of = {to_int(row[0]): to_int(row[1]) for row in tables.rows("SpellDuration", ["ID", "Duration"])}
     breaks = _breaks_on_move(tables, spells)
 
     out: list[Delivery] = []

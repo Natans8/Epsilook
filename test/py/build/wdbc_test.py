@@ -64,8 +64,9 @@ def test_carries_both_strings(table: list[dict[str, Any]]) -> None:
     assert len(paths) < 50, "the name column holds paths — this is a 5.4 client"
 
 
-def test_refuses_a_layout_that_does_not_fit(definition: dbd.Definition,
-                                            table: list[dict[str, Any]], tmp_path: Path) -> None:
+def test_refuses_a_layout_that_does_not_fit(
+    definition: dbd.Definition, table: list[dict[str, Any]], tmp_path: Path
+) -> None:
     """A layout from the wrong build is an error rather than a silent misread.
 
     Every value would still decode under a wrong layout, and every one would be
@@ -104,11 +105,8 @@ def _one_column_file(magic: bytes, values: list[int], *, index: bool) -> bytes:
     return header + tail + block + records + b"\0"
 
 
-@pytest.mark.parametrize("magic,index", [(wdbc.WDBC, False),
-                                         (wdbc.WDB2, False),
-                                         (wdbc.WDB2, True)])
-def test_finds_the_records_in_either_container(magic: bytes, index: bool,
-                                               tmp_path: Path) -> None:
+@pytest.mark.parametrize("magic,index", [(wdbc.WDBC, False), (wdbc.WDB2, False), (wdbc.WDB2, True)])
+def test_finds_the_records_in_either_container(magic: bytes, index: bool, tmp_path: Path) -> None:
     """Both containers, and both WDB2 shapes, put the records where we look."""
     definition = dbd.parse("COLUMNS\nint Value\n\nBUILD 1.0.0.1\nValue<32>\n", "Probe")
     path = tmp_path / "probe.dbc"

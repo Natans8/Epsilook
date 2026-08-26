@@ -32,11 +32,17 @@ SpellID,DifficultyID,MaxTargets,MaxTargetLevel
 
 
 def build(tables: BuildTables) -> DescriptionValues:
-    return read_spell_values(tables(
-        SpellEffect=SPELL_EFFECT, SpellRadius=SPELL_RADIUS,
-        SpellDuration=SPELL_DURATION, SpellRange=SPELL_RANGE,
-        SpellMisc=SPELL_MISC, SpellAuraOptions=SPELL_AURA_OPTIONS,
-        SpellTargetRestrictions=SPELL_TARGET_RESTRICTIONS))
+    return read_spell_values(
+        tables(
+            SpellEffect=SPELL_EFFECT,
+            SpellRadius=SPELL_RADIUS,
+            SpellDuration=SPELL_DURATION,
+            SpellRange=SPELL_RANGE,
+            SpellMisc=SPELL_MISC,
+            SpellAuraOptions=SPELL_AURA_OPTIONS,
+            SpellTargetRestrictions=SPELL_TARGET_RESTRICTIONS,
+        )
+    )
 
 
 def test_a_template_counts_effects_from_one(tables: BuildTables) -> None:
@@ -68,23 +74,27 @@ def test_a_zero_is_left_out_rather_than_recorded(tables: BuildTables) -> None:
     assert values.max_target_level == {}
 
 
-def test_the_variance_the_range_is_written_around_survives(
-        tables: BuildTables) -> None:
+def test_the_variance_the_range_is_written_around_survives(tables: BuildTables) -> None:
     """Without it both ends of a `$m1 to $M1` range come out identical."""
     assert build(tables).variance[100] == {1: 0.5}
 
 
-def test_a_build_lacking_a_table_leaves_its_dict_empty(
-        tables: BuildTables) -> None:
+def test_a_build_lacking_a_table_leaves_its_dict_empty(tables: BuildTables) -> None:
     """How an optional table reports itself: the prose still cooks, without
     that number."""
-    values = read_spell_values(tables(
-        SpellEffect=SPELL_EFFECT, SpellMisc=SPELL_MISC,
-        absent={"SpellRadius": "radii inside cooked descriptions",
+    values = read_spell_values(
+        tables(
+            SpellEffect=SPELL_EFFECT,
+            SpellMisc=SPELL_MISC,
+            absent={
+                "SpellRadius": "radii inside cooked descriptions",
                 "SpellRange": "ranges inside cooked descriptions",
                 "SpellDuration": "the channel duration",
                 "SpellAuraOptions": "stack caps",
-                "SpellTargetRestrictions": "max-target counts"}))
+                "SpellTargetRestrictions": "max-target counts",
+            },
+        )
+    )
     assert values.radius == {}
     assert values.range_max == {}
     assert values.points[100] == {1: 50.0, 2: 25.0}

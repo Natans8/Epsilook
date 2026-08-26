@@ -12,12 +12,14 @@ from ...routes.effects import MOVEMENT_NAMES
 from ..registry import register
 from ..section import Layout, Scope, Section
 
-SPEED_MODE_NAMES = register(Section(
-    name="speedModeNames",
-    doc="The movement each speed row scales, by the number the row stores.",
-    module="universal",
-    produce=lambda _reads: {"names": list(MOVEMENT_NAMES)},
-    columns=("names",),
-    layout=Layout.BARE,
-    scope=Scope.UNIVERSAL,
-))
+SPEED_MODE_NAMES = register(
+    Section(
+        name="speedModeNames",
+        doc="The movement each speed row scales, by the number the row stores.",
+        module="universal",
+        produce=lambda _reads: {"names": list(MOVEMENT_NAMES)},
+        columns=("names",),
+        layout=Layout.BARE,
+        scope=Scope.UNIVERSAL,
+    )
+)

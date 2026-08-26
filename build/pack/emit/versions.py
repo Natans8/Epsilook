@@ -57,7 +57,8 @@ def _exclusive(manifest_path: Path) -> Iterator[None]:
                 raise TimeoutError(
                     f"waited {LOCK_TIMEOUT:.0f}s for {lock}. A build was most "
                     f"likely killed while holding it; delete the file and run "
-                    f"again.") from None
+                    f"again."
+                ) from None
             time.sleep(LOCK_POLL)
     try:
         try:
@@ -81,8 +82,10 @@ def _read(manifest_path: Path) -> list[dict[str, object]]:
         return []
     loaded = json.loads(manifest_path.read_text(encoding="utf-8"))
     if not isinstance(loaded, list):
-        sys.exit(f"error: {manifest_path} is not a list of packs. The roster "
-                 f"is written by this build; delete it to start over.")
+        sys.exit(
+            f"error: {manifest_path} is not a list of packs. The roster "
+            f"is written by this build; delete it to start over."
+        )
     return loaded
 
 
@@ -95,15 +98,15 @@ def version_key(version: str) -> tuple[int, ...]:
     return tuple(int(part) if part.isdigit() else 0 for part in version.split("."))
 
 
-def _made(pack_id: str, label: str, file: str, built: str, digest: str, *,
-          hidden: bool, default: bool) -> dict[str, object]:
+def _made(
+    pack_id: str, label: str, file: str, built: str, digest: str, *, hidden: bool, default: bool
+) -> dict[str, object]:
     """One entry, with its optional flags absent rather than false.
 
     The app tests for the keys, so writing them false would mark every ordinary
     pack as carrying a property it does not have.
     """
-    made: dict[str, object] = {"id": pack_id, "label": label, "file": file,
-                               "built": built, "hash": digest}
+    made: dict[str, object] = {"id": pack_id, "label": label, "file": file, "built": built, "hash": digest}
     if hidden:
         made["hidden"] = True
     if default:
@@ -111,8 +114,9 @@ def _made(pack_id: str, label: str, file: str, built: str, digest: str, *,
     return made
 
 
-def entry(pack_id: str, label: str, built: str, payload: bytes, *,
-          hidden: bool = False, default: bool = False) -> dict[str, object]:
+def entry(
+    pack_id: str, label: str, built: str, payload: bytes, *, hidden: bool = False, default: bool = False
+) -> dict[str, object]:
     """One pack's roster entry, naming the manifest that names its modules.
 
     The hash is over the manifest, not over the pack: the modules are already
@@ -121,9 +125,15 @@ def entry(pack_id: str, label: str, built: str, payload: bytes, *,
     which is the manifest -- and because it names every module, its hash moves
     exactly when any of them does.
     """
-    return _made(pack_id, label, f"data/{pack_id}/manifest.json", built,
-                 hashlib.sha256(payload).hexdigest()[:10],
-                 hidden=hidden, default=default)
+    return _made(
+        pack_id,
+        label,
+        f"data/{pack_id}/manifest.json",
+        built,
+        hashlib.sha256(payload).hexdigest()[:10],
+        hidden=hidden,
+        default=default,
+    )
 
 
 def update(manifest_path: Path, made: dict[str, object]) -> None:

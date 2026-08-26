@@ -60,8 +60,7 @@ from typing import Any
 
 import packfile
 from packs import schema_name, select
-from repo import (CACHE, DIM, GREEN, RESET, ROOT, YELLOW, log,
-                  survive_console_encoding)
+from repo import CACHE, DIM, GREEN, RESET, ROOT, YELLOW, log, survive_console_encoding
 
 sys.path.insert(0, str(ROOT / "build"))
 
@@ -76,8 +75,7 @@ try:
     import pyarrow  # type: ignore[import-untyped]
 except ImportError:  # pragma: no cover - a development-tool dependency
     sys.exit(
-        "tools/packdb.py needs DuckDB and PyArrow, which pyproject.toml declares:\n"
-        "    uv run python tools/packdb.py"
+        "tools/packdb.py needs DuckDB and PyArrow, which pyproject.toml declares:\n    uv run python tools/packdb.py"
     )
 
 DATA = ROOT / "site" / "data"
@@ -138,16 +136,16 @@ def decoded(name: str, section: Any) -> Any:
     declaration = DECLARED.get(name)
     if declaration is None:
         return section
-    shipped = ({declaration.columns[0]: section}
-               if declaration.layout is Layout.BARE else section)
-    layouts = {column: layout_for(declaration, column, FEWEST_BYTES)
-               for column in declaration.columns}
-    rows = max((_length(shipped[column], layouts[column])
-                for column in declaration.columns if column in shipped), default=0)
+    shipped = {declaration.columns[0]: section} if declaration.layout is Layout.BARE else section
+    layouts = {column: layout_for(declaration, column, FEWEST_BYTES) for column in declaration.columns}
+    rows = max(
+        (_length(shipped[column], layouts[column]) for column in declaration.columns if column in shipped), default=0
+    )
     columns = {
-        column: decode_column(shipped[column], layouts[column],
-                              declaration.absent.get(column, EMPTY_SLOT), rows)
-        for column in declaration.columns if column in shipped}
+        column: decode_column(shipped[column], layouts[column], declaration.absent.get(column, EMPTY_SLOT), rows)
+        for column in declaration.columns
+        if column in shipped
+    }
     return columns[declaration.columns[0]] if declaration.layout is Layout.BARE else columns
 
 
@@ -178,8 +176,7 @@ def _tables(name: str, section: Any) -> list[tuple[str, list[str], list[list[Any
             table = name if length == max(by_length) else f"{name}_{columns[0]}"
             out.append((table, columns, [section[c] for c in columns]))
         return out
-    if isinstance(section, dict) and all(
-            not isinstance(v, (list, dict)) for v in section.values()):
+    if isinstance(section, dict) and all(not isinstance(v, (list, dict)) for v in section.values()):
         keys = list(section)
         values = [section[k] for k in keys]
         # A column holds one type. Most lookups are uniform and land as what
@@ -202,8 +199,7 @@ def _tables(name: str, section: Any) -> list[tuple[str, list[str], list[list[Any
                 # An empty group is a real answer -- no kind carries a column
                 # no property declares -- and it lands as an empty table rather
                 # than as a row holding nothing.
-                out.extend(_tables(f"{name}_{key}", value) if value
-                           else [(f"{name}_{key}", ["value"], [[]])])
+                out.extend(_tables(f"{name}_{key}", value) if value else [(f"{name}_{key}", ["value"], [[]])])
             else:
                 # A scalar beside the groups: nothing to recurse into, and
                 # dropping it would lose it silently.
@@ -211,8 +207,7 @@ def _tables(name: str, section: Any) -> list[tuple[str, list[str], list[list[Any
         return out
     if isinstance(section, dict):  # nested, e.g. meta -- values as JSON text
         keys = list(section)
-        return [(name, ["key", "value"],
-                 [keys, [json.dumps(section[k], separators=(",", ":")) for k in keys]])]
+        return [(name, ["key", "value"], [keys, [json.dumps(section[k], separators=(",", ":")) for k in keys]])]
     if isinstance(section, list):
         return [(name, ["idx", "value"], [list(range(len(section))), section])]
     raise TypeError(f"section {name!r} has an unrecognised shape: {type(section).__name__}")
@@ -244,8 +239,7 @@ def load_pack(connection: Any, pack_id: str, path: Path) -> tuple[int, int]:
             if data and data[0]:
                 arrow = pyarrow.table(dict(zip(columns, data)))
                 connection.register("section", arrow)
-                connection.execute(
-                    f'CREATE TABLE "{schema}"."{table}" AS SELECT * FROM section')
+                connection.execute(f'CREATE TABLE "{schema}"."{table}" AS SELECT * FROM section')
                 connection.unregister("section")
             else:
                 spec = ", ".join(f'"{c}" {column_type(v)}' for c, v in zip(columns, data))
@@ -256,15 +250,13 @@ def load_pack(connection: Any, pack_id: str, path: Path) -> tuple[int, int]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__,
-                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("version", nargs="*", help="pack id or a prefix (default: all)")
     parser.add_argument("--list", action="store_true", help="print what would be built")
     parser.add_argument("--db", default=str(DB_PATH), help=f"output (default {DB_PATH})")
     args = parser.parse_args()
 
-    chosen = [(p, DATA / p.id)
-              for p in (select(" ".join(args.version)) if args.version else select(None))]
+    chosen = [(p, DATA / p.id) for p in (select(" ".join(args.version)) if args.version else select(None))]
     chosen = [(p, path) for p, path in chosen if (path / "manifest.json").exists()]
     if not chosen:
         log(f"{YELLOW}no packs on disk{RESET}")
@@ -273,8 +265,7 @@ def main() -> int:
     if args.list:
         for pack, path in chosen:
             megabytes = sum(packfile.sizes(path).values()) / 1e6
-            log(f"  {schema_name(pack.id):<10} {pack.id:<22} "
-                f"{megabytes:>6.1f} MB  {pack.label}")
+            log(f"  {schema_name(pack.id):<10} {pack.id:<22} {megabytes:>6.1f} MB  {pack.label}")
         return 0
 
     Path(args.db).parent.mkdir(parents=True, exist_ok=True)
@@ -287,14 +278,15 @@ def main() -> int:
             tables, rows = load_pack(connection, pack.id, path)
             total_tables += tables
             total_rows += rows
-            log(f"  {schema_name(pack.id):<10} {tables:>3} tables  {rows:>10,} rows"
-                f"  [{time.time() - started:.1f}s]")
+            log(f"  {schema_name(pack.id):<10} {tables:>3} tables  {rows:>10,} rows  [{time.time() - started:.1f}s]")
     finally:
         connection.close()
 
     size = Path(args.db).stat().st_size
-    log(f"\n{GREEN}{len(chosen)} pack(s){RESET}  {total_tables} tables, "
-        f"{total_rows:,} rows  -> {args.db} ({size / 1e6:,.0f} MB)")
+    log(
+        f"\n{GREEN}{len(chosen)} pack(s){RESET}  {total_tables} tables, "
+        f"{total_rows:,} rows  -> {args.db} ({size / 1e6:,.0f} MB)"
+    )
     return 0
 
 

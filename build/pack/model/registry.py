@@ -44,40 +44,37 @@ def register(section: Section) -> Section:
         if existing.module == section.module and existing.scope is not section.scope:
             raise ValueError(
                 f"module {section.module!r} is declared {existing.scope.value} "
-                f"by {existing.name} and {section.scope.value} by {section.name}")
+                f"by {existing.name} and {section.scope.value} by {section.name}"
+            )
 
     unknown = sorted(set(section.reads) - CONTEXT_FIELDS)
     if unknown:
-        raise ValueError(
-            f"{section.name} reads {', '.join(unknown)}, which the derive "
-            f"context does not hold")
+        raise ValueError(f"{section.name} reads {', '.join(unknown)}, which the derive context does not hold")
 
     stray = sorted(set(section.encoding) - set(section.columns))
     if stray:
-        raise ValueError(
-            f"{section.name} encodes {', '.join(stray)}, which it does not produce")
+        raise ValueError(f"{section.name} encodes {', '.join(stray)}, which it does not produce")
 
     unspoken = sorted(set(section.localizable) - set(section.columns))
     if unspoken:
-        raise ValueError(
-            f"{section.name} declares {', '.join(unspoken)} localizable, which "
-            f"it does not produce")
+        raise ValueError(f"{section.name} declares {', '.join(unspoken)} localizable, which it does not produce")
 
     if section.layout is Layout.BARE:
         if len(section.columns) != 1:
-            raise ValueError(
-                f"{section.name} is bare but declares {len(section.columns)} columns")
+            raise ValueError(f"{section.name} is bare but declares {len(section.columns)} columns")
         if section.localizable:
             raise ValueError(
                 f"{section.name} is bare and localizable; a language is split "
-                f"out by column name and a bare payload has none")
+                f"out by column name and a bare payload has none"
+            )
 
     if section.localizable and not set(section.reads) & SPOKEN_FIELDS:
         raise ValueError(
             f"{section.name} ships {', '.join(section.localizable)} as language "
             f"but reads none of {', '.join(sorted(SPOKEN_FIELDS))}; either the "
             f"column is the same in every language or the field it comes from "
-            f"is missing from `Spoken` and no locale pass rebuilds it")
+            f"is missing from `Spoken` and no locale pass rebuilds it"
+        )
 
     SECTIONS.append(section)
     return section

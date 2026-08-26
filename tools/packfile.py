@@ -58,8 +58,7 @@ def module(file: str) -> dict[str, Any]:
     return loaded
 
 
-def entries(manifest: dict[str, Any],
-            locale: str = DEFAULT_LOCALE) -> dict[str, dict[str, Any]]:
+def entries(manifest: dict[str, Any], locale: str = DEFAULT_LOCALE) -> dict[str, dict[str, Any]]:
     """Which module file a pack reads for each module, in one language.
 
     The structure modules and the chosen language's, together: that IS a pack
@@ -81,14 +80,14 @@ def entries(manifest: dict[str, Any],
     """
     locales = manifest.get("locales", {})
     if not locales:
-        raise ValueError(f"{manifest.get('pack', 'this pack')} names no languages; "
-                         f"it predates the language axis and has to be rebuilt")
-    return {**manifest.get("modules", {}),
-            **(locales.get(locale) or locales.get(DEFAULT_LOCALE, {}))}
+        raise ValueError(
+            f"{manifest.get('pack', 'this pack')} names no languages; "
+            f"it predates the language axis and has to be rebuilt"
+        )
+    return {**manifest.get("modules", {}), **(locales.get(locale) or locales.get(DEFAULT_LOCALE, {}))}
 
 
-def load(pack_dir: Path, *, want: tuple[str, ...] = (),
-         locale: str = DEFAULT_LOCALE) -> dict[str, Any]:
+def load(pack_dir: Path, *, want: tuple[str, ...] = (), locale: str = DEFAULT_LOCALE) -> dict[str, Any]:
     """One pack as the single document its modules add up to.
 
     Args:
@@ -126,8 +125,7 @@ def sizes(pack_dir: Path, locale: str = DEFAULT_LOCALE) -> dict[str, int]:
     One language's, because that is what a reader downloads: adding every
     language up would describe a pack nobody fetches.
     """
-    return {name: entry["bytes"]
-            for name, entry in entries(manifest_of(pack_dir), locale).items()}
+    return {name: entry["bytes"] for name, entry in entries(manifest_of(pack_dir), locale).items()}
 
 
 def files(manifest: dict[str, Any]) -> list[str]:

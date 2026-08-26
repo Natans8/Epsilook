@@ -9,10 +9,42 @@ of these modules rather than an edit to a list somewhere else.
 
 from __future__ import annotations
 
-from . import (anims, assets, entities, expansions, fx, gates, keybinds, links,
-               mechanics, models, modifiers, rows, screens, sounds, spells,
-               text, vehicles)
+from . import (
+    anims,
+    assets,
+    entities,
+    expansions,
+    fx,
+    gates,
+    keybinds,
+    links,
+    mechanics,
+    models,
+    modifiers,
+    rows,
+    screens,
+    sounds,
+    spells,
+    text,
+    vehicles,
+)
 
-__all__ = ["anims", "assets", "entities", "expansions", "fx", "gates",
-           "keybinds", "links", "mechanics", "models", "modifiers", "rows",
-           "screens", "sounds", "spells", "text", "vehicles"]
+__all__ = [
+    "anims",
+    "assets",
+    "entities",
+    "expansions",
+    "fx",
+    "gates",
+    "keybinds",
+    "links",
+    "mechanics",
+    "models",
+    "modifiers",
+    "rows",
+    "screens",
+    "sounds",
+    "spells",
+    "text",
+    "vehicles",
+]

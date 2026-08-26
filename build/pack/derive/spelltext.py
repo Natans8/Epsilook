@@ -38,16 +38,22 @@ CODE_MEANING = {
     "M": "points_max",
     "o": "points_total",  # amount times ticks over the full duration
     "b": "points_per_combo",
-    "t": "period", "T": "period",
-    "a": "radius", "A": "radius",
+    "t": "period",
+    "T": "period",
+    "a": "radius",
+    "A": "radius",
     "x": "chain_targets",
-    "i": "max_targets", "I": "max_targets",
+    "i": "max_targets",
+    "I": "max_targets",
     "q": "misc_value",
-    "d": "duration", "D": "duration",
-    "u": "max_stacks", "U": "max_stacks",
+    "d": "duration",
+    "D": "duration",
+    "u": "max_stacks",
+    "U": "max_stacks",
     "n": "charges",
     "h": "proc_chance",
-    "r": "range", "R": "range",
+    "r": "range",
+    "R": "range",
     "v": "max_target_level",
 }
 
@@ -71,28 +77,52 @@ right for more of them than any other. Eliding instead left sentences like
 
 ELIDED_WORDS = [
     # caster stats and scaling
-    "RAP", "AP", "SP", "MWB", "mwb", "MHP", "pri",
-    "INT", "STR", "AGI", "STA", "SPI", "versadmg", "abs",
+    "RAP",
+    "AP",
+    "SP",
+    "MWB",
+    "mwb",
+    "MHP",
+    "pri",
+    "INT",
+    "STR",
+    "AGI",
+    "STA",
+    "SPI",
+    "versadmg",
+    "abs",
     # weapon damage, enchant values, item-level scaling
-    "ecix", "ec", "bc", "sw", "mw",
+    "ecix",
+    "ec",
+    "bc",
+    "sw",
+    "mw",
     # proc/cast bookkeeping the tooltip computes at runtime
-    "proccooldown", "procrppm", "maxcast",
+    "proccooldown",
+    "procrppm",
+    "maxcast",
     # creature-level bands, UI markers, the player's hearth
-    "ctrmax", "ctrmin", "lootspec", "bullet", "expandtiptag",
+    "ctrmax",
+    "ctrmin",
+    "lootspec",
+    "bullet",
+    "expandtiptag",
     # malformed redirects such as `$347182spelldesc`, whose `@` is in the wrong
     # place, so the redirect pass never sees them
-    "spelldesc", "spellaura", "spelltooltip", "spellname", "spellicon",
+    "spelldesc",
+    "spellaura",
+    "spelltooltip",
+    "spellname",
+    "spellicon",
 ]
 # The trailing `;` is part of the token for the ones that carry one (`$bullet;`)
 # and absent for the rest, so it is optional.
-_ELIDED_WORD_RE = re.compile(
-    r"\$\d*(" + "|".join(sorted(ELIDED_WORDS, key=len, reverse=True)) + r")\d*;?")
+_ELIDED_WORD_RE = re.compile(r"\$\d*(" + "|".join(sorted(ELIDED_WORDS, key=len, reverse=True)) + r")\d*;?")
 
 # The level codes, matched the same way the elided ones are. Kept as its own
 # pattern so the two lists cannot both claim a word: a code in both would be
 # substituted or dropped depending on which pass ran first.
-_LEVEL_WORD_RE = re.compile(
-    r"\$\d*(" + "|".join(sorted(LEVEL_WORDS, key=len, reverse=True)) + r")\d*;?")
+_LEVEL_WORD_RE = re.compile(r"\$\d*(" + "|".join(sorted(LEVEL_WORDS, key=len, reverse=True)) + r")\d*;?")
 
 # `$j1g` / `$j1f` — the ground and flight halves of a mount's speed effect.
 # Two letters with the index between them, so the generic code regex would read
@@ -181,8 +211,7 @@ def _folded(node: ast.expr) -> float:
     # bool is a subclass of int, and `True` is not a quantity a template
     # means -- the character filter upstream keeps letters out, but this
     # function is the one that decides what counts as a number.
-    if (isinstance(node, ast.Constant) and not isinstance(node.value, bool)
-            and isinstance(node.value, (int, float))):
+    if isinstance(node, ast.Constant) and not isinstance(node.value, bool) and isinstance(node.value, (int, float)):
         return node.value
     if isinstance(node, ast.BinOp):
         fold = _ARITHMETIC.get(type(node.op))
@@ -290,19 +319,16 @@ class _FrenchTextLocale(TextLocale):
 
 
 ENGLISH = TextLocale()
-RUSSIAN = _RussianTextLocale(seconds=("сек",), minutes=("мин",),
-                             hours=("ч",), days=("дн.",))
+RUSSIAN = _RussianTextLocale(seconds=("сек",), minutes=("мин",), hours=("ч",), days=("дн.",))
 # Read from how each client's own templates word a duration beside a number,
 # rather than guessed. The same measurement over the English templates returns
 # `sec`, `min`, `hour`/`hours` and `day`/`days`, which is exactly what this
 # file already supplied for English -- so it recovers a known answer, and the
 # convention it recovers is the one applied here: the short unit abbreviates
 # for seconds and minutes and is spelled out from hours up.
-FRENCH = _FrenchTextLocale(seconds=("s",), minutes=("min",),
-                           hours=("heure", "heures"), days=("jour", "jours"))
+FRENCH = _FrenchTextLocale(seconds=("s",), minutes=("min",), hours=("heure", "heures"), days=("jour", "jours"))
 # Spanish pluralises as English does -- one is one, everything else is not.
-SPANISH = TextLocale(seconds=("s",), minutes=("min",),
-                     hours=("hora", "horas"), days=("día", "días"))
+SPANISH = TextLocale(seconds=("s",), minutes=("min",), hours=("hora", "horas"), days=("día", "días"))
 
 
 def format_duration(ms: int, locale: TextLocale = ENGLISH) -> str:
@@ -334,10 +360,15 @@ class DescriptionCooker:
     be cooked in any order.
     """
 
-    def __init__(self, descriptions: dict[int, str], aura_descriptions: dict[int, str],
-                 names: dict[int, str], values: DescriptionValues,
-                 variables: dict[int, dict[str, str]],
-                 locale: TextLocale = ENGLISH):
+    def __init__(
+        self,
+        descriptions: dict[int, str],
+        aura_descriptions: dict[int, str],
+        names: dict[int, str],
+        values: DescriptionValues,
+        variables: dict[int, dict[str, str]],
+        locale: TextLocale = ENGLISH,
+    ):
         self.descriptions = descriptions
         self.aura_descriptions = aura_descriptions
         self.names = names
@@ -356,7 +387,6 @@ class DescriptionCooker:
         if not template:
             return ""
         return _tidy(self._render(template, spell, 0, ()))
-
 
     def _render(self, text: str, spell: int, depth: int, seen: tuple[int, ...]) -> str:
         """Resolve every construct in `text`, reading values from `spell`.
@@ -379,8 +409,7 @@ class DescriptionCooker:
         text = self._substitute_codes(text, spell)
         return _strip_markup(text)
 
-    def _expand_redirects(self, text: str, depth: int,
-                          seen: tuple[int, ...]) -> str:
+    def _expand_redirects(self, text: str, depth: int, seen: tuple[int, ...]) -> str:
         """`$@spelldescN` and friends: splice in another spell's own text.
 
         The spliced body is rendered in the target's context.
@@ -394,8 +423,7 @@ class DescriptionCooker:
                 return self.names.get(target, "")
             if target in seen:  # A -> B -> A; the game shows nothing either
                 return ""
-            body = (self.aura_descriptions if kind == "spellaura"
-                    else self.descriptions).get(target, "")
+            body = (self.aura_descriptions if kind == "spellaura" else self.descriptions).get(target, "")
             if not body:
                 return ""
             return self._render(body, target, depth + 1, seen + (target,))
@@ -448,7 +476,7 @@ class DescriptionCooker:
                     break
                 pos, consumed = after, True
             if not consumed:  # a bare `$?` that opens nothing; not a conditional
-                out.append(text[j:j + 2])
+                out.append(text[j : j + 2])
                 i = j + 2
                 continue
             if pos < len(text) and text[pos] == "[":
@@ -475,7 +503,7 @@ class DescriptionCooker:
             out.append(text[i:j])
             body, after = _balanced(text, j + 1, "{", "}")
             if body is None:
-                out.append(text[j:j + 2])
+                out.append(text[j : j + 2])
                 i = j + 2
                 continue
             out.append(self._eval(body, spell))
@@ -563,15 +591,13 @@ class DescriptionCooker:
         elif what in ("points_min", "points_max"):
             base = _at(v.points, target, index)
             spread = (_at(v.variance, target, index) or 0) / 2
-            got = None if base is None else base * (
-                1 - spread if what == "points_min" else 1 + spread)
+            got = None if base is None else base * (1 - spread if what == "points_min" else 1 + spread)
         elif what == "points_per_combo":
             got = _at(v.points, target, index)
         elif what == "points_total":
             base = _at(v.points, target, index)
             period, dur = _at(v.period, target, index), v.duration.get(target)
-            got = (None if base is None or not period or not dur
-                   else base * max(1, round(dur / period)))
+            got = None if base is None or not period or not dur else base * max(1, round(dur / period))
         elif what == "period":
             ms = _at(v.period, target, index)
             got = None if not ms else ms / 1000
@@ -617,8 +643,7 @@ def _at(table: dict[int, dict[int, float]], spell: int, index: int) -> float | N
     return table.get(spell, {}).get(index)
 
 
-def _balanced(text: str, start: int, open_ch: str = "[", close_ch: str = "]"
-              ) -> tuple[str | None, int]:
+def _balanced(text: str, start: int, open_ch: str = "[", close_ch: str = "]") -> tuple[str | None, int]:
     """The body of the bracket at `start`, and the index just past its close.
 
     Brackets nest -- a conditional's branch routinely holds another one -- so a
@@ -633,7 +658,7 @@ def _balanced(text: str, start: int, open_ch: str = "[", close_ch: str = "]"
         elif text[i] == close_ch:
             level -= 1
             if level == 0:
-                return text[start + 1:i], i + 1
+                return text[start + 1 : i], i + 1
     return None, start
 
 
@@ -647,7 +672,7 @@ def _resolve_plurals(text: str, locale: TextLocale = ENGLISH) -> str:
     def pick(m: re.Match[str]) -> str:
         # The last number in the run before it, not the character immediately
         # before: a noun sits between the two as often as not.
-        before = re.findall(r"\d+(?:\.\d+)?", text[max(0, m.start() - 60):m.start()])
+        before = re.findall(r"\d+(?:\.\d+)?", text[max(0, m.start() - 60) : m.start()])
         n = float(before[-1]) if before else None
         forms = m.group(1).split(":")
         return forms[locale.plural_index(n, len(forms))]

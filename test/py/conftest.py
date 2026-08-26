@@ -25,9 +25,9 @@ def _tables(tmp_path: Path) -> BuildTables:
     """
     sources = itertools.count()
 
-    def build(*, absent: dict[str, str] | None = None,
-              defaults: dict[tuple[str, str], str] | None = None,
-              **csvs: str) -> CsvTables:
+    def build(
+        *, absent: dict[str, str] | None = None, defaults: dict[tuple[str, str], str] | None = None, **csvs: str
+    ) -> CsvTables:
         directory = tmp_path / f"source{next(sources)}"
         directory.mkdir()
         for table, text in csvs.items():

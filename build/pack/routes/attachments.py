@@ -15,9 +15,7 @@ from ..sources import load_local_enum
 M2_ATTACHMENT_NAMES: dict[int, str] = load_local_enum("m2_attachments")
 """Raw M2 attachment id -> the game's own name for it (wowdev.wiki/M2)."""
 
-VEHICLE_GEO_COMPONENT_LINKS = [
-    attach for _, attach in sorted(load_local_enum("vehicle_geo_component_links").items())
-]
+VEHICLE_GEO_COMPONENT_LINKS = [attach for _, attach in sorted(load_local_enum("vehicle_geo_component_links").items())]
 """Seat AttachmentID (an index) -> the raw M2 attachment id it stands for.
 
 Compiled into the client and in no db2, so it cannot be derived from data. It

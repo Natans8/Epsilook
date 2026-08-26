@@ -45,46 +45,53 @@ def _hotfix(table: str, columns: Mapping[str, str]) -> Overlay:
     return Overlay(table, columns, judged_on=STAMP_COLUMN)
 
 
-_SPELL_NAMES = {
-    table: _hotfix("spell_name", {"ID": "ID", columns[1]: "Name"})
-    for table, columns in SPELL_NAME_SOURCES
-}
+_SPELL_NAMES = {table: _hotfix("spell_name", {"ID": "ID", columns[1]: "Name"}) for table, columns in SPELL_NAME_SOURCES}
 """The name mapping, once per table the name is ever read from: naming one
 table would overlay some builds and silently not others."""
 
 _HOTFIXES: Mapping[str, Overlay] = {
     **_SPELL_NAMES,
-    "SpellXSpellVisual": _hotfix("spell_x_spell_visual", {
-        "ID": "ID", "SpellID": "SpellID", "SpellVisualID": "SpellVisualID"}),
-    "SpellVisual": _hotfix("spell_visual", {
-        "ID": "ID",
-        "SpellVisualMissileSetID": "SpellVisualMissileSetID",
-        "RaidSpellVisualMissileSetID": "RaidSpellVisualMissileSetID",
-        "MissileAttachment": "MissileAttachment",
-        "MissileDestinationAttachment": "MissileDestinationAttachment",
-        "AnimEventSoundID": "AnimEventSoundID",
-        **{column: column for column in VISUAL_REDIRECTS},
-    }),
-    "SpellVisualMissile": _hotfix("spell_visual_missile", {
-        "ID": "ID",
-        "SpellVisualMissileSetID": "SpellVisualMissileSetID",
-        "SpellVisualEffectNameID": "SpellVisualEffectNameID",
-        "SoundEntriesID": "SoundEntriesID",
-        "AnimKitID": "AnimKitID",
-        "SpellMissileMotionID": "SpellMissileMotionID",
-        "Attachment": "Attachment",
-        "DestinationAttachment": "DestinationAttachment",
-    }),
-    "SpellVisualEffectName": _hotfix("spell_visual_effect_name", {
-        "ID": "ID", "ModelFileDataID": "ModelFileDataID"}),
+    "SpellXSpellVisual": _hotfix(
+        "spell_x_spell_visual", {"ID": "ID", "SpellID": "SpellID", "SpellVisualID": "SpellVisualID"}
+    ),
+    "SpellVisual": _hotfix(
+        "spell_visual",
+        {
+            "ID": "ID",
+            "SpellVisualMissileSetID": "SpellVisualMissileSetID",
+            "RaidSpellVisualMissileSetID": "RaidSpellVisualMissileSetID",
+            "MissileAttachment": "MissileAttachment",
+            "MissileDestinationAttachment": "MissileDestinationAttachment",
+            "AnimEventSoundID": "AnimEventSoundID",
+            **{column: column for column in VISUAL_REDIRECTS},
+        },
+    ),
+    "SpellVisualMissile": _hotfix(
+        "spell_visual_missile",
+        {
+            "ID": "ID",
+            "SpellVisualMissileSetID": "SpellVisualMissileSetID",
+            "SpellVisualEffectNameID": "SpellVisualEffectNameID",
+            "SoundEntriesID": "SoundEntriesID",
+            "AnimKitID": "AnimKitID",
+            "SpellMissileMotionID": "SpellMissileMotionID",
+            "Attachment": "Attachment",
+            "DestinationAttachment": "DestinationAttachment",
+        },
+    ),
+    "SpellVisualEffectName": _hotfix("spell_visual_effect_name", {"ID": "ID", "ModelFileDataID": "ModelFileDataID"}),
     "SpellEffect": _hotfix("spell_effect", SPELL_EFFECT_COLUMNS),
-    "SpellMisc": _hotfix("spell_misc", {
-        "ID": "ID", "SpellID": "SpellID", "DifficultyID": "DifficultyID",
-        "SpellIconFileDataID": "SpellIconFileDataID"}),
-    "CreatureDisplayInfo": _hotfix("creature_display_info", {
-        "ID": "ID", "ModelID": "ModelID"}),
-    "CreatureModelData": _hotfix("creature_model_data", {
-        "ID": "ID", "FileDataID": "FileDataID"}),
+    "SpellMisc": _hotfix(
+        "spell_misc",
+        {
+            "ID": "ID",
+            "SpellID": "SpellID",
+            "DifficultyID": "DifficultyID",
+            "SpellIconFileDataID": "SpellIconFileDataID",
+        },
+    ),
+    "CreatureDisplayInfo": _hotfix("creature_display_info", {"ID": "ID", "ModelID": "ModelID"}),
+    "CreatureModelData": _hotfix("creature_model_data", {"ID": "ID", "FileDataID": "FileDataID"}),
 }
 """Client table -> how the server's hotfixes revise it, before a build is known."""
 
@@ -109,11 +116,11 @@ def hotfix_overlays(build: int) -> dict[str, Overlay]:
             merge used to refuse before the rule carried its own bound.
     """
     if build <= 0:
-        raise ValueError(f"hotfix_overlays: {build} is not a client build; a "
-                         f"floor at or below zero admits every hotfix row")
+        raise ValueError(
+            f"hotfix_overlays: {build} is not a client build; a floor at or below zero admits every hotfix row"
+        )
     admits = at_least(build)
-    return {base: replace(overlay, admits=admits)
-            for base, overlay in _HOTFIXES.items()}
+    return {base: replace(overlay, admits=admits) for base, overlay in _HOTFIXES.items()}
 
 
 def check_overlay_declaration() -> list[str]:

@@ -43,8 +43,7 @@ def supplement_overlay(floor: int) -> dict[str, Overlay]:
     It adds rather than restates, because a row the community list lacks is
     exactly what it is for.
     """
-    return {TABLE: Overlay(table=TABLE, key=ID, judged_on=ID,
-                           admits=above(floor))}
+    return {TABLE: Overlay(table=TABLE, key=ID, judged_on=ID, admits=above(floor))}
 
 
 class ListfileTables:
@@ -67,8 +66,7 @@ class ListfileTables:
         chooses.
         """
         if self.path.suffix == ".gz":
-            return gzip.open(self.path, "rt", encoding="utf-8", errors="replace",
-                             newline="")
+            return gzip.open(self.path, "rt", encoding="utf-8", errors="replace", newline="")
         # `newline=""` on purpose: without it a lone carriage return counts as a
         # line terminator, so a path carrying one would be split into a
         # truncated row that still looks like a real name and a remainder that
@@ -96,16 +94,14 @@ class ListfileTables:
         and one unreadable line is not a truncated download.
         """
         if table != TABLE:
-            sys.exit(f"error: {type(self).__name__} serves only {TABLE!r}, "
-                     f"and was asked for {table!r}")
+            sys.exit(f"error: {type(self).__name__} serves only {TABLE!r}, and was asked for {table!r}")
         if not self.path.exists():
             sys.exit(f"error: the listfile is missing from {self.path}")
 
         index = []
         for column in columns:
             if column not in COLUMNS:
-                sys.exit(f"error: the listfile has no column {column!r}; "
-                         f"it carries {list(COLUMNS)}")
+                sys.exit(f"error: the listfile has no column {column!r}; it carries {list(COLUMNS)}")
             index.append(COLUMNS.index(column))
 
         # This is the largest read in the build -- some two million rows per

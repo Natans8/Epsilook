@@ -23,15 +23,13 @@ from pack.tables.csv_tables import CsvTables
 PACK = "9.2.7.45745"
 TABLE_DIR = CACHE_DIR / PACK
 
-pytestmark = pytest.mark.skipif(
-    not TABLE_DIR.is_dir(), reason=f"no cached tables for {PACK}; build a pack first")
+pytestmark = pytest.mark.skipif(not TABLE_DIR.is_dir(), reason=f"no cached tables for {PACK}; build a pack first")
 
 
 def plainly(directory: Path, table: str, columns: list[str]) -> list[tuple[str, ...]]:
     """One table's named columns, read with nothing but the csv module."""
     with (directory / f"{table}.csv").open(newline="", encoding="utf-8") as handle:
-        return [tuple(row[column] for column in columns)
-                for row in csv.DictReader(handle)]
+        return [tuple(row[column] for column in columns) for row in csv.DictReader(handle)]
 
 
 @pytest.mark.parametrize("table", TABLES)
@@ -65,4 +63,5 @@ def test_the_pinned_sound_kit_build_is_just_another_source() -> None:
     if not (pinned / "SoundKitName.csv").exists():
         pytest.skip("the pinned sound-kit build is not cached")
     assert list(CsvTables(pinned).rows("SoundKitName", ["ID", "Name"])) == plainly(
-        pinned, "SoundKitName", ["ID", "Name"])
+        pinned, "SoundKitName", ["ID", "Name"]
+    )

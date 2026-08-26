@@ -30,13 +30,17 @@ def entry(module: Module, location: str) -> dict[str, object]:
     The size travels so a deploy can be checked against what was built without
     fetching it.
     """
-    return {"file": f"{location}/{module.filename}" if location else module.filename,
-            "bytes": len(module.payload)}
+    return {"file": f"{location}/{module.filename}" if location else module.filename, "bytes": len(module.payload)}
 
 
-def manifest(pack_id: str, modules: Sequence[Module],
-             header: Mapping[str, object] | None = None, *,
-             absent: Sequence[str] = (), location: str = "") -> dict[str, object]:
+def manifest(
+    pack_id: str,
+    modules: Sequence[Module],
+    header: Mapping[str, object] | None = None,
+    *,
+    absent: Sequence[str] = (),
+    location: str = "",
+) -> dict[str, object]:
     """One pack's manifest.
 
     Args:
@@ -75,16 +79,15 @@ def manifest(pack_id: str, modules: Sequence[Module],
     return {
         "pack": pack_id,
         "meta": dict(header or {}),
-        "modules": {module.name: entry(module, location)
-                    for module in modules if not module.locale},
+        "modules": {module.name: entry(module, location) for module in modules if not module.locale},
         "locales": locales,
         "absentSections": list(absent),
     }
 
 
-def carry_forward(fresh: Mapping[str, object], existing: Mapping[str, object],
-                  built: frozenset[str],
-                  home: Mapping[str, str]) -> dict[str, object]:
+def carry_forward(
+    fresh: Mapping[str, object], existing: Mapping[str, object], built: frozenset[str], home: Mapping[str, str]
+) -> dict[str, object]:
     """A partial build's manifest, completed from the pack's previous one.
 
     A partial build produces some modules and a manifest naming only those;
@@ -106,31 +109,34 @@ def carry_forward(fresh: Mapping[str, object], existing: Mapping[str, object],
         home: section name -> the module it ships in, from the registry, for
             deciding which carried claims about a section still stand.
     """
+
     def merged_entries(name: str) -> dict[str, object]:
         held = existing.get(name)
-        kept = {module: entry for module, entry in held.items()
-                if module not in built} if isinstance(held, Mapping) else {}
+        kept = (
+            {module: entry for module, entry in held.items() if module not in built}
+            if isinstance(held, Mapping)
+            else {}
+        )
         add = fresh.get(name)
         return {**kept, **(add if isinstance(add, Mapping) else {})}
 
     held_locales = existing.get("locales")
-    old_locales: Mapping[str, Mapping[str, object]] = (
-        held_locales if isinstance(held_locales, Mapping) else {})
+    old_locales: Mapping[str, Mapping[str, object]] = held_locales if isinstance(held_locales, Mapping) else {}
     made_locales = fresh.get("locales")
-    new_locales: Mapping[str, Mapping[str, object]] = (
-        made_locales if isinstance(made_locales, Mapping) else {})
-    locales = {code: {**{module: entry for module, entry
-                         in old_locales.get(code, {}).items()
-                         if module not in built},
-                      **new_locales.get(code, {})}
-               for code in sorted(set(old_locales) | set(new_locales))}
+    new_locales: Mapping[str, Mapping[str, object]] = made_locales if isinstance(made_locales, Mapping) else {}
+    locales = {
+        code: {
+            **{module: entry for module, entry in old_locales.get(code, {}).items() if module not in built},
+            **new_locales.get(code, {}),
+        }
+        for code in sorted(set(old_locales) | set(new_locales))
+    }
 
     def standing(claims: object) -> dict[str, object]:
         """The existing per-section claims about sections not rebuilt."""
         if not isinstance(claims, Mapping):
             return {}
-        return {name: value for name, value in claims.items()
-                if home.get(str(name), "") not in built}
+        return {name: value for name, value in claims.items() if home.get(str(name), "") not in built}
 
     old_meta = existing.get("meta")
     old_meta = old_meta if isinstance(old_meta, Mapping) else {}
@@ -138,29 +144,32 @@ def carry_forward(fresh: Mapping[str, object], existing: Mapping[str, object],
     new_meta = dict(new_meta) if isinstance(new_meta, Mapping) else {}
     for table in ("counts", "domains"):
         held = old_meta.get(table)
-        new_meta[table] = {**(dict(held) if isinstance(held, Mapping) else {}),
-                           **(new_meta.get(table) or {})}
+        new_meta[table] = {**(dict(held) if isinstance(held, Mapping) else {}), **(new_meta.get(table) or {})}
     new_meta["degradedSections"] = {
         **standing(old_meta.get("degradedSections")),
-        **(new_meta.get("degradedSections") or {})}
+        **(new_meta.get("degradedSections") or {}),
+    }
 
     added = fresh.get("absentSections")
-    absent = sorted(set(standing_names(existing.get("absentSections"), built, home))
-                    | {str(name) for name
-                       in (added if isinstance(added, list) else [])})
+    absent = sorted(
+        set(standing_names(existing.get("absentSections"), built, home))
+        | {str(name) for name in (added if isinstance(added, list) else [])}
+    )
 
-    return {**dict(fresh), "meta": new_meta,
-            "modules": merged_entries("modules"), "locales": locales,
-            "absentSections": absent}
+    return {
+        **dict(fresh),
+        "meta": new_meta,
+        "modules": merged_entries("modules"),
+        "locales": locales,
+        "absentSections": absent,
+    }
 
 
-def standing_names(absent: object, built: frozenset[str],
-                   home: Mapping[str, str]) -> list[str]:
+def standing_names(absent: object, built: frozenset[str], home: Mapping[str, str]) -> list[str]:
     """The carried absent sections whose module was not rebuilt."""
     if not isinstance(absent, list):
         return []
-    return [str(name) for name in absent
-            if home.get(str(name), "") not in built]
+    return [str(name) for name in absent if home.get(str(name), "") not in built]
 
 
 def _leaf(value: object) -> bool:
@@ -179,8 +188,9 @@ def _rendered(value: object, indent: int) -> str:
     pad = " " * indent
     if isinstance(value, Mapping):
         body = ",\n".join(
-            f"{pad}  {json.dumps(key, ensure_ascii=False)}: "
-            f"{_rendered(held, indent + 2)}" for key, held in value.items())
+            f"{pad}  {json.dumps(key, ensure_ascii=False)}: {_rendered(held, indent + 2)}"
+            for key, held in value.items()
+        )
         return "{\n" + body + "\n" + pad + "}"
     if not isinstance(value, list):
         raise TypeError(f"{type(value).__name__} has no rendering in a manifest")

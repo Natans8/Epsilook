@@ -41,8 +41,8 @@ def test_every_release_names_a_world_dump() -> None:
 
 def schema(**kinds: str) -> list[Column]:
     return parse_create_table(
-        "CREATE TABLE `t` (" + ", ".join(f"`{name}` {kind}"
-                                         for name, kind in kinds.items()) + ");")
+        "CREATE TABLE `t` (" + ", ".join(f"`{name}` {kind}" for name, kind in kinds.items()) + ");"
+    )
 
 
 def test_a_lossy_column_must_be_declared() -> None:
@@ -56,8 +56,7 @@ def test_a_release_that_types_a_declared_column_exactly_is_allowed() -> None:
     FLOAT, so an equality check makes those releases unbuildable. Refusing the
     column anyway costs a revision nobody relied on and keeps it meaning one
     thing whichever release a build matched."""
-    check_lossy_declaration("spell_effect", schema(EffectBasePoints="int"),
-                            ["EffectBasePoints"])
+    check_lossy_declaration("spell_effect", schema(EffectBasePoints="int"), ["EffectBasePoints"])
 
 
 def test_a_column_this_release_predates_is_not_a_type_disagreement() -> None:

@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 from pack.routes.attachments import NO_ATTACHMENT, NO_MOTION
-from pack.routes.models import (MODEL_CAT_AREA, MODEL_CAT_TRAIL, SCALE_UNIT,
-                                UNPLACED, AttachModel, ModelSources)
+from pack.routes.models import MODEL_CAT_AREA, MODEL_CAT_TRAIL, SCALE_UNIT, UNPLACED, AttachModel, ModelSources
 from pack.routes.procedures import ProcEffects, read_proc_effects
 from support import BuildTables
 
@@ -36,8 +35,7 @@ MODELS = ModelSources(area_model_fid={200: 8300}, weapontrail_fid={500: 8400})
 
 
 def procs(tables: BuildTables) -> ProcEffects:
-    return read_proc_effects(
-        tables(SpellProceduralEffect=SPELL_PROCEDURAL_EFFECT), MODELS)
+    return read_proc_effects(tables(SpellProceduralEffect=SPELL_PROCEDURAL_EFFECT), MODELS)
 
 
 def test_every_chain_type_reaches_one_bucket(tables: BuildTables) -> None:
@@ -90,14 +88,11 @@ def test_the_valueless_types_are_membership(tables: BuildTables) -> None:
     assert resolved.camos == {13}
 
 
-def test_a_model_procedure_resolves_through_its_own_table(
-        tables: BuildTables) -> None:
+def test_a_model_procedure_resolves_through_its_own_table(tables: BuildTables) -> None:
     """Two Types reach two tables and land in one bucket, tagged by category."""
     assert procs(tables).models == {
-        14: AttachModel(8300, MODEL_CAT_AREA, NO_ATTACHMENT, NO_ATTACHMENT, 0,
-                         NO_MOTION, UNPLACED, SCALE_UNIT),
-        16: AttachModel(8400, MODEL_CAT_TRAIL, NO_ATTACHMENT, NO_ATTACHMENT, 0,
-                         NO_MOTION, UNPLACED, SCALE_UNIT),
+        14: AttachModel(8300, MODEL_CAT_AREA, NO_ATTACHMENT, NO_ATTACHMENT, 0, NO_MOTION, UNPLACED, SCALE_UNIT),
+        16: AttachModel(8400, MODEL_CAT_TRAIL, NO_ATTACHMENT, NO_ATTACHMENT, 0, NO_MOTION, UNPLACED, SCALE_UNIT),
     }
 
 
@@ -105,13 +100,11 @@ def test_a_model_that_does_not_resolve_is_dropped(tables: BuildTables) -> None:
     assert 15 not in procs(tables).models
 
 
-def test_an_animation_pairs_with_the_slot_it_replaces(
-        tables: BuildTables) -> None:
+def test_an_animation_pairs_with_the_slot_it_replaces(tables: BuildTables) -> None:
     """A value is meaningless without the base it stands in for. Slot 4 (Walk)
     is left alone here, so it contributes no pair."""
     assert procs(tables).anims == {17: ((0, 12), (5, 13))}
 
 
-def test_an_animation_row_replacing_nothing_is_dropped(
-        tables: BuildTables) -> None:
+def test_an_animation_row_replacing_nothing_is_dropped(tables: BuildTables) -> None:
     assert 18 not in procs(tables).anims

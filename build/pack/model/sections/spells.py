@@ -39,21 +39,21 @@ def spells(reads: Reads) -> SectionColumns:
     }
 
 
-SPELLS = register(Section(
-    name="spells",
-    doc="Every spell the build lists, and the values it carries one of.",
-    module="core",
-    produce=spells,
-    columns=("ids", "names", "subtexts", "altNames", "icons", "schools", "eras"),
-    reads=("spell_ids", "names", "alt_names", "icons", "props", "declared"),
-    # Three of these are answers most spells do not have. Saying so is what
-    # lets the encoder stop padding them the day the app can read a gap: 831 KB
-    # of the raw pack is empty alternative names, which gzip eats and
-    # `JSON.parse` still walks.
-    cardinality={"subtexts": Cardinality.PARTIAL,
-                 "altNames": Cardinality.PARTIAL,
-                 "icons": Cardinality.PARTIAL},
-    absent={"icons": 0},
-    counts=(Count("spells", lambda columns, _reads: len(columns["ids"])),),
-    localizable=('names', 'subtexts', 'altNames'),
-))
+SPELLS = register(
+    Section(
+        name="spells",
+        doc="Every spell the build lists, and the values it carries one of.",
+        module="core",
+        produce=spells,
+        columns=("ids", "names", "subtexts", "altNames", "icons", "schools", "eras"),
+        reads=("spell_ids", "names", "alt_names", "icons", "props", "declared"),
+        # Three of these are answers most spells do not have. Saying so is what
+        # lets the encoder stop padding them the day the app can read a gap: 831 KB
+        # of the raw pack is empty alternative names, which gzip eats and
+        # `JSON.parse` still walks.
+        cardinality={"subtexts": Cardinality.PARTIAL, "altNames": Cardinality.PARTIAL, "icons": Cardinality.PARTIAL},
+        absent={"icons": 0},
+        counts=(Count("spells", lambda columns, _reads: len(columns["ids"])),),
+        localizable=("names", "subtexts", "altNames"),
+    )
+)

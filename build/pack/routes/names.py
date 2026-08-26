@@ -43,11 +43,11 @@ def read_spell_names(tables: Tables) -> SpellNames:
     A build with no name source is fatal: an empty spell list would look like a
     successful build of nothing.
     """
-    source = next(((table, columns) for table, columns in SPELL_NAME_SOURCES
-                   if tables.available(table)), None)
+    source = next(((table, columns) for table, columns in SPELL_NAME_SOURCES if tables.available(table)), None)
     if source is None:
-        sys.exit("error: no spell-name source for this build; tried "
-                 + ", ".join(table for table, _ in SPELL_NAME_SOURCES))
+        sys.exit(
+            "error: no spell-name source for this build; tried " + ", ".join(table for table, _ in SPELL_NAME_SOURCES)
+        )
     table, columns = source
     log(f"  spell names from {table}.{columns[1]}")
 
@@ -61,16 +61,17 @@ def read_spell_names(tables: Tables) -> SpellNames:
     return spells
 
 
-def read_override_names(tables: Tables,
-                        by_spell: Mapping[int, set[int]]) -> dict[int, str]:
+def read_override_names(tables: Tables, by_spell: Mapping[int, set[int]]) -> dict[int, str]:
     """Spell -> its override names as one searchable string.
 
     `by_spell` is which SpellOverrideName ids each spell's auras name. Resolved
     in sorted id order so the string is stable across builds.
     """
-    names = {to_int(override_id): name for override_id, name
-             in tables.rows("SpellOverrideName", ["ID", "OverrideName_lang"])}
-    resolved = {spell: " ".join(names[identifier] for identifier in sorted(identifiers)
-                                if identifier in names)
-                for spell, identifiers in by_spell.items()}
+    names = {
+        to_int(override_id): name for override_id, name in tables.rows("SpellOverrideName", ["ID", "OverrideName_lang"])
+    }
+    resolved = {
+        spell: " ".join(names[identifier] for identifier in sorted(identifiers) if identifier in names)
+        for spell, identifiers in by_spell.items()
+    }
     return {spell: text for spell, text in resolved.items() if text}

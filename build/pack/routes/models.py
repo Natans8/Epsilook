@@ -55,8 +55,12 @@ WEAPON_FID_MAIN = -1
 WEAPON_FID_OFF = -2
 WEAPON_FID_RANGED = -3
 WEAPON_FID_AMMO = -4
-_WEAPON_SLOT_FID = {"main hand": WEAPON_FID_MAIN, "off hand": WEAPON_FID_OFF,
-                    "ranged": WEAPON_FID_RANGED, "ammo": WEAPON_FID_AMMO}
+_WEAPON_SLOT_FID = {
+    "main hand": WEAPON_FID_MAIN,
+    "off hand": WEAPON_FID_OFF,
+    "ranged": WEAPON_FID_RANGED,
+    "ammo": WEAPON_FID_AMMO,
+}
 EFFECT_NAME_TYPE_WEAPON = {
     type_id: _WEAPON_SLOT_FID[value["slot"]]
     for type_id, value in _EFFECT_NAME_TYPES.items()
@@ -131,8 +135,7 @@ class Placement(NamedTuple):
     """The anim kit it plays instead of a single animation, or zero."""
 
 
-UNPLACED = Placement(scale=SCALE_UNIT, offset=(0, 0, 0), rotation=(0, 0, 0),
-                     arrives=0, held=0, goes=0, animkit=0)
+UNPLACED = Placement(scale=SCALE_UNIT, offset=(0, 0, 0), rotation=(0, 0, 0), arrives=0, held=0, goes=0, animkit=0)
 """A model drawn where its attachment puts it, at native size.
 
 Every category but the attached ones reaches its model through a table with no
@@ -201,9 +204,19 @@ class AttachModel:
     """
 
 
-PLACEMENT_COLUMNS = ("Scale", "Offset_0", "Offset_1", "Offset_2",
-                     "Yaw", "Pitch", "Roll",
-                     "StartAnimID", "AnimID", "EndAnimID", "AnimKitID")
+PLACEMENT_COLUMNS = (
+    "Scale",
+    "Offset_0",
+    "Offset_1",
+    "Offset_2",
+    "Yaw",
+    "Pitch",
+    "Roll",
+    "StartAnimID",
+    "AnimID",
+    "EndAnimID",
+    "AnimKitID",
+)
 """The placement columns of `SpellVisualKitModelAttach`, in reading order.
 
 `read_placement` unpacks this positionally, so the two are two declarations
@@ -254,11 +267,13 @@ def read_placement(values: Sequence[str]) -> Placement:
     scale, x, y, z, yaw, pitch, roll, arrives, held, goes, kit = values
     return Placement(
         scale=_scaled(scale),
-        offset=(_fixed(x, OFFSET_UNIT), _fixed(y, OFFSET_UNIT),
-                _fixed(z, OFFSET_UNIT)),
+        offset=(_fixed(x, OFFSET_UNIT), _fixed(y, OFFSET_UNIT), _fixed(z, OFFSET_UNIT)),
         rotation=(_spun(yaw), _spun(pitch), _spun(roll)),
-        arrives=_played(arrives), held=_played(held), goes=_played(goes),
-        animkit=_played(kit))
+        arrives=_played(arrives),
+        held=_played(held),
+        goes=_played(goes),
+        animkit=_played(kit),
+    )
 
 
 @dataclass
@@ -332,8 +347,7 @@ class EffectNames(NamedTuple):
     """
 
 
-def read_effect_names(tables: Tables, named: Callable[[set[int]], set[int]]
-                      ) -> EffectNames:
+def read_effect_names(tables: Tables, named: Callable[[set[int]], set[int]]) -> EffectNames:
     """`SpellVisualEffectName` as the columns the model routes read.
 
     The Type says how to reach the model: a file, an item id, a creature
@@ -347,21 +361,19 @@ def read_effect_names(tables: Tables, named: Callable[[set[int]], set[int]]
     generic: dict[int, int] = {}
     built: dict[int, int] = {}
     for name_id, model_fid, type_id, generic_id, scale in tables.rows(
-            "SpellVisualEffectName",
-            ["ID", "ModelFileDataID", "Type", "GenericID", "Scale"]):
+        "SpellVisualEffectName", ["ID", "ModelFileDataID", "Type", "GenericID", "Scale"]
+    ):
         identifier = to_int(name_id)
         fid[identifier] = to_int(model_fid)
         types[identifier] = to_int(type_id)
         generic[identifier] = to_int(generic_id)
         built[identifier] = _fixed(scale, SCALE_UNIT)
 
-    weapon_files = {file for name_id, file in fid.items()
-                    if file and types.get(name_id, 0) in EFFECT_NAME_TYPE_WEAPON}
+    weapon_files = {file for name_id, file in fid.items() if file and types.get(name_id, 0) in EFFECT_NAME_TYPE_WEAPON}
     placeholders = weapon_files - named(weapon_files) if weapon_files else set()
     if placeholders:
         for effect_name, file in list(fid.items()):
-            if file in placeholders \
-                    and types.get(effect_name, 0) in EFFECT_NAME_TYPE_WEAPON:
+            if file in placeholders and types.get(effect_name, 0) in EFFECT_NAME_TYPE_WEAPON:
                 fid[effect_name] = 0
     return EffectNames(fid=fid, types=types, generic=generic, built=built)
 
@@ -386,30 +398,29 @@ def file_for_effect_name(models: ModelSources, name_id: int) -> int:
     return EFFECT_NAME_TYPE_WEAPON.get(models.effect_name_type.get(name_id, 0), 0)
 
 
-def read_model_sources(tables: Tables, creatures: CreatureModels, items: ItemModels,
-                       named: Callable[[set[int]], set[int]]) -> ModelSources:
+def read_model_sources(
+    tables: Tables, creatures: CreatureModels, items: ItemModels, named: Callable[[set[int]], set[int]]
+) -> ModelSources:
     """Read every table that ends in a model file.
 
     `named` narrows a set of file ids to the ones that name a real asset.
     """
     names = read_effect_names(tables, named)
     fid, generic = names.fid, names.generic
-    models = ModelSources(effect_name_fid=fid, effect_name_type=names.types,
-                          effect_name_built=names.built)
+    models = ModelSources(effect_name_fid=fid, effect_name_type=names.types, effect_name_built=names.built)
 
     attach_models: dict[int, set[AttachModel]] = {}
     attach_anims: dict[int, set[int]] = {}
     attach_animkits: dict[int, set[int]] = {}
     for kit_id, name_id, attach, *placed in tables.rows(
-            "SpellVisualKitModelAttach",
-            ["ParentSpellVisualKitID", "SpellVisualEffectNameID", "AttachmentID",
-             *PLACEMENT_COLUMNS]):
+        "SpellVisualKitModelAttach",
+        ["ParentSpellVisualKitID", "SpellVisualEffectNameID", "AttachmentID", *PLACEMENT_COLUMNS],
+    ):
         kit = to_int(kit_id)
         if not kit:
             continue
         placement = read_placement(placed)
-        row = _attached_model(to_int(name_id), to_int(attach), placement, models,
-                              creatures, items, generic)
+        row = _attached_model(to_int(name_id), to_int(attach), placement, models, creatures, items, generic)
         if row is not None:
             attach_models.setdefault(kit, set()).add(row)
         # The animations reach the anim column as well, which answers what a
@@ -417,8 +428,7 @@ def read_model_sources(tables: Tables, creatures: CreatureModels, items: ItemMod
         # so the row carries them and these buckets keep them too. They are
         # indexed even when the model did not resolve, because the spell still
         # plays them.
-        played = {value for value in
-                  (placement.arrives, placement.held, placement.goes) if value}
+        played = {value for value in (placement.arrives, placement.held, placement.goes) if value}
         if played:
             attach_anims.setdefault(kit, set()).update(played)
         if placement.animkit:
@@ -429,18 +439,16 @@ def read_model_sources(tables: Tables, creatures: CreatureModels, items: ItemMod
 
     # The area model carries its file directly, with no effect-name hop, and is
     # reached two ways: a kit's emission effect, and a procedural row.
-    for area_id, model_fid in tables.rows(
-            "SpellVisualKitAreaModel", ["ID", "ModelFileDataID"]):
+    for area_id, model_fid in tables.rows("SpellVisualKitAreaModel", ["ID", "ModelFileDataID"]):
         models.area_model_fid[to_int(area_id)] = to_int(model_fid)
-    for emission_id, area_id in tables.rows(
-            "SpellEffectEmission", ["ID", "AreaModelID"]):
-        models.emission_fid[to_int(emission_id)] = models.area_model_fid.get(
-            to_int(area_id), 0)
+    for emission_id, area_id in tables.rows("SpellEffectEmission", ["ID", "AreaModelID"]):
+        models.emission_fid[to_int(emission_id)] = models.area_model_fid.get(to_int(area_id), 0)
 
     # A barrage is a volley of copies of one model; the count and cone columns
     # describe the spread and nothing renders them.
     for barrage_id, name_id, attach in tables.rows(
-            "BarrageEffect", ["ID", "SpellVisualEffectNameID", "AttachmentPoint"]):
+        "BarrageEffect", ["ID", "SpellVisualEffectNameID", "AttachmentPoint"]
+    ):
         models.barrage_fid[to_int(barrage_id)] = fid.get(to_int(name_id), 0)
         models.barrage_attach[to_int(barrage_id)] = to_int(attach)
 
@@ -449,10 +457,15 @@ def read_model_sources(tables: Tables, creatures: CreatureModels, items: ItemMod
     return models
 
 
-def _attached_model(name_id: int, attach: int, placement: Placement,
-                    models: ModelSources, creatures: CreatureModels,
-                    items: ItemModels,
-                    generic: dict[int, int]) -> AttachModel | None:
+def _attached_model(
+    name_id: int,
+    attach: int,
+    placement: Placement,
+    models: ModelSources,
+    creatures: CreatureModels,
+    items: ItemModels,
+    generic: dict[int, int],
+) -> AttachModel | None:
     """One `SpellVisualKitModelAttach` row as a model, or None if it reached none.
 
     The effect-name's Type picks between four sources of the file id. The
@@ -466,16 +479,21 @@ def _attached_model(name_id: int, attach: int, placement: Placement,
         # builds with no server dump.
         display = generic.get(name_id, 0)
         file = creatures.fid_for_display(display)
-        return (AttachModel(file, MODEL_CAT_DISPLAY, attach, NO_ATTACHMENT, display,
-                            NO_MOTION, placement, built, name_id) if file else None)
+        return (
+            AttachModel(file, MODEL_CAT_DISPLAY, attach, NO_ATTACHMENT, display, NO_MOTION, placement, built, name_id)
+            if file
+            else None
+        )
     if name_type == EFFECT_NAME_TYPE_ITEM:
         # The row keeps the item as its ref even when the item has no name.
         item = generic.get(name_id, 0)
         file = items.model_fid.get(item, 0)
-        return (AttachModel(file, MODEL_CAT_ITEM, attach, NO_ATTACHMENT, item,
-                            NO_MOTION, placement, built, name_id) if file else None)
+        return (
+            AttachModel(file, MODEL_CAT_ITEM, attach, NO_ATTACHMENT, item, NO_MOTION, placement, built, name_id)
+            if file
+            else None
+        )
     file = file_for_effect_name(models, name_id)
     if file:
-        return AttachModel(file, MODEL_CAT_ATTACH, attach, NO_ATTACHMENT, 0, NO_MOTION,
-                           placement, built, name_id)
+        return AttachModel(file, MODEL_CAT_ATTACH, attach, NO_ATTACHMENT, 0, NO_MOTION, placement, built, name_id)
     return None

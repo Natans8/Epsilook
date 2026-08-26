@@ -22,6 +22,7 @@ here needs to judge what counts as a spelling. Three mechanical filters remain:
 
 Re-run after a default-pack bump if spelling coverage looks off.
 """
+
 from __future__ import annotations
 
 import re
@@ -98,8 +99,7 @@ def corpus_words() -> set[str]:
     try:
         import duckdb  # type: ignore[import-not-found]  # optional, dev-tool-only, like builddb.py
     except ImportError:
-        raise SystemExit("tools/spellings.py needs DuckDB: run it as `uv run python "
-                         "tools/spellings.py`") from None
+        raise SystemExit("tools/spellings.py needs DuckDB: run it as `uv run python tools/spellings.py`") from None
 
     sources = [
         'SELECT "Name_lang" AS t FROM v9_2_7."SpellName"',

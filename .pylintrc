@@ -3,8 +3,8 @@
 #
 #     uv run pylint build build/pack tools
 #
-# tools/check.py names the exact file set in PYTHON_SOURCES and runs all four
-# Python checkers over it, so that list is the authority on coverage.
+# tools/check.py names the exact file set in PYTHON_SOURCES and runs every
+# Python checker over it, so that list is the authority on coverage.
 #
 # tools/check.py runs it with --errors-only, so an ERROR blocks a commit while
 # style findings stay advisory. mypy and pyflakes run alongside; pylint is here

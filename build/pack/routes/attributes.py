@@ -68,11 +68,10 @@ def shipped_attributes() -> dict[int, Mapping[str, object]]:
     """
     declared = load_local_enum("spell_attributes")
     shipped: dict[int, Mapping[str, object]] = {
-        bit: meta for bit, meta in declared.items()
-        if isinstance(meta, dict) and meta.get("handler")}
+        bit: meta for bit, meta in declared.items() if isinstance(meta, dict) and meta.get("handler")
+    }
     if not shipped:
-        sys.exit("error: spell_attributes.json declares no handler "
-                 "- nothing to ship")
+        sys.exit("error: spell_attributes.json declares no handler - nothing to ship")
     # Handlers key the output, so two bits sharing one would leave only the
     # last bit's spells under it -- a flag quietly reporting another's
     # population. Copying an entry as a template is the obvious way to add the
@@ -80,13 +79,11 @@ def shipped_attributes() -> dict[int, Mapping[str, object]]:
     handlers = [str(meta["handler"]) for meta in shipped.values()]
     if len(handlers) != len(set(handlers)):
         repeated = sorted({h for h in handlers if handlers.count(h) > 1})
-        sys.exit(f"error: spell_attributes.json declares one handler for "
-                 f"several bits: {repeated}")
+        sys.exit(f"error: spell_attributes.json declares one handler for several bits: {repeated}")
     return shipped
 
 
-def read_spell_attributes(
-        attribute_words: Mapping[int, Sequence[int]]) -> dict[str, list[int]]:
+def read_spell_attributes(attribute_words: Mapping[int, Sequence[int]]) -> dict[str, list[int]]:
     """Group spells by the declared attribute flags they carry.
 
     Counts spells rather than `SpellMisc` rows, since the words arrive already
@@ -106,7 +103,8 @@ def read_spell_attributes(
         wanted = bit_test(bit)
         required = None if declared is None else bit_test(int(str(declared)))
         out[str(meta["handler"])] = sorted(
-            spell for spell, words in attribute_words.items()
-            if carries(words, wanted)
-            and (required is None or carries(words, required)))
+            spell
+            for spell, words in attribute_words.items()
+            if carries(words, wanted) and (required is None or carries(words, required))
+        )
     return out
