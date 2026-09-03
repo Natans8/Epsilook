@@ -48,8 +48,14 @@
     --row-rgb: var(--overlay-rgb);
 }
 
+/* The words of the row as one inline run — the text and its reason — so a selection copies as one line. */
+.text {
+    min-width: 0;
+}
+
 /* The offending text as typed, in the reader's own characters, wearing the chip's own mark. */
 .verbatim {
+    margin-right: 0.25rem;
     font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
     font-size: 0.95em;
     color: var(--text-strong);

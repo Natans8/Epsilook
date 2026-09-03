@@ -711,6 +711,35 @@ function sameAsk(a: string, b: string): boolean {
 }
 
 /**
+ * The text with every spelling warning applied whose fix asks the same question.
+ *
+ * A chip draws its parse, so a warning about characters the chips cannot show — a missing space after a scope's
+ * close, a scope left open — tells a chip reader nothing they can act on; the chip view holds only spellings the
+ * chips can show. The engine's own equivalence is what separates a spelling from a finding: a fix that changes
+ * the ask (splitting two kinds into two clauses, say) is a real offer and stays for the reader to take.
+ *
+ * Exported as the chip view's door for text arriving from outside the bar — the URL, or the plain view handing
+ * the query back — which converges exactly this and nothing more: a segment's other convergences wait for its
+ * commit, so text seeded in an editing form still arrives in that form.
+ *
+ * @param text One segment's text, or a whole query.
+ * @returns The text with every such fix applied, to a fixpoint.
+ */
+export function spellingFixes(text: string): string {
+    let out = text;
+    // Bounded, because a fix could in principle raise a fresh warning of its own kind; a handful of passes
+    // covers every glued boundary a segment can carry.
+    for (let pass = 0; pass < 8; pass += 1) {
+        const parsed = parse(out, {mode: "final"});
+        const fix = parsed.diagnostics.find((d) =>
+            d.severity === "warning" && d.fix !== undefined && equivalent(parsed, parse(d.fix.query)))?.fix;
+        if (fix === undefined) return out;
+        out = fix.query;
+    }
+    return out;
+}
+
+/**
  * The committed spelling of one settled segment: its own written-tier respell, taken only when it provably
  * asks the same question.
  *
@@ -722,10 +751,10 @@ function sameAsk(a: string, b: string): boolean {
  */
 function settledSpelling(open: string): string {
     if (open.trim() === "") return open;
-    const parsed = parse(open, {mode: "final"});
+    const parsed = parse(spellingFixes(open), {mode: "final"});
     // An error or a warning leaves the characters alone — an error because the formatter writes only the
-    // evaluable query, a warning because rewriting warned text would silently apply the fix the warning is
-    // offering. A NOTE is information and blocks nothing: the counts-rows note rides every count spelling.
+    // evaluable query, a warning because rewriting warned text would silently apply a fix that changes the
+    // ask. A NOTE is information and blocks nothing: the counts-rows note rides every count spelling.
     if (parsed.diagnostics.some((d) => d.severity !== "note")) return open;
     // The chip-invisible rewrites converge too: the chip already draws `spell:{desc:hello}` as the desc door,
     // so the settled text says what the chip shows.

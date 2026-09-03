@@ -10,4 +10,4 @@ export type {BarHandle} from "./components/bar";
 export {Bar} from "./components/bar";
 export {PlainBar} from "./components/plain";
 export type {Vocabulary} from "./utils/offers";
-export {settledQuery} from "./utils/plan";
+export {settledQuery, spellingFixes} from "./utils/plan";

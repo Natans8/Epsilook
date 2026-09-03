@@ -15,7 +15,7 @@ import {parse} from "../search/index";
 import {recentQueries} from "./history";
 import {BASE} from "./pack";
 import type {BarHandle} from "./bar/index";
-import {Bar, PlainBar} from "./bar/index";
+import {Bar, PlainBar, spellingFixes} from "./bar/index";
 import type {Answer} from "./components/count";
 import {Count} from "./components/count";
 import {Diagnostics} from "./components/diagnostics";
@@ -71,8 +71,10 @@ export function App({info, searcher}: {
     readonly searcher: Searcher;
 }): ReactElement {
     const {t, i18n} = useTranslation();
-    const [text, setText] = useState(urlQuery);
     const [plain, setPlain] = useState(urlPlain);
+    // The chip view holds only spellings the chips can show, so text arriving from the URL has its spelling
+    // warnings applied on the way in; the plain view is the reader's own text and keeps it as written.
+    const [text, setText] = useState(() => (urlPlain() ? urlQuery() : spellingFixes(urlQuery())));
     const [result, setResult] = useState<Answer | null>(null);
     // The bar's rewrite door, for the panel controls whose rewrites must be undoable inside the bar.
     const barRef = useRef<BarHandle>(null);
@@ -181,6 +183,8 @@ export function App({info, searcher}: {
                         className={`${styles.viewToggle} ${plain ? styles.viewOn : ""}`}
                         title={t("bar.plaintextHint")}
                         onClick={() => {
+                            // Coming back to chips, the text converges as it would have arriving there.
+                            if (plain) setText(spellingFixes(text));
                             setPlain((was) => !was);
                         }}
                     >

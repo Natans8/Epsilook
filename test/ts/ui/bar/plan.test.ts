@@ -10,7 +10,7 @@ import {
     backspaceAtStart, commitSegment, deleteAtEnd, firstDiff, grownSegment, insertAtGap, keywordBehind,
     negatesBefore, openHead, pairDelimiter, planAt, removeSegment, removeSelection, removeTerm, replaceSelection,
     scopedForm, scopeGesture, segmentAt, segmentsOf, selectionOver, selectionStep, shiftScope, slotStart,
-    termStarts, toggleSort,
+    settledQuery, termStarts, toggleSort,
 } from "../../../../src/ui/bar/utils/plan";
 
 test("a door's arrow turns that door alone, respelled through the formatter", () => {
@@ -413,7 +413,8 @@ test("the brace shed asks the FORMATTER's rule, not two spellings: an alternatio
 
 test("a scope closing before its segment ends never gains a second brace", () => {
     // `model:{a b}c` — the closer is mid-segment, so the slot is not an interior.
-    assert.equal(commitSegment("model:{a b}c", 0).text, "model:{a b}c");
+    // The closer stays single; the space after it is the one thing the settle supplies.
+    assert.equal(commitSegment("model:{a b}c", 0).text, "model:{a b} c");
     // The dangling separator is trimmed by the same commit, which is the point: no second brace either way.
     assert.equal(commitSegment("model:{a b}|", 0).text, "model:{a b}");
     // A scope that never closes still commits as one; the commit is what supplies the brace.
@@ -629,4 +630,12 @@ test("the slot reads its position from the head cell, which holds characters the
     assert.deepEqual(pairDelimiter("", 0, 0, "/", "model:{"), {value: "//", caret: 1});
     // With no head the segment is plain text, and a slash there is a character of a path.
     assert.equal(pairDelimiter("spells", 6, 6, "/", ""), null);
+});
+
+test("a spelling warning whose fix asks the same question converges on commit, and one that changes the ask stays", () => {
+    // The chips cannot show the missing space, so the settle supplies it and the respell follows.
+    assert.equal(commitSegment("model:{fire}sound:bell", 0).text, "model:fire sound:bell");
+    assert.equal(settledQuery("model:{fire}sound:bell"), "model:fire sound:bell");
+    // Two kinds in one scope warn without an equivalent fix, and the text is left as typed.
+    assert.equal(settledQuery("model:{attach missile}"), "model:{attach missile}");
 });

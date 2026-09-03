@@ -23,7 +23,8 @@
     "result_one": "",
     "result_other": "",
     "searching": "",
-    "elapsed": ""
+    "elapsed": "",
+    "refused": ""
   },
   "bar": {
     "placeholder": "",
@@ -72,5 +73,8 @@
     "apply": "",
     "simplifyNone": "",
     "simplified": ""
+  },
+  "strip": {
+    "label": ""
   }
 }

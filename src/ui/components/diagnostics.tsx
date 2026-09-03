@@ -31,8 +31,12 @@ export function Diagnostics({parsed, text, apply}: {
         <ul className={styles.strip} aria-label={t("strip.label")}>
             {rows.map((row, i) => (
                 <li key={`${String(i)}:${row.message}`} className={`${styles.row} ${styles[row.severity]}`}>
-                    {row.verbatim !== "" && <code className={styles.verbatim}>{row.verbatim}</code>}
-                    <span className={styles.message}>{row.message}</span>
+                    {/* One inline run, so a copy of the row reads as one line: the text, a space, the reason. */}
+                    <span className={styles.text}>
+                        {row.verbatim !== "" && <code className={styles.verbatim}>{row.verbatim}</code>}
+                        {row.verbatim !== "" && " "}
+                        <span className={styles.message}>{row.message}</span>
+                    </span>
                     {row.fixes.length > 0 && (
                         // One button per correction, in the reader's own order: a refusal between several
                         // readings offers each, and the group wraps rather than the row when they run long.
