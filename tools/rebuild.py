@@ -43,7 +43,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import packfile
-from packs import PACKS, Pack, select, stale_cache
+from packs import PACKS, Pack, listed, select, stale_cache
 from repo import DIM, GREEN, RED, RESET, YELLOW
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -91,7 +91,7 @@ def build_argv(pack: Pack, refresh: bool, timing: bool = False) -> list[str]:
         argv += ["--client", pack.client]
     if pack.default:
         argv.append("--default")
-    if pack.hidden:
+    if not listed(pack):
         argv.append("--hidden")
     if refresh:
         argv.append("--refresh")

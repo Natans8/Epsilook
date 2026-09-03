@@ -60,6 +60,16 @@ TDB_RELEASES: Mapping[str, Mapping[str, str]] = {
         "world": "TDB_full_world_1200.26021_2026_02_06.sql",
         "hotfixes": "TDB_full_hotfixes_1200.26021_2026_02_06.sql",
     },
+    # The second test slot, one minor patch further out than the first and
+    # reaching the same dump for the same reason. Keyed exactly rather than by
+    # patch, because no TDB is cut against 12.1 at all and a fallback would
+    # find nothing and empty every morph name without saying so.
+    "12.1.5.69594": {
+        "tag": "TDB1200.26021",
+        "asset": "TDB_full_1200.26021_2026_02_06.7z",
+        "world": "TDB_full_world_1200.26021_2026_02_06.sql",
+        "hotfixes": "TDB_full_hotfixes_1200.26021_2026_02_06.sql",
+    },
     "8.3.7.35662": {
         "tag": "TDB837.20101",
         "asset": "TDB_full_837.20101_2020_10_20.7z",

@@ -102,7 +102,6 @@ WAGO_PROBE_URL = "https://wago.tools/db2/SpellCastTimes/csv?build={build}"
 # with the internals below. See the module docstring.
 IGNORED_PRODUCTS = {
     "wow_classic_titan": "China-exclusive (Titan Reforged)",
-    "wowxptr": "retail PTR 2",
     "wow_beta": "retail alpha/beta",
     "wow_cn_beta": "China-exclusive beta",
     "wow_classic_ptr": "Classic PTR",
@@ -170,6 +169,7 @@ FLAVOURS: dict[str, Flavour] = {
     for f in (
         Flavour("wow"),
         Flavour("wowt", mark="ptr"),
+        Flavour("wowxptr", mark="ptr2"),
         Flavour("wow_classic"),
         Flavour("wow_classic_era"),
         Flavour("wow_anniversary"),
@@ -230,6 +230,16 @@ class Pack:
         return ".".join(self.build.split(".")[:3])
 
     @property
+    def version(self) -> tuple[int, ...]:
+        """The patch as numbers, so one line can be compared against another.
+
+        `patch` is what a label prints and this is what a rule reads. String
+        order would put "12.1.10" before "12.1.5", which is exactly the
+        comparison the test slots need to get right.
+        """
+        return tuple(int(part) for part in self.patch.split("."))
+
+    @property
     def schema(self) -> str:
         """`"9.2.7.45745"` -> `"v9_2_7"`. The pack's schema in either database.
 
@@ -286,16 +296,29 @@ PACKS: tuple[Pack, ...] = (
     Pack("tbc", "TBC Classic", "wow_anniversary", "2.5.6.69110", tracked=True),
     Pack("mop", "MoP Classic", "wow_classic", "5.5.4.69155", tracked=True),
     Pack("midnight", "Midnight", "wow", "12.1.0.69273", tracked=True),
-    # The retail test line. It runs AHEAD of live most of the time and level
-    # with it the rest, so it is tagged rather than told apart by its build —
-    # see Pack.id. Its links go to Wowhead's own /ptr/ section.
+    # THE TWO RETAIL TEST LINES, and neither is "the" PTR. Blizzard runs two
+    # equal public test slots and uses them in turn: whichever holds the patch
+    # under test leads, and the other sits on the patch that just shipped. Over
+    # 1,207 days the lead fell to wowt on 476 and to wowxptr on 388, so pinning
+    # either one permanently misses about half the time it has anything to show.
     #
-    # WHILE IT IS LEVEL WITH LIVE it is the same BUILD as midnight, so its
+    # They are tagged rather than told apart by their build — see Pack.id — and
+    # their marks are Wowhead's own section names, which is what lets a link
+    # reach /ptr/ and /ptr-2/ without a rule that has to guess.
+    #
+    # WHILE A SLOT IS LEVEL WITH LIVE it is the same BUILD as midnight, so its
     # modules encode to the same bytes, so they get the same content-addressed
     # names and are written once — both manifests then name the same files.
-    # The condition is the shared build, not the roster row: move this to a
+    # The condition is the shared build, not the roster row: move one to a
     # build of its own and the modules diverge with it, needing no edit here.
     Pack("midnight-ptr", "Midnight PTR", "wowt", "12.1.0.69273", tracked=True),
+    # TODO: this pack does not build yet. wago exports SpellVisualMissile for
+    # 12.1.5.69594 with positional headers, because its copy of WoWDBDefs
+    # predates the definition upstream already carries. Declaring the missing
+    # column OPTIONAL would not help and would hurt: every column of that table
+    # is unnamed, so the pack would ship silently missing all missile data
+    # rather than failing. It builds the day wago picks the definition up.
+    Pack("midnight-ptr2", "Midnight PTR 2", "wowxptr", "12.1.5.69594", tracked=True),
     # Lines that moved on, and pinned retail. Historical artifacts: their build
     # is final, so untracked rather than polling a line that would answer
     # about a different expansion entirely.
@@ -320,6 +343,53 @@ PACKS: tuple[Pack, ...] = (
 assert sum(p.default for p in PACKS) == 1, "exactly one pack must be the default"
 assert len({p.key for p in PACKS}) == len(PACKS), "duplicate pack key"
 assert len({p.id for p in PACKS}) == len(PACKS), "duplicate pack id"
+
+TEST_LINES: tuple[str, ...] = ("wowt", "wowxptr")
+"""The retail test slots, in priority order.
+
+Blizzard runs two of them and neither is senior, but two entries for one build
+would be the same pack listed twice, so ties are broken by this order. wowt
+comes first because it is Wowhead's plain /ptr/ section.
+"""
+
+
+def retail() -> Pack | None:
+    """The live retail pack a test slot is measured against.
+
+    Read from the roster rather than from Blizzard's service, so what a pack
+    declares can be decided offline and a build stays reproducible.
+    """
+    for pack in PACKS:
+        if pack.flavour == "wow" and pack.tracked:
+            return pack
+    return None
+
+
+def listed(pack: Pack) -> bool:
+    """Whether a pack belongs in the version dropdown.
+
+    Everything is listed except a test slot with nothing to show. A slot earns
+    its entry by being on a LATER PATCH than live: level with live it is a
+    duplicate of the retail pack, and behind live it is staler than one. Both
+    still build and both stay reachable by `?v=`; this decides the dropdown
+    alone, which is what `hidden` has always meant.
+
+    A slot that ties another on the same build loses to the higher-priority
+    one, because the two packs are byte-identical and listing both would offer
+    the same data under two names.
+    """
+    if pack.hidden:
+        return False
+    if pack.flavour not in TEST_LINES:
+        return True
+    live = retail()
+    if live is None or pack.version <= live.version:
+        return False
+    rank = TEST_LINES.index(pack.flavour)
+    return not any(
+        other.build == pack.build and other.flavour in TEST_LINES and TEST_LINES.index(other.flavour) < rank
+        for other in PACKS
+    )
 
 
 # A per-build download cache directory, e.g. `.cache/9.2.7.45745`. Anything
@@ -672,7 +742,7 @@ def main() -> int:
 
     behind = 0
     for pack in PACKS:
-        flags = " ".join(f for f, on in (("default", pack.default), ("hidden", pack.hidden)) if on)
+        flags = " ".join(f for f, on in (("default", pack.default), ("hidden", not listed(pack))) if on)
         line = f"{pack.key:<14} {pack.id:<17} {pack.label:<28} {flags}"
         if args.check and pack.tracked:
             available = live_build(pack.flavour)
