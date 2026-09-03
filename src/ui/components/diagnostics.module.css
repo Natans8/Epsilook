@@ -18,26 +18,34 @@
     font-size: 0.85rem;
 }
 
+/* A row is one unit — the text, its mark, the reason and the corrections — so it wears a faint wash in its tone
+ * under all of them, and the corrections sit right after the reason rather than at the far edge, where a wide
+ * page would put a whole line between a warning and its button. */
 .row {
     display: flex;
     align-items: baseline;
     flex-wrap: wrap;
     gap: 0.5rem;
-    padding: 0.1rem 0 0.1rem 0.6rem;
+    padding: 0.15rem 0.6rem;
     border-left: 2px solid var(--row-ink);
+    border-radius: 0 4px 4px 0;
+    background: rgba(var(--row-rgb), calc(0.08 * var(--wash-strength)));
     color: var(--text);
 }
 
 .error {
     --row-ink: rgb(var(--danger-rgb));
+    --row-rgb: var(--danger-rgb);
 }
 
 .warning {
     --row-ink: var(--gold-dim);
+    --row-rgb: var(--gold-rgb);
 }
 
 .note {
     --row-ink: var(--border-ctrl);
+    --row-rgb: var(--overlay-rgb);
 }
 
 /* The offending text as typed, in the reader's own characters, wearing the chip's own mark. */
@@ -62,10 +70,9 @@
     color: var(--text-dim);
 }
 
-/* The corrections, as a group at the row's right: one button per reading offered, wrapping among themselves
- * before the row does, so three offers on a narrow page stack under the message rather than tearing it. */
+/* The corrections, right after the reason: one button per reading offered, wrapping among themselves before the
+ * row does, so three offers on a narrow page stack under the message rather than tearing it. */
 .fixes {
-    margin-left: auto;
     display: inline-flex;
     flex-wrap: wrap;
     justify-content: flex-end;
