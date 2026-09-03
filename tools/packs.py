@@ -104,6 +104,7 @@ IGNORED_PRODUCTS = {
     "wow_classic_titan": "China-exclusive (Titan Reforged)",
     "wowxptr": "retail PTR 2",
     "wow_beta": "retail alpha/beta",
+    "wow_cn_beta": "China-exclusive beta",
     "wow_classic_ptr": "Classic PTR",
     "wow_classic_beta": "Classic beta",
     "wow_classic_era_ptr": "Classic Era PTR",
