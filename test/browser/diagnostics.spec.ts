@@ -48,6 +48,15 @@ test("the chip view settles a spelling the chips cannot show on arrival, and the
     await expect(strip().getByRole("listitem")).toHaveCount(1);
 });
 
+test("a warning between two readings offers each as its own button, and the one taken rewrites the query", async () => {
+    await openWith("model:{attach missile}");
+    const buttons = strip().getByRole("button");
+    await expect(buttons).toHaveCount(2);
+    await buttons.first().click();
+    await expectQuery(page, "model:attach model:missile ");
+    await expect(strip()).toHaveCount(0);
+});
+
 test("a warning's fix rewrites the query and takes its row with it, while an error keeps the count refused",
     async () => {
         // In the plain view, where a spelling warning stands rather than converging on arrival.

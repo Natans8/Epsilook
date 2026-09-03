@@ -288,20 +288,20 @@ describe("binds and their values", () => {
 
     it("exact and a pattern cannot combine, and the fix drops the anchor", () => {
         const [error] = invalid("name:=Fire*");
-        assert.match(error.message, /exact and a pattern/);
-        assert.equal(error.fix?.query, "name:Fire*");
+        assert.match(error.message, /= cannot combine/);
+        assert.equal(error.fixes?.[0]?.query, "name:Fire*");
     });
 
     it("a declined operator is a static error with the drop fix, in both modes", () => {
         const [error] = invalid("name:>m");
-        assert.match(error.message, /no ordering/);
-        assert.equal(error.fix?.query, "name:m");
+        assert.match(error.message, /no order to sort by/);
+        assert.equal(error.fixes?.[0]?.query, "name:m");
         assert.equal(parse("name:>m", {mode: "typing"}).clauses[0].state, "invalid");
     });
 
     it("an ill-typed value is an error in final text and silence while typing", () => {
         const [error] = invalid("scale:abc");
-        assert.match(error.message, /scale takes/);
+        assert.match(error.message, /scale can take/);
         const typing = parse("scale:abc", {mode: "typing"});
         assert.equal(typing.clauses[0].state, "incomplete");
         assert.deepEqual(typing.diagnostics, []);
@@ -495,7 +495,7 @@ describe("regular expressions: the superuser door", () => {
 
     it("a quantity axis declines a pattern", () => {
         const [error] = invalid("scale:/5/");
-        assert.match(error.message, /run on text and file paths/);
+        assert.match(error.message, /run on text and file names/);
     });
 
     it("a pattern's characters are not typography-folded — stored text is matched as written", () => {
@@ -511,7 +511,7 @@ describe("regular expressions: the superuser door", () => {
 
     it("a broken pattern is an error in final text and silence while typing", () => {
         const [error] = invalid("name:/[/");
-        assert.match(error.message, /not a valid pattern/);
+        assert.match(error.message, /invalid regular expression/);
         const typing = parse("name:/[/", {mode: "typing"});
         assert.equal(typing.clauses[0].state, "incomplete");
         assert.deepEqual(typing.diagnostics, []);
@@ -549,8 +549,8 @@ describe("scopes", () => {
 
     it("a foreign axis in a scope is a static error, with its own clause as the fix", () => {
         const [error] = invalid("model:{sound:fire}");
-        assert.match(error.message, /cannot read a model row/);
-        assert.equal(error.fix?.query, "model:* sound:fire");
+        assert.match(error.message, /not a model field/);
+        assert.equal(error.fixes?.[0]?.query, "model:* sound:fire");
     });
 
     it("a wrong property in a kind scope is named, not searched", () => {
@@ -567,7 +567,7 @@ describe("scopes", () => {
     it("a scope of only negations has no anchor: an error in final text, quiet while typing", () => {
         const parsed = parse("model:{-fire}");
         assert.equal(parsed.clauses[0].state, "invalid");
-        assert.match(errors(parsed)[0].message, /positive term/);
+        assert.match(errors(parsed)[0].message, /something to look for/);
         assert.deepEqual(errors(parse("model:{-fire}", {mode: "typing"})), []);
     });
 
@@ -587,7 +587,7 @@ describe("scopes", () => {
 
     it("a scope cannot hold another scope, even while typing", () => {
         const [error] = invalid("model:{attach:{chest}}");
-        assert.match(error.message, /takes a value, not a scope/);
+        assert.match(error.message, /not more curly brackets/);
         assert.equal(parse("model:{fire {", {mode: "typing"}).clauses[0].state, "invalid");
     });
 
@@ -597,15 +597,15 @@ describe("scopes", () => {
         assert.equal(parsed.clauses[0].state, "ok");
         assert.equal((parsed.clauses[1].ask as ColumnAsk).column.key, "sound");
         const [warning] = warnings(parsed);
-        assert.match(warning.message, /closed it before the next clause/);
-        assert.equal(warning.fix?.query, "model:{fire } sound:ice");
+        assert.match(warning.message, /closed before the next field/);
+        assert.equal(warning.fixes?.[0]?.query, "model:{fire } sound:ice");
     });
 
     it("count is universal, so it belongs and the scope closes at the end", () => {
         const parsed = parse("model:{fire count:>4");
         assert.equal(parsed.clauses.length, 1);
         assert.equal(parsed.clauses[0].state, "ok");
-        assert.match(warnings(parsed)[0].message, /closed it at the end/);
+        assert.match(warnings(parsed)[0].message, /closed at the end/);
     });
 
     it("lenient parens: a scope-shaped group is read as a scope", () => {
@@ -682,7 +682,7 @@ describe("brace expansion and glued tokens", () => {
     it("a glued single-value group is a missing space, warned and split", () => {
         const parsed = parse("model:(fire)bolt");
         assert.equal(parsed.clauses.length, 2);
-        assert.match(warnings(parsed)[0].message, /glued together/);
+        assert.match(warnings(parsed)[0].message, /run together/);
     });
 
     it("a glued phrase can never mean anything, warned and split", () => {
@@ -1122,7 +1122,7 @@ it("a punctuation-only operand warns on the bare spelling, and quotes make it a 
     // exactly how punctuation is searched and carry no warning at all.
     const bare = parse("name:.").diagnostics.filter((d) => d.severity === "warning");
     assert.equal(bare.length, 1);
-    assert.match(bare[0].fix?.query ?? "", /^name:\//);
+    assert.match(bare[0].fixes?.[0]?.query ?? "", /^name:\//);
     for (const query of ['name:"---"', 'name:"\\""']) {
         assert.deepEqual(parse(query).diagnostics, [], query);
     }

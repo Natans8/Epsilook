@@ -47,7 +47,11 @@ export interface Diagnostic {
     /** Index into {@link Parsed.clauses} of the clause the finding is about. */
     readonly clause: number;
     readonly message: string;
-    readonly fix?: Fix;
+    /**
+     * The corrections on offer, in the order the reader ranks them: one where the reading is settled, several
+     * where the reader declined to choose between readings.
+     */
+    readonly fixes?: readonly Fix[];
 }
 
 /**

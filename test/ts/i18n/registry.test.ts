@@ -34,7 +34,7 @@ describe("the string registry", () => {
 
     it("interpolates without escaping, because the values reach text nodes and terminals rather than markup", () => {
         // An escaped value would show `&quot;` to the reader; the quotes here are the diagnostic's own.
-        assert.equal(t("diagnostics:axis.noOrdering", {word: "name"}), "the name axis has no ordering");
+        assert.equal(t("diagnostics:axis.noOrdering", {word: "name"}), "name has no order to sort by");
     });
 
     it("declares Russian as a skeleton: English's keys, none of them translated yet", () => {

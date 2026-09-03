@@ -731,8 +731,9 @@ export function spellingFixes(text: string): string {
     // covers every glued boundary a segment can carry.
     for (let pass = 0; pass < 8; pass += 1) {
         const parsed = parse(out, {mode: "final"});
-        const fix = parsed.diagnostics.find((d) =>
-            d.severity === "warning" && d.fix !== undefined && equivalent(parsed, parse(d.fix.query)))?.fix;
+        const fix = parsed.diagnostics.filter((d) => d.severity === "warning")
+            .flatMap((d) => d.fixes ?? [])
+            .find((offer) => equivalent(parsed, parse(offer.query)));
         if (fix === undefined) return out;
         out = fix.query;
     }

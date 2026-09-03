@@ -273,7 +273,7 @@ test("a query the parser refuses says what is wrong instead of counting", async 
     await page.keyboard.type("xpac:zzz", {delay: 5});
     await page.keyboard.press("Enter");
     const status = page.locator("[role=status]");
-    await expect(status).toContainText("xpac takes one of");
+    await expect(status).toContainText("it takes one of");
     await expect(status).not.toContainText("spells");
 
     // A query that parses answers as it always did.

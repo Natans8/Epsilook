@@ -62,11 +62,11 @@ test("a kind STANDING in the scope narrows the offers to its own: only what can 
 test("two positive kinds on one row warn: a row is one kind, the scope can match nothing", () => {
     const warned = parse("model:{attach missile}");
     assert.ok(warned.diagnostics.some((d) => d.severity === "warning"
-        && d.message.includes("one kind")), "the empty meet is said, never silent");
+        && d.message.includes("two different kinds")), "the empty meet is said, never silent");
     // The scope still parses and runs; and a negated kind collides with nothing.
     assert.equal(warned.clauses[0].state, "ok");
     assert.ok(!parse("model:{attach -missile}").diagnostics.some(
-        (d) => d.severity === "warning" && d.message.includes("one kind")));
+        (d) => d.severity === "warning" && d.message.includes("two different kinds")));
 });
 
 test("a top-level word offers the doors it could open, from its first character", () => {

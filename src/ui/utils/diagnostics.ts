@@ -13,11 +13,7 @@ export interface StripRow {
     /** The offending clause's text, exactly as typed. Empty where the finding is about the query as a whole. */
     readonly verbatim: string;
     readonly message: string;
-    /**
-     * Every correction the reader offers, in the order it ranks them. A diagnostic carries at most one today, so
-     * this is a list of one or none; a refusal that names several readings it declined between lands here as
-     * one entry each, and the strip draws them as it draws the one.
-     */
+    /** Every correction the reader offers, in the order it ranks them; the strip draws one button each. */
     readonly fixes: readonly Fix[];
 }
 
@@ -37,7 +33,7 @@ export function stripRows(parsed: Parsed, text: string): readonly StripRow[] {
         const clause = parsed.clauses[d.clause];
         const start = clause === undefined ? text.length : clause.span.start;
         const verbatim = clause === undefined ? "" : text.slice(clause.span.start, clause.span.end).trim();
-        const fixes = d.fix === undefined ? [] : [d.fix];
+        const fixes = d.fixes ?? [];
         return {row: {severity: d.severity, verbatim, message: d.message, fixes}, start, order};
     });
     placed.sort((a, b) =>

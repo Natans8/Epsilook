@@ -103,7 +103,7 @@ export type Interp =
 export interface Pending {
     readonly severity: Severity;
     readonly message: string;
-    readonly fix?: Fix;
+    readonly fixes?: readonly Fix[];
 }
 
 /** The operators that require an order, by name — the ones whose refusal message says "no ordering". */
@@ -323,10 +323,10 @@ export function typedCtx(prop: Prop, word: string, pend: Pending[], done: (value
         pend.push({
             severity: "warning",
             message: i18n.t("diagnostics:value.punctuationOnly"),
-            fix: {
+            fixes: [{
                 label: i18n.t("diagnostics:fix.asPattern"),
                 query: `${word}${GRAMMAR.bind}${GRAMMAR.regex}${escapeRegExp(t)}${GRAMMAR.regex}`,
-            },
+            }],
         });
     };
     const bareValue = (t: string): Interp => {

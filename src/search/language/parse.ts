@@ -207,7 +207,7 @@ class Parser {
         this.clauses.push({span, not, state, ask});
         if (state === "ok") this.current.push(index);
         for (const p of pend) {
-            this.diagnostics.push({severity: p.severity, clause: index, message: p.message, fix: p.fix});
+            this.diagnostics.push({severity: p.severity, clause: index, message: p.message, fixes: p.fixes});
         }
         return index;
     }
@@ -578,7 +578,7 @@ class Parser {
             this.push({start, end}, not, "invalid", this.incompleteAsk(head), pend);
             return end;
         }
-        this.scopeWarnings(terms, pend);
+        this.scopeWarnings(terms, pend, head, {start, end}, not);
         const test: RowTest = {is: "scope", terms};
         const ask: Ask = scoped.role === "column"
             ? {on: "column", column: scoped.column, test}
@@ -827,7 +827,8 @@ class Parser {
         if (foreign !== null) {
             const fix = items === 1 ? this.foreignFix(start, not, head, foreign.span, after) : undefined;
             this.push({start, end: after}, not, "invalid", this.incompleteAsk(head),
-                [...pend, {severity: "error", message: foreign.message, fix}]);
+                [...pend, {severity: "error", message: foreign.message,
+                    fixes: fix === undefined ? undefined : [fix]}]);
             return after;
         }
 
@@ -844,7 +845,7 @@ class Parser {
             const word = headWord(head);
             pend.push({severity: "note", message: i18n.t("diagnostics:scope.emptyMeansAny", {word})});
         }
-        this.scopeWarnings(terms, pend);
+        this.scopeWarnings(terms, pend, head, {start, end: after}, not);
 
         if (!closed && this.mode === "final") {
             const repaired = resumeAt >= 0
@@ -855,7 +856,7 @@ class Parser {
                 message: resumeAt >= 0
                     ? i18n.t("diagnostics:scope.unclosedBeforeNext")
                     : i18n.t("diagnostics:scope.unclosedAtEnd"),
-                fix: {label: i18n.t("diagnostics:fix.closeScope"), query: repaired},
+                fixes: [{label: i18n.t("diagnostics:fix.closeScope"), query: repaired}],
             });
         }
 
@@ -946,7 +947,7 @@ class Parser {
     }
 
     /** The legal-but-misleading shapes: all warned, none refused. */
-    private scopeWarnings(terms: ScopeTerm[][], pend: Pending[]): void {
+    private scopeWarnings(terms: ScopeTerm[][], pend: Pending[], head: Head, span: Span, not: boolean): void {
         for (const run of terms) {
             const ok = run.filter((t) => t.state === "ok" && t.ask !== null);
             const positives = ok.filter((t) => !t.not);
@@ -959,10 +960,22 @@ class Parser {
                 if (positive.ask?.on === "kindWord") kinds.push(positive.ask.kind);
             }
             if (new Set(kinds).size > 1) {
+                const [a, b] = [wordOf(kinds[0]), wordOf(kinds[1])];
+                const word = headWord(head);
+                // Two readings the reader may have meant, each offered where the scope holds nothing but the two
+                // kind words: one of each on the spell, or a row that is either. A scope carrying more than the
+                // pair has no single respell for either reading, so it warns without an offer.
+                const bare = ok.length === 2 && positives.length === 2 && !not;
+                const bind = `${word}${GRAMMAR.bind}`;
                 pend.push({
                     severity: "warning",
-                    message: i18n.t("diagnostics:scope.twoKinds",
-                        {a: wordOf(kinds[0]), b: wordOf(kinds[1])}),
+                    message: i18n.t("diagnostics:scope.twoKinds", {a, b, column: word}),
+                    fixes: bare ? [
+                        {label: i18n.t("diagnostics:fix.oneOfEach"),
+                            query: this.splice(span.start, span.end, `${bind}${a} ${bind}${b}`)},
+                        {label: i18n.t("diagnostics:fix.either"),
+                            query: this.splice(span.start, span.end, `${bind}${a}${GRAMMAR.or}${b}`)},
+                    ] : undefined,
                 });
             }
 
@@ -990,7 +1003,7 @@ class Parser {
                 severity: "warning",
                 clause: this.clauses.length - 1,
                 message: i18n.t("diagnostics:scope.spaceAfterClose", {symbol: GRAMMAR.scope.close}),
-                fix: {label: i18n.t("diagnostics:fix.insertSpace"), query: this.splice(after, after, " ")},
+                fixes: [{label: i18n.t("diagnostics:fix.insertSpace"), query: this.splice(after, after, " ")}],
             });
         }
     }
@@ -1111,7 +1124,7 @@ class Parser {
                           word: string): void {
         if (interp.r === "fail") {
             if (interp.rescuable !== true || this.mode === "final") {
-                pend.push({severity: "error", message: interp.message, fix: this.failFix(span, interp)});
+                pend.push({severity: "error", message: interp.message, fixes: this.failFix(span, interp)});
             }
             run.push({span, not, state: "incomplete", ask: null});
             return;
@@ -1266,7 +1279,7 @@ class Parser {
             pend.push({
                 severity: "warning",
                 message: i18n.t("diagnostics:value.glued"),
-                fix: {label: i18n.t("diagnostics:fix.insertSpace"), query: this.splice(at, at, " ")},
+                fixes: [{label: i18n.t("diagnostics:fix.insertSpace"), query: this.splice(at, at, " ")}],
             });
         }
         return {main, extras: [...extras]};
@@ -1358,7 +1371,7 @@ class Parser {
                 return;
             }
             this.push(span, not, "invalid", ask,
-                [...pend, {severity: "error", message: interp.message, fix: this.failFix(span, interp)}]);
+                [...pend, {severity: "error", message: interp.message, fixes: this.failFix(span, interp)}]);
             return;
         }
         if (interp.r === "empty") {
@@ -1380,10 +1393,10 @@ class Parser {
     }
 
     /** The structural fix a failed value offers, when it names one. */
-    private failFix(span: Span, interp: Interp & { r: "fail" }): Fix | undefined {
-        if (interp.fixQuotes === true) return this.dropQuotesFix(span);
-        if (interp.fixDrop !== undefined) return this.dropFix(span, interp.fixDrop);
-        return undefined;
+    private failFix(span: Span, interp: Interp & { r: "fail" }): readonly Fix[] | undefined {
+        const one = interp.fixQuotes === true ? this.dropQuotesFix(span)
+            : interp.fixDrop !== undefined ? this.dropFix(span, interp.fixDrop) : undefined;
+        return one === undefined ? undefined : [one];
     }
 
     /** The one structural fix a failed value can offer: the same clause without the offending symbol. */

@@ -57,6 +57,8 @@
   "fix": {
     "closeScope": "",
     "ownClause": "",
+    "oneOfEach": "",
+    "either": "",
     "insertSpace": "",
     "withoutSymbol": "",
     "dropQuotes": "",

@@ -16,16 +16,21 @@ import styles from "./diagnostics.module.css";
 /**
  * The strip. Draws nothing at all for a query the reader accepted, so the count sits directly under the bar.
  */
-export function Diagnostics({parsed, text, apply}: {
+export function Diagnostics({parsed, text, plain, apply}: {
     /** The query as read in final mode — the same parse the count refuses on. */
     readonly parsed: Parsed;
     /** The text that parse was read from. */
     readonly text: string;
+    /**
+     * Whether the plain view stands. A note says how a spelling was read, and the chips already draw that
+     * reading, so it is shown only where the reader is looking at their own text.
+     */
+    readonly plain: boolean;
     /** Applies a fix's whole-query rewrite, through the bar's own undo where the bar stands. */
     readonly apply: (next: string) => void;
 }): ReactElement | null {
     const {t} = useTranslation();
-    const rows = stripRows(parsed, text);
+    const rows = stripRows(parsed, text).filter((row) => plain || row.severity !== "note");
     if (rows.length === 0) return null;
     return (
         <ul className={styles.strip} aria-label={t("strip.label")}>

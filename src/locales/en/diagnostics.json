@@ -1,73 +1,75 @@
 {
   "clause": {
-    "unknownDoor": "\"{{word}}\" opens no door",
-    "negatesNothing": "\"{{symbol}}\" negates nothing",
+    "unknownDoor": "\"{{word}}\" is not a field",
+    "negatesNothing": "\"{{symbol}}\" has nothing to exclude",
     "empty": "{{what}} {{why}}",
     "emptySubject": "the value",
     "emptyIgnored": "\"{{word}}\" {{why}} and was ignored"
   },
   "why": {
-    "noValue": "names no value",
-    "nothingToCompare": "compares against nothing",
+    "noValue": "has no value",
+    "nothingToCompare": "has nothing to compare against",
     "emptyGroup": "is an empty group, which matches nothing"
   },
   "bind": {
-    "noValue": "{{word}}: names no value",
-    "noValueIgnored": "{{word}}: names no value and was ignored",
-    "valueNotScope": "{{word}}: takes a value, not a scope",
-    "countsRows": "{{head}}:{{value}} counts {{label}} rows",
-    "negatedRowCount": "the minus cannot negate a row count — negating a pair is not negating its halves"
+    "noValue": "{{word}}: has no value",
+    "noValueIgnored": "{{word}}: has no value and was ignored",
+    "valueNotScope": "{{word}}: takes a value, not curly brackets",
+    "countsRows": "{{head}}{{value}} is read as a count — spells with {{value}} {{label}}",
+    "negatedRowCount": "a minus before a count is not read — turn the comparison round instead, as in {{word}}<=2"
   },
   "axis": {
-    "noOrdering": "the {{word}} axis has no ordering",
-    "cannotAnswer": "the {{word}} axis cannot answer {{operator}}",
-    "takes": "{{word}} takes {{hint}}",
-    "takesQuoted": "{{word}} takes {{hint}} — a quoted value is text",
-    "noPatterns": "the {{word}} axis has no patterns",
-    "noRegex": "the {{word}} axis cannot run one — regular expressions run on text and file paths only"
+    "noOrdering": "{{word}} has no order to sort by",
+    "cannotAnswer": "{{word}} cannot be compared with {{operator}}",
+    "takes": "not a value {{word}} can take — it takes {{hint}}",
+    "takesQuoted": "a quoted value is text, and {{word}} takes {{hint}}",
+    "noPatterns": "{{word}} cannot take a regular expression",
+    "noRegex": "{{word}} cannot take a regular expression — they run on text and file names only"
   },
   "pattern": {
-    "invalid": "not a valid pattern: {{problem}}",
-    "pathWeak": "a pattern on a file path rarely helps — path names run words together",
-    "unclosed": "the pattern was not closed — it ends at whitespace, so a space is written \\s"
+    "invalid": "invalid regular expression: {{problem}}",
+    "pathWeak": "a regular expression on a file name rarely helps — file names run their words together",
+    "unclosed": "the regular expression has no closing / — it ends at the first space, so a space is written \\s"
   },
   "value": {
-    "differentQuestions": "these alternatives ask different questions",
-    "glued": "two values are glued together — a space is missing",
-    "groupUnclosed": "the group was not closed",
-    "exactPattern": "exact and a pattern cannot combine",
-    "anchorPattern": "{{symbol}} and a pattern cannot combine",
+    "differentQuestions": "these alternatives cannot be searched together",
+    "glued": "two values run together — a space is missing",
+    "groupUnclosed": "the ( was never closed",
+    "exactPattern": "= cannot combine with a regular expression",
+    "anchorPattern": "{{symbol}} cannot combine with a regular expression",
     "trailingRange": "{{written}} reads as at least {{bound}} — the same as {{wildcard}} for the upper bound",
-    "punctuationOnly": "punctuation is not matched — search it as a pattern"
+    "punctuationOnly": "punctuation alone cannot be searched — search it as a regular expression"
   },
   "scope": {
-    "innerBindScope": "an axis inside a scope takes a value, not a scope",
-    "twoKinds": "a row is one kind — {{a}} and {{b}} never share one, so this can match nothing",
-    "nested": "a scope cannot hold another scope",
-    "emptyMeansAny": "{{word}}:{} means any {{word}} row — the same as {{word}}:*",
-    "unclosedBeforeNext": "the scope was not closed — closed it before the next clause",
-    "unclosedAtEnd": "the scope was not closed — closed it at the end",
-    "needsPositive": "a scope needs a positive term — negation only refines",
-    "contentNegation": "both sides are content words, which rarely share one row — negate a kind word or a property instead",
-    "qualifierAlone": "a {{name}} only says who a row plays on — add what the row is",
+    "innerBindScope": "inside curly brackets a field takes a value, not more curly brackets",
+    "twoKinds": "{{a}} and {{b}} are two different kinds, so no single {{column}} is both",
+    "nested": "curly brackets cannot hold more curly brackets",
+    "emptyMeansAny": "{{word}}:{} means any {{word}} — the same as {{word}}:*",
+    "unclosedBeforeNext": "the { was never closed — it is read as closed before the next field",
+    "unclosedAtEnd": "the { was never closed — it is read as closed at the end",
+    "needsPositive": "curly brackets need something to look for — a minus only narrows",
+    "contentNegation": "both are plain words, which rarely describe the same thing — exclude a kind or a property instead",
+    "qualifierAlone": "{{name}} only says who it plays on — add what it is",
     "spaceAfterClose": "missing space after {{symbol}}",
     "foreignProperty": "{{kind}} has no \"{{word}}\" property",
-    "foreignAxis": "a {{word}} axis cannot read a {{column}} row"
+    "foreignAxis": "{{word}} is not a {{column}} field, so it cannot go inside {{column}}'s curly brackets"
   },
   "fix": {
-    "closeScope": "close the scope",
-    "ownClause": "make it its own clause",
+    "closeScope": "close the brackets",
+    "ownClause": "move it out on its own",
+    "oneOfEach": "one of each",
+    "either": "either",
     "insertSpace": "insert the space",
-    "withoutSymbol": "search for it without {{symbol}}",
+    "withoutSymbol": "search without {{symbol}}",
     "dropQuotes": "drop the quotes",
-    "asPattern": "search it as a pattern"
+    "asPattern": "search it as a regular expression"
   },
   "simplify": {
     "allDead": "every alternative of this query contradicts itself; it is returned as written",
     "matchesEverything": "this query matches every spell — one alternative selects whatever the other excludes — so its simplest form is the empty query"
   },
   "sort": {
-    "takesDoor": "{{word}} takes a door word to order by, as in {{word}}{{bind}}name or {{word}}{{bind}}{{negate}}model",
+    "takesDoor": "{{word}} takes a field to order by, as in {{word}}{{bind}}name or {{word}}{{bind}}{{negate}}model",
     "takesCount": "{{word}} takes how many to list, as in {{word}}{{bind}}20"
   }
 }

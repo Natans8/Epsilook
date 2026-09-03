@@ -170,7 +170,7 @@ export function App({info, searcher}: {
                                handle={barRef} vocab={vocab}/>}
                     <Simplify text={text} plain={plain} apply={rewrite}/>
                 </div>
-                <Diagnostics parsed={finalParse} text={text} apply={rewrite}/>
+                <Diagnostics parsed={finalParse} text={text} plain={plain} apply={rewrite}/>
                 <div className={styles.statusRow}>
                     <Count parsed={finalParse} result={result} stale={result === null || result.for !== text}/>
                     {/* A view switch, not a command: it changes how the query is shown and never what it says.
