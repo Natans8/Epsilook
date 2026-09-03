@@ -1,0 +1,96 @@
+/**
+ * The diagnostics strip, under the bar and above the count.
+ *
+ * Slim by design: the count beneath it moves down one row per diagnostic, so every row is one line at the count's
+ * own type size. A row's weight is drawn the way the bar draws it on the chip — the same wavy underline under the
+ * offending text, danger for an error and gold for a warning — so the two surfaces reading one parse look like one
+ * voice restating itself rather than two opinions. A note underlines nothing: it blocks nothing.
+ */
+
+.strip {
+    list-style: none;
+    margin: 0.35rem 0 0;
+    /* The bar's own text inset, as the count beneath takes it: the strip is the panel speaking, not the page. */
+    padding: 0 0.5rem 0 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    font-size: 0.85rem;
+}
+
+.row {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    padding: 0.1rem 0 0.1rem 0.6rem;
+    border-left: 2px solid var(--row-ink);
+    color: var(--text);
+}
+
+.error {
+    --row-ink: rgb(var(--danger-rgb));
+}
+
+.warning {
+    --row-ink: var(--gold-dim);
+}
+
+.note {
+    --row-ink: var(--border-ctrl);
+}
+
+/* The offending text as typed, in the reader's own characters, wearing the chip's own mark. */
+.verbatim {
+    font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+    font-size: 0.95em;
+    color: var(--text-strong);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    text-underline-offset: 3px;
+}
+
+.error .verbatim {
+    text-decoration: underline wavy rgba(var(--danger-rgb), 0.9);
+}
+
+.warning .verbatim {
+    text-decoration: underline wavy var(--gold-dim);
+}
+
+.message {
+    color: var(--text-dim);
+}
+
+/* The corrections, as a group at the row's right: one button per reading offered, wrapping among themselves
+ * before the row does, so three offers on a narrow page stack under the message rather than tearing it. */
+.fixes {
+    margin-left: auto;
+    display: inline-flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.35rem;
+}
+
+.fix {
+    font: inherit;
+    font-size: 0.85rem;
+    padding: 0 0.55rem;
+    line-height: 1.5;
+    color: var(--text);
+    background: var(--bg-panel);
+    border: 1px solid var(--border-ctrl);
+    border-radius: 999px;
+    cursor: pointer;
+}
+
+.fix:hover {
+    border-color: var(--gold-dim);
+    color: var(--text-strong);
+}
+
+.fix:focus-visible {
+    outline: none;
+    border-color: var(--gold-dim);
+    box-shadow: 0 0 0 3px rgba(var(--gold-rgb), 0.12);
+}

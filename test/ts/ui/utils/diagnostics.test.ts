@@ -1,0 +1,36 @@
+/**
+ * The strip's model: rows read the parse and nothing else, the offending text is cut by the clause's own span, and
+ * the order is the written order with an error outranking a warning on the same clause.
+ */
+import assert from "node:assert/strict";
+import test from "node:test";
+
+import {parse} from "../../../../src/search/index";
+import {stripRows} from "../../../../src/ui/utils/diagnostics";
+
+test("a query the reader accepts draws no rows", () => {
+    assert.deepEqual(stripRows(parse("model:fire sound:bell", {mode: "final"}), "model:fire sound:bell"), []);
+});
+
+test("a refused clause is an error row carrying the clause verbatim and no fix", () => {
+    const text = "model:fire model:{-attach>2}";
+    const rows = stripRows(parse(text, {mode: "final"}), text);
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].severity, "error");
+    assert.equal(rows[0].verbatim, "model:{-attach>2}");
+    assert.deepEqual(rows[0].fixes, []);
+});
+
+test("a warning with a fix carries the whole-query rewrite the fix would apply", () => {
+    const text = "model:{fire}sound:bell";
+    const rows = stripRows(parse(text, {mode: "final"}), text);
+    const warned = rows.find((r) => r.severity === "warning" && r.fixes.length > 0);
+    assert.ok(warned !== undefined, "the missing space after a scope's close warns with a fix");
+    assert.deepEqual(warned.fixes.map((fix) => fix.query), ["model:{fire} sound:bell"]);
+});
+
+test("rows come in written order, whatever order the reader raised them in", () => {
+    const text = "model:{-attach>1} sound:bell model:{-attach>2}";
+    const rows = stripRows(parse(text, {mode: "final"}), text);
+    assert.deepEqual(rows.map((r) => r.verbatim), ["model:{-attach>1}", "model:{-attach>2}"]);
+});

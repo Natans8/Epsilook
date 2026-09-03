@@ -12,40 +12,18 @@ import {useTranslation} from "react-i18next";
 import type {PackInfo, Searcher} from "./searcher";
 import {expansionArt} from "./art";
 import {parse} from "../search/index";
-import type {Diagnostic} from "../search/index";
 import {recentQueries} from "./history";
 import {BASE} from "./pack";
 import type {BarHandle} from "./bar/index";
 import {Bar, PlainBar} from "./bar/index";
+import type {Answer} from "./components/count";
+import {Count} from "./components/count";
+import {Diagnostics} from "./components/diagnostics";
 import {Simplify} from "./components/simplify";
 import {carriedQuery, reloadWith, urlPlain, urlQuery} from "./utils/query";
 import styles from "./app.module.css";
 
 const APP_LANGUAGES = ["en", "ru"];
-
-/**
- * One line of status, held back until it stops changing — what a live region should announce.
- *
- * The count answers every keystroke, and a live region that followed it would queue an announcement per
- * keystroke and read a stream of half-typed answers over the reader's own typing. What is on SCREEN still
- * updates live; only the announcement waits for the query to settle.
- *
- * @param line The status line as it now reads.
- * @param after How long the line must stand unchanged before it is announced, in milliseconds.
- * @returns The line to announce.
- */
-function useSettled(line: string, after = 700): string {
-    const [held, setHeld] = useState(line);
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            setHeld(line);
-        }, after);
-        return (): void => {
-            clearTimeout(timer);
-        };
-    }, [line, after]);
-    return held;
-}
 
 /**
  * One knob: a captioned select whose choice is a URL parameter.
@@ -95,7 +73,7 @@ export function App({info, searcher}: {
     const {t, i18n} = useTranslation();
     const [text, setText] = useState(urlQuery);
     const [plain, setPlain] = useState(urlPlain);
-    const [result, setResult] = useState<{ count: number; ms: number; for: string } | null>(null);
+    const [result, setResult] = useState<Answer | null>(null);
     // The bar's rewrite door, for the panel controls whose rewrites must be undoable inside the bar.
     const barRef = useRef<BarHandle>(null);
     const asked = useRef("");
@@ -145,23 +123,15 @@ export function App({info, searcher}: {
         };
     }, [text, plain]);
 
-    const stale = result === null || result.for !== text;
-    // A query the parser REFUSES does not get to answer. An invalid clause is dropped from the evaluable
-    // groups, so `xpac:zzz` constrained nothing and reported the whole pack — a wrong answer wearing the
-    // authority of a number. The bar already squiggles the clause; the count says what is wrong instead of
-    // counting. Only in final text: while typing, anything a further keystroke could rescue stays quiet.
+    // The query as it stands, read in final mode: the one parse the strip and the count both answer to. Only in
+    // final text — while typing, anything a further keystroke could rescue stays quiet.
     const finalParse = useMemo(() => parse(text, {mode: "final"}), [text]);
-    const broken = finalParse.diagnostics.filter((d: Diagnostic) => d.severity === "error");
-    // Under a limit the status line reports what is LISTED, not the query's full count: the honest number with
-    // an explainer beside it reads worse than the plain one.
-    const shown = (count: number): number =>
-        (finalParse.limit === null ? count : Math.min(Math.abs(finalParse.limit.value), count));
-    const line = broken.length > 0 ? broken[0].message
-        : result === null ? ""
-            : `${shown(result.count).toLocaleString()} `
-            + t("count.result", {count: shown(result.count)})
-            + `, ${t("count.elapsed", {ms: result.ms})}`;
-    const announced = useSettled(line);
+    // The one door for a whole-query rewrite: through the bar's undo stack where the bar stands, and the plain
+    // view has only the text.
+    const rewrite = (next: string): void => {
+        if (barRef.current !== null) barRef.current.rewrite(next);
+        else setText(next);
+    };
 
     return (
         <div className={styles.page}>
@@ -196,26 +166,11 @@ export function App({info, searcher}: {
                                     label={t("bar.placeholder")} history={history} vocab={vocab}/>
                         : <Bar text={text} onText={setText} placeholder={t("bar.placeholder")}
                                handle={barRef} vocab={vocab}/>}
-                    <Simplify
-                        text={text}
-                        plain={plain}
-                        apply={(next) => {
-                            // Through the bar's undo stack where the bar stands; the plain view has only
-                            // the text.
-                            if (barRef.current !== null) barRef.current.rewrite(next);
-                            else setText(next);
-                        }}
-                    />
+                    <Simplify text={text} plain={plain} apply={rewrite}/>
                 </div>
+                <Diagnostics parsed={finalParse} text={text} apply={rewrite}/>
                 <div className={styles.statusRow}>
-                    {/* The line updates with every answer; what is ANNOUNCED settles first — see `announced`. */}
-                    <div
-                        className={`${styles.status} ${stale ? styles.statusStale : ""}`}
-                        aria-hidden="true"
-                    >
-                        {line}
-                    </div>
-                    <div className={styles.announce} role="status">{announced}</div>
+                    <Count parsed={finalParse} result={result} stale={result === null || result.for !== text}/>
                     {/* A view switch, not a command: it changes how the query is shown and never what it says.
                         Its home is this row rather than the bar, because nothing beside the bar should read as
                         part of the ask. */}

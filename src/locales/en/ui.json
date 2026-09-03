@@ -23,7 +23,8 @@
     "result_one": "spell",
     "result_other": "spells",
     "searching": "searching…",
-    "elapsed": "{{ms}} ms"
+    "elapsed": "{{ms}} ms",
+    "refused": "not searched"
   },
   "bar": {
     "placeholder": "Search spells — a word, or an axis like scale:",
@@ -72,5 +73,8 @@
     "apply": "Apply",
     "simplifyNone": "Nothing to simplify — the query is already in its simplest form.",
     "simplified": "Simpler spelling: {{query}}"
+  },
+  "strip": {
+    "label": "What the reader said about the query"
   }
 }

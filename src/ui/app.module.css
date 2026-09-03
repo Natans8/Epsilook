@@ -61,21 +61,6 @@
     position: relative;
 }
 
-/* Carried to assistive technology and not to the eye: the status line beside it is drawn, and this says the
- * same thing on a cadence a listener can follow. Kept in the accessibility tree, so neither `display: none`
- * nor `visibility: hidden` will do. */
-.announce {
-    position: absolute;
-    clip-path: inset(50%);
-    overflow: hidden;
-    width: 1px;
-    height: 1px;
-    margin: -1px;
-    padding: 0;
-    border: 0;
-    white-space: nowrap;
-}
-
 .barRow {
     display: flex;
     gap: 0.5rem;
@@ -90,17 +75,6 @@
     /* The caption sits on the bar's own text inset — the count reads as the panel's voice, not the page's —
      * and the view pill's half-rem of padding closes the right side to the same line. */
     padding: 0 0.5rem 0 1rem;
-}
-
-.status {
-    font-size: 0.85rem;
-    color: var(--text-dim);
-    font-variant-numeric: tabular-nums;
-    min-height: 1.2em;
-}
-
-.statusStale {
-    opacity: 0.55;
 }
 
 .footer {
