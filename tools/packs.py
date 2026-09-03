@@ -176,7 +176,7 @@ PACKS: tuple[Pack, ...] = (
     Pack("vanilla", "Vanilla Classic", "wow_classic_era", "1.15.9.69109"),
     Pack("tbc", "TBC Classic", "wow_anniversary", "2.5.6.69110"),
     Pack("mop", "MoP Classic", "wow_classic", "5.5.4.69155"),
-    Pack("midnight", "Midnight", "wow", "12.0.7.68974"),
+    Pack("midnight", "Midnight", "wow", "12.1.0.69273"),
     # Lines that moved on, and pinned retail. Historical artifacts: their build
     # is final, so FROZEN rather than a product that would answer about a
     # different expansion entirely.

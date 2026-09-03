@@ -71,10 +71,10 @@
     "hash": "a2c130fba1"
   },
   {
-    "id": "12.0.7.68974",
-    "label": "Midnight 12.0.7",
-    "file": "data/12.0.7.68974/spelldata.json.gz",
-    "built": "2026-08-10",
-    "hash": "a25b98515f"
+    "id": "12.1.0.69273",
+    "label": "Midnight 12.1.0",
+    "file": "data/12.1.0.69273/spelldata.json.gz",
+    "built": "2026-09-04",
+    "hash": "bf5c90c26d"
   }
 ]
