@@ -8,52 +8,54 @@
  * from what it says.
  */
 import type {ReactElement} from "react";
-import {useId} from "react";
 import {useTranslation} from "react-i18next";
 import type {Fix, Parsed, Span} from "../../search/index";
 import {stripRows} from "../utils/diagnostics";
 import styles from "./diagnostics.module.css";
 
 /**
- * One correction on offer: the button, and the preview of the query it would write.
+ * One correction on offer: the button, which shows what it would write while it is pointed at.
  *
- * A rewrite the reader cannot see before taking it is a gamble, so hovering or focusing the button shows the
- * whole query as it would stand afterwards — the simplify button's own rule, applied to every offer. The preview
- * is the button's description, so it reaches a reader who cannot see the hover as well as one who can.
+ * A rewrite the reader cannot see before taking it is a gamble, so hovering or focusing the button asks the
+ * page to draw the query as it would stand afterwards — in the bar itself, where the query is always drawn,
+ * rather than in a second picture beside the button.
  */
-function Offer({fix, apply}: {
+function Offer({fix, apply, onPreview}: {
     readonly fix: Fix;
     readonly apply: (next: string) => void;
+    /** Says which rewrite is being considered, or none. */
+    readonly onPreview: (query: string | null) => void;
 }): ReactElement {
-    const {t} = useTranslation();
-    const previewId = useId();
-    const written = fix.query.trim();
     return (
-        <span className={styles.offer}>
-            <button
-                type="button"
-                className={styles.fix}
-                aria-describedby={previewId}
-                onClick={() => {
-                    apply(fix.query);
-                }}
-            >
-                {fix.label}
-            </button>
-            <span id={previewId} className={styles.preview} role="tooltip">
-                <span className={styles.previewLabel}>{t("strip.becomes")}</span>
-                {written === ""
-                    ? <span className={styles.previewEmpty}>{t("strip.emptyQuery")}</span>
-                    : <code className={styles.previewQuery}>{written}</code>}
-            </span>
-        </span>
+        <button
+            type="button"
+            className={styles.fix}
+            onMouseEnter={() => {
+                onPreview(fix.query);
+            }}
+            onMouseLeave={() => {
+                onPreview(null);
+            }}
+            onFocus={() => {
+                onPreview(fix.query);
+            }}
+            onBlur={() => {
+                onPreview(null);
+            }}
+            onClick={() => {
+                onPreview(null);
+                apply(fix.query);
+            }}
+        >
+            {fix.label}
+        </button>
     );
 }
 
 /**
  * The strip. Draws nothing at all for a query the reader accepted, so the count sits directly under the bar.
  */
-export function Diagnostics({parsed, text, plain, apply, onAim}: {
+export function Diagnostics({parsed, text, plain, apply, onAim, onPreview}: {
     /** The query as read in final mode — the same parse the count refuses on. */
     readonly parsed: Parsed;
     /** The text that parse was read from. */
@@ -70,6 +72,8 @@ export function Diagnostics({parsed, text, plain, apply, onAim}: {
      * holds the focus, names its clause so the bar can mark it.
      */
     readonly onAim: (span: Span | null) => void;
+    /** Says which offered rewrite the reader is considering, or none, so the bar can draw it. */
+    readonly onPreview: (query: string | null) => void;
 }): ReactElement | null {
     const {t} = useTranslation();
     const rows = stripRows(parsed, text).filter((row) => plain || row.severity !== "note");
@@ -103,7 +107,9 @@ export function Diagnostics({parsed, text, plain, apply, onAim}: {
                         // One button per correction, in the reader's own order: a refusal between several
                         // readings offers each, and the group wraps rather than the row when they run long.
                         <span className={styles.fixes}>
-                            {row.fixes.map((fix) => <Offer key={fix.query} fix={fix} apply={apply}/>)}
+                            {row.fixes.map((fix) => (
+                                <Offer key={fix.query} fix={fix} apply={apply} onPreview={onPreview}/>
+                            ))}
                         </span>
                     )}
                 </li>

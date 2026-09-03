@@ -31,7 +31,7 @@ const NO_HISTORY: readonly string[] = [];
  * The plaintext editor.
  */
 export function PlainBar({
-    text, onText, placeholder, label, history = NO_HISTORY, vocab = NO_VOCABULARY, aim = null,
+    text, onText, placeholder, label, history = NO_HISTORY, vocab = NO_VOCABULARY, aim = null, preview = null,
 }: {
     readonly text: string;
     readonly onText: (text: string) => void;
@@ -44,8 +44,29 @@ export function PlainBar({
     readonly vocab?: Vocabulary;
     /** A stretch of the query something outside the bar is pointing at — a diagnostic's clause — drawn marked. */
     readonly aim?: Span | null;
+    /**
+     * A query to show in place of the text while an offer outside the bar is being considered — the picture of
+     * what the press would write, lifted without a trace when the pointer leaves.
+     */
+    readonly preview?: string | null;
 }): ReactElement {
     const field = useRef<HTMLTextAreaElement>(null);
+    /** What the field held before a preview replaced it, so the lift restores the caret with the characters. */
+    const before = useRef<{ value: string; start: number; end: number } | null>(null);
+    const drawnText = preview ?? text;
+    useLayoutEffect(() => {
+        const el = field.current;
+        if (el === null) return;
+        if (preview !== null) {
+            // The field shows the preview too, or the mirror and the field would disagree under the caret.
+            before.current ??= {value: el.value, start: el.selectionStart, end: el.selectionEnd};
+            el.value = preview;
+        } else if (before.current !== null) {
+            el.value = before.current.value;
+            el.setSelectionRange(before.current.start, before.current.end);
+            before.current = null;
+        }
+    }, [preview]);
     // The same offers the chip view gets, read from the same plan, and the same panel state around them: this
     // view shows the query differently, it does not know less about it. What it does NOT take is the chip
     // view's conveniences — no commit, no scope gesture, no rewrap — so a picked offer lands as the characters
@@ -125,7 +146,7 @@ export function PlainBar({
         const el = field.current;
         // The field is uncontrolled, so the platform's own undo survives a session; text arriving from
         // anywhere else — the URL, a language switch — is written in only while the reader is elsewhere.
-        if (el !== null && document.activeElement !== el && el.value !== text) el.value = text;
+        if (el !== null && preview === null && document.activeElement !== el && el.value !== text) el.value = text;
     });
 
     /**
@@ -220,7 +241,7 @@ export function PlainBar({
                 <span className={styles.plainInk} aria-hidden="true">
                     {/* The pointed-at clause wears the aim band under the field, cut by the character as a
                         selection is: the text is the reader's own and the band says which stretch is meant. */}
-                    <Classed text={text} rich mirrored selected={aim ?? undefined} band={frame.aimed}/>
+                    <Classed text={drawnText} rich mirrored selected={aim ?? undefined} band={frame.aimed}/>
                     {ghosting && <span className={frame.ghost}>{ghost}</span>}
                     {/* A trailing newline keeps a text ending in a space from collapsing the last line. */}
                     {"\n"}

@@ -23,6 +23,27 @@ export interface StripRow {
     readonly fixes: readonly Fix[];
 }
 
+/**
+ * Where a rewrite differs from the text it rewrites, in the rewrite's own coordinates.
+ *
+ * The common prefix and suffix are what the reader already had; what lies between is what the offer changes,
+ * and marking exactly that is what lets a one-character fix — a space, a brace — be seen in a bar that
+ * otherwise looks unchanged. A pure removal leaves nothing to mark.
+ *
+ * @param before The text as it stands.
+ * @param after The text the rewrite would leave.
+ * @returns The changed stretch of `after`, or null where the rewrite only takes away.
+ */
+export function changedSpan(before: string, after: string): Span | null {
+    let start = 0;
+    while (start < before.length && start < after.length && before[start] === after[start]) start += 1;
+    let tail = 0;
+    while (tail < before.length - start && tail < after.length - start
+    && before[before.length - 1 - tail] === after[after.length - 1 - tail]) tail += 1;
+    const end = after.length - tail;
+    return end > start ? {start, end} : null;
+}
+
 /** The severities in the order a row's weight ranks them, heaviest first. */
 const WEIGHT: Readonly<Record<Severity, number>> = {error: 0, warning: 1, note: 2};
 

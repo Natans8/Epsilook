@@ -76,8 +76,6 @@
   },
   "strip": {
     "label": "What the reader said about the query",
-    "remove": "remove",
-    "becomes": "the query becomes",
-    "emptyQuery": "an empty query"
+    "remove": "remove"
   }
 }

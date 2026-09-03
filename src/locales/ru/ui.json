@@ -76,8 +76,6 @@
   },
   "strip": {
     "label": "",
-    "remove": "",
-    "becomes": "",
-    "emptyQuery": ""
+    "remove": ""
   }
 }

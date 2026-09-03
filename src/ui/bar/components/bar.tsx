@@ -60,7 +60,7 @@ export interface BarHandle {
 /**
  * The bar: every segment of the query in a row, with one position open for editing.
  */
-export function Bar({text, onText, placeholder, vocab = NO_VOCABULARY, handle, aim = null}: {
+export function Bar({text, onText, placeholder, vocab = NO_VOCABULARY, handle, aim = null, preview = null}: {
     readonly text: string;
     readonly onText: (text: string) => void;
     readonly placeholder: string;
@@ -68,9 +68,19 @@ export function Bar({text, onText, placeholder, vocab = NO_VOCABULARY, handle, a
     readonly vocab?: Vocabulary;
     /** The panel's door for undoable whole-query rewrites. */
     readonly handle?: Ref<BarHandle>;
-    /** A stretch of the query something outside the bar is pointing at — a diagnostic's clause — drawn marked. */
+    /** A stretch of the drawn query something outside the bar is pointing at — a diagnostic's clause — drawn marked. */
     readonly aim?: Span | null;
+    /**
+     * A query to DRAW in place of the text, while an offer outside the bar is being considered.
+     *
+     * The bar shows what the query would be after the press, settled and at rest, and nothing else moves: the
+     * session, the caret, the undo stacks and the selection all stay with the text, so when the preview lifts the
+     * bar is exactly as it was. The text is still the truth; this is a picture of a possible one.
+     */
+    readonly preview?: string | null;
 }): ReactElement {
+    const previewing = preview !== null;
+    const drawnText = preview ?? text;
     // The searches this browser remembers. Shared, because the SESSION knows when a query was finished with
     // and the SURFACE knows what to do with one.
     const [history, setHistory] = useState(recentQueries);
@@ -114,16 +124,18 @@ export function Bar({text, onText, placeholder, vocab = NO_VOCABULARY, handle, a
         },
     }));
 
-    const segments = useMemo(() => segmentsOf(text), [text]);
+    const segments = useMemo(() => segmentsOf(drawnText), [drawnText]);
     // The slot holds a FRAGMENT, so it cannot paint itself: the whole query is painted once and each surface
     // takes its own slice, which is what makes an open chip read exactly as the plain view reads.
-    const painted = useMemo(() => paint(text), [text]);
+    const painted = useMemo(() => paint(drawnText), [drawnText]);
     const slotRuns = useMemo(
         () => runsWithin(painted, {start: slotStart(at), end: slotStart(at) + at.slot.length}).map(quieted),
         [painted, at]);
     // At rest — no focus, or a bar-wide selection standing — the open position renders settled like every
     // other segment. A selection is a stretch of the settled query, so nothing inside it is in its editing form.
-    const rest = (!focused && text !== "") || sel !== null;
+    const rest = previewing || (!focused && text !== "") || sel !== null;
+    // A selection is a range of the TEXT, and a preview draws another text, so no band is drawn over a picture.
+    const band = previewing ? null : sel;
     const {assist, offers, shown, lit, listId, setCaretInSlot, onPick, onLight} =
         useBarAssist(text, editing, rest, vocab, history);
     const openStart = gapAt === null && !rest ? at.before.length : -1;
@@ -181,7 +193,7 @@ export function Bar({text, onText, placeholder, vocab = NO_VOCABULARY, handle, a
      * enough to read but not made of the query's own characters is what made words look like objects.
      */
     const between = (from: number, to: number, row: number): ReactElement => {
-        const covered = sel !== null && sel.from <= from && sel.to >= to;
+        const covered = band !== null && band.from <= from && band.to >= to;
         return (
             <span
                 key={`sep-${String(row)}`}
@@ -189,17 +201,17 @@ export function Bar({text, onText, placeholder, vocab = NO_VOCABULARY, handle, a
                 data-at={from}
                 data-plain=""
             >
-                {text.slice(from, to)}
+                {drawnText.slice(from, to)}
             </span>
         );
     };
 
     /** One settled segment: a chip, or a stretch of the query's own text. */
     const settled = (seg: BarSegment, row: number): ReactElement => {
-        const covered = sel !== null && sel.from <= seg.start && sel.to >= seg.end;
+        const covered = band !== null && band.from <= seg.start && band.to >= seg.end;
         // Text paints its own selection character by character; a chip is atomic, so the whole of it paints.
-        const inside = sel === null || !seg.plain ? undefined
-            : {start: Math.max(sel.from, seg.start) - seg.start, end: Math.min(sel.to, seg.end) - seg.start};
+        const inside = band === null || !seg.plain ? undefined
+            : {start: Math.max(band.from, seg.start) - seg.start, end: Math.min(band.to, seg.end) - seg.start};
         // A pointed-at clause marks the whole segment it stands in: a chip is atomic, and a stretch of text is
         // one settled child, so the mark lands on the unit the reader sees.
         const aimed = aim !== null && aim.start < seg.end && aim.end > seg.start;
@@ -219,10 +231,10 @@ export function Bar({text, onText, placeholder, vocab = NO_VOCABULARY, handle, a
                 // the segment's own query text, which says what it asks and is what a reader would type to
                 // say it again. Text needs none: it reads as itself.
                 role={seg.plain ? undefined : "group"}
-                aria-label={seg.plain ? undefined : text.slice(seg.start, seg.end)}
+                aria-label={seg.plain ? undefined : drawnText.slice(seg.start, seg.end)}
             >
                 <SettledSegment
-                    text={text.slice(seg.start, seg.end)}
+                    text={drawnText.slice(seg.start, seg.end)}
                     at={seg.start}
                     act={actionsFor(seg.start)}
                     selected={inside}
@@ -255,7 +267,7 @@ export function Bar({text, onText, placeholder, vocab = NO_VOCABULARY, handle, a
         // opening a zero-width nothing is how phantom chiplets appear.
         if (seg.start !== seg.end) children.push(settled(seg, row));
     }
-    if (drawn < text.length) children.push(between(drawn, text.length, segments.length));
+    if (drawn < drawnText.length) children.push(between(drawn, drawnText.length, segments.length));
     // At rest the input stays mounted out of sight — same keyed sibling, so waking never remounts it —
     // holding the bar's place in the tab order until focus brings the editing form back.
     if (rest) children.push(<Fragment key="open">{open}</Fragment>);
@@ -277,7 +289,7 @@ export function Bar({text, onText, placeholder, vocab = NO_VOCABULARY, handle, a
                 data-selection={sel === null ? undefined : selectedText()}
             >
                 {children}
-                {shown && (
+                {shown && !previewing && (
                     <Surface offers={offers} lit={lit} listId={listId} onPick={onPick} onLight={onLight}/>
                 )}
             </div>

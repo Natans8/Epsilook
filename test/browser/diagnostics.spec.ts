@@ -72,17 +72,23 @@ test("pointing at a row marks the clause it is about in the bar, and nothing els
     await expect(marked).toHaveCount(0);
 });
 
-test("hovering an offer previews the whole query it would write, before it is taken", async () => {
+test("hovering an offer draws the query it would write in the bar itself, and lifts it on leaving", async () => {
     await openWith("model:fire model:{attach missile}");
     await page.mouse.move(0, 0);
-    const offer = strip().getByRole("button", {name: "one of each"});
-    await expect(page.getByRole("tooltip")).toHaveCount(0);
-    await offer.hover();
-    const preview = page.getByRole("tooltip");
-    await expect(preview).toBeVisible();
-    await expect(preview).toContainText("model:fire model:attach model:missile");
-    // The preview is the button's description, so it reaches a reader who cannot see the hover.
-    await expect(offer).toHaveAttribute("aria-describedby", /.+/);
+    const chips = page.locator("[class*='qbar'] > [class*='settled']");
+    await expect(chips).toHaveCount(2);
+
+    await strip().getByRole("button", {name: "one of each"}).hover();
+    // The bar shows the rewrite: three chips, the two new ones marked as what changed. The text is untouched.
+    await expect(chips).toHaveCount(3);
+    await expect(chips.nth(1)).toHaveAttribute("aria-label", "model:attach");
+    await expect(chips.nth(2)).toHaveAttribute("aria-label", "model:missile");
+    await expect(page.locator("[class*='qbar'] > [class*='settled'][class*='aimed']")).toHaveCount(2);
+    await expectQuery(page, "model:fire model:{attach missile}");
+
+    await page.mouse.move(0, 0);
+    await expect(chips).toHaveCount(2);
+    await expect(chips.nth(1)).toHaveAttribute("aria-label", "model:{attach missile}");
 });
 
 test("a warning's fix rewrites the query and takes its row with it, while an error keeps the count refused",

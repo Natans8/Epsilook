@@ -20,6 +20,7 @@ import {Bar, PlainBar, spellingFixes} from "./bar/index";
 import type {Answer} from "./components/count";
 import {Count} from "./components/count";
 import {Diagnostics} from "./components/diagnostics";
+import {changedSpan} from "./utils/diagnostics";
 import {Simplify} from "./components/simplify";
 import {carriedQuery, reloadWith, urlPlain, urlQuery} from "./utils/query";
 import styles from "./app.module.css";
@@ -75,9 +76,14 @@ export function App({info, searcher}: {
     const [plain, setPlain] = useState(urlPlain);
     // The clause a diagnostic row is pointing at, which the bar marks so the row and its subject read as one.
     const [aim, setAim] = useState<Span | null>(null);
+    // The rewrite an offered fix would make, drawn in the bar while its button is pointed at; the text itself
+    // is untouched until the press.
+    const [preview, setPreview] = useState<string | null>(null);
     // The chip view holds only spellings the chips can show, so text arriving from the URL has its spelling
     // warnings applied on the way in; the plain view is the reader's own text and keeps it as written.
     const [text, setText] = useState(() => (urlPlain() ? urlQuery() : spellingFixes(urlQuery())));
+    // While a preview stands, the mark moves to what the rewrite changed, so the eye lands on the difference.
+    const marked = preview === null ? aim : changedSpan(text, preview);
     const [result, setResult] = useState<Answer | null>(null);
     // The bar's rewrite door, for the panel controls whose rewrites must be undoable inside the bar.
     const barRef = useRef<BarHandle>(null);
@@ -168,12 +174,14 @@ export function App({info, searcher}: {
                 <div className={styles.barRow} data-query={text}>
                     {plain
                         ? <PlainBar text={text} onText={setText} placeholder={t("bar.placeholder")}
-                                    label={t("bar.placeholder")} history={history} vocab={vocab} aim={aim}/>
+                                    label={t("bar.placeholder")} history={history} vocab={vocab} aim={marked}
+                                    preview={preview}/>
                         : <Bar text={text} onText={setText} placeholder={t("bar.placeholder")}
-                               handle={barRef} vocab={vocab} aim={aim}/>}
+                               handle={barRef} vocab={vocab} aim={marked} preview={preview}/>}
                     <Simplify text={text} plain={plain} apply={rewrite}/>
                 </div>
-                <Diagnostics parsed={finalParse} text={text} plain={plain} apply={rewrite} onAim={setAim}/>
+                <Diagnostics parsed={finalParse} text={text} plain={plain} apply={rewrite} onAim={setAim}
+                             onPreview={setPreview}/>
                 <div className={styles.statusRow}>
                     <Count parsed={finalParse} result={result} stale={result === null || result.for !== text}/>
                     {/* A view switch, not a command: it changes how the query is shown and never what it says.

@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {parse} from "../../../../src/search/index";
-import {stripRows} from "../../../../src/ui/utils/diagnostics";
+import {changedSpan, stripRows} from "../../../../src/ui/utils/diagnostics";
 
 test("a query the reader accepts draws no rows", () => {
     assert.deepEqual(stripRows(parse("model:fire sound:bell", {mode: "final"}), "model:fire sound:bell"), []);
@@ -43,4 +43,12 @@ test("rows come in written order, whatever order the reader raised them in", () 
     const text = "model:{-attach>1} sound:bell model:{-attach>2}";
     const rows = stripRows(parse(text, {mode: "final"}), text);
     assert.deepEqual(rows.map((r) => r.verbatim), ["model:{-attach>1}", "model:{-attach>2}"]);
+});
+
+test("the changed span of a rewrite is what lies between the common prefix and suffix, in the rewrite", () => {
+    assert.deepEqual(changedSpan("model:{fire}sound:bell", "model:{fire} sound:bell"), {start: 12, end: 13});
+    assert.deepEqual(changedSpan("a model:{x y} b", "a model:x model:y b"), {start: 8, end: 17});
+    // A pure removal leaves nothing to mark.
+    assert.equal(changedSpan("model:fire sort:zzz", "model:fire"), null);
+    assert.equal(changedSpan("same", "same"), null);
 });
