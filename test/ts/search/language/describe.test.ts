@@ -278,3 +278,12 @@ test("a term is headed by the door the reader went through, beside a sibling as 
     assert.equal(bind("model:{file:chest fire}"), "file");
     assert.equal(bind("model:{point:chest fire}"), "point");
 });
+
+test("a kind word and its row count draw as one chip cell, the pair the reader typed", () => {
+    const drawn = views("model:{attach>2}")[0];
+    assert.equal(drawn.form, "chip");
+    const body = chip("model:{attach>2}").body;
+    assert.equal(body[0].is, "word");
+    assert.equal(body[0].text, "attach");
+    assert.ok(body.length > 1, "the comparison follows the word in the same cell");
+});

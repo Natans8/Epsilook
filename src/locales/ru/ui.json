@@ -75,6 +75,7 @@
     "simplified": ""
   },
   "strip": {
-    "label": ""
+    "label": "",
+    "remove": ""
   }
 }

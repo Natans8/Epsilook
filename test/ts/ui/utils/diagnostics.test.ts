@@ -12,12 +12,21 @@ test("a query the reader accepts draws no rows", () => {
     assert.deepEqual(stripRows(parse("model:fire sound:bell", {mode: "final"}), "model:fire sound:bell"), []);
 });
 
-test("a refused clause is an error row carrying the clause verbatim and no fix", () => {
+test("a refused clause is an error row carrying the clause verbatim, and removal is always its last offer", () => {
     const text = "model:fire model:{-attach>2}";
     const rows = stripRows(parse(text, {mode: "final"}), text);
     assert.equal(rows.length, 1);
     assert.equal(rows[0].severity, "error");
     assert.equal(rows[0].verbatim, "model:{-attach>2}");
+    // The reader's own offer first, the comparison turned round; then the clause taken out whole.
+    assert.deepEqual(rows[0].fixes.map((fix) => fix.query), ["model:fire model:{attach<=2}", "model:fire"]);
+});
+
+test("a note offers nothing: it reports a reading rather than a flaw", () => {
+    const text = "model:{attach>2}";
+    const rows = stripRows(parse(text, {mode: "final"}), text);
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].severity, "note");
     assert.deepEqual(rows[0].fixes, []);
 });
 
@@ -26,7 +35,8 @@ test("a warning with a fix carries the whole-query rewrite the fix would apply",
     const rows = stripRows(parse(text, {mode: "final"}), text);
     const warned = rows.find((r) => r.severity === "warning" && r.fixes.length > 0);
     assert.ok(warned !== undefined, "the missing space after a scope's close warns with a fix");
-    assert.deepEqual(warned.fixes.map((fix) => fix.query), ["model:{fire} sound:bell"]);
+    // The reader's own fix, then removal of the warned clause alone.
+    assert.deepEqual(warned.fixes.map((fix) => fix.query), ["model:{fire} sound:bell", "sound:bell"]);
 });
 
 test("rows come in written order, whatever order the reader raised them in", () => {

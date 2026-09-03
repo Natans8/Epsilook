@@ -91,6 +91,8 @@ export type Interp =
     readonly fixDrop?: string;
     /** Offer removing the quotes as the fix. */
     readonly fixQuotes?: true;
+    /** Corrections already spelled out as whole queries, where the refusal knows the reading it would take. */
+    readonly fixes?: readonly Fix[];
     /**
      * A further keystroke could still change the verdict — the value did not parse, but more characters might
      * complete a word that does. Such a failure is held quietly while typing and reported only in final text,

@@ -219,3 +219,10 @@ describe("equivalent", () => {
         }
     });
 });
+
+it("a kind word and its row count write back as the one term the reader typed", () => {
+    assert.equal(formatQuery(parse("model:{attach count>2}"), "written"), "model:{attach>2}");
+    assert.equal(formatQuery(parse("model:{attach>2}"), "written"), "model:{attach>2}");
+    // A negated kind is not the pair, and keeps the count word.
+    assert.equal(formatQuery(parse("model:{-attach count>2}"), "written"), "model:{-attach count>2}");
+});

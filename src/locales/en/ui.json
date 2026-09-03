@@ -75,6 +75,7 @@
     "simplified": "Simpler spelling: {{query}}"
   },
   "strip": {
-    "label": "What the reader said about the query"
+    "label": "What the reader said about the query",
+    "remove": "remove"
   }
 }

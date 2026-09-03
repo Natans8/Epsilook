@@ -767,9 +767,12 @@ function settledSpelling(open: string): string {
 /**
  * Removes the character range `[from, to)` and one adjacent separator, so no double gap remains.
  *
+ * Also the strip model's door for taking a clause out whole — the strip's remove offer — so a removal from
+ * outside the bar leaves the same text a chip's own x would.
+ *
  * @returns The new text with the caret where the removal stood, flagged as a removal.
  */
-function spliceOut(text: string, from: number, to: number): Commit {
+export function spliceOut(text: string, from: number, to: number): Commit {
     let a = from;
     let b = to;
     if (text[b] === " ") b += 1;

@@ -490,6 +490,24 @@ function gluedTail(term: ScopeTerm, tier: Spelling): string | null {
     return null;
 }
 
+/**
+ * A kind word and the count comparison the desugar set after it, written back as the one term the reader typed.
+ *
+ * `attach>2` reads as the pair "an attach row, and more than two of them", and the pair spelled out is
+ * `attach count>2`; the two read alike, and the shorter is what a reader types and what the chip draws as one
+ * cell, so it is the written form. The count word is spelled only where it stands without a kind before it.
+ *
+ * @param term A scope term.
+ * @param next The term after it in the same run, if any.
+ * @param tier The output tier.
+ * @returns The fused spelling, or null where the two are not that pair.
+ */
+function rowCountText(term: ScopeTerm, next: ScopeTerm | undefined, tier: Spelling): string | null {
+    if (next === undefined || term.not || next.not || term.state !== "ok" || next.state !== "ok") return null;
+    if (term.ask?.on !== "kindWord" || next.ask?.on !== "count") return null;
+    return `${wordOf(term.ask.kind)}${valueText(next.ask.value, undefined, tier)}`;
+}
+
 function askText(ask: Ask, tier: Spelling): string | null {
     if (ask.on === "plain") return valueText(ask.value, undefined, tier, true);
     if (ask.on === "prop") {
@@ -515,9 +533,20 @@ function askText(ask: Ask, tier: Spelling): string | null {
 
     const enclosing = ask.on === "kind" ? ask.kind : null;
     const runs = test.terms
-        .map((run) => run
-            .map((term) => ({term, text: termText(term, tier, enclosing)}))
-            .filter((pair): pair is { term: ScopeTerm; text: string } => pair.text !== null))
+        .map((run) => {
+            const out: { term: ScopeTerm; text: string }[] = [];
+            for (let i = 0; i < run.length; i++) {
+                const fused = rowCountText(run[i], run[i + 1], tier);
+                if (fused !== null) {
+                    out.push({term: run[i], text: fused});
+                    i += 1;
+                    continue;
+                }
+                const text = termText(run[i], tier, enclosing);
+                if (text !== null) out.push({term: run[i], text});
+            }
+            return out;
+        })
         .filter((run) => run.length > 0);
     if (runs.length === 0) return exists;
     const lone = unbracedTerm(test.terms);

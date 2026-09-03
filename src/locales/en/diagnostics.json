@@ -16,7 +16,7 @@
     "noValueIgnored": "{{word}}: has no value and was ignored",
     "valueNotScope": "{{word}}: takes a value, not curly brackets",
     "countsRows": "{{head}}{{value}} is read as a count — spells with {{value}} {{label}}",
-    "negatedRowCount": "a minus before a count is not read — turn the comparison round instead, as in {{word}}<=2"
+    "negatedRowCount": "a minus before a count is not read — turn the comparison round instead"
   },
   "axis": {
     "noOrdering": "{{word}} has no order to sort by",
@@ -62,7 +62,8 @@
     "insertSpace": "insert the space",
     "withoutSymbol": "search without {{symbol}}",
     "dropQuotes": "drop the quotes",
-    "asPattern": "search it as a regular expression"
+    "asPattern": "search it as a regular expression",
+    "turnRound": "turn the comparison round"
   },
   "simplify": {
     "allDead": "every alternative of this query contradicts itself; it is returned as written",

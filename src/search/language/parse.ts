@@ -33,6 +33,7 @@ import type {Kind as KindDecl} from "../schema/kinds";
 import {isFlag, wordOf} from "../schema/kinds";
 import {door, path as pathType, text as textType} from "../vocabulary/value-types";
 import type {Interp, Pending, ValueCtx} from "./operand";
+import {COMPARISONS} from "../vocabulary/operators";
 import {combineAlternatives, countCtx, ctxFor, kindCtx, propCtx, topCtx} from "./operand";
 import type {Seg} from "./scan";
 import {isWs, scanPhrase, Scanner, scopeShaped, splitAlternatives, splitBare} from "./scan";
@@ -1091,7 +1092,11 @@ class Parser {
                     return {kind: "done", next: end};
                 }
                 const counted: Interp = main.r === "count" && bind.of !== undefined && termNot
-                    ? {r: "fail", message: i18n.t("diagnostics:bind.negatedRowCount", {word})}
+                    ? {
+                        r: "fail",
+                        message: i18n.t("diagnostics:bind.negatedRowCount", {word}),
+                        fixes: this.turnedRoundFix(termStart, vpos, spanEnd, word),
+                    }
                     : main;
                 this.pushScopeTerm(run, {start: termStart, end: spanEnd}, termNot, counted, pend, word);
                 this.scopeExtras(head, extras, run, pend);
@@ -1394,9 +1399,37 @@ class Parser {
 
     /** The structural fix a failed value offers, when it names one. */
     private failFix(span: Span, interp: Interp & { r: "fail" }): readonly Fix[] | undefined {
+        if (interp.fixes !== undefined) return interp.fixes;
         const one = interp.fixQuotes === true ? this.dropQuotesFix(span)
             : interp.fixDrop !== undefined ? this.dropFix(span, interp.fixDrop) : undefined;
         return one === undefined ? undefined : [one];
+    }
+
+    /**
+     * The reading a negated row count would take, spelled positively: the comparison turned round.
+     *
+     * `-attach>2` is offered as `attach<=2`, the complement of the count, which is the one thing a minus before
+     * a count could mean. A range or an exact count has no single complement, so those offer nothing here.
+     *
+     * @param termStart Where the term's word starts, after any minus.
+     * @param vpos Where the comparison starts.
+     * @param end Where the term ends.
+     * @param word The kind word.
+     * @returns The one fix, or none where the comparison has no complement.
+     */
+    private turnedRoundFix(termStart: number, vpos: number, end: number, word: string): readonly Fix[] | undefined {
+        const written = this.text.slice(vpos, end);
+        const turned = [
+            [COMPARISONS.gte, COMPARISONS.lt], [COMPARISONS.lte, COMPARISONS.gt],
+            [COMPARISONS.gt, COMPARISONS.lte], [COMPARISONS.lt, COMPARISONS.gte],
+        ].map(([from, to]) => {
+            const spellings = [from.symbol, ...(from.aliases ?? [])].filter((s): s is string => s !== undefined);
+            const spelled = spellings.find((s) => written.startsWith(s));
+            return spelled === undefined ? null : `${word}${to.symbol ?? ""}${written.slice(spelled.length)}`;
+        }).find((fix) => fix !== null);
+        if (turned === undefined) return undefined;
+        const from = termStart > 0 && this.text[termStart - 1] === GRAMMAR.negate ? termStart - 1 : termStart;
+        return [{label: i18n.t("diagnostics:fix.turnRound"), query: this.splice(from, end, turned)}];
     }
 
     /** The one structural fix a failed value can offer: the same clause without the offending symbol. */

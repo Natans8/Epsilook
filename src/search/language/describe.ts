@@ -399,10 +399,14 @@ function scopeItems(terms: ReadonlyArray<readonly ScopeTerm[]>, under: Kind | nu
     let previous: ScopeTerm | null = null;
     for (const run of terms) {
         if (run.length === 0) continue;
-        for (const [index, term] of run.entries()) {
-            const item = termItem(term, run.length === 1, under);
+        for (let index = 0; index < run.length; index++) {
+            const term = run[index];
+            // A kind word and its row count draw as the one term the reader typed, `attach >2`, exactly as the
+            // formatter writes them back; the pair takes two of the run's terms and one of the lane's items.
+            const fused = rowCountItem(term, run[index + 1], run.length === 2);
+            const item = fused ?? termItem(term, run.length === 1, under);
             const last = items[items.length - 1];
-            const folded = term.glued !== undefined && previous !== null && last !== undefined
+            const folded = fused === null && term.glued !== undefined && previous !== null && last !== undefined
             && sharesDoor(previous, term)
                 ? foldGlued(last, item)
                 : null;
@@ -413,10 +417,32 @@ function scopeItems(terms: ReadonlyArray<readonly ScopeTerm[]>, under: Kind | nu
             }
             if (index === 0 && items.length > 0) items.push({is: "or"});
             items.push(item);
-            previous = term;
+            if (fused !== null) index += 1;
+            previous = run[index];
         }
     }
     return items;
+}
+
+/**
+ * A kind word and the count comparison after it, as the one item the reader typed: `attach >2`.
+ *
+ * The parser reads `attach>2` as two terms, the kind and its row count, and drawing them apart made a lane of a
+ * single condition. The item spans both terms, so removing it removes the pair, and its body is the kind's
+ * word followed by the comparison's own pieces.
+ *
+ * @param term A scope term.
+ * @param next The term after it in the same run, if any.
+ * @param lone Whether the pair is the whole run.
+ * @returns The fused item, or null where the two are not that pair.
+ */
+function rowCountItem(term: ScopeTerm, next: ScopeTerm | undefined, lone: boolean): LaneItem | null {
+    if (next === undefined || term.not || next.not || term.state !== "ok" || next.state !== "ok") return null;
+    if (term.ask?.on !== "kindWord" || next.ask?.on !== "count") return null;
+    return {
+        is: "term", not: false, lone, span: {start: term.span.start, end: next.span.end},
+        body: [{is: "word", text: wordOf(term.ask.kind)}, ...exprPieces(next.ask.value)],
+    };
 }
 
 /**

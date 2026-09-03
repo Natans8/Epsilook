@@ -62,7 +62,8 @@
     "insertSpace": "",
     "withoutSymbol": "",
     "dropQuotes": "",
-    "asPattern": ""
+    "asPattern": "",
+    "turnRound": ""
   },
   "simplify": {
     "allDead": "",
