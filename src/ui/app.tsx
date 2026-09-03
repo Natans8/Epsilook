@@ -12,6 +12,7 @@ import {useTranslation} from "react-i18next";
 import type {PackInfo, Searcher} from "./searcher";
 import {expansionArt} from "./art";
 import {parse} from "../search/index";
+import type {Span} from "../search/index";
 import {recentQueries} from "./history";
 import {BASE} from "./pack";
 import type {BarHandle} from "./bar/index";
@@ -72,6 +73,8 @@ export function App({info, searcher}: {
 }): ReactElement {
     const {t, i18n} = useTranslation();
     const [plain, setPlain] = useState(urlPlain);
+    // The clause a diagnostic row is pointing at, which the bar marks so the row and its subject read as one.
+    const [aim, setAim] = useState<Span | null>(null);
     // The chip view holds only spellings the chips can show, so text arriving from the URL has its spelling
     // warnings applied on the way in; the plain view is the reader's own text and keeps it as written.
     const [text, setText] = useState(() => (urlPlain() ? urlQuery() : spellingFixes(urlQuery())));
@@ -165,12 +168,12 @@ export function App({info, searcher}: {
                 <div className={styles.barRow} data-query={text}>
                     {plain
                         ? <PlainBar text={text} onText={setText} placeholder={t("bar.placeholder")}
-                                    label={t("bar.placeholder")} history={history} vocab={vocab}/>
+                                    label={t("bar.placeholder")} history={history} vocab={vocab} aim={aim}/>
                         : <Bar text={text} onText={setText} placeholder={t("bar.placeholder")}
-                               handle={barRef} vocab={vocab}/>}
+                               handle={barRef} vocab={vocab} aim={aim}/>}
                     <Simplify text={text} plain={plain} apply={rewrite}/>
                 </div>
-                <Diagnostics parsed={finalParse} text={text} plain={plain} apply={rewrite}/>
+                <Diagnostics parsed={finalParse} text={text} plain={plain} apply={rewrite} onAim={setAim}/>
                 <div className={styles.statusRow}>
                     <Count parsed={finalParse} result={result} stale={result === null || result.for !== text}/>
                     {/* A view switch, not a command: it changes how the query is shown and never what it says.

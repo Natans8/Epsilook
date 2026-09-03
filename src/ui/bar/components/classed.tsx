@@ -73,7 +73,7 @@ export function Pattern({pattern}: { readonly pattern: string }): ReactElement {
  * it reaches, a broken clause carries its squiggle and a vocabulary word is marked as one. It needs a whole
  * query to parse — the open slot holds a fragment, and paints lexically.
  */
-export function Classed({text, rich, runs: given, mirrored, selected}: {
+export function Classed({text, rich, runs: given, mirrored, selected, band}: {
     readonly text: string;
     readonly rich?: boolean;
     /**
@@ -94,6 +94,8 @@ export function Classed({text, rich, runs: given, mirrored, selected}: {
     readonly runs?: readonly Run[];
     /** The stretch of this text the bar's selection covers, in the text's own coordinates. */
     readonly selected?: Span;
+    /** The class the covered stretch wears; the selection band unless the caller is marking something else. */
+    readonly band?: string;
 }): ReactElement {
     // The caller's runs win where it has them: a slot cannot paint itself, and lexing the same characters a
     // second time here would only produce the poorer answer.
@@ -150,7 +152,7 @@ export function Classed({text, rich, runs: given, mirrored, selected}: {
                 const inSel = from >= selected.start && to <= selected.end;
                 out.push(
                     <span key={`${String(i)}-${String(from)}`} title={piece.note}
-                          className={inSel ? `${piece.cls ?? ""} ${frame.selected}` : piece.cls}>
+                          className={inSel ? `${piece.cls ?? ""} ${band ?? frame.selected}` : piece.cls}>
                         {text.slice(from, to)}
                     </span>,
                 );

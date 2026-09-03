@@ -127,6 +127,19 @@
     padding-block: 0;
 }
 
+/* The clause a diagnostic is about, while its row is pointed at: the selection's own band, drawn the same way
+ * and by the same rules, in the gold the strip already speaks in — so the eye connects the row to the chip or
+ * the text it names without a second vocabulary. A chip under it flattens its fills exactly as it does under
+ * the selection, which is what lets one band read through a chip and through raw text alike. */
+.aimed {
+    background: rgba(var(--gold-rgb), calc(0.22 * var(--wash-strength)));
+    padding-block: var(--band-pad);
+}
+
+.settled.aimed {
+    padding-block: 0;
+}
+
 /* the inline completion: the rest of the one candidate, drawn faded past the caret. It is appended to the mirror
  * and never inserted into it, so it moves no character the caret has to line up with — and it carries no weight
  * or spacing of its own, for the same reason every other run under a field carries none.

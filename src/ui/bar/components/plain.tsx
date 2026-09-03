@@ -12,6 +12,7 @@
  * looking at it.
  */
 import type {ChangeEvent, KeyboardEvent, ReactElement} from "react";
+import type {Span} from "../../../search/index";
 import {useLayoutEffect, useMemo, useRef, useState} from "react";
 import {pairDelimiter, planAt, slotStart, writeSlot} from "../utils/plan";
 import type {Offer, Vocabulary} from "../utils/offers";
@@ -29,7 +30,9 @@ const NO_HISTORY: readonly string[] = [];
 /**
  * The plaintext editor.
  */
-export function PlainBar({text, onText, placeholder, label, history = NO_HISTORY, vocab = NO_VOCABULARY}: {
+export function PlainBar({
+    text, onText, placeholder, label, history = NO_HISTORY, vocab = NO_VOCABULARY, aim = null,
+}: {
     readonly text: string;
     readonly onText: (text: string) => void;
     readonly placeholder: string;
@@ -39,6 +42,8 @@ export function PlainBar({text, onText, placeholder, label, history = NO_HISTORY
     readonly history?: readonly string[];
     /** The closed vocabularies the loaded pack carries. */
     readonly vocab?: Vocabulary;
+    /** A stretch of the query something outside the bar is pointing at — a diagnostic's clause — drawn marked. */
+    readonly aim?: Span | null;
 }): ReactElement {
     const field = useRef<HTMLTextAreaElement>(null);
     // The same offers the chip view gets, read from the same plan, and the same panel state around them: this
@@ -213,7 +218,9 @@ export function PlainBar({text, onText, placeholder, label, history = NO_HISTORY
                 {/* The backdrop sits in FLOW and sizes the wrap; the field rides above it, so the two wrap
                     identically and the text can never reach past the bar it is drawn in. */}
                 <span className={styles.plainInk} aria-hidden="true">
-                    <Classed text={text} rich mirrored/>
+                    {/* The pointed-at clause wears the aim band under the field, cut by the character as a
+                        selection is: the text is the reader's own and the band says which stretch is meant. */}
+                    <Classed text={text} rich mirrored selected={aim ?? undefined} band={frame.aimed}/>
                     {ghosting && <span className={frame.ghost}>{ghost}</span>}
                     {/* A trailing newline keeps a text ending in a space from collapsing the last line. */}
                     {"\n"}

@@ -5,11 +5,17 @@
  * them and adds nothing: the offending text is cut from the query by the clause's own span, and the order is the
  * order the clauses were written in, so the strip reads left to right as the bar does.
  */
-import type {Diagnostic, Fix, Parsed, Severity} from "../../search/index";
+import type {Diagnostic, Fix, Parsed, Severity, Span} from "../../search/index";
+import {i18n} from "../../i18n";
+// The model directly rather than the bar's door: the door also hands out components, which a Node test of
+// this React-free model cannot compile, and the splice is the model's own.
+import {spliceOut} from "../bar/utils/plan";
 
 /** One row of the strip: what was written, what the reader said about it, and the corrections on offer. */
 export interface StripRow {
     readonly severity: Severity;
+    /** Where the offending clause stands in the query, so a surface can point at it; null for the query as a whole. */
+    readonly span: Span | null;
     /** The offending clause's text, exactly as typed. Empty where the finding is about the query as a whole. */
     readonly verbatim: string;
     readonly message: string;
@@ -33,8 +39,15 @@ export function stripRows(parsed: Parsed, text: string): readonly StripRow[] {
         const clause = parsed.clauses[d.clause];
         const start = clause === undefined ? text.length : clause.span.start;
         const verbatim = clause === undefined ? "" : text.slice(clause.span.start, clause.span.end).trim();
-        const fixes = d.fixes ?? [];
-        return {row: {severity: d.severity, verbatim, message: d.message, fixes}, start, order};
+        // A flawed clause can always be taken out whole, so removal closes every error's and warning's offers;
+        // a note reports a reading and asks for nothing.
+        const remove = clause === undefined || d.severity === "note" ? [] : [{
+            label: i18n.t("ui:strip.remove"),
+            query: spliceOut(text, clause.span.start, clause.span.end).text,
+        }];
+        const fixes = [...(d.fixes ?? []), ...remove];
+        const span = clause === undefined ? null : clause.span;
+        return {row: {severity: d.severity, span, verbatim, message: d.message, fixes}, start, order};
     });
     placed.sort((a, b) =>
         a.start - b.start || WEIGHT[a.row.severity] - WEIGHT[b.row.severity] || a.order - b.order);

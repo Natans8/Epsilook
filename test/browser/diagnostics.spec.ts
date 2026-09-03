@@ -50,11 +50,26 @@ test("the chip view settles a spelling the chips cannot show on arrival, and the
 
 test("a warning between two readings offers each as its own button, and the one taken rewrites the query", async () => {
     await openWith("model:{attach missile}");
+    // Two readings, then removal, which every flawed clause offers last.
     const buttons = strip().getByRole("button");
-    await expect(buttons).toHaveCount(2);
+    await expect(buttons).toHaveCount(3);
     await buttons.first().click();
     await expectQuery(page, "model:attach model:missile ");
     await expect(strip()).toHaveCount(0);
+});
+
+test("pointing at a row marks the clause it is about in the bar, and nothing else", async () => {
+    await openWith("model:fire model:{attach missile}");
+    const marked = page.locator("[class*='qbar'] > [class*='settled'][class*='aimed']");
+    await expect(marked).toHaveCount(0);
+    // From outside the strip: a pointer the last cell left resting inside the row's area would move within it
+    // and never enter it.
+    await page.mouse.move(0, 0);
+    await strip().getByRole("listitem").first().hover();
+    await expect(marked).toHaveCount(1);
+    await expect(marked).toHaveAttribute("aria-label", "model:{attach missile}");
+    await page.mouse.move(0, 0);
+    await expect(marked).toHaveCount(0);
 });
 
 test("a warning's fix rewrites the query and takes its row with it, while an error keeps the count refused",
@@ -65,9 +80,13 @@ test("a warning's fix rewrites the query and takes its row with it, while an err
         await expect(strip().getByRole("listitem")).toHaveCount(2);
         await expect(page.getByText("not searched")).toBeVisible();
 
-        await strip().getByRole("button").click();
+        await strip().getByRole("button", {name: "insert the space"}).click();
         await expectQuery(page, "model:{fire} sound:bell model:{-attach>2}");
         await expect(strip().getByRole("listitem")).toHaveCount(1);
-        await expect(strip().getByRole("button")).toHaveCount(0);
         await expect(page.getByText("not searched")).toBeVisible();
+
+        // The error's last offer takes the clause out whole, and the count is asked again.
+        await strip().getByRole("button", {name: "remove"}).click();
+        await expectQuery(page, "model:{fire} sound:bell");
+        await expect(strip()).toHaveCount(0);
     });

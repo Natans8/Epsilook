@@ -14,7 +14,7 @@
  */
 import type {ReactElement, Ref} from "react";
 import {Fragment, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState} from "react";
-import type {Run} from "../../../search/index";
+import type {Run, Span} from "../../../search/index";
 import {paint, runsWithin} from "../../../search/index";
 import type {BarSegment} from "../utils/plan";
 import {segmentsOf, slotStart} from "../utils/plan";
@@ -60,7 +60,7 @@ export interface BarHandle {
 /**
  * The bar: every segment of the query in a row, with one position open for editing.
  */
-export function Bar({text, onText, placeholder, vocab = NO_VOCABULARY, handle}: {
+export function Bar({text, onText, placeholder, vocab = NO_VOCABULARY, handle, aim = null}: {
     readonly text: string;
     readonly onText: (text: string) => void;
     readonly placeholder: string;
@@ -68,6 +68,8 @@ export function Bar({text, onText, placeholder, vocab = NO_VOCABULARY, handle}: 
     readonly vocab?: Vocabulary;
     /** The panel's door for undoable whole-query rewrites. */
     readonly handle?: Ref<BarHandle>;
+    /** A stretch of the query something outside the bar is pointing at — a diagnostic's clause — drawn marked. */
+    readonly aim?: Span | null;
 }): ReactElement {
     // The searches this browser remembers. Shared, because the SESSION knows when a query was finished with
     // and the SURFACE knows what to do with one.
@@ -198,8 +200,12 @@ export function Bar({text, onText, placeholder, vocab = NO_VOCABULARY, handle}: 
         // Text paints its own selection character by character; a chip is atomic, so the whole of it paints.
         const inside = sel === null || !seg.plain ? undefined
             : {start: Math.max(sel.from, seg.start) - seg.start, end: Math.min(sel.to, seg.end) - seg.start};
+        // A pointed-at clause marks the whole segment it stands in: a chip is atomic, and a stretch of text is
+        // one settled child, so the mark lands on the unit the reader sees.
+        const aimed = aim !== null && aim.start < seg.end && aim.end > seg.start;
         const cls = [styles.settled, seg.plain ? "" : styles.chipHost,
-            covered && !seg.plain ? styles.selected : ""].filter((held) => held !== "").join(" ");
+            covered && !seg.plain ? styles.selected : "", aimed ? styles.aimed : ""]
+            .filter((held) => held !== "").join(" ");
         return (
             <span
                 key={`seg-${String(row)}`}
@@ -220,7 +226,9 @@ export function Bar({text, onText, placeholder, vocab = NO_VOCABULARY, handle}: 
                     at={seg.start}
                     act={actionsFor(seg.start)}
                     selected={inside}
-                    wholly={covered && !seg.plain}
+                    // A band stands under the whole chip for the selection and for the aim alike, and the
+                    // chip flattens its fills under either.
+                    wholly={(covered && !seg.plain) || aimed}
                 />
             </span>
         );

@@ -9,14 +9,14 @@
  */
 import type {ReactElement} from "react";
 import {useTranslation} from "react-i18next";
-import type {Parsed} from "../../search/index";
+import type {Parsed, Span} from "../../search/index";
 import {stripRows} from "../utils/diagnostics";
 import styles from "./diagnostics.module.css";
 
 /**
  * The strip. Draws nothing at all for a query the reader accepted, so the count sits directly under the bar.
  */
-export function Diagnostics({parsed, text, plain, apply}: {
+export function Diagnostics({parsed, text, plain, apply, onAim}: {
     /** The query as read in final mode — the same parse the count refuses on. */
     readonly parsed: Parsed;
     /** The text that parse was read from. */
@@ -28,6 +28,11 @@ export function Diagnostics({parsed, text, plain, apply}: {
     readonly plain: boolean;
     /** Applies a fix's whole-query rewrite, through the bar's own undo where the bar stands. */
     readonly apply: (next: string) => void;
+    /**
+     * Says which clause the reader is pointing at, or none: the row under the pointer, or the row whose button
+     * holds the focus, names its clause so the bar can mark it.
+     */
+    readonly onAim: (span: Span | null) => void;
 }): ReactElement | null {
     const {t} = useTranslation();
     const rows = stripRows(parsed, text).filter((row) => plain || row.severity !== "note");
@@ -35,7 +40,22 @@ export function Diagnostics({parsed, text, plain, apply}: {
     return (
         <ul className={styles.strip} aria-label={t("strip.label")}>
             {rows.map((row, i) => (
-                <li key={`${String(i)}:${row.message}`} className={`${styles.row} ${styles[row.severity]}`}>
+                <li
+                    key={`${String(i)}:${row.message}`}
+                    className={`${styles.row} ${styles[row.severity]}`}
+                    onMouseEnter={() => {
+                        onAim(row.span);
+                    }}
+                    onMouseLeave={() => {
+                        onAim(null);
+                    }}
+                    onFocus={() => {
+                        onAim(row.span);
+                    }}
+                    onBlur={() => {
+                        onAim(null);
+                    }}
+                >
                     {/* One inline run, so a copy of the row reads as one line: the text, a space, the reason. */}
                     <span className={styles.text}>
                         {row.verbatim !== "" && <code className={styles.verbatim}>{row.verbatim}</code>}
