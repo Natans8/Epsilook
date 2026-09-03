@@ -4,8 +4,8 @@
     "format": 60,
     "version": "10.2.7.55664",
     "label": "Dragonflight 10.2.7",
-    "built": "2026-08-21",
-    "listfileTag": "202608202030",
+    "built": "2026-09-04",
+    "listfileTag": "202609032221",
     "tdbTag": "TDB1027.24051",
     "absentTables": [],
     "degradedSections": {},
@@ -115,7 +115,7 @@
     }
   },
   "modules": {
-    "core": {"file": "data/modules/core-028485ea2bfa.json.gz", "bytes": 10032129},
+    "core": {"file": "data/modules/core-9d4710397ace.json.gz", "bytes": 10032146},
     "universal": {"file": "data/modules/universal-8786c54c00b0.json.gz", "bytes": 25216}
   },
   "locales": {

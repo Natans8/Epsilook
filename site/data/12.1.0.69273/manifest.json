@@ -4,8 +4,8 @@
     "format": 60,
     "version": "12.1.0.69273",
     "label": "Midnight 12.1.0",
-    "built": "2026-08-21",
-    "listfileTag": "202608202030",
+    "built": "2026-09-04",
+    "listfileTag": "202609032221",
     "tdbTag": "TDB1200.26021",
     "absentTables": [],
     "degradedSections": {},
@@ -97,7 +97,7 @@
     }
   },
   "modules": {
-    "core": {"file": "data/modules/core-996b1574b5b5.json.gz", "bytes": 13459258},
+    "core": {"file": "data/modules/core-035572e7a9b9.json.gz", "bytes": 13459272},
     "universal": {"file": "data/modules/universal-8786c54c00b0.json.gz", "bytes": 25216}
   },
   "locales": {
