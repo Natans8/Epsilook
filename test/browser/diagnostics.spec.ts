@@ -72,6 +72,19 @@ test("pointing at a row marks the clause it is about in the bar, and nothing els
     await expect(marked).toHaveCount(0);
 });
 
+test("hovering an offer previews the whole query it would write, before it is taken", async () => {
+    await openWith("model:fire model:{attach missile}");
+    await page.mouse.move(0, 0);
+    const offer = strip().getByRole("button", {name: "one of each"});
+    await expect(page.getByRole("tooltip")).toHaveCount(0);
+    await offer.hover();
+    const preview = page.getByRole("tooltip");
+    await expect(preview).toBeVisible();
+    await expect(preview).toContainText("model:fire model:attach model:missile");
+    // The preview is the button's description, so it reaches a reader who cannot see the hover.
+    await expect(offer).toHaveAttribute("aria-describedby", /.+/);
+});
+
 test("a warning's fix rewrites the query and takes its row with it, while an error keeps the count refused",
     async () => {
         // In the plain view, where a spelling warning stands rather than converging on arrival.
