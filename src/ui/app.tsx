@@ -82,6 +82,10 @@ export function App({info, searcher}: {
     // The stretch of the query the pointer is over in the bar, which lights the strip rows about it. Held only
     // when it changes, since the plain view reports on every move of the pointer.
     const [hovered, setHovered] = useState<Span | null>(null);
+    // Where the plain view's caret should land after a rewrite that names a spot; the chip bar lands its own.
+    const [landing, setLanding] = useState<number | null>(null);
+    // The stretch of the query being edited in the chip bar, which the strip reads as text still being typed.
+    const [editing, setEditing] = useState<Span | null>(null);
     const hover = (span: Span | null): void => {
         setHovered((was) => (was?.start === span?.start && was?.end === span?.end ? was : span));
     };
@@ -145,9 +149,13 @@ export function App({info, searcher}: {
     const finalParse = useMemo(() => parse(text, {mode: "final"}), [text]);
     // The one door for a whole-query rewrite: through the bar's undo stack where the bar stands, and the plain
     // view has only the text.
-    const rewrite = (next: string): void => {
-        if (barRef.current !== null) barRef.current.rewrite(next);
-        else setText(next);
+    const rewrite = (next: string, caret?: number): void => {
+        if (barRef.current !== null) {
+            barRef.current.rewrite(next, caret);
+            return;
+        }
+        setText(next);
+        setLanding(caret ?? null);
     };
 
     return (
@@ -181,13 +189,17 @@ export function App({info, searcher}: {
                     {plain
                         ? <PlainBar text={text} onText={setText} placeholder={t("bar.placeholder")}
                                     label={t("bar.placeholder")} history={history} vocab={vocab} aim={marked}
-                                    preview={preview} onHover={hover}/>
+                                    preview={preview} onHover={hover} land={landing}
+                                    onLanded={() => {
+                                        setLanding(null);
+                                    }}/>
                         : <Bar text={text} onText={setText} placeholder={t("bar.placeholder")}
-                               handle={barRef} vocab={vocab} aim={marked} preview={preview} onHover={hover}/>}
+                               handle={barRef} vocab={vocab} aim={marked} preview={preview} onHover={hover}
+                               onOpen={setEditing}/>}
                     <Simplify text={text} plain={plain} apply={rewrite}/>
                 </div>
                 <Diagnostics parsed={finalParse} text={text} plain={plain} apply={rewrite} onAim={setAim}
-                             onPreview={setPreview} lit={hovered}/>
+                             onPreview={setPreview} lit={hovered} editing={plain ? null : editing}/>
                 <div className={styles.statusRow}>
                     <Count parsed={finalParse} result={result} stale={result === null || result.for !== text}/>
                     {/* A view switch, not a command: it changes how the query is shown and never what it says.

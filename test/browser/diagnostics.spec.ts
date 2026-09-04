@@ -139,3 +139,16 @@ test("a warning's fix rewrites the query and takes its row with it, while an err
         await expectQuery(page, "model:{fire} sound:bell");
         await expect(strip()).toHaveCount(0);
     });
+
+test("clearing a value leaves the field open with the caret in its empty slot", async () => {
+    await openWith("model:fire scale:x2+50%");
+    await page.mouse.move(0, 0);
+    await strip().getByRole("button", {name: "clear the value"}).click();
+    await expectQuery(page, "model:fire scale:");
+    // The slot of the cleared field, not a fresh tail: focused, empty, and with no settled error left behind.
+    const input = barInput(page);
+    await expect(input).toBeFocused();
+    await expect(input).toHaveValue("");
+    await expect(page.locator("[class*='qbar'] > [class*='settled']")).toHaveCount(1);
+    await expect(strip()).toHaveCount(0);
+});

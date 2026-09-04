@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {parse} from "../../../../src/search/index";
-import {changedSpan, stripRows} from "../../../../src/ui/utils/diagnostics";
+import {changedSpan, mergeEditing, stripRows} from "../../../../src/ui/utils/diagnostics";
 
 test("a query the reader accepts draws no rows", () => {
     assert.deepEqual(stripRows(parse("model:fire sound:bell", {mode: "final"}), "model:fire sound:bell"), []);
@@ -72,4 +72,23 @@ test("a finding about the value alone offers to clear it and keep the field, bef
     // A structural fault has no value to keep: removal alone closes its offers.
     const shape = stripRows(parse("model:fire sort:zzz", {mode: "final"}), "model:fire sort:zzz");
     assert.deepEqual(shape[0].fixes.map((fix) => fix.label), ["remove"]);
+});
+
+test("the clear offer lands the caret right after the bind, in the emptied slot", () => {
+    const text = "model:fire scale:x2+50%";
+    const rows = stripRows(parse(text, {mode: "final"}), text);
+    const clear = rows[0].fixes.find((fix) => fix.label === "clear the value");
+    assert.equal(clear?.caret, "model:fire scale:".length);
+});
+
+test("a stretch being edited is read in typing mode, where an unfinished value is silent", () => {
+    const text = "model:fire scale: sort:zzz";
+    const settled = stripRows(parse(text, {mode: "final"}), text);
+    const typing = stripRows(parse(text, {mode: "typing"}), text);
+    assert.deepEqual(settled.map((r) => r.verbatim), ["scale:", "sort:zzz"]);
+    // The open slot is quiet; the settled fault elsewhere still stands.
+    const editing = {start: 11, end: 17};
+    assert.deepEqual(mergeEditing(settled, typing, editing).map((r) => r.verbatim), ["sort:zzz"]);
+    // Nothing being edited: the final reading, untouched.
+    assert.deepEqual(mergeEditing(settled, typing, null), settled);
 });

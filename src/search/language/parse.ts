@@ -687,6 +687,22 @@ class Parser {
     }
 
     /** Consumes a balanced brace run, or the rest of the input when it never closes. */
+    /**
+     * Where a pattern opening at `i` ends, or -1 where no pattern opens there.
+     *
+     * A pattern is its own language, and its braces and bars are not the query's — `/\d{2,}/` inside a scope
+     * must not read as a nested scope. It opens only at a token start, exactly as the scanner reads it: after
+     * the scope's brace, whitespace, an alternation bar, a group's opener or a comparison symbol. A slash mid-word
+     * is an ordinary character, which keeps a pasted path fragment searchable.
+     */
+    private patternEnd(i: number, floor: number, limit: number): number {
+        if (this.text[i] !== GRAMMAR.regex) return -1;
+        const before = i === floor ? "" : this.text[i - 1];
+        const opens = before === "" || isWs(before) || before === GRAMMAR.scope.open || before === GRAMMAR.or
+            || before === GRAMMAR.group.open || PREFIX_OPERATORS.some((op) => op.symbol?.endsWith(before) === true);
+        return opens ? this.scan.regex(i, limit).end : -1;
+    }
+
     private skipBraces(open: number, limit: number): number {
         let depth = 0;
         let i = open;
@@ -698,6 +714,11 @@ class Parser {
             }
             if (c === GRAMMAR.phrase) {
                 i = scanPhrase(this.text, i, limit).end;
+                continue;
+            }
+            const pattern = this.patternEnd(i, open + 1, limit);
+            if (pattern >= 0) {
+                i = pattern;
                 continue;
             }
             if (c === GRAMMAR.scope.open) depth++;
@@ -720,6 +741,11 @@ class Parser {
             }
             if (c === GRAMMAR.phrase) {
                 i = scanPhrase(this.text, i, limit).end;
+                continue;
+            }
+            const pattern = this.patternEnd(i, brace + 1, limit);
+            if (pattern >= 0) {
+                i = pattern;
                 continue;
             }
             if (c === GRAMMAR.scope.open && innerBrace < 0) innerBrace = i;

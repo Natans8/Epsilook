@@ -53,15 +53,19 @@ function quieted(run: Run): Run {
  * the bar's OWN undo stack and Ctrl+Z takes it back.
  */
 export interface BarHandle {
-    /** Applies one whole-query rewrite as an undoable operation, the caret landing on the fresh tail. */
-    rewrite(next: string): void;
+    /**
+     * Applies one whole-query rewrite as an undoable operation. The caret lands on the fresh tail, or where
+     * `caret` says — inside the segment standing there, at its slot's end — for a rewrite that leaves a slot to
+     * type into.
+     */
+    rewrite(next: string, caret?: number): void;
 }
 
 /**
  * The bar: every segment of the query in a row, with one position open for editing.
  */
 export function Bar({
-    text, onText, placeholder, vocab = NO_VOCABULARY, handle, aim = null, preview = null, onHover,
+    text, onText, placeholder, vocab = NO_VOCABULARY, handle, aim = null, preview = null, onHover, onOpen,
 }: {
     readonly text: string;
     readonly onText: (text: string) => void;
@@ -86,6 +90,11 @@ export function Bar({
      * under the pointer are then a picture of another text.
      */
     readonly onHover?: (span: Span | null) => void;
+    /**
+     * Says which stretch of the text is being edited — the open segment, while the bar has focus — or none at
+     * rest, so a surface reading the text can read that stretch as text still being typed.
+     */
+    readonly onOpen?: (span: Span | null) => void;
 }): ReactElement {
     const previewing = preview !== null;
     const drawnText = preview ?? text;
@@ -129,17 +138,18 @@ export function Bar({
     } = selection;
     const {
         at, gapAt, caret, session, focused, setFocused, onKeystroke, commitOpen, onArrow, onScopeShift, onCommit,
-        onCancel, onEdge, onUndo, onRedo, actionsFor, pushUndo, openTail,
+        onCancel, onEdge, onUndo, onRedo, actionsFor, pushUndo, openTail, openSegment,
     } = editing;
 
     // The panel's rewrite door: one undoable operation through the session's own machinery, so Ctrl+Z takes
     // back an applied simplify exactly as it takes back any other operation.
     useImperativeHandle(handle, () => ({
-        rewrite: (next: string): void => {
+        rewrite: (next: string, landAt?: number): void => {
             if (next === text) return;
             pushUndo(text);
             clearing.current();
-            openTail(next);
+            if (landAt === undefined) openTail(next);
+            else openSegment(next, landAt, "end");
         },
     }));
 
@@ -155,6 +165,12 @@ export function Bar({
     const rest = previewing || (!focused && text !== "") || sel !== null;
     // A selection is a range of the TEXT, and a preview draws another text, so no band is drawn over a picture.
     const band = previewing ? null : sel;
+    // The open segment, reported whenever it changes: what is being typed is not yet what was said.
+    const openFrom = rest || gapAt !== null ? -1 : at.before.length;
+    const openTo = openFrom < 0 ? -1 : openFrom + at.open.length;
+    useLayoutEffect(() => {
+        onOpen?.(openFrom < 0 ? null : {start: openFrom, end: openTo});
+    }, [onOpen, openFrom, openTo]);
     const {assist, offers, shown, lit, listId, setCaretInSlot, onPick, onLight} =
         useBarAssist(text, editing, rest, vocab, history);
     const openStart = gapAt === null && !rest ? at.before.length : -1;

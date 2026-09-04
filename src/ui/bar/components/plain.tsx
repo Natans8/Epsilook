@@ -32,7 +32,7 @@ const NO_HISTORY: readonly string[] = [];
  */
 export function PlainBar({
     text, onText, placeholder, label, history = NO_HISTORY, vocab = NO_VOCABULARY, aim = null, preview = null,
-    onHover,
+    onHover, land = null, onLanded,
 }: {
     readonly text: string;
     readonly onText: (text: string) => void;
@@ -55,8 +55,20 @@ export function PlainBar({
      * speaks about that stretch outside the bar can light up. Silent while a preview is drawn.
      */
     readonly onHover?: (span: Span | null) => void;
+    /** Where a rewrite from outside asked the caret to land, or none; taken once, then reported landed. */
+    readonly land?: number | null;
+    readonly onLanded?: () => void;
 }): ReactElement {
     const field = useRef<HTMLTextAreaElement>(null);
+    useLayoutEffect(() => {
+        const el = field.current;
+        if (el === null || land === null || land === undefined) return;
+        // The text is written in first: the value effect below skips a focused field, and this focuses it.
+        el.value = text;
+        el.focus();
+        el.setSelectionRange(land, land);
+        onLanded?.();
+    }, [land, text, onLanded]);
     /** The last point reported, so a pointer resting on one character does not report it on every move. */
     const pointed = useRef<number | null>(null);
     const report = (at: number | null): void => {

@@ -39,6 +39,11 @@ export type Severity = "error" | "warning" | "note";
 export interface Fix {
     readonly label: string;
     readonly query: string;
+    /**
+     * Where the caret lands once the fix is applied, as an offset into `query`; absent, it lands after the
+     * query's end. A fix that empties a slot names the slot, so the reader is left typing into it.
+     */
+    readonly caret?: number;
 }
 
 /** One finding about one clause, in the reader's words. */

@@ -10,7 +10,8 @@
 import type {ReactElement} from "react";
 import {useTranslation} from "react-i18next";
 import type {Fix, Parsed, Span} from "../../search/index";
-import {stripRows} from "../utils/diagnostics";
+import {parse} from "../../search/index";
+import {mergeEditing, stripRows} from "../utils/diagnostics";
 import styles from "./diagnostics.module.css";
 
 /**
@@ -22,7 +23,7 @@ import styles from "./diagnostics.module.css";
  */
 function Offer({fix, apply, onPreview}: {
     readonly fix: Fix;
-    readonly apply: (next: string) => void;
+    readonly apply: (next: string, caret?: number) => void;
     /** Says which rewrite is being considered, or none. */
     readonly onPreview: (query: string | null) => void;
 }): ReactElement {
@@ -44,7 +45,7 @@ function Offer({fix, apply, onPreview}: {
             }}
             onClick={() => {
                 onPreview(null);
-                apply(fix.query);
+                apply(fix.query, fix.caret);
             }}
         >
             {fix.label}
@@ -55,7 +56,7 @@ function Offer({fix, apply, onPreview}: {
 /**
  * The strip. Draws nothing at all for a query the reader accepted, so the count sits directly under the bar.
  */
-export function Diagnostics({parsed, text, plain, apply, onAim, onPreview, lit}: {
+export function Diagnostics({parsed, text, plain, apply, onAim, onPreview, lit, editing}: {
     /** The query as read in final mode — the same parse the count refuses on. */
     readonly parsed: Parsed;
     /** The text that parse was read from. */
@@ -65,8 +66,8 @@ export function Diagnostics({parsed, text, plain, apply, onAim, onPreview, lit}:
      * reading, so it is shown only where the reader is looking at their own text.
      */
     readonly plain: boolean;
-    /** Applies a fix's whole-query rewrite, through the bar's own undo where the bar stands. */
-    readonly apply: (next: string) => void;
+    /** Applies a fix's whole-query rewrite, through the bar's own undo where the bar stands, landing where it says. */
+    readonly apply: (next: string, caret?: number) => void;
     /**
      * Says which clause the reader is pointing at, or none: the row under the pointer, or the row whose button
      * holds the focus, names its clause so the bar can mark it.
@@ -79,9 +80,17 @@ export function Diagnostics({parsed, text, plain, apply, onAim, onPreview, lit}:
      * lights up, the link between a squiggle and its reason running both ways.
      */
     readonly lit: Span | null;
+    /**
+     * The stretch of the query being edited, or none. What is being typed is not yet what was said, so the
+     * rows about that stretch come from a typing-mode reading, where an unfinished value is silent and a
+     * further keystroke can still rescue anything — exactly as the bar squiggles nothing in an open slot.
+     */
+    readonly editing: Span | null;
 }): ReactElement | null {
     const {t} = useTranslation();
-    const rows = stripRows(parsed, text).filter((row) => plain || row.severity !== "note");
+    const rows = mergeEditing(stripRows(parsed, text),
+        editing === null ? [] : stripRows(parse(text, {mode: "typing"}), text), editing)
+        .filter((row) => plain || row.severity !== "note");
     if (rows.length === 0) return null;
     // A point — the plain view's character under the pointer — touches the clause it stands in; a stretch — a
     // settled segment — touches every clause it overlaps.

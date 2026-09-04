@@ -1209,3 +1209,12 @@ it("existence on a kind inside a scope is the kind word, not bare existence", ()
     assert.deepEqual(term("model:{display:any}"), {on: "kindWord", kind: "display"});
 });
 
+
+it("a pattern inside a scope keeps its own braces and bars: they are the pattern language, not a nested scope", () => {
+    const parsed = parse(String.raw`name:{/^(fire|frost)[_-]?\d{2,}(?!bolt)$/}`, {mode: "final"});
+    assert.deepEqual(parsed.diagnostics, []);
+    assert.equal(parsed.clauses.length, 1);
+    assert.equal(parsed.clauses[0].state, "ok");
+    // A slash mid-word is still an ordinary character, so a path fragment reads as text.
+    assert.equal(parse("model:{spell/fire}", {mode: "final"}).clauses[0].state, "ok");
+});
