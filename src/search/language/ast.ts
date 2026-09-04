@@ -52,6 +52,12 @@ export interface Diagnostic {
      * where the reader declined to choose between readings.
      */
     readonly fixes?: readonly Fix[];
+    /**
+     * The sublanguage the finding belongs to, where the query language is not the one at fault: a regular
+     * expression has its own grammar and its own errors, and a surface names it so the reader knows which
+     * language to think in.
+     */
+    readonly about?: "regex";
 }
 
 /**

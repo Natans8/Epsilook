@@ -113,6 +113,8 @@ export function Diagnostics({parsed, text, plain, apply, onAim, onPreview, lit}:
                     <span className={styles.text}>
                         {row.verbatim !== "" && <code className={styles.verbatim}>{row.verbatim}</code>}
                         {row.verbatim !== "" && " "}
+                        {row.about === "regex" && <span className={styles.about}>{t("strip.about.regex")}</span>}
+                        {row.about !== null && " "}
                         <span className={styles.message}>{row.message}</span>
                     </span>
                     {row.fixes.length > 0 && (

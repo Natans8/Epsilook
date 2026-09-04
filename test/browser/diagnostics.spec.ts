@@ -87,6 +87,21 @@ test("pointing at a marked clause in the bar lights the rows about it, and only 
     await expect(lit).toHaveCount(0);
 });
 
+test("a preview that empties the bar keeps its height, so the offer stays under the pointer", async () => {
+    await openWith("model:{attach missile}");
+    await page.mouse.move(0, 0);
+    const bar = page.locator("[class*='qbar']").first();
+    const before = (await bar.boundingBox())?.height ?? 0;
+    const remove = strip().getByRole("button", {name: "remove"});
+    await remove.hover();
+    await expect(page.locator("[class*='qbar'] > [class*='settled']")).toHaveCount(0);
+    // Held, not shrunk, and still held a moment later: a bar that let go would lift the preview and loop.
+    await page.waitForTimeout(300);
+    expect((await bar.boundingBox())?.height ?? 0).toBe(before);
+    await expect(page.locator("[class*='qbar'] > [class*='settled']")).toHaveCount(0);
+    await expect(strip().getByRole("listitem")).toHaveCount(1);
+});
+
 test("hovering an offer draws the query it would write in the bar itself, and lifts it on leaving", async () => {
     await openWith("model:fire model:{attach missile}");
     await page.mouse.move(0, 0);

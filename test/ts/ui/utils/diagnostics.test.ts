@@ -52,3 +52,12 @@ test("the changed span of a rewrite is what lies between the common prefix and s
     assert.equal(changedSpan("model:fire sort:zzz", "model:fire"), null);
     assert.equal(changedSpan("same", "same"), null);
 });
+
+test("a finding about a regular expression says so, and every other row names no sublanguage", () => {
+    const text = "model:fire model:/fir";
+    const rows = stripRows(parse(text, {mode: "final"}), text);
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].about, "regex");
+    const plain = stripRows(parse("model:{-attach>2}", {mode: "final"}), "model:{-attach>2}");
+    assert.equal(plain[0].about, null);
+});

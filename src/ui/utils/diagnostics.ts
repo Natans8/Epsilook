@@ -19,6 +19,8 @@ export interface StripRow {
     /** The offending clause's text, exactly as typed. Empty where the finding is about the query as a whole. */
     readonly verbatim: string;
     readonly message: string;
+    /** The sublanguage at fault, named on the row so the reader knows which grammar the reason is about. */
+    readonly about: "regex" | null;
     /** Every correction the reader offers, in the order it ranks them; the strip draws one button each. */
     readonly fixes: readonly Fix[];
 }
@@ -68,7 +70,8 @@ export function stripRows(parsed: Parsed, text: string): readonly StripRow[] {
         }];
         const fixes = [...(d.fixes ?? []), ...remove];
         const span = clause === undefined ? null : clause.span;
-        return {row: {severity: d.severity, span, verbatim, message: d.message, fixes}, start, order};
+        const about = d.about ?? null;
+        return {row: {severity: d.severity, span, verbatim, message: d.message, about, fixes}, start, order};
     });
     placed.sort((a, b) =>
         a.start - b.start || WEIGHT[a.row.severity] - WEIGHT[b.row.severity] || a.order - b.order);

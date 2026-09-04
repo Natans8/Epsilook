@@ -93,6 +93,8 @@ export type Interp =
     readonly fixQuotes?: true;
     /** Corrections already spelled out as whole queries, where the refusal knows the reading it would take. */
     readonly fixes?: readonly Fix[];
+    /** The sublanguage at fault, where it is not the query language. */
+    readonly about?: "regex";
     /**
      * A further keystroke could still change the verdict — the value did not parse, but more characters might
      * complete a word that does. Such a failure is held quietly while typing and reported only in final text,
@@ -106,6 +108,7 @@ export interface Pending {
     readonly severity: Severity;
     readonly message: string;
     readonly fixes?: readonly Fix[];
+    readonly about?: "regex";
 }
 
 /** The operators that require an order, by name — the ones whose refusal message says "no ordering". */
@@ -200,7 +203,7 @@ function patternProblem(pattern: string): string | null {
 export function badPattern(pattern: string): Interp | null {
     const problem = patternProblem(pattern);
     if (problem === null) return null;
-    return {r: "fail", rescuable: true, message: i18n.t("diagnostics:pattern.invalid", {problem})};
+    return {r: "fail", rescuable: true, about: "regex", message: i18n.t("diagnostics:pattern.invalid", {problem})};
 }
 
 /** Whether any of the types is the path type, whose glued names make patterns weak — the warning turns on this. */
@@ -236,7 +239,7 @@ export function quotedQuantity(word: string, prop: Prop): Interp {
 /** A pattern on a file path is honest but weak, and the warning says why — once per clause. */
 export function warnPathGlob(pend: Pending[]): void {
     const message = i18n.t("diagnostics:pattern.pathWeak");
-    if (!pend.some((p) => p.message === message)) pend.push({severity: "warning", message});
+    if (!pend.some((p) => p.message === message)) pend.push({severity: "warning", about: "regex", message});
 }
 
 /**
@@ -425,7 +428,7 @@ export function typedCtx(prop: Prop, word: string, pend: Pending[], done: (value
             const globbing = prop.types.find((type) => accepts(type, "glob"));
             if (globbing === undefined) {
                 // Rescuable: `*-` is a keystroke away from the open range `*-10`, which is no pattern at all.
-                return {r: "fail", rescuable: true, message: i18n.t("diagnostics:axis.noPatterns", {word})};
+                return {r: "fail", rescuable: true, about: "regex", message: i18n.t("diagnostics:axis.noPatterns", {word})};
             }
             if (pathTyped([globbing])) warnPathGlob(pend);
             return done({op: "glob", operand: {text: pattern}});
@@ -433,7 +436,7 @@ export function typedCtx(prop: Prop, word: string, pend: Pending[], done: (value
         bare: bareValue,
         regex: (pattern): Interp => {
             if (!prop.types.some((type) => accepts(type, "regex"))) {
-                return {r: "fail", message: i18n.t("diagnostics:axis.noRegex", {word})};
+                return {r: "fail", about: "regex", message: i18n.t("diagnostics:axis.noRegex", {word})};
             }
             return badPattern(pattern) ?? done({op: "regex", operand: {text: pattern}});
         },
@@ -561,7 +564,7 @@ export function kindCtx(kind: Kind, countFallback: boolean, pend: Pending[]): Va
         glob: (pattern): Interp => {
             const globbing = refs.filter((ref) => propOf(ref).types.some((type) => accepts(type, "glob")));
             if (globbing.length === 0) {
-                return {r: "fail", rescuable: true, message: i18n.t("diagnostics:axis.noPatterns", {word})};
+                return {r: "fail", rescuable: true, about: "regex", message: i18n.t("diagnostics:axis.noPatterns", {word})};
             }
             if (globbing.some((ref) => pathTyped(propOf(ref).types))) warnPathGlob(pend);
             return {r: "props", props: globbing, value: {op: "glob", operand: {text: pattern}}};
@@ -597,7 +600,7 @@ export function kindCtx(kind: Kind, countFallback: boolean, pend: Pending[]): Va
         regex: (pattern): Interp => {
             const takers = refs.filter((ref) => propOf(ref).types.some((type) => accepts(type, "regex")));
             if (takers.length === 0) {
-                return {r: "fail", message: i18n.t("diagnostics:axis.noRegex", {word})};
+                return {r: "fail", about: "regex", message: i18n.t("diagnostics:axis.noRegex", {word})};
             }
             return badPattern(pattern)
                 ?? {r: "props", props: takers, value: {op: "regex", operand: {text: pattern}}};

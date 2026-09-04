@@ -89,6 +89,17 @@ export function Bar({
 }): ReactElement {
     const previewing = preview !== null;
     const drawnText = preview ?? text;
+    // A preview may draw fewer chips than the text has — none at all, for a removal — and a bar that shrank
+    // would move whatever stands beneath it out from under the pointer that asked for the preview, lifting it,
+    // growing back, and looping. So the bar keeps the height it had when the preview began.
+    const box = useRef<HTMLDivElement>(null);
+    const kept = useRef<number | null>(null);
+    useLayoutEffect(() => {
+        const el = box.current;
+        if (el === null) return;
+        if (!previewing) kept.current = el.offsetHeight;
+        el.style.minHeight = previewing && kept.current !== null ? `${String(kept.current)}px` : "";
+    });
     // The searches this browser remembers. Shared, because the SESSION knows when a query was finished with
     // and the SURFACE knows what to do with one.
     const [history, setHistory] = useState(recentQueries);
@@ -289,6 +300,7 @@ export function Bar({
     return (
         <ChipArt value={vocab.art ?? EMPTY_ART}>
             <div
+                ref={box}
                 className={styles.qbar}
                 // Focusable but never tabbed to: while a selection stands its keys are the bar's own, and the
                 // press that made it deliberately moved focus nowhere. Tab still reaches the slot, which is the

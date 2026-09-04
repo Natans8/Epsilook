@@ -76,6 +76,9 @@
   },
   "strip": {
     "label": "",
-    "remove": ""
+    "remove": "",
+    "about": {
+      "regex": ""
+    }
   }
 }

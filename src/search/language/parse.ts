@@ -208,7 +208,9 @@ class Parser {
         this.clauses.push({span, not, state, ask});
         if (state === "ok") this.current.push(index);
         for (const p of pend) {
-            this.diagnostics.push({severity: p.severity, clause: index, message: p.message, fixes: p.fixes});
+            this.diagnostics.push({
+                severity: p.severity, clause: index, message: p.message, fixes: p.fixes, about: p.about,
+            });
         }
         return index;
     }
@@ -1129,7 +1131,10 @@ class Parser {
                           word: string): void {
         if (interp.r === "fail") {
             if (interp.rescuable !== true || this.mode === "final") {
-                pend.push({severity: "error", message: interp.message, fixes: this.failFix(span, interp)});
+                pend.push({
+                    severity: "error", message: interp.message, fixes: this.failFix(span, interp),
+                    about: interp.about,
+                });
             }
             run.push({span, not, state: "incomplete", ask: null});
             return;
@@ -1296,6 +1301,7 @@ class Parser {
             if (!seg.closed && this.mode === "final") {
                 pend.push({
                     severity: "warning",
+                    about: "regex",
                     message: i18n.t("diagnostics:pattern.unclosed"),
                 });
             }
@@ -1376,7 +1382,10 @@ class Parser {
                 return;
             }
             this.push(span, not, "invalid", ask,
-                [...pend, {severity: "error", message: interp.message, fixes: this.failFix(span, interp)}]);
+                [...pend, {
+                    severity: "error", message: interp.message, fixes: this.failFix(span, interp),
+                    about: interp.about,
+                }]);
             return;
         }
         if (interp.r === "empty") {

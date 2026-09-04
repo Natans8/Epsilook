@@ -67,6 +67,16 @@ export function PlainBar({
     /** What the field held before a preview replaced it, so the lift restores the caret with the characters. */
     const before = useRef<{ value: string; start: number; end: number } | null>(null);
     const drawnText = preview ?? text;
+    // As the chip bar does: the bar keeps the height it had when a preview began, so a shorter picture cannot
+    // move the pointer off the offer that asked for it.
+    const box = useRef<HTMLDivElement>(null);
+    const kept = useRef<number | null>(null);
+    useLayoutEffect(() => {
+        const el = box.current;
+        if (el === null) return;
+        if (preview === null) kept.current = el.offsetHeight;
+        el.style.minHeight = preview !== null && kept.current !== null ? `${String(kept.current)}px` : "";
+    });
     useLayoutEffect(() => {
         const el = field.current;
         if (el === null) return;
@@ -240,6 +250,7 @@ export function PlainBar({
 
     return (
         <div
+            ref={box}
             className={`${frame.qbar} ${styles.plainBar}`}
             onMouseDown={(e) => {
                 // The ground either side of the text belongs to the field, as it does in any text box.

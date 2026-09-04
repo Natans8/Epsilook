@@ -72,6 +72,18 @@
     text-decoration: underline wavy var(--gold-dim);
 }
 
+/* The sublanguage a finding is about, said before the reason: a regular expression has its own errors, and
+ * the label is what tells the reader which grammar to think in. */
+.about {
+    margin-right: 0.35rem;
+    padding: 0 0.4rem;
+    font-size: 0.8em;
+    letter-spacing: 0.02em;
+    color: var(--text);
+    border: 1px solid var(--border-ctrl);
+    border-radius: 4px;
+}
+
 .message {
     color: var(--text-dim);
 }

@@ -76,6 +76,9 @@
   },
   "strip": {
     "label": "What the reader said about the query",
-    "remove": "remove"
+    "remove": "remove",
+    "about": {
+      "regex": "regular expression"
+    }
   }
 }
