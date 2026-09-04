@@ -110,11 +110,13 @@
 
 /* A row under the pointer is doing something — marking its clause in the bar — so it says so: the wash deepens
  * and the rule brightens. Not a pointer cursor, because the row itself takes no press; its buttons do. */
-.row:hover {
+.row:hover,
+.litRow {
     background: rgba(var(--row-rgb), calc(0.16 * var(--wash-strength)));
 }
 
-.row:hover .message {
+.row:hover .message,
+.litRow .message {
     color: var(--text);
 }
 

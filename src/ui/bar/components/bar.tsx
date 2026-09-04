@@ -60,7 +60,9 @@ export interface BarHandle {
 /**
  * The bar: every segment of the query in a row, with one position open for editing.
  */
-export function Bar({text, onText, placeholder, vocab = NO_VOCABULARY, handle, aim = null, preview = null}: {
+export function Bar({
+    text, onText, placeholder, vocab = NO_VOCABULARY, handle, aim = null, preview = null, onHover,
+}: {
     readonly text: string;
     readonly onText: (text: string) => void;
     readonly placeholder: string;
@@ -78,6 +80,12 @@ export function Bar({text, onText, placeholder, vocab = NO_VOCABULARY, handle, a
      * bar is exactly as it was. The text is still the truth; this is a picture of a possible one.
      */
     readonly preview?: string | null;
+    /**
+     * Says which stretch of the text the pointer is over — a settled segment — or none, so whatever speaks
+     * about that stretch outside the bar can light up. Silent while a preview is drawn, since the segments
+     * under the pointer are then a picture of another text.
+     */
+    readonly onHover?: (span: Span | null) => void;
 }): ReactElement {
     const previewing = preview !== null;
     const drawnText = preview ?? text;
@@ -232,6 +240,12 @@ export function Bar({text, onText, placeholder, vocab = NO_VOCABULARY, handle, a
                 // say it again. Text needs none: it reads as itself.
                 role={seg.plain ? undefined : "group"}
                 aria-label={seg.plain ? undefined : drawnText.slice(seg.start, seg.end)}
+                onMouseEnter={() => {
+                    if (!previewing) onHover?.({start: seg.start, end: seg.end});
+                }}
+                onMouseLeave={() => {
+                    if (!previewing) onHover?.(null);
+                }}
             >
                 <SettledSegment
                     text={drawnText.slice(seg.start, seg.end)}

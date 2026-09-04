@@ -55,7 +55,7 @@ function Offer({fix, apply, onPreview}: {
 /**
  * The strip. Draws nothing at all for a query the reader accepted, so the count sits directly under the bar.
  */
-export function Diagnostics({parsed, text, plain, apply, onAim, onPreview}: {
+export function Diagnostics({parsed, text, plain, apply, onAim, onPreview, lit}: {
     /** The query as read in final mode — the same parse the count refuses on. */
     readonly parsed: Parsed;
     /** The text that parse was read from. */
@@ -74,16 +74,28 @@ export function Diagnostics({parsed, text, plain, apply, onAim, onPreview}: {
     readonly onAim: (span: Span | null) => void;
     /** Says which offered rewrite the reader is considering, or none, so the bar can draw it. */
     readonly onPreview: (query: string | null) => void;
+    /**
+     * The stretch of the query the pointer is over in the bar, or none: every row about a clause it touches
+     * lights up, the link between a squiggle and its reason running both ways.
+     */
+    readonly lit: Span | null;
 }): ReactElement | null {
     const {t} = useTranslation();
     const rows = stripRows(parsed, text).filter((row) => plain || row.severity !== "note");
     if (rows.length === 0) return null;
+    // A point — the plain view's character under the pointer — touches the clause it stands in; a stretch — a
+    // settled segment — touches every clause it overlaps.
+    const touches = (span: Span | null): boolean => {
+        if (lit === null || span === null) return false;
+        if (lit.start === lit.end) return span.start <= lit.start && lit.start < span.end;
+        return lit.start < span.end && lit.end > span.start;
+    };
     return (
         <ul className={styles.strip} aria-label={t("strip.label")}>
             {rows.map((row, i) => (
                 <li
                     key={`${String(i)}:${row.message}`}
-                    className={`${styles.row} ${styles[row.severity]}`}
+                    className={`${styles.row} ${styles[row.severity]}${touches(row.span) ? ` ${styles.litRow}` : ""}`}
                     onMouseEnter={() => {
                         onAim(row.span);
                     }}

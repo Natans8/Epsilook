@@ -72,6 +72,21 @@ test("pointing at a row marks the clause it is about in the bar, and nothing els
     await expect(marked).toHaveCount(0);
 });
 
+test("pointing at a marked clause in the bar lights the rows about it, and only those", async () => {
+    await openWith("model:fire model:{attach missile} model:{-attach>2}");
+    await page.mouse.move(0, 0);
+    const lit = strip().locator("[class*='litRow']");
+    await expect(strip().getByRole("listitem")).toHaveCount(2);
+    await expect(lit).toHaveCount(0);
+
+    await page.locator("[class*='qbar'] > [class*='settled']").nth(1).hover();
+    await expect(lit).toHaveCount(1);
+    await expect(lit).toContainText("two different kinds");
+
+    await page.mouse.move(0, 0);
+    await expect(lit).toHaveCount(0);
+});
+
 test("hovering an offer draws the query it would write in the bar itself, and lifts it on leaving", async () => {
     await openWith("model:fire model:{attach missile}");
     await page.mouse.move(0, 0);

@@ -32,6 +32,7 @@ const NO_HISTORY: readonly string[] = [];
  */
 export function PlainBar({
     text, onText, placeholder, label, history = NO_HISTORY, vocab = NO_VOCABULARY, aim = null, preview = null,
+    onHover,
 }: {
     readonly text: string;
     readonly onText: (text: string) => void;
@@ -49,8 +50,20 @@ export function PlainBar({
      * what the press would write, lifted without a trace when the pointer leaves.
      */
     readonly preview?: string | null;
+    /**
+     * Says where in the text the pointer is — the character under it, as an empty span — or none, so whatever
+     * speaks about that stretch outside the bar can light up. Silent while a preview is drawn.
+     */
+    readonly onHover?: (span: Span | null) => void;
 }): ReactElement {
     const field = useRef<HTMLTextAreaElement>(null);
+    /** The last point reported, so a pointer resting on one character does not report it on every move. */
+    const pointed = useRef<number | null>(null);
+    const report = (at: number | null): void => {
+        if (at === pointed.current) return;
+        pointed.current = at;
+        onHover?.(at === null ? null : {start: at, end: at});
+    };
     /** What the field held before a preview replaced it, so the lift restores the caret with the characters. */
     const before = useRef<{ value: string; start: number; end: number } | null>(null);
     const drawnText = preview ?? text;
@@ -258,6 +271,16 @@ export function PlainBar({
                     }}
                     onMouseUp={(e) => {
                         track(e.currentTarget);
+                    }}
+                    // The character under the pointer, read off the field's own layout: the mirror underneath
+                    // wraps identically, so the field's caret geometry is the text's.
+                    onMouseMove={(e) => {
+                        if (preview !== null) return;
+                        const hit = document.caretPositionFromPoint(e.clientX, e.clientY);
+                        report(hit === null || hit.offsetNode !== e.currentTarget ? null : hit.offset);
+                    }}
+                    onMouseLeave={() => {
+                        report(null);
                     }}
                     onFocus={(e) => {
                         track(e.currentTarget);
