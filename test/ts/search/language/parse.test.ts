@@ -1218,3 +1218,23 @@ it("a pattern inside a scope keeps its own braces and bars: they are the pattern
     // A slash mid-word is still an ordinary character, so a path fragment reads as text.
     assert.equal(parse("model:{spell/fire}", {mode: "final"}).clauses[0].state, "ok");
 });
+
+it("a negated row count offers the comparison turned round, reading the longest symbol written", () => {
+    const fixOf = (query: string): string | undefined =>
+        parse(query, {mode: "final"}).diagnostics[0]?.fixes?.[0]?.query;
+    assert.equal(fixOf("model:{-attach>2}"), "model:{attach<=2}");
+    assert.equal(fixOf("model:{-attach>=2}"), "model:{attach<2}");
+    assert.equal(fixOf("model:{-attach<=2}"), "model:{attach>2}");
+    assert.equal(fixOf("model:{-attach≤2}"), "model:{attach>2}");
+    // A range has no single complement, so nothing is offered but what the strip adds.
+    assert.equal(fixOf("model:{-attach:2-5}"), undefined);
+});
+
+it("the two-kinds offers rewrite the whole clause, so they are made only where the scope is that one run", () => {
+    const offers = (query: string): readonly string[] | undefined =>
+        parse(query, {mode: "final"}).diagnostics.find((d) => d.severity === "warning")?.fixes?.map((f) => f.query);
+    assert.deepEqual(offers("model:{attach missile}"), ["model:attach model:missile", "model:attach|missile"]);
+    // A second run would be dropped by either rewrite, so neither is offered; the warning still stands.
+    assert.equal(offers("model:{attach missile | frost}"), undefined);
+    assert.ok(parse("model:{attach missile | frost}", {mode: "final"}).diagnostics.some((d) => d.severity === "warning"));
+});

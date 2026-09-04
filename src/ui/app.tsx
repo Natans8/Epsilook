@@ -20,7 +20,6 @@ import {Bar, PlainBar, spellingFixes} from "./bar/index";
 import type {Answer} from "./components/count";
 import {Count} from "./components/count";
 import {Diagnostics} from "./components/diagnostics";
-import {changedSpan} from "./utils/diagnostics";
 import {Simplify} from "./components/simplify";
 import {carriedQuery, reloadWith, urlPlain, urlQuery} from "./utils/query";
 import styles from "./app.module.css";
@@ -74,26 +73,23 @@ export function App({info, searcher}: {
 }): ReactElement {
     const {t, i18n} = useTranslation();
     const [plain, setPlain] = useState(urlPlain);
-    // The clause a diagnostic row is pointing at, which the bar marks so the row and its subject read as one.
+    // What the strip and the bar are pointing at in each other: the stretch a strip row means (its clause, or
+    // what an offered rewrite changes), the rewrite drawn in the bar while an offer is considered, the stretch
+    // the pointer is over in the bar, and the stretch being edited, which the strip reads as still being typed.
     const [aim, setAim] = useState<Span | null>(null);
-    // The rewrite an offered fix would make, drawn in the bar while its button is pointed at; the text itself
-    // is untouched until the press.
     const [preview, setPreview] = useState<string | null>(null);
-    // The stretch of the query the pointer is over in the bar, which lights the strip rows about it. Held only
-    // when it changes, since the plain view reports on every move of the pointer.
     const [hovered, setHovered] = useState<Span | null>(null);
-    // Where the plain view's caret should land after a rewrite that names a spot; the chip bar lands its own.
-    const [landing, setLanding] = useState<number | null>(null);
-    // The stretch of the query being edited in the chip bar, which the strip reads as text still being typed.
     const [editing, setEditing] = useState<Span | null>(null);
+    // Held only when it changes, since the plain view reports on every move of the pointer.
     const hover = (span: Span | null): void => {
         setHovered((was) => (was?.start === span?.start && was?.end === span?.end ? was : span));
     };
     // The chip view holds only spellings the chips can show, so text arriving from the URL has its spelling
     // warnings applied on the way in; the plain view is the reader's own text and keeps it as written.
-    const [text, setText] = useState(() => (urlPlain() ? urlQuery() : spellingFixes(urlQuery())));
-    // While a preview stands, the mark moves to what the rewrite changed, so the eye lands on the difference.
-    const marked = preview === null ? aim : changedSpan(text, preview);
+    const [text, setText] = useState(() => {
+        const carried = urlQuery();
+        return urlPlain() ? carried : spellingFixes(carried);
+    });
     const [result, setResult] = useState<Answer | null>(null);
     // The bar's rewrite door, for the panel controls whose rewrites must be undoable inside the bar.
     const barRef = useRef<BarHandle>(null);
@@ -147,16 +143,14 @@ export function App({info, searcher}: {
     // The query as it stands, read in final mode: the one parse the strip and the count both answer to. Only in
     // final text — while typing, anything a further keystroke could rescue stays quiet.
     const finalParse = useMemo(() => parse(text, {mode: "final"}), [text]);
-    // The one door for a whole-query rewrite: through the bar's undo stack where the bar stands, and the plain
-    // view has only the text.
+    // The one door for a whole-query rewrite, through whichever bar stands; a bar not yet mounted takes the
+    // text alone.
     const rewrite = (next: string, caret?: number): void => {
-        if (barRef.current !== null) {
-            barRef.current.rewrite(next, caret);
-            return;
-        }
-        setText(next);
-        setLanding(caret ?? null);
+        if (barRef.current !== null) barRef.current.rewrite(next, caret);
+        else setText(next);
     };
+    // The pointer lights strip rows, so the bars report it only while there is a row to light.
+    const lighting = finalParse.diagnostics.length > 0 ? hover : undefined;
 
     return (
         <div className={styles.page}>
@@ -188,17 +182,14 @@ export function App({info, searcher}: {
                 <div className={styles.barRow} data-query={text}>
                     {plain
                         ? <PlainBar text={text} onText={setText} placeholder={t("bar.placeholder")}
-                                    label={t("bar.placeholder")} history={history} vocab={vocab} aim={marked}
-                                    preview={preview} onHover={hover} land={landing}
-                                    onLanded={() => {
-                                        setLanding(null);
-                                    }}/>
+                                    label={t("bar.placeholder")} history={history} vocab={vocab} aim={aim}
+                                    preview={preview} onHover={lighting} handle={barRef}/>
                         : <Bar text={text} onText={setText} placeholder={t("bar.placeholder")}
-                               handle={barRef} vocab={vocab} aim={marked} preview={preview} onHover={hover}
+                               handle={barRef} vocab={vocab} aim={aim} preview={preview} onHover={lighting}
                                onOpen={setEditing}/>}
                     <Simplify text={text} plain={plain} apply={rewrite}/>
                 </div>
-                <Diagnostics parsed={finalParse} text={text} plain={plain} apply={rewrite} onAim={setAim}
+                <Diagnostics parsed={finalParse} text={text} apply={rewrite} onAim={setAim}
                              onPreview={setPreview} lit={hovered} editing={plain ? null : editing}/>
                 <div className={styles.statusRow}>
                     <Count parsed={finalParse} result={result} stale={result === null || result.for !== text}/>

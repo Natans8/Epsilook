@@ -33,7 +33,7 @@ import type {Kind as KindDecl} from "../schema/kinds";
 import {isFlag, wordOf} from "../schema/kinds";
 import {door, path as pathType, text as textType} from "../vocabulary/value-types";
 import type {Interp, Pending, ValueCtx} from "./operand";
-import {COMPARISONS} from "../vocabulary/operators";
+import {COMPLEMENTS} from "../vocabulary/operators";
 import {combineAlternatives, countCtx, ctxFor, kindCtx, propCtx, topCtx} from "./operand";
 import type {Seg} from "./scan";
 import {isWs, scanPhrase, Scanner, scopeShaped, splitAlternatives, splitBare} from "./scan";
@@ -688,42 +688,47 @@ class Parser {
 
     /** Consumes a balanced brace run, or the rest of the input when it never closes. */
     /**
-     * Where a pattern opening at `i` ends, or -1 where no pattern opens there.
+     * Steps the extent scans over one position: the escape, a phrase and a pattern each consume their own
+     * interior, exactly as the token scanner reads them, so a brace or a bar inside one is never structure.
      *
-     * A pattern is its own language, and its braces and bars are not the query's — `/\d{2,}/` inside a scope
-     * must not read as a nested scope. It opens only at a token start, exactly as the scanner reads it: after
-     * the scope's brace, whitespace, an alternation bar, a group's opener or a comparison symbol. A slash mid-word
-     * is an ordinary character, which keeps a pasted path fragment searchable.
+     * A pattern opens only at a token's start, which is what `tokenStart` tracks: it moves past every
+     * delimiter, and a phrase already opened in the token closes the token to a pattern.
+     *
+     * @returns The position to continue from and the token start to carry, or null where `i` is structure
+     *   the caller reads itself.
      */
-    private patternEnd(i: number, floor: number, limit: number): number {
-        if (this.text[i] !== GRAMMAR.regex) return -1;
-        const before = i === floor ? "" : this.text[i - 1];
-        const opens = before === "" || isWs(before) || before === GRAMMAR.scope.open || before === GRAMMAR.or
-            || before === GRAMMAR.group.open || PREFIX_OPERATORS.some((op) => op.symbol?.endsWith(before) === true);
-        return opens ? this.scan.regex(i, limit).end : -1;
+    private stepOver(i: number, tokenStart: number, limit: number): { next: number; tokenStart: number } | null {
+        const c = this.text[i];
+        if (c === GRAMMAR.escape && i + 1 < limit) return {next: i + 2, tokenStart};
+        if (c === GRAMMAR.phrase) return {next: scanPhrase(this.text, i, limit).end, tokenStart: -1};
+        if (tokenStart >= 0) {
+            const pattern = this.scan.patternAt(i, tokenStart, limit);
+            if (pattern >= 0) return {next: pattern, tokenStart: -1};
+        }
+        return null;
+    }
+
+    /** Whether a character ends the token before it, so a pattern may open right after. */
+    private static delimits(c: string): boolean {
+        return isWs(c) || c === GRAMMAR.scope.open || c === GRAMMAR.scope.close || c === GRAMMAR.or
+            || c === GRAMMAR.group.open || c === GRAMMAR.group.close;
     }
 
     private skipBraces(open: number, limit: number): number {
         let depth = 0;
         let i = open;
+        let tokenStart = open;
         while (i < limit) {
+            const stepped = this.stepOver(i, tokenStart, limit);
+            if (stepped !== null) {
+                ({next: i, tokenStart} = stepped);
+                continue;
+            }
             const c = this.text[i];
-            if (c === GRAMMAR.escape && i + 1 < limit) {
-                i += 2;
-                continue;
-            }
-            if (c === GRAMMAR.phrase) {
-                i = scanPhrase(this.text, i, limit).end;
-                continue;
-            }
-            const pattern = this.patternEnd(i, open + 1, limit);
-            if (pattern >= 0) {
-                i = pattern;
-                continue;
-            }
             if (c === GRAMMAR.scope.open) depth++;
             if (c === GRAMMAR.scope.close && --depth === 0) return i + 1;
             i++;
+            if (Parser.delimits(c)) tokenStart = i;
         }
         return limit;
     }
@@ -731,23 +736,16 @@ class Parser {
     /** Parses `head:{…}`: finds the scope's extent, refuses nesting, then reads the body. */
     private scope(start: number, not: boolean, head: ScopeHead, brace: number, limit: number): number {
         let i = brace + 1;
+        let tokenStart = brace + 1;
         let innerBrace = -1;
         let close = -1;
         while (i < limit) {
+            const stepped = this.stepOver(i, tokenStart, limit);
+            if (stepped !== null) {
+                ({next: i, tokenStart} = stepped);
+                continue;
+            }
             const c = this.text[i];
-            if (c === GRAMMAR.escape && i + 1 < limit) {
-                i += 2;
-                continue;
-            }
-            if (c === GRAMMAR.phrase) {
-                i = scanPhrase(this.text, i, limit).end;
-                continue;
-            }
-            const pattern = this.patternEnd(i, brace + 1, limit);
-            if (pattern >= 0) {
-                i = pattern;
-                continue;
-            }
             if (c === GRAMMAR.scope.open && innerBrace < 0) innerBrace = i;
             if (c === GRAMMAR.scope.close && innerBrace < 0) {
                 close = i;
@@ -755,6 +753,7 @@ class Parser {
             }
             if (c === GRAMMAR.scope.close && innerBrace >= 0) break;
             i++;
+            if (Parser.delimits(c)) tokenStart = i;
         }
 
         if (innerBrace >= 0) {
@@ -995,7 +994,7 @@ class Parser {
                 // Two readings the reader may have meant, each offered where the scope holds nothing but the two
                 // kind words: one of each on the spell, or a row that is either. A scope carrying more than the
                 // pair has no single respell for either reading, so it warns without an offer.
-                const bare = ok.length === 2 && positives.length === 2 && !not;
+                const bare = terms.length === 1 && ok.length === 2 && positives.length === 2 && !not;
                 const bind = `${word}${GRAMMAR.bind}`;
                 pend.push({
                     severity: "warning",
@@ -1456,15 +1455,17 @@ class Parser {
      */
     private turnedRoundFix(termStart: number, vpos: number, end: number, word: string): readonly Fix[] | undefined {
         const written = this.text.slice(vpos, end);
-        const turned = [
-            [COMPARISONS.gte, COMPARISONS.lt], [COMPARISONS.lte, COMPARISONS.gt],
-            [COMPARISONS.gt, COMPARISONS.lte], [COMPARISONS.lt, COMPARISONS.gte],
-        ].map(([from, to]) => {
-            const spellings = [from.symbol, ...(from.aliases ?? [])].filter((s): s is string => s !== undefined);
-            const spelled = spellings.find((s) => written.startsWith(s));
-            return spelled === undefined ? null : `${word}${to.symbol ?? ""}${written.slice(spelled.length)}`;
-        }).find((fix) => fix !== null);
-        if (turned === undefined) return undefined;
+        // The longest spelling that opens the value is the comparison written: `>=` before `>`, or the
+        // complement of the shorter one would be spelled over the longer one's tail.
+        let read: { spelled: string; to: string } | undefined;
+        for (const [from, to] of COMPLEMENTS) {
+            for (const spelled of [from.symbol, ...(from.aliases ?? [])]) {
+                if (typeof spelled !== "string" || !written.startsWith(spelled)) continue;
+                if (read === undefined || spelled.length > read.spelled.length) read = {spelled, to: to.symbol ?? ""};
+            }
+        }
+        if (read === undefined) return undefined;
+        const turned = `${word}${read.to}${written.slice(read.spelled.length)}`;
         const from = termStart > 0 && this.text[termStart - 1] === GRAMMAR.negate ? termStart - 1 : termStart;
         return [{label: i18n.t("diagnostics:fix.turnRound"), query: this.splice(from, end, turned)}];
     }

@@ -127,17 +127,17 @@
 
 /* what the parse could not read, and what it read with a reservation */
 .runError {
-    text-decoration: underline wavy rgba(var(--danger-rgb), 0.9);
+    text-decoration: var(--mark-error);
     text-underline-offset: 3px;
 }
 
 .runWarn {
-    text-decoration: underline wavy var(--gold-dim);
+    text-decoration: var(--mark-warn);
     text-underline-offset: 3px;
 }
 
 /* A pattern painted on its own, not under a field, reads in a code face; under a field the wrap decides. */
 .rxMono {
-    font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+    font-family: var(--font-mono);
     font-size: 0.95em;
 }

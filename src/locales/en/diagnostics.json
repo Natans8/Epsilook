@@ -63,7 +63,9 @@
     "withoutSymbol": "search without {{symbol}}",
     "dropQuotes": "drop the quotes",
     "asPattern": "search it as a regular expression",
-    "turnRound": "turn the comparison round"
+    "turnRound": "turn the comparison round",
+    "clear": "clear the value",
+    "remove": "remove"
   },
   "simplify": {
     "allDead": "every alternative of this query contradicts itself; it is returned as written",

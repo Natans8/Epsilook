@@ -82,6 +82,12 @@
     --gold-rgb: 255, 209, 0;
     --gold-dim: #a8842f;
     --danger-rgb: 224, 112, 112;
+    /* The code face: what a pattern reads in wherever it is drawn. The strip, a chip and an open slot all read
+     * it from here, so a face changed once measures alike in every mirror. */
+    --font-mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
+    /* The marks a broken and a warned stretch of query wear, wherever they are drawn. */
+    --mark-error: underline wavy rgba(var(--danger-rgb), 0.9);
+    --mark-warn: underline wavy var(--gold-dim);
     --select-rgb: 72, 130, 220;
     --select-border-rgb: 120, 170, 240;
 

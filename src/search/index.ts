@@ -63,14 +63,14 @@ export {escapedAt, unescaped} from "./language/scan";
 
 export type {
     Ask, Clause, ClauseState, Diagnostic, Fix, Parsed, ParsedOperand, ParseMode, PropRef, RowTest,
-    ScopeAsk, ScopeTerm, Severity, SortDirective, Span, ValueExpr,
+    ClausePart, ScopeAsk, ScopeTerm, Severity, SortDirective, Span, Sublanguage, ValueExpr,
 } from "./language/ast";
-export {anyOfExpr, COUNT_PROP, propOf} from "./language/ast";
+export {anyOfExpr, COUNT_PROP, overlaps, propOf, rowCountPair} from "./language/ast";
 
 export {parse} from "./language/parse";
 
 export type {Run, RunKind} from "./language/classify";
-export {classify, paint, runsWithin} from "./language/classify";
+export {classify, paint, quieted, runsWithin} from "./language/classify";
 
 export type {ChipView, ClauseView, LaneItem, LaneView, Piece} from "./language/describe";
 export {describe, glyphOf, NEGATION} from "./language/describe";

@@ -7,7 +7,7 @@
 import type {ReactElement, ReactNode} from "react";
 import {useMemo} from "react";
 import type {Run, Span} from "../../../search/index";
-import {classify, paint} from "../../../search/index";
+import {classify, paint, quieted} from "../../../search/index";
 import type {PatternKind} from "../utils/pattern";
 import {patternRuns} from "../utils/pattern";
 import {runToneOf} from "./tone";
@@ -73,7 +73,7 @@ export function Pattern({pattern}: { readonly pattern: string }): ReactElement {
  * it reaches, a broken clause carries its squiggle and a vocabulary word is marked as one. It needs a whole
  * query to parse — the open slot holds a fragment, and paints lexically.
  */
-export function Classed({text, rich, runs: given, mirrored, selected, band}: {
+export function Classed({text, rich, runs: given, mirrored, selected, aimed}: {
     readonly text: string;
     readonly rich?: boolean;
     /**
@@ -94,9 +94,11 @@ export function Classed({text, rich, runs: given, mirrored, selected, band}: {
     readonly runs?: readonly Run[];
     /** The stretch of this text the bar's selection covers, in the text's own coordinates. */
     readonly selected?: Span;
-    /** The class the covered stretch wears; the selection band unless the caller is marking something else. */
-    readonly band?: string;
+    /** The stretch something outside the bar is pointing at, drawn with the aim band; never together with a selection. */
+    readonly aimed?: Span;
 }): ReactElement {
+    const banded = selected ?? aimed;
+    const bandClass = selected === undefined ? frame.aimed : frame.selected;
     // The caller's runs win where it has them: a slot cannot paint itself, and lexing the same characters a
     // second time here would only produce the poorer answer.
     const runs = useMemo(() => given ?? (rich === true ? paint(text) : classify(text)), [given, text, rich]);
@@ -134,7 +136,7 @@ export function Classed({text, rich, runs: given, mirrored, selected, band}: {
             }))
             : [{start: run.start, end: run.end, cls, note: undefined}];
         for (const piece of pieces) {
-            if (selected === undefined) {
+            if (banded === undefined) {
                 out.push(
                     <span key={`${String(i)}-${String(piece.start)}`} className={piece.cls} title={piece.note}>
                         {text.slice(piece.start, piece.end)}
@@ -146,15 +148,15 @@ export function Classed({text, rich, runs: given, mirrored, selected, band}: {
             // characters and so is a classed piece, so neither can be made to respect the other's boundaries.
             const cut = [
                 piece.start,
-                ...[selected.start, selected.end].filter((edge) => edge > piece.start && edge < piece.end),
+                ...[banded.start, banded.end].filter((edge) => edge > piece.start && edge < piece.end),
                 piece.end,
             ];
             for (let cutAt = 0; cutAt + 1 < cut.length; cutAt++) {
                 const [from, to] = [cut[cutAt], cut[cutAt + 1]];
-                const inSel = from >= selected.start && to <= selected.end;
+                const inSel = from >= banded.start && to <= banded.end;
                 out.push(
                     <span key={`${String(i)}-${String(from)}`} title={piece.note}
-                          className={inSel ? `${piece.cls ?? ""} ${band ?? frame.selected}` : piece.cls}>
+                          className={inSel ? `${piece.cls ?? ""} ${bandClass}` : piece.cls}>
                         {text.slice(from, to)}
                     </span>,
                 );
@@ -162,4 +164,16 @@ export function Classed({text, rich, runs: given, mirrored, selected, band}: {
         }
     }
     return <>{out}</>;
+}
+
+/**
+ * A quotation of query text, painted as the bar paints it, with every diagnostic state quieted.
+ *
+ * What a surface beside the bar shows when it names a clause: the head in its column's tone, a kind word with its
+ * mark, an operator as itself. The squiggles stay with the bar, since whoever quotes a clause is saying how it
+ * fared in their own way, and the painting is remembered per text so a list of quotations costs one parse each.
+ */
+export function QueryText({text}: { readonly text: string }): ReactElement {
+    const runs = useMemo(() => paint(text).map(quieted), [text]);
+    return <Classed text={text} runs={runs}/>;
 }

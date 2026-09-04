@@ -35,6 +35,24 @@ export type ParseMode = "typing" | "final";
 /** How strongly a {@link Diagnostic} objects, from a blocking error to a note in passing. */
 export type Severity = "error" | "warning" | "note";
 
+/** The sublanguages a finding can be about, where the query language itself is not the one at fault. */
+export type Sublanguage = "regex";
+
+/** The parts of a clause a finding can be about on their own, with the rest of the clause standing. */
+export type ClausePart = "value";
+
+/**
+ * Whether two spans share any character. A span standing on one character, `{start, end: start + 1}`, is a
+ * point; an empty span shares nothing.
+ *
+ * @param a One span.
+ * @param b The other.
+ * @returns True where the two overlap.
+ */
+export function overlaps(a: Span, b: Span): boolean {
+    return a.start < b.end && a.end > b.start;
+}
+
 /** A structural correction a diagnostic can offer — never a spelling guess. */
 export interface Fix {
     readonly label: string;
@@ -62,13 +80,13 @@ export interface Diagnostic {
      * expression has its own grammar and its own errors, and a surface names it so the reader knows which
      * language to think in.
      */
-    readonly about?: "regex";
+    readonly about?: Sublanguage;
     /**
-     * Which part of the clause the finding is about, where a surface can act on the part alone: the VALUE,
+     * Which part of the clause the finding is about, where a surface can act on the part alone: the value,
      * with the field standing — a reading the axis refused, a pattern that did not compile — as against the
      * clause's structure, where nothing short of the whole can be kept.
      */
-    readonly at?: "value";
+    readonly at?: ClausePart;
 }
 
 /**
@@ -241,3 +259,20 @@ export const propOf = (ref: PropRef): Prop => ref.kind.props[ref.prop];
  * clauses, and that is the one expression node it constructs rather than carries through.
  */
 export const anyOfExpr = (alternatives: readonly ValueExpr[]): ValueExpr => ({op: "anyOf", alternatives});
+
+/**
+ * The kind word and the count comparison the desugar sets after it, where two neighbouring terms are that pair.
+ *
+ * `attach>2` reads as "an attach row, and more than two of them", two terms in one run; every surface that draws
+ * or writes a scope treats the pair as the one term the reader typed, and this is the one place that says which
+ * two terms are it. A negated or unfinished term is never half of a pair.
+ *
+ * @param term A scope term.
+ * @param next The term after it in the same run, if any.
+ * @returns The pair's kind and its count expression, or null where the two are not that pair.
+ */
+export function rowCountPair(term: ScopeTerm, next: ScopeTerm | undefined): { kind: Kind; value: ValueExpr } | null {
+    if (next === undefined || term.not || next.not || term.state !== "ok" || next.state !== "ok") return null;
+    if (term.ask?.on !== "kindWord" || next.ask?.on !== "count") return null;
+    return {kind: term.ask.kind, value: next.ask.value};
+}

@@ -16,7 +16,7 @@
  * - everything displayed is typeable: every word or glyph this module emits parses back in its place.
  */
 import type {Ask, Clause, Diagnostic, Parsed, ParsedOperand, PropRef, ScopeTerm, Span, ValueExpr} from "./ast";
-import {propOf} from "./ast";
+import {propOf, rowCountPair} from "./ast";
 import {GRAMMAR, spelling} from "./grammar";
 import {doorOf, spokenProp, wordOf} from "../schema/kinds";
 import {headWord} from "../schema/schema";
@@ -437,11 +437,11 @@ function scopeItems(terms: ReadonlyArray<readonly ScopeTerm[]>, under: Kind | nu
  * @returns The fused item, or null where the two are not that pair.
  */
 function rowCountItem(term: ScopeTerm, next: ScopeTerm | undefined, lone: boolean): LaneItem | null {
-    if (next === undefined || term.not || next.not || term.state !== "ok" || next.state !== "ok") return null;
-    if (term.ask?.on !== "kindWord" || next.ask?.on !== "count") return null;
+    const pair = rowCountPair(term, next);
+    if (pair === null || next === undefined) return null;
     return {
         is: "term", not: false, lone, span: {start: term.span.start, end: next.span.end},
-        body: [{is: "word", text: wordOf(term.ask.kind)}, ...exprPieces(next.ask.value)],
+        body: [{is: "word", text: wordOf(pair.kind)}, ...exprPieces(pair.value)],
     };
 }
 

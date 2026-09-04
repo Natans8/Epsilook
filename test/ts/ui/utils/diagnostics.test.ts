@@ -83,12 +83,10 @@ test("the clear offer lands the caret right after the bind, in the emptied slot"
 
 test("a stretch being edited is read in typing mode, where an unfinished value is silent", () => {
     const text = "model:fire scale: sort:zzz";
-    const settled = stripRows(parse(text, {mode: "final"}), text);
-    const typing = stripRows(parse(text, {mode: "typing"}), text);
-    assert.deepEqual(settled.map((r) => r.verbatim), ["scale:", "sort:zzz"]);
+    const parsed = parse(text, {mode: "final"});
+    assert.deepEqual(stripRows(parsed, text).map((r) => r.verbatim), ["scale:", "sort:zzz"]);
     // The open slot is quiet; the settled fault elsewhere still stands.
-    const editing = {start: 11, end: 17};
-    assert.deepEqual(mergeEditing(settled, typing, editing).map((r) => r.verbatim), ["sort:zzz"]);
+    assert.deepEqual(mergeEditing(parsed, text, {start: 11, end: 17}).map((r) => r.verbatim), ["sort:zzz"]);
     // Nothing being edited: the final reading, untouched.
-    assert.deepEqual(mergeEditing(settled, typing, null), settled);
+    assert.deepEqual(mergeEditing(parsed, text, null), stripRows(parsed, text));
 });

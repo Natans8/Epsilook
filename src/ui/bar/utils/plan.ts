@@ -10,7 +10,7 @@
  * a head cell plus a value slot, the bind consumed as a gesture. The text underneath never changes — a plan
  * reconstructs it verbatim, which the tests pin — so the round trip is unconditional.
  */
-import type {Span} from "../../../search/index";
+import type {Parsed, Span} from "../../../search/index";
 import {
     classify, convergeDisplay, describe, directiveTexts, equivalent, escapedAt, fold, formatQuery, GRAMMAR, HEADS,
     parse, PREFIX_OPERATORS, spellingsOf,
@@ -726,18 +726,24 @@ function sameAsk(a: string, b: string): boolean {
  * @returns The text with every such fix applied, to a fixpoint.
  */
 export function spellingFixes(text: string): string {
+    return spellingFixesRead(text).text;
+}
+
+/** {@link spellingFixes}, with the final reading the fixpoint ended on, so a caller need not read it again. */
+function spellingFixesRead(text: string): { text: string; parsed: Parsed } {
     let out = text;
+    let parsed = parse(out, {mode: "final"});
     // Bounded, because a fix could in principle raise a fresh warning of its own kind; a handful of passes
     // covers every glued boundary a segment can carry.
     for (let pass = 0; pass < 8; pass += 1) {
-        const parsed = parse(out, {mode: "final"});
         const fix = parsed.diagnostics.filter((d) => d.severity === "warning")
             .flatMap((d) => d.fixes ?? [])
             .find((offer) => equivalent(parsed, parse(offer.query)));
-        if (fix === undefined) return out;
+        if (fix === undefined) break;
         out = fix.query;
+        parsed = parse(out, {mode: "final"});
     }
-    return out;
+    return {text: out, parsed};
 }
 
 /**
@@ -752,7 +758,7 @@ export function spellingFixes(text: string): string {
  */
 function settledSpelling(open: string): string {
     if (open.trim() === "") return open;
-    const parsed = parse(spellingFixes(open), {mode: "final"});
+    const {parsed} = spellingFixesRead(open);
     // An error or a warning leaves the characters alone — an error because the formatter writes only the
     // evaluable query, a warning because rewriting warned text would silently apply a fix that changes the
     // ask. A NOTE is information and blocks nothing: the counts-rows note rides every count spelling.

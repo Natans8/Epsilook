@@ -401,3 +401,17 @@ export function runsWithin(runs: readonly Run[], span: Span): Run[] {
     }
     return out;
 }
+
+/**
+ * One painted run with its diagnostic state dropped.
+ *
+ * A run drawn outside the clause that raised the state — a slot still being typed, a quotation of the clause
+ * beside its own reason — keeps its colour and loses the squiggle: the state belongs to a committed clause, and
+ * a mark repeated where the finding is already said adds nothing.
+ *
+ * @param run The run as painted.
+ * @returns The run without its state, or the run itself where it carried none.
+ */
+export function quieted(run: Run): Run {
+    return run.state === undefined ? run : {...run, state: undefined};
+}

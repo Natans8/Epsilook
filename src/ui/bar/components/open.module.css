@@ -64,7 +64,7 @@
  * the field and the mirror beneath it change together — the one thing a mirrored surface may never do is
  * measure differently from its field, and both inherit from here. */
 .editwrap.pattern {
-    font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+    font-family: var(--font-mono);
 }
 
 /* The code face has a shorter natural line than the text face, and a shorter line box in a slot stretched to

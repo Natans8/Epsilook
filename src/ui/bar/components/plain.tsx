@@ -11,15 +11,17 @@
  * delimiters that belong to it, a broken clause's squiggle — because reading the raw text is the reason for
  * looking at it.
  */
-import type {ChangeEvent, KeyboardEvent, ReactElement} from "react";
+import type {ChangeEvent, KeyboardEvent, ReactElement, Ref} from "react";
 import type {Span} from "../../../search/index";
-import {useLayoutEffect, useMemo, useRef, useState} from "react";
+import {useImperativeHandle, useLayoutEffect, useMemo, useRef, useState} from "react";
 import {pairDelimiter, planAt, slotStart, writeSlot} from "../utils/plan";
 import type {Offer, Vocabulary} from "../utils/offers";
 import {NO_VOCABULARY, offerSlot, offersAt} from "../utils/offers";
 import {optionId, useOfferPanel} from "../hooks/panel";
 import {Surface} from "./surface";
+import type {BarHandle} from "./bar";
 import {Classed} from "./classed";
+import {useHeldHeight} from "../hooks/held-height";
 // Two sheets, two jobs: the bar's own frame is shared with the chip view, the rest is this view's alone.
 import frame from "./bar.module.css";
 import styles from "./plain.module.css";
@@ -32,7 +34,7 @@ const NO_HISTORY: readonly string[] = [];
  */
 export function PlainBar({
     text, onText, placeholder, label, history = NO_HISTORY, vocab = NO_VOCABULARY, aim = null, preview = null,
-    onHover, land = null, onLanded,
+    onHover, handle,
 }: {
     readonly text: string;
     readonly onText: (text: string) => void;
@@ -55,40 +57,36 @@ export function PlainBar({
      * speaks about that stretch outside the bar can light up. Silent while a preview is drawn.
      */
     readonly onHover?: (span: Span | null) => void;
-    /** Where a rewrite from outside asked the caret to land, or none; taken once, then reported landed. */
-    readonly land?: number | null;
-    readonly onLanded?: () => void;
+    /** The panel's door for undoable whole-query rewrites, the same one the chip bar answers. */
+    readonly handle?: Ref<BarHandle>;
 }): ReactElement {
     const field = useRef<HTMLTextAreaElement>(null);
+    /** Where the next text should land the caret, once the text has arrived; taken once. */
+    const landing = useRef<number | null>(null);
+    useImperativeHandle(handle, () => ({
+        rewrite: (next: string, caret?: number): void => {
+            landing.current = caret ?? null;
+            onText(next);
+        },
+    }));
     useLayoutEffect(() => {
         const el = field.current;
-        if (el === null || land === null || land === undefined) return;
+        const at = landing.current;
+        if (el === null || at === null) return;
+        landing.current = null;
         // The text is written in first: the value effect below skips a focused field, and this focuses it.
         el.value = text;
         el.focus();
-        el.setSelectionRange(land, land);
-        onLanded?.();
-    }, [land, text, onLanded]);
-    /** The last point reported, so a pointer resting on one character does not report it on every move. */
-    const pointed = useRef<number | null>(null);
+        el.setSelectionRange(at, at);
+    }, [text]);
+    /** The character under the pointer as a one-character span; the page keeps what changed. */
     const report = (at: number | null): void => {
-        if (at === pointed.current) return;
-        pointed.current = at;
-        onHover?.(at === null ? null : {start: at, end: at});
+        onHover?.(at === null ? null : {start: at, end: at + 1});
     };
     /** What the field held before a preview replaced it, so the lift restores the caret with the characters. */
     const before = useRef<{ value: string; start: number; end: number } | null>(null);
     const drawnText = preview ?? text;
-    // As the chip bar does: the bar keeps the height it had when a preview began, so a shorter picture cannot
-    // move the pointer off the offer that asked for it.
-    const box = useRef<HTMLDivElement>(null);
-    const kept = useRef<number | null>(null);
-    useLayoutEffect(() => {
-        const el = box.current;
-        if (el === null) return;
-        if (preview === null) kept.current = el.offsetHeight;
-        el.style.minHeight = preview !== null && kept.current !== null ? `${String(kept.current)}px` : "";
-    });
+    const box = useHeldHeight(preview !== null);
     useLayoutEffect(() => {
         const el = field.current;
         if (el === null) return;
@@ -277,7 +275,7 @@ export function PlainBar({
                 <span className={styles.plainInk} aria-hidden="true">
                     {/* The pointed-at clause wears the aim band under the field, cut by the character as a
                         selection is: the text is the reader's own and the band says which stretch is meant. */}
-                    <Classed text={drawnText} rich mirrored selected={aim ?? undefined} band={frame.aimed}/>
+                    <Classed text={drawnText} rich mirrored aimed={aim ?? undefined}/>
                     {ghosting && <span className={frame.ghost}>{ghost}</span>}
                     {/* A trailing newline keeps a text ending in a space from collapsing the last line. */}
                     {"\n"}
@@ -298,7 +296,8 @@ export function PlainBar({
                     // The character under the pointer, read off the field's own layout: the mirror underneath
                     // wraps identically, so the field's caret geometry is the text's.
                     onMouseMove={(e) => {
-                        if (preview !== null) return;
+                        if (preview !== null || onHover === undefined) return;
+                        // Not in Safari, which has only the older range form; the link is then absent, not broken.
                         const hit = document.caretPositionFromPoint(e.clientX, e.clientY);
                         report(hit === null || hit.offsetNode !== e.currentTarget ? null : hit.offset);
                     }}

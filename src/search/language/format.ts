@@ -16,7 +16,7 @@ import {doorOf, formatValue, isFlag, sentinelOf, spokenProp, wordOf} from "../sc
 import {headWord} from "../schema/schema";
 import {COMPARISONS, exact} from "../vocabulary/operators";
 import type {Ask, Clause, Parsed, ParsedOperand, PropRef, ScopeTerm, ValueExpr} from "./ast";
-import {anyOfExpr, propOf} from "./ast";
+import {anyOfExpr, propOf, rowCountPair} from "./ast";
 import {escapeRegExp} from "../text/patterns";
 import {scopeShaped} from "./scan";
 import type {AxisType} from "../vocabulary/value-types";
@@ -503,9 +503,8 @@ function gluedTail(term: ScopeTerm, tier: Spelling): string | null {
  * @returns The fused spelling, or null where the two are not that pair.
  */
 function rowCountText(term: ScopeTerm, next: ScopeTerm | undefined, tier: Spelling): string | null {
-    if (next === undefined || term.not || next.not || term.state !== "ok" || next.state !== "ok") return null;
-    if (term.ask?.on !== "kindWord" || next.ask?.on !== "count") return null;
-    return `${wordOf(term.ask.kind)}${valueText(next.ask.value, undefined, tier)}`;
+    const pair = rowCountPair(term, next);
+    return pair === null ? null : `${wordOf(pair.kind)}${valueText(pair.value, undefined, tier)}`;
 }
 
 function askText(ask: Ask, tier: Spelling): string | null {

@@ -248,6 +248,22 @@ export class Scanner {
      * Only an escaped slash unwraps. The value still ends at whitespace — a pattern writes a space as `\s` — so tag
      * closure holds everywhere.
      */
+    /**
+     * Where a pattern opening at `at` ends, or -1 where none opens there — the same rule {@link token} reads by:
+     * a slash opens a pattern only at a token's start, or straight after a lone comparison symbol.
+     *
+     * @param at The position of the slash.
+     * @param tokenStart Where the token holding it began, so what stands between is the token so far.
+     * @param limit Where scanning stops.
+     * @returns The position just past the pattern, or -1.
+     */
+    patternAt(at: number, tokenStart: number, limit: number): number {
+        if (this.text[at] !== GRAMMAR.regex) return -1;
+        const cur = this.text.slice(tokenStart, at);
+        if (cur !== "" && !PREFIX_OPERATORS.some((op) => op.symbol === cur)) return -1;
+        return this.regex(at, limit).end;
+    }
+
     regex(at: number, limit: number): Seg {
         let out = "";
         let i = at + 1;

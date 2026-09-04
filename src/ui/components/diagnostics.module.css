@@ -56,7 +56,7 @@
 /* The offending text as typed, in the reader's own characters, wearing the chip's own mark. */
 .verbatim {
     margin-right: 0.25rem;
-    font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+    font-family: var(--font-mono);
     font-size: 0.95em;
     color: var(--text-strong);
     white-space: pre-wrap;
@@ -65,11 +65,11 @@
 }
 
 .error .verbatim {
-    text-decoration: underline wavy rgba(var(--danger-rgb), 0.9);
+    text-decoration: var(--mark-error);
 }
 
 .warning .verbatim {
-    text-decoration: underline wavy var(--gold-dim);
+    text-decoration: var(--mark-warn);
 }
 
 /* The sublanguage a finding is about, said before the reason: a regular expression has its own errors, and

@@ -19,7 +19,7 @@
 // The instance rather than the bare `t`, because several value-reading closures here take a parameter named `t`
 // and would shadow the import.
 import {i18n} from "../../i18n";
-import type {Fix, ParsedOperand, PropRef, Severity, ValueExpr} from "./ast";
+import type {ClausePart, Fix, ParsedOperand, PropRef, Severity, Sublanguage, ValueExpr} from "./ast";
 import {anyOfExpr, COUNT_PROP, propOf} from "./ast";
 import type {Column} from "../schema/columns";
 import {GRAMMAR, PREFIX_OPERATORS} from "./grammar";
@@ -94,7 +94,7 @@ export type Interp =
     /** Corrections already spelled out as whole queries, where the refusal knows the reading it would take. */
     readonly fixes?: readonly Fix[];
     /** The sublanguage at fault, where it is not the query language. */
-    readonly about?: "regex";
+    readonly about?: Sublanguage;
     /**
      * A further keystroke could still change the verdict — the value did not parse, but more characters might
      * complete a word that does. Such a failure is held quietly while typing and reported only in final text,
@@ -108,8 +108,8 @@ export interface Pending {
     readonly severity: Severity;
     readonly message: string;
     readonly fixes?: readonly Fix[];
-    readonly about?: "regex";
-    readonly at?: "value";
+    readonly about?: Sublanguage;
+    readonly at?: ClausePart;
 }
 
 /** The operators that require an order, by name — the ones whose refusal message says "no ordering". */

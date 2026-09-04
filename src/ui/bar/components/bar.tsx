@@ -14,8 +14,8 @@
  */
 import type {ReactElement, Ref} from "react";
 import {Fragment, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState} from "react";
-import type {Run, Span} from "../../../search/index";
-import {paint, runsWithin} from "../../../search/index";
+import type {Span} from "../../../search/index";
+import {overlaps, paint, quieted, runsWithin} from "../../../search/index";
 import type {BarSegment} from "../utils/plan";
 import {segmentsOf, slotStart} from "../utils/plan";
 import {OpenSegment} from "./open";
@@ -27,25 +27,12 @@ import {Surface} from "./surface";
 import {useEditingSession} from "../hooks/session";
 import {useBarSelection} from "../hooks/selection";
 import {useBarAssist} from "../hooks/assist";
+import {useHeldHeight} from "../hooks/held-height";
 import {recentQueries, rememberQuery} from "../../history";
 import styles from "./bar.module.css";
 
 /** One frozen empty map, so a bar with no art does not hand the context a fresh object each render. */
 const EMPTY_ART: Readonly<Record<string, string>> = Object.freeze({});
-
-/**
- * One painted run with its diagnostic state dropped.
- *
- * A value half typed is not a value that failed: `scale:x` on its way to `scale:x5` was being squiggled as
- * though the reader had finished and got it wrong. Diagnostics belong to a committed query, which is the
- * silent-while-typing half of the law, drawn.
- *
- * @param run The run as painted.
- * @returns The run without its state, or the run itself where it carried none.
- */
-function quieted(run: Run): Run {
-    return run.state === undefined ? run : {...run, state: undefined};
-}
 
 /**
  * What the panel around the bar may ask of it. A control outside the bar that rewrites the query — the
@@ -98,17 +85,7 @@ export function Bar({
 }): ReactElement {
     const previewing = preview !== null;
     const drawnText = preview ?? text;
-    // A preview may draw fewer chips than the text has — none at all, for a removal — and a bar that shrank
-    // would move whatever stands beneath it out from under the pointer that asked for the preview, lifting it,
-    // growing back, and looping. So the bar keeps the height it had when the preview began.
-    const box = useRef<HTMLDivElement>(null);
-    const kept = useRef<number | null>(null);
-    useLayoutEffect(() => {
-        const el = box.current;
-        if (el === null) return;
-        if (!previewing) kept.current = el.offsetHeight;
-        el.style.minHeight = previewing && kept.current !== null ? `${String(kept.current)}px` : "";
-    });
+    const box = useHeldHeight(previewing);
     // The searches this browser remembers. Shared, because the SESSION knows when a query was finished with
     // and the SURFACE knows what to do with one.
     const [history, setHistory] = useState(recentQueries);
@@ -249,7 +226,7 @@ export function Bar({
             : {start: Math.max(band.from, seg.start) - seg.start, end: Math.min(band.to, seg.end) - seg.start};
         // A pointed-at clause marks the whole segment it stands in: a chip is atomic, and a stretch of text is
         // one settled child, so the mark lands on the unit the reader sees.
-        const aimed = aim !== null && aim.start < seg.end && aim.end > seg.start;
+        const aimed = aim !== null && overlaps(aim, seg);
         const cls = [styles.settled, seg.plain ? "" : styles.chipHost,
             covered && !seg.plain ? styles.selected : "", aimed ? styles.aimed : ""]
             .filter((held) => held !== "").join(" ");

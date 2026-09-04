@@ -8,47 +8,50 @@
  * from what it says.
  */
 import type {ReactElement} from "react";
+import {useMemo} from "react";
 import {useTranslation} from "react-i18next";
-import type {Fix, Parsed, Run, Span} from "../../search/index";
-import {paint, parse} from "../../search/index";
-import {Classed} from "../bar/index";
-import {mergeEditing, stripRows} from "../utils/diagnostics";
+import type {Fix, Parsed, Span} from "../../search/index";
+import {overlaps} from "../../search/index";
+import {QueryText} from "../bar/index";
+import {changedSpan, mergeEditing} from "../utils/diagnostics";
 import styles from "./diagnostics.module.css";
-
-/** One painted run with its diagnostic state dropped: colour stays, the squiggle is the row's to draw. */
-function quiet(run: Run): Run {
-    return run.state === undefined ? run : {...run, state: undefined};
-}
 
 /**
  * One correction on offer: the button, which shows what it would write while it is pointed at.
  *
  * A rewrite the reader cannot see before taking it is a gamble, so hovering or focusing the button asks the
  * page to draw the query as it would stand afterwards — in the bar itself, where the query is always drawn,
- * rather than in a second picture beside the button.
+ * rather than in a second picture beside the button — with what the rewrite changes marked, so the eye lands
+ * on the difference. Leaving hands the mark back to the row's own clause.
  */
-function Offer({fix, apply, onPreview}: {
+function Offer({fix, text, clause, apply, onPreview, onAim}: {
     readonly fix: Fix;
+    /** The query the fix rewrites. */
+    readonly text: string;
+    /** The row's clause, which the mark returns to when the pointer leaves the button. */
+    readonly clause: Span | null;
     readonly apply: (next: string, caret?: number) => void;
     /** Says which rewrite is being considered, or none. */
     readonly onPreview: (query: string | null) => void;
+    /** Says which stretch of the drawn query is meant, or none. */
+    readonly onAim: (span: Span | null) => void;
 }): ReactElement {
+    const consider = (): void => {
+        onPreview(fix.query);
+        onAim(changedSpan(text, fix.query));
+    };
+    const drop = (): void => {
+        onPreview(null);
+        onAim(clause);
+    };
     return (
         <button
             type="button"
             className={styles.fix}
-            onMouseEnter={() => {
-                onPreview(fix.query);
-            }}
-            onMouseLeave={() => {
-                onPreview(null);
-            }}
-            onFocus={() => {
-                onPreview(fix.query);
-            }}
-            onBlur={() => {
-                onPreview(null);
-            }}
+            onMouseEnter={consider}
+            onMouseLeave={drop}
+            onFocus={consider}
+            onBlur={drop}
             onClick={() => {
                 onPreview(null);
                 apply(fix.query, fix.caret);
@@ -59,19 +62,17 @@ function Offer({fix, apply, onPreview}: {
     );
 }
 
+/** The label a row wears for the sublanguage its finding is about, by catalog key. */
+const ABOUT = {regex: "strip.about.regex"} as const;
+
 /**
  * The strip. Draws nothing at all for a query the reader accepted, so the count sits directly under the bar.
  */
-export function Diagnostics({parsed, text, plain, apply, onAim, onPreview, lit, editing}: {
+export function Diagnostics({parsed, text, apply, onAim, onPreview, lit, editing}: {
     /** The query as read in final mode — the same parse the count refuses on. */
     readonly parsed: Parsed;
     /** The text that parse was read from. */
     readonly text: string;
-    /**
-     * Whether the plain view stands. A note says how a spelling was read, and the chips already draw that
-     * reading, so it is shown only where the reader is looking at their own text.
-     */
-    readonly plain: boolean;
     /** Applies a fix's whole-query rewrite, through the bar's own undo where the bar stands, landing where it says. */
     readonly apply: (next: string, caret?: number) => void;
     /**
@@ -94,17 +95,13 @@ export function Diagnostics({parsed, text, plain, apply, onAim, onPreview, lit, 
     readonly editing: Span | null;
 }): ReactElement | null {
     const {t} = useTranslation();
-    const rows = mergeEditing(stripRows(parsed, text),
-        editing === null ? [] : stripRows(parse(text, {mode: "typing"}), text), editing)
-        .filter((row) => plain || row.severity !== "note");
+    // A note says how a spelling was read and asks for nothing; it is the chip's own to tell, in its tooltip,
+    // and the strip lists what can be acted on. Read once per text, not per render: the model parses.
+    const rows = useMemo(
+        () => mergeEditing(parsed, text, editing).filter((row) => row.severity !== "note"),
+        [parsed, text, editing]);
     if (rows.length === 0) return null;
-    // A point — the plain view's character under the pointer — touches the clause it stands in; a stretch — a
-    // settled segment — touches every clause it overlaps.
-    const touches = (span: Span | null): boolean => {
-        if (lit === null || span === null) return false;
-        if (lit.start === lit.end) return span.start <= lit.start && lit.start < span.end;
-        return lit.start < span.end && lit.end > span.start;
-    };
+    const touches = (span: Span | null): boolean => lit !== null && span !== null && overlaps(lit, span);
     return (
         <ul className={styles.strip} aria-label={t("strip.label")}>
             {rows.map((row, i) => (
@@ -128,15 +125,18 @@ export function Diagnostics({parsed, text, plain, apply, onAim, onPreview, lit, 
                     <span className={styles.text}>
                         {row.verbatim !== "" && (
                             // Painted as the bar paints it, so a field, a value and a kind word keep the colours
-                            // the reader knows them by. The runs are quieted: the row's own underline already
-                            // says how the clause fared, and a squiggle under a squiggle says nothing more.
-                            <code className={styles.verbatim}>
-                                <Classed text={row.verbatim} runs={paint(row.verbatim).map(quiet)}/>
-                            </code>
+                            // the reader knows them by; the row's own underline says how the clause fared.
+                            <>
+                                <code className={styles.verbatim}><QueryText text={row.verbatim}/></code>
+                                {" "}
+                            </>
                         )}
-                        {row.verbatim !== "" && " "}
-                        {row.about === "regex" && <span className={styles.about}>{t("strip.about.regex")}</span>}
-                        {row.about !== null && " "}
+                        {row.about !== null && (
+                            <>
+                                <span className={styles.about}>{t(ABOUT[row.about])}</span>
+                                {" "}
+                            </>
+                        )}
                         <span className={styles.message}>{row.message}</span>
                     </span>
                     {row.fixes.length > 0 && (
@@ -144,7 +144,8 @@ export function Diagnostics({parsed, text, plain, apply, onAim, onPreview, lit, 
                         // readings offers each, and the group wraps rather than the row when they run long.
                         <span className={styles.fixes}>
                             {row.fixes.map((fix) => (
-                                <Offer key={fix.query} fix={fix} apply={apply} onPreview={onPreview}/>
+                                <Offer key={fix.query} fix={fix} text={text} clause={row.span} apply={apply}
+                                       onPreview={onPreview} onAim={onAim}/>
                             ))}
                         </span>
                     )}

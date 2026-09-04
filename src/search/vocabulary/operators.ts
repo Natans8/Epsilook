@@ -265,5 +265,11 @@ export const ORDERING: readonly Operator[] = Object.freeze([lt, lte, gt, gte, ra
  */
 export const COMPARISONS = Object.freeze({lt, lte, gt, gte});
 
+/**
+ * Each ordered comparison's complement: the comparison that selects exactly what it rejects. A refusal to
+ * negate a comparison offers this instead, since "not more than two" is "at most two".
+ */
+export const COMPLEMENTS: ReadonlyMap<Operator, Operator> = new Map([[lt, gte], [lte, gt], [gt, lte], [gte, lt]]);
+
 /** Every operator that combines clauses, tightest-binding first. */
 export const CLAUSE_OPERATORS: readonly Operator[] = Object.freeze([not, and, or]);
