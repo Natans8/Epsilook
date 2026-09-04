@@ -152,3 +152,11 @@ test("clearing a value leaves the field open with the caret in its empty slot", 
     await expect(page.locator("[class*='qbar'] > [class*='settled']")).toHaveCount(1);
     await expect(strip()).toHaveCount(0);
 });
+
+test("the quoted text of a row is painted as the bar paints it, in the fields and values the reader knows", async () => {
+    await openWith("model:fire model:{attach missile}");
+    const quoted = strip().locator("code");
+    await expect(quoted).toHaveText("model:{attach missile}");
+    // Painted runs, not one flat string: the head wears its column tone, the kind words their own mark.
+    expect(await quoted.locator("span[class]").count()).toBeGreaterThan(1);
+});

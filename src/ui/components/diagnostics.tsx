@@ -9,10 +9,16 @@
  */
 import type {ReactElement} from "react";
 import {useTranslation} from "react-i18next";
-import type {Fix, Parsed, Span} from "../../search/index";
-import {parse} from "../../search/index";
+import type {Fix, Parsed, Run, Span} from "../../search/index";
+import {paint, parse} from "../../search/index";
+import {Classed} from "../bar/index";
 import {mergeEditing, stripRows} from "../utils/diagnostics";
 import styles from "./diagnostics.module.css";
+
+/** One painted run with its diagnostic state dropped: colour stays, the squiggle is the row's to draw. */
+function quiet(run: Run): Run {
+    return run.state === undefined ? run : {...run, state: undefined};
+}
 
 /**
  * One correction on offer: the button, which shows what it would write while it is pointed at.
@@ -120,7 +126,14 @@ export function Diagnostics({parsed, text, plain, apply, onAim, onPreview, lit, 
                 >
                     {/* One inline run, so a copy of the row reads as one line: the text, a space, the reason. */}
                     <span className={styles.text}>
-                        {row.verbatim !== "" && <code className={styles.verbatim}>{row.verbatim}</code>}
+                        {row.verbatim !== "" && (
+                            // Painted as the bar paints it, so a field, a value and a kind word keep the colours
+                            // the reader knows them by. The runs are quieted: the row's own underline already
+                            // says how the clause fared, and a squiggle under a squiggle says nothing more.
+                            <code className={styles.verbatim}>
+                                <Classed text={row.verbatim} runs={paint(row.verbatim).map(quiet)}/>
+                            </code>
+                        )}
                         {row.verbatim !== "" && " "}
                         {row.about === "regex" && <span className={styles.about}>{t("strip.about.regex")}</span>}
                         {row.about !== null && " "}

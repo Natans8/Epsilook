@@ -9,5 +9,6 @@
 export type {BarHandle} from "./components/bar";
 export {Bar} from "./components/bar";
 export {PlainBar} from "./components/plain";
+export {Classed} from "./components/classed";
 export type {Vocabulary} from "./utils/offers";
 export {settledQuery, spellingFixes} from "./utils/plan";
