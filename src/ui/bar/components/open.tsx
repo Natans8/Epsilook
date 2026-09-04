@@ -376,7 +376,13 @@ export function OpenSegment({
                     {at.head.negated ? NEGATION : ""}{headCase(at.head.word)}
                 </span>
             )}
-            <span key="slot" className={styles.editwrap}>
+            {/* A slot that opens a pattern is writing another language, and wears its code face — set on the
+                wrap, so the field and its mirror change together. */}
+            <span
+                key="slot"
+                className={at.slot.trimStart().startsWith(GRAMMAR.regex)
+                    ? `${styles.editwrap} ${styles.pattern}` : styles.editwrap}
+            >
                 <span ref={backdrop} className={styles.qhl} aria-hidden="true">
                     {highlight}
                     {/* The ghost is APPENDED, never inserted: it lives past the last character the field holds,

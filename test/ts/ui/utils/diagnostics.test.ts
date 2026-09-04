@@ -18,8 +18,10 @@ test("a refused clause is an error row carrying the clause verbatim, and removal
     assert.equal(rows.length, 1);
     assert.equal(rows[0].severity, "error");
     assert.equal(rows[0].verbatim, "model:{-attach>2}");
-    // The reader's own offer first, the comparison turned round; then the clause taken out whole.
-    assert.deepEqual(rows[0].fixes.map((fix) => fix.query), ["model:fire model:{attach<=2}", "model:fire"]);
+    // The reader's own offer first, the comparison turned round; then the value cleared; then the clause taken
+    // out whole.
+    assert.deepEqual(rows[0].fixes.map((fix) => fix.query),
+        ["model:fire model:{attach<=2}", "model:fire model:", "model:fire"]);
 });
 
 test("a note offers nothing: it reports a reading rather than a flaw", () => {
@@ -60,4 +62,14 @@ test("a finding about a regular expression says so, and every other row names no
     assert.equal(rows[0].about, "regex");
     const plain = stripRows(parse("model:{-attach>2}", {mode: "final"}), "model:{-attach>2}");
     assert.equal(plain[0].about, null);
+});
+
+test("a finding about the value alone offers to clear it and keep the field, before removal", () => {
+    const text = "model:fire scale:x2+50%";
+    const rows = stripRows(parse(text, {mode: "final"}), text);
+    assert.deepEqual(rows[0].fixes.map((fix) => [fix.label, fix.query]),
+        [["clear the value", "model:fire scale:"], ["remove", "model:fire"]]);
+    // A structural fault has no value to keep: removal alone closes its offers.
+    const shape = stripRows(parse("model:fire sort:zzz", {mode: "final"}), "model:fire sort:zzz");
+    assert.deepEqual(shape[0].fixes.map((fix) => fix.label), ["remove"]);
 });

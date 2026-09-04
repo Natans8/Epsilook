@@ -58,6 +58,12 @@ export interface Diagnostic {
      * language to think in.
      */
     readonly about?: "regex";
+    /**
+     * Which part of the clause the finding is about, where a surface can act on the part alone: the VALUE,
+     * with the field standing — a reading the axis refused, a pattern that did not compile — as against the
+     * clause's structure, where nothing short of the whole can be kept.
+     */
+    readonly at?: "value";
 }
 
 /**

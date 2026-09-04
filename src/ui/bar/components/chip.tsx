@@ -242,7 +242,8 @@ function Pieces({pieces, text}: { readonly pieces: readonly Piece[]; readonly te
         }
         if (piece.is === "regex") {
             out.push(
-                <span key={i}>
+                // A pattern is another language and reads in a code face, slashes included.
+                <span key={i} className={styles.vPattern}>
                     <span className={styles.vQuote}>{GRAMMAR.regex}</span>
                     <Pattern pattern={piece.pattern}/>
                     <span className={styles.vQuote}>{GRAMMAR.regex}</span>

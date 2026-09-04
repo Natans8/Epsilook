@@ -9,7 +9,7 @@ import type {Diagnostic, Fix, Parsed, Severity, Span} from "../../search/index";
 import {i18n} from "../../i18n";
 // The model directly rather than the bar's door: the door also hands out components, which a Node test of
 // this React-free model cannot compile, and the splice is the model's own.
-import {spliceOut} from "../bar/utils/plan";
+import {openHead, spliceOut} from "../bar/utils/plan";
 
 /** One row of the strip: what was written, what the reader said about it, and the corrections on offer. */
 export interface StripRow {
@@ -63,12 +63,21 @@ export function stripRows(parsed: Parsed, text: string): readonly StripRow[] {
         const start = clause === undefined ? text.length : clause.span.start;
         const verbatim = clause === undefined ? "" : text.slice(clause.span.start, clause.span.end).trim();
         // A flawed clause can always be taken out whole, so removal closes every error's and warning's offers;
-        // a note reports a reading and asks for nothing.
-        const remove = clause === undefined || d.severity === "note" ? [] : [{
+        // a note reports a reading and asks for nothing. Where the finding is about the VALUE alone, the
+        // softer way out comes first: the field stays, open and empty, for the reader to retype into.
+        const flawed = clause !== undefined && d.severity !== "note";
+        const head = flawed && d.at === "value" ? openHead(text.slice(clause.span.start, clause.span.end)) : null;
+        const clear = clause === undefined || head === null || !head.bound ? [] : [{
+            label: i18n.t("ui:strip.clear"),
+            query: text.slice(0, clause.span.start)
+                + text.slice(clause.span.start, clause.span.start + head.consumed - (head.scoped ? 1 : 0))
+                + text.slice(clause.span.end),
+        }];
+        const remove = clause === undefined || !flawed ? [] : [{
             label: i18n.t("ui:strip.remove"),
             query: spliceOut(text, clause.span.start, clause.span.end).text,
         }];
-        const fixes = [...(d.fixes ?? []), ...remove];
+        const fixes = [...(d.fixes ?? []), ...clear, ...remove];
         const span = clause === undefined ? null : clause.span;
         const about = d.about ?? null;
         return {row: {severity: d.severity, span, verbatim, message: d.message, about, fixes}, start, order};

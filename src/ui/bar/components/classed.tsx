@@ -123,11 +123,13 @@ export function Classed({text, rich, runs: given, mirrored, selected, band}: {
         // language stops applying, so the clause's tone, its exclusion red and its vocabulary mark are all
         // dropped rather than combined with. Two languages layered would say neither. Every other run paints
         // as one piece, so the selection below has a single shape to cut.
+        // A pattern reads in a code face wherever the painting stands on its own; under a field the face is the
+        // wrap's business, since field and mirror must change together.
         const pieces = run.kind === "regex"
             ? patternRuns(text.slice(run.start, run.end)).map((part) => ({
                 start: run.start + part.start,
                 end: run.start + part.end,
-                cls: PATTERN_CLASS[part.kind],
+                cls: mirrored === true ? PATTERN_CLASS[part.kind] : `${PATTERN_CLASS[part.kind]} ${styles.rxMono}`,
                 note: part.note,
             }))
             : [{start: run.start, end: run.end, cls, note: undefined}];

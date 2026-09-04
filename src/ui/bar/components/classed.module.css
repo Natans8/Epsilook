@@ -135,3 +135,9 @@
     text-decoration: underline wavy var(--gold-dim);
     text-underline-offset: 3px;
 }
+
+/* A pattern painted on its own, not under a field, reads in a code face; under a field the wrap decides. */
+.rxMono {
+    font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+    font-size: 0.95em;
+}

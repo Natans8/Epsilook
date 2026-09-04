@@ -414,3 +414,9 @@
     color: var(--text-strong);
     border-bottom-color: var(--text-strong);
 }
+
+/* A pattern is another language, and a settled chip says so with a code face on the whole of it, slashes included. */
+.vPattern {
+    font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+    font-size: 0.95em;
+}

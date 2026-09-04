@@ -210,6 +210,7 @@ class Parser {
         for (const p of pend) {
             this.diagnostics.push({
                 severity: p.severity, clause: index, message: p.message, fixes: p.fixes, about: p.about,
+                at: p.at,
             });
         }
         return index;
@@ -1133,7 +1134,7 @@ class Parser {
             if (interp.rescuable !== true || this.mode === "final") {
                 pend.push({
                     severity: "error", message: interp.message, fixes: this.failFix(span, interp),
-                    about: interp.about,
+                    about: interp.about, at: "value",
                 });
             }
             run.push({span, not, state: "incomplete", ask: null});
@@ -1302,6 +1303,7 @@ class Parser {
                 pend.push({
                     severity: "warning",
                     about: "regex",
+                    at: "value",
                     message: i18n.t("diagnostics:pattern.unclosed"),
                 });
             }
@@ -1384,7 +1386,7 @@ class Parser {
             this.push(span, not, "invalid", ask,
                 [...pend, {
                     severity: "error", message: interp.message, fixes: this.failFix(span, interp),
-                    about: interp.about,
+                    about: interp.about, at: "value",
                 }]);
             return;
         }

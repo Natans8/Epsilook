@@ -109,6 +109,7 @@ export interface Pending {
     readonly message: string;
     readonly fixes?: readonly Fix[];
     readonly about?: "regex";
+    readonly at?: "value";
 }
 
 /** The operators that require an order, by name — the ones whose refusal message says "no ordering". */
@@ -239,7 +240,9 @@ export function quotedQuantity(word: string, prop: Prop): Interp {
 /** A pattern on a file path is honest but weak, and the warning says why — once per clause. */
 export function warnPathGlob(pend: Pending[]): void {
     const message = i18n.t("diagnostics:pattern.pathWeak");
-    if (!pend.some((p) => p.message === message)) pend.push({severity: "warning", about: "regex", message});
+    if (!pend.some((p) => p.message === message)) {
+        pend.push({severity: "warning", about: "regex", at: "value", message});
+    }
 }
 
 /**
@@ -327,6 +330,7 @@ export function typedCtx(prop: Prop, word: string, pend: Pending[], done: (value
         if (t === "" || squash(t) !== "") return;
         pend.push({
             severity: "warning",
+            at: "value",
             message: i18n.t("diagnostics:value.punctuationOnly"),
             fixes: [{
                 label: i18n.t("diagnostics:fix.asPattern"),

@@ -60,6 +60,22 @@
     padding: 0 0.55rem;
 }
 
+/* A slot holding a pattern is another language, and says so in a code face. The face is set on the WRAP so
+ * the field and the mirror beneath it change together — the one thing a mirrored surface may never do is
+ * measure differently from its field, and both inherit from here. */
+.editwrap.pattern {
+    font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+
+/* The code face has a shorter natural line than the text face, and a shorter line box in a slot stretched to
+ * the head's height sat the ink at the top. Measured: the text face's normal line is four thirds of its size,
+ * so the code face is given the same, on field and mirror alike — Firefox only clamps a line-height UP to the
+ * font's normal, so an explicit taller one holds — and the slot keeps the geometry it has in text. */
+.editwrap.pattern .qhl,
+.editwrap.pattern .q {
+    line-height: 1.3334;
+}
+
 .qhl {
     /* Decoration only: the input above owns the selection, and a backdrop that could take it would paint one
      * rectangle per classed run — a gap at every space, because a run boundary is not a character. */

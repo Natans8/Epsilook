@@ -79,6 +79,7 @@
     "remove": "",
     "about": {
       "regex": ""
-    }
+    },
+    "clear": ""
   }
 }

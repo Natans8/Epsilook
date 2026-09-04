@@ -7,7 +7,7 @@
  */
 import type {Locator, Page} from "@playwright/test";
 import {expect, test} from "@playwright/test";
-import {barInput, clearBar, expectQuery, openHarness, plainField, plainSwitch, seed} from "./helpers";
+import {barInput, clearBar, expectQuery, HARNESS_URL, openHarness, plainField, plainSwitch, seed} from "./helpers";
 
 let page: Page;
 
@@ -100,4 +100,26 @@ test("an escaped slash writes ONE delimiter, not two", async () => {
     // pattern still closes on the one slash that was already there.
     await page.keyboard.type(String.raw`\/`, {delay: 20});
     await expectQuery(page, String.raw`name:{/a\//}`);
+});
+
+test("an open slot holding a complex pattern reads in a code face, field and mirror agreeing on every metric", async () => {
+    const pattern = String.raw`/^(fire|frost)[_-]?\d{2,}(?!bolt)$/`;
+    await page.goto(`${HARNESS_URL}?q=${encodeURIComponent(`model:${pattern} sound:bell`)}`);
+    await barInput(page).waitFor({state: "visible", timeout: 120_000});
+    // Open the pattern chip by pressing its value; the slot then holds the pattern.
+    await page.locator("[class*='qbar'] > [class*='settled']").first().getByText("fire").click();
+    const input = barInput(page);
+    await expect(input).toHaveValue(pattern);
+    const metrics = await input.evaluate((el) => {
+        const wrap = el.parentElement as HTMLElement;
+        const mirror = wrap.querySelector("[class*='qhl']") as HTMLElement;
+        const of = (node: HTMLElement) => {
+            const c = getComputedStyle(node);
+            return [c.fontFamily, c.fontSize, c.lineHeight, node.getBoundingClientRect().height];
+        };
+        return {input: of(el as HTMLElement), mirror: of(mirror), wrapClass: wrap.className};
+    });
+    expect(metrics.wrapClass).toContain("pattern");
+    expect(metrics.input[0]).toContain("monospace");
+    expect(metrics.input).toEqual(metrics.mirror);
 });
