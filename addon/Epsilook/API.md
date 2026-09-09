@@ -33,6 +33,8 @@ a spell's own parts (`GetPartDataByIndex`). Every id is the game's own.
 | `Action`    | `key`, `label`, `needs`, `kind`, `except`, `effect`, `revert`, `hint`                    |
 | `DataInfo`  | `pack`, `built`, `format`, `variation`, `supplied`, `absent`, `homes`                    |
 | `Problem`   | `severity`, `message`, `at`, `length` (positions index the query text, counted from one) |
+| `SkyData`   | `id`, `name`, `file`, `celestialFile`, `flags`, `param`, `presets`, `conditions`, `conditionWords`, `flat`, `zones`, `maps`, `spell`, `spells` |
+| `SkyLight`  | `top`, `middle`, `band1`, `band2`, `smog`, `fog`, `sun`, `ambient`, `direct`, `horizon`, `ground`, `river`, `ocean`, `endFog`, `fogEnd`, `shadow`, `cloud` |
 
 A `PartData.values` entry is one of three shapes, decided by the property's declared type: a property whose value
 resolved from an id to a name is a table `{ id, text }`; a property whose number names a vocabulary entry is that
@@ -169,6 +171,44 @@ while true do
     end
 end
 ```
+
+## The sky
+
+The one family here whose subject is not a spell. A skybox belongs to a stretch of the world, and Epsilon's own spells
+are an edge into it rather than the thing it hangs off, so these read by `LightSkybox` id and the spell is a field on
+the record.
+
+| call                                          | returns                                                     |
+|-----------------------------------------------|--------------------------------------------------------------|
+| `Epsilook:GetNumSkies()`                      | how many sky domes this build carries                       |
+| `Epsilook:GetSkyIndexByID(skyboxID)`          | the dome's row, or `nil`                                    |
+| `Epsilook:GetSkyDataByID(skyboxID, target)`   | `SkyData`, or `nil`                                         |
+| `Epsilook:GetSkyDataByIndex(index, target)`   | `SkyData`, or `nil`                                         |
+| `Epsilook:GetSkyPlaces(skyboxID)`             | zone names, map names, and the maps it is the whole sky of  |
+| `Epsilook:GetSkySpells(skyboxID)`             | every spell that sets it, and the preset each one sets      |
+| `Epsilook:GetSkyLight(skyboxID, time, target)` | `SkyLight` at any half-minute of the 2,880-half-minute day  |
+| `Epsilook:FindSkies(text)`                    | the ids whose name, zone, map or spell matches              |
+| `Epsilook:UnpackColor(packed)`                | `r, g, b, a`, each from zero to one                         |
+| `Epsilook:GetSkyActions()`                    | an array of `Action`                                        |
+| `Epsilook:GetSkyCommand(key, skyboxID)`       | the command that action would send, without its leading dot |
+
+`SkyData.param` is the `LightParams` preset the row stands for: 2,884 presets share 414 domes, and the one a row takes
+is the preset the most lights draw. `presets` is how many share the dome, and `spell` is the one of `spells` that sets
+`param`, so a caller offering one button offers the right one.
+
+`conditions` is a mask over the eight `LightParams` slots a `Light` row carries, which are conditions rather than a
+set: bit nought is the plain sky, and the rest are underwater, storm, storm underwater, death, and three the client
+documents as unknown. `conditionWords` spells the bits that are set, leaving out the plain sky, which needs no saying.
+A dome with no bit nought is somebody's storm sky and nobody's sky.
+
+Every colour on a `SkyLight` is packed as the client stores it, one number holding alpha, red, green and blue;
+`UnpackColor` is the one place that is undone. `fogEnd`, `shadow` and `cloud` are plain numbers. The ramp ships as
+stops rather than as a fixed set of hours, so any moment can be asked for and the day wraps.
+
+`flat` says every stop holds the same colours, so the hour cannot change the sky's own light.
+
+**Nothing here performs anything.** `GetSkyCommand` returns the text an action would send and never sends it, the same
+rule the rest of this surface keeps.
 
 ## Chat links
 

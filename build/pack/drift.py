@@ -29,6 +29,14 @@ OPTIONAL_TABLES = {
     "ShadowyEffect": "the ghost/shadowy fx category",
     "SpellVisualScreenEffect": "the kit route into screen fx",
     "ScreenEffect": "the screen fx category",
+    # The sky sections ship absent without these; nothing else reads them.
+    "LightSkybox": "the skybox roster",
+    "LightParams": "the presets that pick a skybox and colour the day",
+    "LightData": "the colour ramp through the day",
+    "Light": "where on a map a preset is drawn, and under which condition",
+    # arrives in Cataclysm; before it the client hardcodes the zones
+    "ZoneLight": "the names of the zones a sky is drawn in",
+    "Map": "map names, the fallback place for a light no zone names",
     "FullScreenEffect": "screen fx colour grading + overlay textures",
     "AnimReplacement": "anim-replacement sets (aura 312)",
     "SpellShapeshiftForm": "the shapeshift fx category",

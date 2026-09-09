@@ -505,6 +505,28 @@ erDiagram
     }
 ```
 
+**The light family is the one chain that does not start at a spell.** It starts at a place: a `Light` row is a sphere
+on a map, and everything else hangs off it.
+
+```mermaid
+---
+title: The light family — a place, its presets, and the dome one of them picks
+---
+erDiagram
+    accTitle: The light family
+    accDescr {
+    A Light row belongs to a Map and carries eight LightParams, one per condition rather than
+    eight members of a set. A ZoneLight names one Light, which is the only naming of a place the
+    client ships. Each LightParams has many LightData stops, its day, and points at one
+    LightSkybox, the dome's model.
+    }
+    Map ||--o{ Light:"lights standing on it"
+    ZoneLight |o--|| Light:"names one, and only 373 do"
+    Light ||--|{ LightParams:"EIGHT slots, one per condition"
+    LightParams ||--o{ LightData:"one stop per moment of the day"
+    LightParams }o--o| LightSkybox:"the dome, where it picks one"
+```
+
 The recurring joins, for reference:
 
 | from                        | column                                                    | to                                                    |
@@ -520,6 +542,9 @@ The recurring joins, for reference:
 | `SoundKitEntry`             | `SoundKitID`                                              | the audio files                                       |
 | `AnimKitSegment`            | `ParentAnimKitID`, `AnimID`                               | an anim kit's animations                              |
 | `SpellCastingRequirements`  | `RequiredAreasID`                                         | `AreaGroupMember` to `AreaTable`                      |
+| `Light`                     | `LightParamsID_0` to `_7`, meaning set by the SLOT         | `LightParams`, one per condition                      |
+| `LightParams`               | `LightSkyboxID`                                            | `LightSkybox`, the dome's model                       |
+| `ZoneLight`                 | `LightID`                                                  | the `Light` whose zone it names                       |
 
 ### As shipped
 
@@ -583,6 +608,11 @@ flowchart TD
 | **row tables** | What a spell HAS, as rows of a named kind: the distinct rows pooled once, referenced per spell  |
 | **link rows**  | The many-to-many the graph walk flattened, with the target mask on the row that earned it       |
 | **vocabulary** | A name, path or colour stored once and referenced, instead of repeated on every row that has it |
+| **roster**     | A subject that is not a spell, keyed by its own id, with parallel sections hanging off it      |
+
+**The sky is the first roster whose subject is not a spell.** `skyboxes` is keyed by `LightSkybox` id and
+`skyPlaces`, `skySpells` and `skyRamps` are parallel rows hanging off it, the same one-to-many shape `screenTextures`
+uses. It lands in its own `sky` module, so a pack carries it without every other pack paying for it.
 
 Nothing but `spells` is dense, and that is the point: a column every spell has is rare, and everything else is a count,
 a reference or a value somebody else's row also uses.
@@ -970,6 +1000,34 @@ different creatures are two rows rather than one.
 tells the renderer that a dedicated pill already shows it, so the raw one is not drawn a second time. That makes the
 mechanics column an inventory of the features not built yet — most effect and aura values are unparsed rather than
 missing, and promoting one takes it out of that column on its own.
+
+### Routes that start at a place
+
+The one family whose subject is not a spell. A sky belongs to a stretch of the world, and a spell is an edge INTO it
+rather than the thing it hangs off, so the roster is the domes and the spell column points at them.
+
+| route         | ships as                            | notes                                                             |
+|---------------|-------------------------------------|--------------------------------------------------------------------|
+| **dome**      | `skyboxes`                          | One row per `LightSkybox`, standing for the preset most lights draw |
+| **place**     | `skyPlaces`                         | A `ZoneLight` name where there is one, else the map it stands on   |
+| **condition** | `skyboxes.conditions`, `skyConditions` | A mask over a `Light` row's eight slots, and what each bit means |
+| **ramp**      | `skyRamps`                          | The preset's day, one row per stop; a reader between two interpolates |
+| **spell**     | `skySpells`                         | Epsilon only, and the edge lives in the spell's NAME, not a table  |
+
+**A `Light` row carries eight LightParams, and they are conditions rather than a set.** Clear, clear underwater, storm,
+storm underwater, death, and three the client documents as unknown. Reading them together is not a rounding error: the
+death sky sits in slot four of nearly every light in the game, so a union reports it as the sky of everywhere instead
+of the sky of being dead. The mask ships so a reader cannot make that mistake by accident.
+
+**No table joins a spell to a sky.** Epsilon names its own spells `Skybox LightData <preset>: <model>`, and that name
+is the only mapping there is, which is why the section parses it rather than a route reading it. On every pack but
+Epsilon's the column is empty, and the roster still ships.
+
+**Where a light stands is not a place, and no table makes it one.** A light is a sphere with a radius, and turning its
+coordinates into an area needs the terrain, which the pack does not read. So a sky with no `ZoneLight` name is placed
+by its map, which for a raid or a dungeon is the whole answer and for a continent is as close as the data gets. A light
+at the origin with no radius is the exception: the client reads that as the map's own sky rather than a light standing
+anywhere, and it ships as its own kind.
 
 ### Routes that start at the spell row
 

@@ -63,6 +63,7 @@ from .routes import (
     Delivery,
     FxPayloads,
     GameObjectData,
+    implicit_target_bits,
     ItemModels,
     KeyboundOverride,
     KitEffects,
@@ -71,15 +72,6 @@ from .routes import (
     MountData,
     ProcEffects,
     Reach,
-    ShapeshiftForms,
-    SpellEffectRows,
-    SpellNames,
-    SpellProperties,
-    SpellText,
-    VehicleSeats,
-    VisualGraph,
-    VisualMissiles,
-    implicit_target_bits,
     read_anim_replacements,
     read_animkit_anims,
     read_animkit_bonesets,
@@ -97,6 +89,7 @@ from .routes import (
     read_override_names,
     read_proc_effects,
     read_shapeshift_forms,
+    read_skies,
     read_soundkit_files,
     read_spell_attributes,
     read_spell_delivery,
@@ -110,6 +103,15 @@ from .routes import (
     read_visual_graph,
     read_zone_maps,
     resolve_paths,
+    ShapeshiftForms,
+    SkyRoster,
+    SpellEffectRows,
+    SpellNames,
+    SpellProperties,
+    SpellText,
+    VehicleSeats,
+    VisualGraph,
+    VisualMissiles,
 )
 from .routes.anims import read_anim_emotes
 from .routes.sounds import read_kit_names, read_kit_types, sound_type_names
@@ -337,6 +339,11 @@ class Derivations:
     def fx(self) -> FxPayloads:
         with phase("read fx payloads"):
             return read_fx_payloads(self.tables)
+
+    @cached_property
+    def skies(self) -> SkyRoster:
+        with phase("read skies"):
+            return read_skies(self.tables)
 
     @cached_property
     def kits(self) -> KitEffects:

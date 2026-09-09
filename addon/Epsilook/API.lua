@@ -34,6 +34,10 @@
 --               property is a table of id and text)
 --   Action      key, label, needs, kind, except, via, effect, revert, hint
 --   DataInfo    pack, built, format, variation, homes
+--   SkyData     id, name, file, celestialFile, flags, param, presets,
+--               conditions, conditionWords, flat, zones, maps, spell, spells
+--   SkyLight    top, middle, band1, band2, smog, fog, sun, ambient, direct,
+--               horizon, ground, river, ocean, endFog, fogEnd, shadow, cloud
 
 _G.Epsilook = _G.Epsilook or {}
 local Epsilook = _G.Epsilook
@@ -931,6 +935,366 @@ end
 function Epsilook:IsMatch(query, spellID)
 	mounted(self)
 	return Search.Matches(query, spellID)
+end
+
+-- The sky. It is the one family here whose subject is not a spell: a skybox
+-- belongs to a stretch of the world, and Epsilon's own spells are an edge into
+-- it rather than the thing it hangs off. So these read by skybox id, and the
+-- spell is a field on the record.
+
+--- Which run of rows in a side section belongs to each skybox, built once.
+-- The three side sections are written in skybox order, so a run is a first row
+-- and a length; walking the key column once beats a search per call, and there
+-- are a couple of thousand rows in the largest of them.
+local skyRuns = {}
+
+local function runsOf(section)
+	local found = skyRuns[section]
+	if found then
+		return found
+	end
+	found = {}
+	local keys = Data.ReadAll("sky", section, "skyboxIds") or {}
+	for row = 1, #keys do
+		local run = found[keys[row]]
+		if run then
+			run[2] = run[2] + 1
+		else
+			found[keys[row]] = { row - 1, 1 }
+		end
+	end
+	skyRuns[section] = found
+	return found
+end
+
+--- The words for each bit of a condition mask, read once.
+local function conditionWords()
+	return Data.ReadAll("sky", "skyConditions", "words") or {}
+end
+
+--- A packed colour as four channels.
+-- Every sky colour ships as the client stores it, one number holding alpha,
+-- red, green and blue. Unpacking is one decision, so it lives here rather than
+-- in each interface that draws one.
+-- @param packed a colour from a SkyLight
+-- @return r, g, b, a, each from zero to one
+function Epsilook:UnpackColor(packed)
+	packed = packed or 0
+	local b = packed % 256
+	local g = math.floor(packed / 256) % 256
+	local r = math.floor(packed / 65536) % 256
+	local a = math.floor(packed / 16777216) % 256
+	return r / 255, g / 255, b / 255, a / 255
+end
+
+--- How many sky domes this build carries.
+function Epsilook:GetNumSkies()
+	mounted(self)
+	local node = Data.GetColumn("sky", "skyboxes", "ids")
+	return node and Reader.size(node) or 0
+end
+
+--- The row a skybox id sits at.
+-- @param skyboxID the LightSkybox id
+-- @return the row, counted from zero, or nil
+function Epsilook:GetSkyIndexByID(skyboxID)
+	mounted(self)
+	local node, blob = Data.GetColumn("sky", "skyboxes", "ids")
+	return node and Reader.rowOf(blob, node, skyboxID) or nil
+end
+
+--- The places a dome is seen, zones before maps.
+-- A zone is the only naming of a place the client ships; a map is the fallback
+-- for a light no zone names, and a map the dome is the whole sky of says so.
+-- @param skyboxID the LightSkybox id
+-- @return a list of zone names, a list of map names, a list of whole-map names
+function Epsilook:GetSkyPlaces(skyboxID)
+	mounted(self)
+	local run = runsOf("skyPlaces")[skyboxID]
+	local zones, maps, whole = {}, {}, {}
+	if not run then
+		return zones, maps, whole
+	end
+	local kinds = Data.ReadAll("sky", "skyPlaces", "kinds") or {}
+	local names = Data.ReadAll("sky", "skyPlaces", "names") or {}
+	for at = run[1] + 1, run[1] + run[2] do
+		local kind, name = kinds[at], names[at]
+		if kind == 0 then
+			zones[#zones + 1] = name
+		else
+			maps[#maps + 1] = name
+			if kind == 2 then
+				whole[#whole + 1] = name
+			end
+		end
+	end
+	return zones, maps, whole
+end
+
+--- Every Epsilon spell that sets a dome, and the preset each one sets.
+-- @param skyboxID the LightSkybox id
+-- @return a list of spell ids, and a parallel list of the LightParams each sets
+function Epsilook:GetSkySpells(skyboxID)
+	mounted(self)
+	local run = runsOf("skySpells")[skyboxID]
+	local spells, params = {}, {}
+	if not run then
+		return spells, params
+	end
+	local ids = Data.ReadAll("sky", "skySpells", "spells") or {}
+	local presets = Data.ReadAll("sky", "skySpells", "paramIds") or {}
+	for at = run[1] + 1, run[1] + run[2] do
+		spells[#spells + 1] = ids[at]
+		params[#params + 1] = presets[at]
+	end
+	return spells, params
+end
+
+--- One dome's whole record, by row.
+-- @param index a row counted from zero
+-- @param target an optional table to fill instead of allocating one
+-- @return a SkyData, or nil where the row is outside this build
+function Epsilook:GetSkyDataByIndex(index, target)
+	mounted(self)
+	local ids, blob = Data.GetColumn("sky", "skyboxes", "ids")
+	if not ids or index < 0 or index >= Reader.size(ids) then
+		return nil
+	end
+	local out = target or {}
+	out.id = Reader.number(blob, ids, index)
+	out.name = cell("skyboxes", "names", index, "")
+	out.file = cell("skyboxes", "files", index, 0)
+	out.celestialFile = cell("skyboxes", "celestialFiles", index, 0)
+	out.flags = cell("skyboxes", "skyFlags", index, 0)
+	out.param = cell("skyboxes", "params", index, 0)
+	out.presets = cell("skyboxes", "presets", index, 0)
+	out.conditions = cell("skyboxes", "conditions", index, 0)
+	out.flat = cell("skyboxes", "flat", index, 0) == 1
+	-- Bit nought is the plain sky and needs no saying, so the words start at one.
+	local words = conditionWords()
+	out.conditionWords = {}
+	for bit = 1, #words - 1 do
+		if math.floor(out.conditions / 2 ^ bit) % 2 == 1 and words[bit + 1] ~= "" then
+			out.conditionWords[#out.conditionWords + 1] = words[bit + 1]
+		end
+	end
+	out.zones, out.maps = self:GetSkyPlaces(out.id)
+	local spells, params = self:GetSkySpells(out.id)
+	out.spells = spells
+	-- The spell to offer first is the one setting the preset the row stands for.
+	out.spell = spells[1]
+	for at = 1, #spells do
+		if params[at] == out.param then
+			out.spell = spells[at]
+			break
+		end
+	end
+	return out
+end
+
+--- One dome's whole record, by id.
+-- @param skyboxID the LightSkybox id
+-- @param target an optional table to fill instead of allocating one
+-- @return a SkyData, or nil where this build has no such dome
+function Epsilook:GetSkyDataByID(skyboxID, target)
+	local row = self:GetSkyIndexByID(skyboxID)
+	if not row then
+		return nil
+	end
+	return self:GetSkyDataByIndex(row, target)
+end
+
+--- The names of the SkyLight fields, in the order the ramp columns ship.
+local SKY_LIGHT_FIELDS = {
+	{ "top", "skyTopColors" },
+	{ "middle", "skyMiddleColors" },
+	{ "band1", "skyBand1Colors" },
+	{ "band2", "skyBand2Colors" },
+	{ "smog", "skySmogColors" },
+	{ "fog", "skyFogColors" },
+	{ "sun", "sunColors" },
+	{ "ambient", "ambientColors" },
+	{ "direct", "directColors" },
+	{ "horizon", "horizonAmbientColors" },
+	{ "ground", "groundAmbientColors" },
+	{ "river", "riverCloseColors" },
+	{ "ocean", "oceanCloseColors" },
+	{ "endFog", "endFogColors" },
+}
+
+--- One channel of a packed colour, blended between two stops.
+local function blend(from, to, part)
+	local out = 0
+	for shift = 0, 3 do
+		local unit = 2 ^ (shift * 8)
+		local a = math.floor(from / unit) % 256
+		local b = math.floor(to / unit) % 256
+		out = out + math.floor(a + (b - a) * part + 0.5) * unit
+	end
+	return out
+end
+
+--- What the sky holds at one moment of the day.
+-- The ramp ships as stops rather than as a fixed set of hours, so any moment
+-- can be asked for; between two stops the colours are blended, and the day
+-- wraps, so a moment after the last stop reads back towards the first.
+-- @param skyboxID the LightSkybox id
+-- @param time a half-minute of the day, from zero to 2879
+-- @param target an optional table to fill instead of allocating one
+-- @return a SkyLight, or nil where the dome has no ramp
+function Epsilook:GetSkyLight(skyboxID, time, target)
+	mounted(self)
+	local run = runsOf("skyRamps")[skyboxID]
+	if not run then
+		return nil
+	end
+	local times = Data.ReadAll("sky", "skyRamps", "times") or {}
+	local first, count = run[1] + 1, run[2]
+	time = time % 2880
+
+	-- The stop at or before the moment, and the one after it, wrapping the day.
+	local before = first + count - 1
+	for at = first, first + count - 1 do
+		if times[at] > time then
+			before = at - 1
+			break
+		end
+	end
+	if before < first then
+		before = first + count - 1
+	end
+	local after = before + 1
+	if after > first + count - 1 then
+		after = first
+	end
+	local span = (times[after] - times[before]) % 2880
+	local part = span > 0 and (((time - times[before]) % 2880) / span) or 0
+
+	local out = target or {}
+	for at = 1, #SKY_LIGHT_FIELDS do
+		local name, column = SKY_LIGHT_FIELDS[at][1], SKY_LIGHT_FIELDS[at][2]
+		local values = Data.ReadAll("sky", "skyRamps", column)
+		out[name] = values and blend(values[before], values[after], part) or 0
+	end
+	for _, pair in ipairs({
+		{ "fogEnd", "fogEnds" },
+		{ "shadow", "shadowOpacities" },
+		{ "cloud", "cloudDensities" },
+	}) do
+		local values = Data.ReadAll("sky", "skyRamps", pair[2])
+		local from, to = values and values[before] or 0, values and values[after] or 0
+		out[pair[1]] = from + (to - from) * part
+	end
+	return out
+end
+
+--- Every dome whose name, zone, map or spell contains the text.
+-- @param text what to look for, folded to lower case; empty returns every dome
+-- @return a list of skybox ids
+function Epsilook:FindSkies(text)
+	mounted(self)
+	local wanted = (text or ""):lower()
+	local ids = Data.ReadAll("sky", "skyboxes", "ids") or {}
+	local names = Data.ReadAll("sky", "skyboxes", "names") or {}
+	local out = {}
+	for row = 1, #ids do
+		local hit = wanted == "" or names[row]:lower():find(wanted, 1, true) ~= nil
+		if not hit then
+			local zones, maps = self:GetSkyPlaces(ids[row])
+			for _, list in ipairs({ zones, maps }) do
+				for at = 1, #list do
+					if list[at]:lower():find(wanted, 1, true) then
+						hit = true
+						break
+					end
+				end
+				if hit then
+					break
+				end
+			end
+		end
+		if not hit and tonumber(wanted) then
+			local spells = self:GetSkySpells(ids[row])
+			for at = 1, #spells do
+				if spells[at] == tonumber(wanted) then
+					hit = true
+					break
+				end
+			end
+		end
+		if hit then
+			out[#out + 1] = ids[row]
+		end
+	end
+	return out
+end
+
+--- What an interface may offer for one sky dome.
+-- The same shape as `ACTIONS`, and read the same way: this says what a dome
+-- affords, never that anything was done. `needs` names the SkyData field the
+-- action takes.
+Epsilook.SKY_ACTIONS = {
+	{
+		key = "area",
+		label = "Area skybox",
+		needs = "spell",
+		effect = "world",
+		revert = "",
+		hint = "Sets the sky of the area you are standing in",
+	},
+	{
+		key = "zone",
+		label = "Zone skybox",
+		needs = "spell",
+		effect = "world",
+		revert = "",
+		hint = "Sets the sky of the whole zone",
+	},
+	{
+		key = "aura",
+		label = "Aura",
+		needs = "spell",
+		effect = "world",
+		revert = "unaura",
+		hint = "Puts the sky on you alone",
+	},
+	{
+		key = "cast",
+		label = "Cast",
+		needs = "spell",
+		effect = "world",
+		revert = "",
+		hint = "Casts it, so anything watching sees it too",
+	},
+}
+
+--- What an interface may offer for a dome.
+-- @return an array of Action
+function Epsilook:GetSkyActions()
+	return Epsilook.SKY_ACTIONS
+end
+
+--- The command one sky action sends, as text.
+-- Returned rather than sent: this surface performs nothing, and only the
+-- interface knows whether a click came from a frame or from old scrollback.
+-- @param key an action key from GetSkyActions
+-- @param skyboxID the LightSkybox id
+-- @return the command without its leading dot, or nil where the dome has no spell
+function Epsilook:GetSkyCommand(key, skyboxID)
+	local sky = self:GetSkyDataByID(skyboxID)
+	if not sky or not sky.spell then
+		return nil
+	end
+	if key == "area" then
+		return "phase shift area skybox " .. sky.spell
+	elseif key == "zone" then
+		return "phase shift zone skybox " .. sky.spell
+	elseif key == "aura" then
+		return "aura " .. sky.spell
+	elseif key == "cast" then
+		return "cast " .. sky.spell
+	end
+	return nil
 end
 
 return Epsilook

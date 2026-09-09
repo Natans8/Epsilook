@@ -20,7 +20,7 @@ from ..derive import DeriveContext
 from ..model import SECTIONS, CountFamily, Section, SectionColumns
 from ..progress import detail
 
-PACK_FORMAT = 60
+PACK_FORMAT = 61
 """What shape the artifact is in.
 
 60 gives every attached model its placement: how big it is drawn, where it sits

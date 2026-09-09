@@ -89,6 +89,23 @@ TABLES = [
     "SpellVisualScreenEffect",
     "ScreenEffect",
     "FullScreenEffect",
+    # The sky. A LightSkybox is the dome's model, a LightParams the preset that
+    # picks one and colours the day around it, and LightData the preset's ramp,
+    # one row per moment of the 2,880-half-minute day.
+    "LightSkybox",
+    "LightParams",
+    "LightData",
+    # Where a preset is drawn. A Light row is a sphere on a map carrying EIGHT
+    # LightParams, one per condition -- clear, clear underwater, storm, storm
+    # underwater, death, and three the client documents as unknown -- so reading
+    # them as one set says a death sky is the sky of everywhere.
+    "Light",
+    # The only table that gives a stretch of a map a name. Absent before Cataclysm,
+    # where the client hardcodes the same rows against map ids in the executable.
+    "ZoneLight",
+    # Names the map a Light stands on, which is as close to a place as a light
+    # with no ZoneLight ever gets.
+    "Map",
     "CreatureDisplayInfo",
     "CreatureModelData",
     "SpellShapeshiftForm",
@@ -163,6 +180,12 @@ READ_IN_ONE_LANGUAGE = {
     # language is handed the answer, so no language ever opens this table's
     # translated copy. See `routes.areas.read_zone_maps`.
     "UiMap": "the zone-map match is resolved once for the build",
+    # A sky's place is a ZoneLight name where it has one, and those are the
+    # client's own internal spellings -- `BoreanTundra`, untranslated in every
+    # locale. The map is the fallback for a light no zone names, so localizing
+    # it alone would translate half a line and leave the other half English.
+    # The sky module ships once rather than per language for the same reason.
+    "Map": "the sky's place line is half untranslatable already",
 }
 """Tables a route reads a translated column from in ONE language only.
 

@@ -94,6 +94,9 @@ AXES: Mapping[str, str] = {
         "implicitTargetBits targetNames speedModeNames spellAttrs"
     ),
     "spell": "spells expansions iconNames iconFids",
+    # The sky is not reached through a query at all: nothing about a spell
+    # leads to it, so it is its own file and a search never pays for it.
+    "sky": "skyboxes skyPlaces skySpells skyRamps skyConditions",
     "text": "spellText",
     "misc": "rowVocabs",
 }

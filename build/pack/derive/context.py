@@ -23,6 +23,7 @@ from ..routes import (
     ProcEffects,
     Reach,
     ShapeshiftForms,
+    SkyRoster,
     SpellEffectRows,
     SpellNames,
     SpellProperties,
@@ -108,6 +109,10 @@ class DeriveContext:
     items: ItemModels = field(default_factory=ItemModels)
     mounts: MountData = field(default_factory=MountData)
     objects: GameObjectData = field(default_factory=GameObjectData)
+    skies: SkyRoster = field(default_factory=lambda: SkyRoster({}, {}, {}))
+    """The skybox roster: the domes, the presets that pick them, and the places
+    and conditions each preset is drawn under."""
+
     models: ModelSources = field(default_factory=ModelSources)
     procs: ProcEffects = field(default_factory=ProcEffects)
     fx: FxPayloads = field(default_factory=FxPayloads)
