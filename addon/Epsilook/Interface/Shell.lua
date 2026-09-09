@@ -748,6 +748,13 @@ Shell.SUBCOMMANDS = {
 	options = function()
 		Epsilook.Options.Show()
 	end,
+	sky = function(rest)
+		-- The gallery is the one surface here that draws rather than prints,
+		-- because comparing skies is looking at them side by side.
+		if not Epsilook.Sky.Open(rest ~= "" and rest or nil) then
+			say(Shell.Said("the data is not loaded"))
+		end
+	end,
 }
 
 --- The command: a subcommand, a lone spell, or a query.
