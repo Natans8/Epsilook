@@ -8,26 +8,26 @@ not name a file, a URL or an emitter; `tools/check.py` enforces that.
 from __future__ import annotations
 
 from . import registry as _registry
-from .areas import Area, AreaGates, read_area_gates, read_zone_maps
+from .areas import Area, AreaGates
 from .assets import resolve_paths
 from .attributes import attribute_bit, read_spell_attributes
 from .creatures import CreatureModels, read_creature_models
-from .delivery import Delivery, read_spell_delivery
+from .delivery import Delivery
 from .effects import EffectRow, MaskedIds, SpellEffectRows, implicit_target_bits, read_spell_effect_rows
 from . import flows as _flows
 from .factions import FactionTemplateRow
 from .fx import ChainEffect, FxPayloads, ScreenRow, expand_chain, read_fx_payloads
 from .gameobjects import GameObjectData
-from .interrupts import interrupt_words, read_aura_interrupts
+from .interrupts import interrupt_words
 from .items import ItemModels, read_item_models
 from .keybinds import KeyboundOverride
 from .kits import KitEffects, read_kit_effects
 from .missiles import Missile, MissileMotion, VisualMissiles, read_missiles
 from .models import ModelSources, read_model_sources
 from .mounts import MountData
-from .names import SpellNames, read_override_names, read_spell_names
+from .names import SpellNames
 from .procedures import ProcEffects, read_proc_effects
-from .reach import Reach, read_spell_reach
+from .reach import Reach
 from .route import ROUTES, Route, route
 from .shapeshifts import ShapeshiftForms
 from .skies import (
@@ -42,8 +42,8 @@ from .skies import (
     read_skies,
 )
 from .sounds import Ambience, ZoneMusic
-from .spells import SpellProperties, read_spell_properties
-from .text import SpellText, read_spell_text
+from .spells import SpellProperties
+from .text import SpellText
 from .values import DescriptionValues, read_spell_values
 from .vehicles import VehicleSeats, read_vehicle_seats
 from .visuals import KitEvent, VisualGraph, phase_words, read_visual_graph
@@ -79,28 +79,19 @@ __all__ = [
     "ProcEffects",
     "RAMP_COLORS",
     "Reach",
-    "read_area_gates",
-    "read_aura_interrupts",
     "read_creature_models",
     "read_fx_payloads",
     "read_item_models",
     "read_kit_effects",
     "read_missiles",
     "read_model_sources",
-    "read_override_names",
     "read_proc_effects",
     "read_skies",
     "read_spell_attributes",
-    "read_spell_delivery",
     "read_spell_effect_rows",
-    "read_spell_names",
-    "read_spell_properties",
-    "read_spell_reach",
-    "read_spell_text",
     "read_spell_values",
     "read_vehicle_seats",
     "read_visual_graph",
-    "read_zone_maps",
     "resolve_paths",
     "Route",
     "ROUTES",

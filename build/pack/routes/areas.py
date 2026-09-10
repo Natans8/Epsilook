@@ -15,12 +15,18 @@ pointing at the containing zone is exactly right.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
+from typing import NamedTuple
 
-from ..tables import Tables
-from .columns import to_int
-from .route import route
+
+class GateRow(NamedTuple):
+    """One spell gated to one named area."""
+
+    spell: int
+    area: int
+    name: str
+
 
 UI_MAP_TYPE_ZONE = 3
 """`UiMap.Type` for a zone map, the only type worth opening.
@@ -59,8 +65,26 @@ class AreaGates:
     areas: dict[int, Area] = field(default_factory=dict)
     """Area id to its description, for the areas some gate actually names."""
 
+    @classmethod
+    def assemble(cls, rows: Iterable[GateRow], parents: Mapping[int, int], maps: Mapping[int, int]) -> AreaGates:
+        """The sorted gate pairs, and one `Area` per area some gate names.
 
-def _root_of(area: int, parents: dict[int, int]) -> int:
+        Args:
+            rows: every spell paired with a named area of its group.
+            parents: area id to its parent, zero at the top.
+            maps: each area's zone map, one answer for the build whatever
+                language this read is in.
+        """
+        gates = cls()
+        for row in sorted(set(rows)):
+            gates.gates.append((row.spell, row.area))
+            if row.area not in gates.areas:
+                root = _root_of(row.area, parents)
+                gates.areas[row.area] = Area(row.name, root, maps.get(root, 0))
+        return gates
+
+
+def _root_of(area: int, parents: Mapping[int, int]) -> int:
     """One area's top-level ancestor.
 
     Asked per gated area rather than precomputed for the table, which is
@@ -82,93 +106,3 @@ def _root_of(area: int, parents: dict[int, int]) -> int:
         seen.add(area)
         area = parents[area]
     return area
-
-
-def read_zone_maps(tables: Tables) -> dict[int, int]:
-    """Each area's zone map, where one names the same place the area does.
-
-    Read ONCE per build and shared by every language, which is what makes the
-    id it produces a fact about the build. The match below is between two
-    translated names and its result is not one: two maps of a single place tie,
-    and the tie breaks on the spelling, so a language left to resolve its own
-    would sometimes open a different map for the same area.
-
-    Args:
-        tables: the source to read from, in the build's own language.
-
-    Returns:
-        Area id to the lowest matching `UiMapID`.
-    """
-    return _match_zone_maps(
-        tables, {to_int(area): name for area, name in tables.rows("AreaTable", ["ID", "AreaName_lang"])}
-    )
-
-
-def _match_zone_maps(tables: Tables, names: dict[int, str]) -> dict[int, int]:
-    """The name match itself, given the area names to match against.
-
-    Both filters are load-bearing. Matching on type alone reaches continent
-    maps; matching on assignment alone reaches a neighbour's map. Requiring the
-    map to be a zone map whose name equals the area's is what keeps the button
-    pointing where the pill says.
-
-    Args:
-        tables: the source to read from.
-        names: area id to name, used as the second half of the match.
-
-    Returns:
-        Area id to the lowest matching `UiMapID`.
-    """
-    zones = {
-        to_int(uid): name
-        for uid, name, kind in tables.rows("UiMap", ["ID", "Name_lang", "Type"])
-        if to_int(kind) == UI_MAP_TYPE_ZONE
-    }
-    maps: dict[int, int] = {}
-    for area_text, map_text in tables.rows("UiMapAssignment", ["AreaID", "UiMapID"]):
-        area, ui_map = to_int(area_text), to_int(map_text)
-        if area in names and zones.get(ui_map) == names[area]:
-            maps[area] = min(ui_map, maps.get(area, ui_map))
-    return maps
-
-
-@route("areas", maps="zone_maps")
-def read_area_gates(tables: Tables, maps: Mapping[int, int]) -> AreaGates:
-    """Read every spell's area gate, and describe the areas they name.
-
-    Args:
-        tables: the source to read from.
-        maps: each area's zone map, from `read_zone_maps`. Passed in rather
-            than resolved here because it is one answer for the build whatever
-            language this read is in -- see that function.
-
-    Returns:
-        The sorted gate pairs, and one `Area` per area some gate names. A group
-        naming an area the build has no row for is skipped rather than shipped
-        nameless, which a handful of spells do.
-    """
-    members: dict[int, list[int]] = {}
-    for group_text, area_text in tables.rows("AreaGroupMember", ["AreaGroupID", "AreaID"]):
-        members.setdefault(to_int(group_text), []).append(to_int(area_text))
-
-    names: dict[int, str] = {}
-    parents: dict[int, int] = {}
-    for area_text, name, parent_text in tables.rows("AreaTable", ["ID", "AreaName_lang", "ParentAreaID"]):
-        area = to_int(area_text)
-        names[area] = name
-        parents[area] = to_int(parent_text)
-
-    gates = AreaGates()
-    for spell_text, group_text in tables.rows("SpellCastingRequirements", ["SpellID", "RequiredAreasID"]):
-        if not (group := to_int(group_text)):
-            continue
-        spell = to_int(spell_text)
-        for area in sorted(set(members.get(group, ()))):
-            if area not in names:
-                continue
-            gates.gates.append((spell, area))
-            if area not in gates.areas:
-                root = _root_of(area, parents)
-                gates.areas[area] = Area(names[area], root, maps.get(root, 0))
-    gates.gates.sort()
-    return gates

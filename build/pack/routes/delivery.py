@@ -14,14 +14,11 @@ partition.
 
 from __future__ import annotations
 
+from collections.abc import Container, Iterable
 from dataclasses import dataclass
+from typing import NamedTuple
 
 from ..sources import enum_id_where, load_local_enum
-from ..tables import Tables, array_columns
-from .attributes import bit_test, carries
-from .columns import BASE_DIFFICULTY, to_int
-from .route import route
-from .spells import SpellProperties
 
 CHANNELLED = 1 << 0
 """The spell channels."""
@@ -36,18 +33,11 @@ The second is the self-channelled flag, a channel that targets the caster. It
 is still a channel, so delivery treats the pair as one.
 """
 
-CHANNEL_TESTS = tuple(bit_test(bit) for bit in CHANNEL_BITS)
-"""`CHANNEL_BITS` resolved to word and mask, since every spell tests the same
-two and the arithmetic does not depend on the spell."""
-
 DURATION_UNLIMITED = 100_000_000
 """`SpellDuration.Duration` at or beyond this is the client's "no limit".
 
 A channel that runs until something stops it. Negative values mean the same.
 """
-
-INTERRUPT_COLUMNS_MAX = 4
-"""Upper bound when probing for `SpellInterrupts.ChannelInterruptFlags_N`."""
 
 
 @dataclass(frozen=True)
@@ -79,75 +69,34 @@ Taking the three columns of one table to share an enum reported the channel
 population several times too low once.
 """
 
-
-def _breaks_on_move(tables: Tables, spells: SpellProperties) -> set[int]:
-    """Which channels end when the caster walks.
-
-    Reads the channel column, so the channel enum rather than the cast one.
-    The table is declared optional, so a build without it loses this half and
-    keeps the rest.
-
-    Args:
-        tables: the source to read from.
-        spells: the build's spells; rows for anything absent are skipped.
-
-    Returns:
-        The spells whose channel is cancelled by movement.
-    """
-    if not tables.available("SpellInterrupts"):
-        return set()
-    moving = bit_test(enum_id_where(load_local_enum(CHANNEL_INTERRUPT_ENUM), "moving"))
-    columns = array_columns(tables, "SpellInterrupts", "ChannelInterruptFlags", INTERRUPT_COLUMNS_MAX)
-    breaks: set[int] = set()
-    seen_base: set[int] = set()
-    for row in tables.rows("SpellInterrupts", ["SpellID", "DifficultyID", *columns]):
-        spell, difficulty = to_int(row[0]), to_int(row[1])
-        base = difficulty == BASE_DIFFICULTY
-        if spell not in spells.attribute_words or (spell in seen_base and not base):
-            continue
-        if base:
-            seen_base.add(spell)
-        words = tuple(to_int(value) for value in row[2:])
-        if carries(words, moving):
-            breaks.add(spell)
-        elif base:
-            # The base row is the spell's answer, so it overrides whatever a
-            # difficulty row set before it arrived.
-            breaks.discard(spell)
-    return breaks
+MOVING_BIT = enum_id_where(load_local_enum(CHANNEL_INTERRUPT_ENUM), "moving")
+"""The bit of the channel interrupt word that movement sets."""
 
 
-@route("delivery", spells="props")
-def read_spell_delivery(tables: Tables, spells: SpellProperties) -> list[Delivery]:
-    """Read the cast time and channel of every spell that has either.
+class DeliveryRow(NamedTuple):
+    """One spell's timing columns, its cast and duration rows joined."""
 
-    `SpellCastTimes.Minimum` is deliberately ignored: it is the haste floor,
+    spell: int
+    cast_ms: int
+    duration_ms: int | None
+    """None where the spell names no duration row."""
+    channelled: bool
+
+
+def assemble_delivery(rows: Iterable[DeliveryRow], breaks: Container[int]) -> list[Delivery]:
+    """The entries: one per spell with a cast time or a channel, sorted.
+
+    `SpellCastTimes.Minimum` is deliberately not read: it is the haste floor,
     and the base column is the nominal number to show.
-
-    Args:
-        tables: the source to read from.
-        spells: the timing ids and attribute words, already resolved to one
-            row per spell.
-
-    Returns:
-        One entry per spell with a cast time or a channel, sorted by spell.
     """
-    cast_of = {to_int(row[0]): to_int(row[1]) for row in tables.rows("SpellCastTimes", ["ID", "Base"])}
-    duration_of = {to_int(row[0]): to_int(row[1]) for row in tables.rows("SpellDuration", ["ID", "Duration"])}
-    breaks = _breaks_on_move(tables, spells)
-
     out: list[Delivery] = []
-    for spell, words in sorted(spells.attribute_words.items()):
-        # A negative base is the "use the caster's ranged weapon speed"
-        # sentinel rather than a duration. Epsilon fires those with no cast
-        # bar, so they read as instant here.
-        cast = max(cast_of.get(spells.cast_index.get(spell, 0), 0), 0)
+    for row in sorted(rows, key=lambda held: held.spell):
+        cast = max(row.cast_ms, 0)
         flags, duration = 0, 0
-        if any(carries(words, test) for test in CHANNEL_TESTS):
-            flags = CHANNELLED | (BREAKS_ON_MOVE if spell in breaks else 0)
-            raw = duration_of.get(spells.duration_index.get(spell, 0))
-            if raw is not None:
-                duration = -1 if raw < 0 or raw > DURATION_UNLIMITED else raw
+        if row.channelled:
+            flags = CHANNELLED | (BREAKS_ON_MOVE if row.spell in breaks else 0)
+            if row.duration_ms is not None:
+                duration = -1 if row.duration_ms < 0 or row.duration_ms > DURATION_UNLIMITED else row.duration_ms
         if cast or flags:
-            out.append(Delivery(spell, cast, duration, flags))
+            out.append(Delivery(row.spell, cast, duration, flags))
     return out

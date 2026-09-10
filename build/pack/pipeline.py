@@ -50,18 +50,14 @@ from .routes import (
     ROUTES,
     Route,
     implicit_target_bits,
-    read_area_gates,
     read_creature_models,
     read_item_models,
-    read_override_names,
-    read_spell_names,
-    read_spell_text,
     read_spell_values,
-    read_zone_maps,
     resolve_paths,
     route,
 )
 from .routes import flows
+from .routes.text import SpellText, read_encounter_notes
 from .routes.values import DescriptionValues
 from .sources import (
     ExpansionLadder,
@@ -390,16 +386,21 @@ def read_spoken(
     tables, world = providers.tables, providers.world
 
     with step(f"read {locale.code} names", f"Reading the tables the game writes in {locale.code} ..."):
-        names = read_spell_names(tables)
+        names = flows.names.run(tables, needs={"spell_subtexts": flows.spell_subtexts.run(tables)})
         creatures = read_creature_models(tables, world)
         items = read_item_models(tables)
         mounts = flows.mounts.run(tables, needs={"names.names": names.names, "creatures": creatures})
         objects = flows.objects.run(tables, needs={"world": world})
         forms = flows.forms.run(tables)
-        areas = read_area_gates(tables, zone_maps)
+        areas = flows.areas.run(tables, needs={"area_parents": flows.area_parents.run(tables), "zone_maps": zone_maps})
         factions = flows.factions.run(tables, needs={"effects.factions.named": faction_templates})
-        alt_names = read_override_names(tables, altnames)
-        templates = read_spell_text(tables)
+        alt_names = flows.alt_names.run(tables, needs={"effects.altnames": altnames})
+        templates = SpellText(
+            flows.spell_descriptions.run(tables),
+            flows.spell_aura_texts.run(tables),
+            flows.spell_variables.run(tables),
+            read_encounter_notes(tables),
+        )
 
     with phase(f"cook {locale.code} descriptions"):
         prose = cook_text(templates, values, names, locale.text)
@@ -679,9 +680,9 @@ def packed(
     with phase("read spell values"):
         values = read_spell_values(providers.base, level=build.max_level, scaling=scaling)
     # An id derived by matching two translated names, so it is the build's
-    # answer and every language is handed it. See `read_zone_maps`.
+    # answer and every language is handed it. See `flows.zone_maps`.
     with phase("read zone maps"):
-        zone_maps = read_zone_maps(providers.tables)
+        zone_maps = flows.zone_maps.run(providers.tables)
 
     chosen = selected(want)
     asked = set(declared_reads(chosen))

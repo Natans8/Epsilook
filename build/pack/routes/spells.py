@@ -14,19 +14,22 @@ and `delivery.py` resolves the two timing ids against their own tables.
 
 from __future__ import annotations
 
-from collections.abc import Container
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
+from typing import NamedTuple
 
-from ..tables import Tables, array_columns
-from .columns import BASE_DIFFICULTY, to_float, to_int
-from .route import route
 
-ATTRIBUTE_COLUMNS_MAX = 32
-"""Upper bound when probing for `SpellMisc.Attributes_N`.
+class PropertiesRow(NamedTuple):
+    """One spell's base row of `SpellMisc`, its array of flag words read whole."""
 
-Slack rather than a limit: the widest build exports 17 and the flag enum tops
-out at 15 columns, and `array_columns` returns only the ones a build has.
-"""
+    spell: int
+    school: int
+    cast_index: int
+    duration_index: int
+    range_index: int
+    speed: float
+    launch_delay: float
+    attribute_words: tuple[int, ...]
 
 
 @dataclass
@@ -61,54 +64,19 @@ class SpellProperties:
     has.
     """
 
-
-@route("props", spell_names="names.names")
-def read_spell_properties(tables: Tables, spell_names: Container[int]) -> SpellProperties:
-    """Read the icon, school and attribute flags of every listed spell.
-
-    Args:
-        tables: the source to read from.
-        spell_names: the build's spell list; rows for anything absent from it
-            are skipped.
-
-    Returns:
-        One entry per spell for each column, taken from its base-difficulty row
-        where it has one.
-    """
-    columns = array_columns(tables, "SpellMisc", "Attributes", ATTRIBUTE_COLUMNS_MAX)
-    spells = SpellProperties()
-    for row in tables.rows(
-        "SpellMisc",
-        [
-            "SpellID",
-            "DifficultyID",
-            "SpellIconFileDataID",
-            "SchoolMask",
-            "CastingTimeIndex",
-            "DurationIndex",
-            "RangeIndex",
-            "Speed",
-            "LaunchDelay",
-            *columns,
-        ],
-    ):
-        spell, difficulty = to_int(row[0]), to_int(row[1])
-        if spell not in spell_names:
-            continue
-        base = difficulty == BASE_DIFFICULTY
-        # An icon of zero is no icon, so it never displaces one already found.
-        # The others have no such value: zero is schoolless, no flags set, and
-        # no cast, duration or range row, all of which are answers.
-        if (icon := to_int(row[2])) and (base or spell not in spells.icon_fid):
-            spells.icon_fid[spell] = icon
-        if base or spell not in spells.school:
-            spells.school[spell] = to_int(row[3])
-            spells.cast_index[spell] = to_int(row[4])
-            spells.duration_index[spell] = to_int(row[5])
-            spells.range_index[spell] = to_int(row[6])
-            if to_float(row[7]) > 0 or to_float(row[8]) > 0:
-                spells.delayed.add(spell)
-            else:
-                spells.delayed.discard(spell)
-            spells.attribute_words[spell] = tuple(to_int(value) for value in row[9:])
-    return spells
+    @classmethod
+    def assemble(cls, rows: Iterable[PropertiesRow], icons: Mapping[int, int]) -> SpellProperties:
+        """The record from each spell's base row, and its icon from the row
+        that has one: an icon of zero never displaces one, so the icon is read
+        apart, base row first."""
+        spells = cls()
+        for row in rows:
+            spells.school[row.spell] = row.school
+            spells.cast_index[row.spell] = row.cast_index
+            spells.duration_index[row.spell] = row.duration_index
+            spells.range_index[row.spell] = row.range_index
+            if row.speed > 0 or row.launch_delay > 0:
+                spells.delayed.add(row.spell)
+            spells.attribute_words[row.spell] = row.attribute_words
+        spells.icon_fid = {spell: icon for spell, icon in icons.items() if spell in spells.school}
+        return spells

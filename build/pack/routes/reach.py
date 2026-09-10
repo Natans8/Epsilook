@@ -18,11 +18,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from ..tables import Tables
-from .columns import to_float, to_int
-from .route import route
-from .spells import SpellProperties
-
 MELEE = 1 << 0
 """The reach is the caster's own combat reach rather than the band's distance.
 
@@ -67,31 +62,3 @@ class Reach:
 
     flags: int
     """`MELEE` and `WEAPON`."""
-
-
-@route("reach", spells="props")
-def read_spell_reach(tables: Tables, spells: SpellProperties) -> list[Reach]:
-    """Read the band of every spell that reaches past its caster.
-
-    Args:
-        tables: the source to read from.
-        spells: the band ids, already resolved to one row per spell.
-
-    Returns:
-        One entry per spell reaching past its caster, sorted by spell.
-    """
-    bands = {
-        to_int(row[0]): (to_float(row[1], YARD_DIGITS), to_float(row[2], YARD_DIGITS), to_int(row[3]) & REACH_FLAGS)
-        for row in tables.rows("SpellRange", ["ID", "RangeMax_0", "RangeMin_0", "Flags"])
-    }
-
-    out: list[Reach] = []
-    for spell, band_id in sorted(spells.range_index.items()):
-        band = bands.get(band_id)
-        if band is None:
-            continue
-        far, near, flags = band
-        if far <= 0:
-            continue
-        out.append(Reach(spell, far, near, flags))
-    return out

@@ -28,7 +28,7 @@ rows and is not a step.
 from __future__ import annotations
 
 from collections.abc import Callable, Container, Iterable, Iterator, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Protocol
 
@@ -162,12 +162,23 @@ class Compare:
         return f"c.{self.column} {self.op} {self.value!r}"
 
     def columns(self) -> frozenset[str]:
-        """The one column."""
-        return frozenset({self.column})
+        """The column, and the other column where the comparison is against one."""
+        named = {self.column}
+        if isinstance(self.value, Column):
+            named.add(self.value.name)
+        return frozenset(named)
 
     def evaluate(self, row: Row, schema: Schema) -> bool:
-        """The comparison on one row: numerically for a number, as text otherwise."""
+        """The comparison on one row: numerically for a number, as text otherwise,
+        and as text against another column."""
         cell = row[schema.at(self.column)]
+        if isinstance(self.value, Column):
+            other = row[schema.at(self.value.name)]
+            if self.op == "==":
+                return cell == other
+            if self.op == "!=":
+                return cell != other
+            raise TypeError(f"two columns compare only for equality, not {self.op}")
         if isinstance(self.value, str):
             if self.op == "==":
                 return cell == self.value
@@ -493,27 +504,30 @@ class Join:
     """Whether the key finds several rows there, each of which becomes a row
     here; otherwise the last row per key stands, as a source's revisions do."""
 
-    _index: dict[int, list[Row]] = field(default_factory=dict, compare=False, repr=False)
-
     def schema(self, incoming: Schema) -> Schema:
         """The incoming columns, then the joined ones."""
         incoming.at(self.key)
         return incoming.with_columns(*self.columns)
 
     def rows(self, incoming: Rows, incoming_schema: Schema, tables: Tables, version: str, needs: Needs) -> Rows:
-        """Append each row's joined columns."""
+        """Append each row's joined columns.
+
+        The other table is indexed per run, never on the step: a declaration
+        is shared by every build and every language, and an index kept on it
+        would answer the next run with the last run's table.
+        """
         del version, needs
-        if not self._index:
-            for source in tables.rows(self.table, [self.by, *self.columns]):
-                key = key_of(source[0])
-                if self.many:
-                    self._index.setdefault(key, []).append(source[1:])
-                else:
-                    self._index[key] = [source[1:]]
+        index: dict[int, list[Row]] = {}
+        for source in tables.rows(self.table, [self.by, *self.columns]):
+            key = key_of(source[0])
+            if self.many:
+                index.setdefault(key, []).append(source[1:])
+            else:
+                index[key] = [source[1:]]
         at = incoming_schema.at(self.key)
         blank: Row = ("",) * len(self.columns)
         for row in incoming:
-            found = self._index.get(key_of(row[at]))
+            found = index.get(key_of(row[at]))
             if found is None:
                 if self.inner:
                     continue
@@ -580,14 +594,14 @@ class Expand:
     into: str
     bits: str
     by: str = "ID"
-    _hops: dict[int, list[tuple[int, int]]] = field(default_factory=dict, compare=False, repr=False)
 
     def schema(self, incoming: Schema) -> Schema:
         """The incoming columns, then the reached id and its bits."""
         incoming.at(self.key)
         return incoming.with_columns(self.into, self.bits)
 
-    def reached(self, seed: int) -> dict[int, int]:
+    @staticmethod
+    def reached(seed: int, hops: Mapping[int, list[tuple[int, int]]]) -> dict[int, int]:
         """Every id reachable from one seed, with the bits it was reached through."""
         out: dict[int, int] = {}
         queue = [(seed, 0)]
@@ -598,27 +612,27 @@ class Expand:
             if before is not None and merged == before:
                 continue
             out[node] = merged
-            for target, bit in self._hops.get(node, ()):
+            for target, bit in hops.get(node, ()):
                 queue.append((target, mask | bit))
         return out
 
     def rows(self, incoming: Rows, incoming_schema: Schema, tables: Tables, version: str, needs: Needs) -> Rows:
-        """One row per id each seed reaches."""
+        """One row per id each seed reaches; the edges are read per run, as a join's index is."""
         del version, needs
-        if not self._hops:
-            columns = list(self.edges)
-            for source in tables.rows(self.table, [self.by, *columns]):
-                node = key_of(source[0])
-                hops = [
-                    (target, bit)
-                    for target, bit in zip(map(key_of, source[1:]), self.edges.values())
-                    if target and target != node
-                ]
-                if hops:
-                    self._hops[node] = hops
+        hops: dict[int, list[tuple[int, int]]] = {}
+        columns = list(self.edges)
+        for source in tables.rows(self.table, [self.by, *columns]):
+            node = key_of(source[0])
+            found = [
+                (target, bit)
+                for target, bit in zip(map(key_of, source[1:]), self.edges.values())
+                if target and target != node
+            ]
+            if found:
+                hops[node] = found
         at = incoming_schema.at(self.key)
         for row in incoming:
-            for node, mask in self.reached(key_of(row[at])).items():
+            for node, mask in self.reached(key_of(row[at]), hops).items():
                 yield (*row, str(node), str(mask))
 
 
@@ -1077,26 +1091,34 @@ class AsMap[T]:
     """Key to one value: the last row per key wins, as a source's revisions do,
     unless the flow says the first stands.
 
-    Any where the value's type is the reader's: a terminal built through
-    ``as_map`` types its values by the reader the column was picked with.
+    Any in the key: an id, or a tuple of ids where the key is several columns,
+    which the declaration says and the type cannot; the field the map lands
+    in types it on the way into the context.
     """
 
     key: tuple[str, ...]
     value: str
     read: Callable[[Cell], T]
     first: bool = False
+    reduce: Callable[[T, T], T] | None = None
+    """How two values under one key combine, where neither simply wins: the
+    least of two map ids, say."""
 
-    def collect(self, rows: Rows, schema: Schema) -> dict[int | tuple[int, ...], T]:
+    def collect(self, rows: Rows, schema: Schema) -> dict[Any, T]:
         """The map."""
         keys = _picker(schema, self.key)
         at = schema.at(self.value)
-        out: dict[int | tuple[int, ...], T] = {}
+        out: dict[Any, T] = {}
         single = len(self.key) == 1
         for row in rows:
             key = keys(row)
             held = key[0] if single else key
-            if self.first and held in out:
-                continue
+            if held in out:
+                if self.first:
+                    continue
+                if self.reduce is not None:
+                    out[held] = self.reduce(out[held], self.read(row[at]))
+                    continue
             out[held] = self.read(row[at])
         return out
 
@@ -1221,12 +1243,15 @@ class AsRows[T]:
 
     record: Callable[..., T]
     columns: tuple[Typed, ...]
-    sort: bool = False
+    sort: bool | Callable[[T], Any] = False
+    """Whether to sort the records, and by what where they have no order of their own."""
 
     def collect(self, rows: Rows, schema: Schema) -> list[T]:
         """The records."""
         readers = [(schema.at(picked.column), picked.read) for picked in self.columns]
         out = [self.record(*(read(row[at]) for at, read in readers)) for row in rows]
+        if callable(self.sort):
+            return sorted(out, key=self.sort)
         return sorted(out) if self.sort else out  # type: ignore[type-var]
 
 
@@ -1249,11 +1274,17 @@ def as_text(cell: Cell) -> str:
     return cell
 
 
-def as_map(key: str | Column | Sequence[str | Column], value: Picked, *, first: bool = False) -> AsMap[Any]:
+def as_map(
+    key: str | Column | Sequence[str | Column],
+    value: Picked,
+    *,
+    first: bool = False,
+    reduce: Callable[[Any, Any], Any] | None = None,
+) -> AsMap[Any]:
     """Land as key to value; a key of several columns is a tuple, a value an id unless typed."""
     keys = (key,) if isinstance(key, (str, Column)) else tuple(key)
     picked = _typed(value)
-    return AsMap(tuple(column_name(name) for name in keys), picked.column, picked.read, first)
+    return AsMap(tuple(column_name(name) for name in keys), picked.column, picked.read, first, reduce)
 
 
 def as_sets(key: str | Column, *value: Picked) -> AsSets[Any]:
@@ -1286,7 +1317,7 @@ def as_pairs(left: str | Column, right: str | Column) -> AsPairs:
     return AsPairs(column_name(left), column_name(right))
 
 
-def as_rows[T](record: Callable[..., T], *columns: Picked, sort: bool = False) -> AsRows[T]:
+def as_rows[T](record: Callable[..., T], *columns: Picked, sort: bool | Callable[[T], Any] = False) -> AsRows[T]:
     """Land as one record per row, the columns in the record's field order, ids unless typed."""
     return AsRows(record, tuple(_typed(picked) for picked in columns), sort)
 

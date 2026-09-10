@@ -13,10 +13,6 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 
 from ..drift import SPELL_NAME_SOURCES
-from ..progress import log
-from ..tables import Tables
-from .columns import to_int
-from .route import route
 
 
 @dataclass
@@ -37,42 +33,22 @@ class SpellNames:
     among them at cast time, so there is no single answer to print.
     """
 
-
-@route("names")
-def read_spell_names(tables: Tables) -> SpellNames:
-    """Read the spell list and its subtexts.
-
-    A build with no name source is fatal: an empty spell list would look like a
-    successful build of nothing.
-    """
-    source = next(((table, columns) for table, columns in SPELL_NAME_SOURCES if tables.available(table)), None)
-    if source is None:
-        sys.exit(
-            "error: no spell-name source for this build; tried " + ", ".join(table for table, _ in SPELL_NAME_SOURCES)
-        )
-    table, columns = source
-    log(f"  spell names from {table}.{columns[1]}")
-
-    spells = SpellNames()
-    for spell_id, name in tables.rows(table, columns):
-        spells.names[to_int(spell_id)] = name
-    for spell_id, subtext in tables.rows("Spell", ["ID", "NameSubtext_lang"]):
-        identifier = to_int(spell_id)
-        if identifier in spells.names and subtext:
-            spells.subtexts[identifier] = subtext
-    return spells
+    @classmethod
+    def assemble(cls, names: Mapping[int, str], subtexts: Mapping[int, str]) -> SpellNames:
+        """The list and its subtexts; a build with no name source is fatal,
+        since an empty spell list would look like a successful build of
+        nothing."""
+        if not names:
+            sys.exit(
+                "error: no spell-name source for this build; tried "
+                + ", ".join(table for table, _ in SPELL_NAME_SOURCES)
+            )
+        return cls(dict(names), {spell: text for spell, text in subtexts.items() if spell in names})
 
 
-@route("alt_names", by_spell="effects.altnames")
-def read_override_names(tables: Tables, by_spell: Mapping[int, set[int]]) -> dict[int, str]:
-    """Spell -> its override names as one searchable string.
-
-    `by_spell` is which SpellOverrideName ids each spell's auras name. Resolved
-    in sorted id order so the string is stable across builds.
-    """
-    names = {
-        to_int(override_id): name for override_id, name in tables.rows("SpellOverrideName", ["ID", "OverrideName_lang"])
-    }
+def override_names(names: Mapping[int, str], by_spell: Mapping[int, set[int]]) -> dict[int, str]:
+    """Spell -> its override names as one searchable string, in id order so
+    the string is stable across builds."""
     resolved = {
         spell: " ".join(names[identifier] for identifier in sorted(identifiers) if identifier in names)
         for spell, identifiers in by_spell.items()

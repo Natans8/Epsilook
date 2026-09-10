@@ -2,8 +2,19 @@
 
 from __future__ import annotations
 
-from pack.routes.spells import read_spell_properties
+from collections.abc import Container
+
+from pack.routes import flows
+from pack.routes.spells import SpellProperties
+from pack.tables import Tables
 from support import BuildTables
+
+
+def read_spell_properties(source: Tables, spells: Container[int]) -> SpellProperties:
+    """The properties as the wiring resolves them: the icons apart, base row first."""
+    icons = flows.spell_icons.run(source, needs={"names.names": spells})
+    return flows.props.run(source, needs={"names.names": spells, "spell_icons": icons})
+
 
 SPELLS = frozenset({100, 200})
 
