@@ -11,6 +11,7 @@ makes every derivation here testable from plain values with no source at all.
 
 from __future__ import annotations
 
+from . import registry as _registry
 from .context import CONTEXT_FIELDS, SPOKEN_FIELDS, DeriveContext, Reads, Spoken
 from .displays import Display, ResolvedDisplays, resolve_displays
 from .icons import NO_ICON, IconIndex, build_icon_index, build_item_icons, icon_name
@@ -20,6 +21,8 @@ from .prose import CookedText, cook_text
 from .references import References, collect_references
 from .rows import PackRows, build_rows, id_rows, masked_rows, replacement_rows, spell_role_rows, spell_rows
 from .walk import KIT_BUCKETS, SpellVisuals, screen_reach, sky_spells, walk_spells
+
+del _registry  # imported for the adapter it registers
 
 __all__ = [
     "COLUMN_FAMILIES",

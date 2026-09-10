@@ -217,12 +217,12 @@ def test_every_effect_type_the_enum_defines_is_named() -> None:
 
 
 def test_a_consumed_effect_type_says_where_it_points() -> None:
-    """A handler is what makes the build read the row, and `points_at` is the
-    table it reads. A type with neither is named but unrouted, which is a
-    stated gap rather than a silent one."""
+    """A handler is what makes the build read the row, and `reads` says which
+    table its Effect column indexes under that type. A type with neither is
+    named but unrouted, which is a stated gap rather than a silent one."""
     declared = load_local_enum("spell_visual_kit_effect_types")
     consumed = {value: payload for value, payload in declared.items() if payload.get("handler")}
     assert consumed
-    assert all(payload.get("points_at") for payload in consumed.values())
+    assert all(payload.get("reads", [{}])[0].get("into") for payload in consumed.values())
     handlers = [payload["handler"] for payload in consumed.values()]
     assert len(handlers) == len(set(handlers)), "a handler must select one type"

@@ -46,6 +46,7 @@
     "door": "the word an axis is reached by, such as a sort orders by"
   },
   "target": "who it plays on",
+  "phase": "when in the spell it happens: precast, cast, travel, impact, aura, channel",
   "kind": {
     "name": {
       "hint": "the spell's name"
@@ -148,7 +149,8 @@
       "hint": "an animation played through a numbered kit",
       "props": {
         "id": "the kit's id",
-        "boneset": "the bones it drives"
+        "boneset": "the bones it drives",
+        "speed": "how fast the kit plays it: backwards below nought, held at nought"
       }
     },
     "loose": {
@@ -180,7 +182,12 @@
       "props": {
         "from": "where the beam starts",
         "to": "where the beam ends",
-        "colour": "the beam's tint"
+        "colour": "the beam's tint",
+        "arcing": "the beam bows away from the line between its ends",
+        "flickering": "the beam switches on and off while it holds",
+        "jagged": "the beam's joints scatter off the line, like lightning",
+        "wavy": "the beam ripples along its length",
+        "width": "how wide the beam starts, in yards"
       }
     },
     "dissolve": {
@@ -260,7 +267,8 @@
     "effect": {
       "hint": "one of the spell's effects — what it actually does",
       "props": {
-        "name": "the effect's name"
+        "name": "the effect's name",
+        "index": "its place among the spell's effects, from 0"
       }
     },
     "aura": {
@@ -320,6 +328,24 @@
     },
     "debuff": {
       "hint": "aura that shows in the red debuff frame"
+    },
+    "faction": {
+      "hint": "the faction a spell turns its target into, by the template its aura sets",
+      "props": {
+        "name": "the faction's name"
+      }
+    },
+    "visualKit": {
+      "hint": "a visual kit by id, the handle a model frame renders a look by",
+      "props": {
+        "id": "the kit's id"
+      }
+    },
+    "breaks": {
+      "hint": "what removes the spell's aura once it is on you",
+      "props": {
+        "on": "the event that removes it"
+      }
     }
   }
 }

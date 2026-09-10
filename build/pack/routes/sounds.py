@@ -11,6 +11,7 @@ from typing import NamedTuple
 from ..sources.enums import load_local_enum
 from ..tables import Tables
 from .columns import to_int
+from .route import route
 
 
 class ZoneMusic(NamedTuple):
@@ -41,6 +42,7 @@ class Ambience(NamedTuple):
     night: int
 
 
+@route("zone_music")
 def read_zone_music(tables: Tables) -> dict[int, ZoneMusic]:
     """Every music set, by its own id."""
     return {
@@ -49,6 +51,7 @@ def read_zone_music(tables: Tables) -> dict[int, ZoneMusic]:
     }
 
 
+@route("ambiences")
 def read_ambiences(tables: Tables) -> dict[int, Ambience]:
     """Every ambience, by its own id."""
     return {
@@ -73,6 +76,7 @@ it, so the alternative to another build's copy is no names at all.
 """
 
 
+@route("kit_names", used="used_kits")
 def read_kit_names(pinned: Tables, used: set[int]) -> list[tuple[int, str]]:
     """The names of the sound kits this pack reaches, sorted.
 
@@ -91,6 +95,7 @@ def read_kit_names(pinned: Tables, used: set[int]) -> list[tuple[int, str]]:
     )
 
 
+@route("soundkit_files")
 def read_soundkit_files(tables: Tables) -> dict[int, set[int]]:
     """Sound kit -> the sound files it plays.
 
@@ -104,6 +109,7 @@ def read_soundkit_files(tables: Tables) -> dict[int, set[int]]:
     return files
 
 
+@route("sound_type_names")
 def sound_type_names() -> dict[int, str]:
     """What each `SoundKit.SoundType` value is called.
 
@@ -113,6 +119,7 @@ def sound_type_names() -> dict[int, str]:
     return {value: str(name) for value, name in load_local_enum(SOUND_TYPE_ENUM).items()}
 
 
+@route("kit_types", used="used_kits")
 def read_kit_types(tables: Tables, used: set[int]) -> dict[int, int]:
     """Sound kit -> what the kit is for, for the kits this pack reaches.
 

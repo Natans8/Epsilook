@@ -50,13 +50,14 @@ ID,PrimaryColor,SecondaryColor,AttachPos
 60,-16776961,255,-1
 """
 
-# Chain 70 nests 71; 72 and 73 nest each other.
+# Chain 70 nests 71; 72 and 73 nest each other. 70 has every character
+# trait, and 72 ripples below the visible height.
 SPELL_CHAIN_EFFECTS = """\
-ID,Red,Green,Blue,SoundKitID,TextureFileDataID_0,TextureFileDataID_1,TextureFileDataID_2,SpellChainEffectID_0,SpellChainEffectID_1,SpellChainEffectID_2,SpellChainEffectID_3,SpellChainEffectID_4,SpellChainEffectID_5,SpellChainEffectID_6,SpellChainEffectID_7,SpellChainEffectID_8,SpellChainEffectID_9,SpellChainEffectID_10
-70,255,0,0,900,400,401,400,71,0,0,0,0,0,0,0,0,0,0
-71,0,255,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
-72,0,0,255,0,0,0,0,73,0,0,0,0,0,0,0,0,0,0
-73,0,0,0,0,0,0,0,72,0,0,0,0,0,0,0,0,0,0
+ID,Red,Green,Blue,SoundKitID,ArcHeight,MaxFlickerOnDuration,JointOffsetRadius,WaveHeight,StartWidth,TextureFileDataID_0,TextureFileDataID_1,TextureFileDataID_2,SpellChainEffectID_0,SpellChainEffectID_1,SpellChainEffectID_2,SpellChainEffectID_3,SpellChainEffectID_4,SpellChainEffectID_5,SpellChainEffectID_6,SpellChainEffectID_7,SpellChainEffectID_8,SpellChainEffectID_9,SpellChainEffectID_10
+70,255,0,0,900,1.5,0.2,0.3,0.6,0.5,400,401,400,71,0,0,0,0,0,0,0,0,0,0
+71,0,255,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+72,0,0,255,0,0,0,0,0.4,1.25,0,0,0,73,0,0,0,0,0,0,0,0,0,0
+73,0,0,0,0,0,0,0,0,0,0,0,0,72,0,0,0,0,0,0,0,0,0,0
 """
 
 BEAM_EFFECT = """\
@@ -160,10 +161,10 @@ def test_a_ghost_masks_the_alpha_off_both_colours(tables: BuildTables) -> None:
 
 
 def test_a_chain_keeps_its_colour_sound_and_textures(tables: BuildTables) -> None:
-    red, green, blue, sound, textures, nested = payloads(tables).chains[70]
-    assert (red, green, blue, sound) == (255, 0, 0, 900)
-    assert textures == (400, 401)
-    assert nested == (71,)
+    chain = payloads(tables).chains[70]
+    assert (chain.red, chain.green, chain.blue, chain.sound) == (255, 0, 0, 900)
+    assert chain.textures == (400, 401)
+    assert chain.nested == (71,)
 
 
 def test_a_beam_carries_both_of_its_ends(tables: BuildTables) -> None:
@@ -203,3 +204,18 @@ def test_a_screen_that_only_paints_swaps_nothing(tables: BuildTables) -> None:
     """Nought and minus one are the two absences, and neither is a value."""
     screen = payloads(tables).screens[32]
     assert (screen.sky, screen.music, screen.ambience, screen.time_of_day) == (0, 0, 0, -1)
+
+
+def test_a_chains_character_is_read_off_its_geometry(tables: BuildTables) -> None:
+    """Four words and a width: each a column the renderer tunes by, read as a
+    trait a reader can name."""
+    chain = payloads(tables).chains[70]
+    assert (chain.arcing, chain.flickering, chain.jagged, chain.wavy) == (True, True, True, True)
+    assert chain.width == 0.5
+
+
+def test_a_ripple_below_the_visible_height_is_not_wavy(tables: BuildTables) -> None:
+    """A non-zero test would call most chains wavy; the threshold is measured."""
+    chain = payloads(tables).chains[72]
+    assert not chain.wavy
+    assert chain.width == 1.25

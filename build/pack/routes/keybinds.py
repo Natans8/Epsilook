@@ -11,6 +11,7 @@ from dataclasses import dataclass
 
 from ..tables import Tables
 from .columns import to_int
+from .route import route
 
 KEYBOUND_TYPE_WORDS = {0: "", 1: "mid-air"}
 """When an override fires. The ordinary press gets no word."""
@@ -37,6 +38,7 @@ def keybound_type_word(type_id: int) -> str:
     return f"type {type_id}"
 
 
+@route("keybinds")
 def read_keybound_overrides(tables: Tables) -> dict[int, KeyboundOverride]:
     """Read every key override.
 

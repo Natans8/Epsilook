@@ -163,6 +163,7 @@ def test_a_build_read_in_another_language_keeps_everything_else() -> None:
         objects=GameObjectData(),
         forms=ShapeshiftForms(),
         areas=AreaGates(),
+        factions=(),
         prose=context.prose,
     )
     russian = context.spoken_in(said)

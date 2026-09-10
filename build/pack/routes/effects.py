@@ -21,12 +21,14 @@ from __future__ import annotations
 
 from collections.abc import Callable, Container, Mapping
 from dataclasses import dataclass, field
+from typing import NamedTuple
 
-from ..drift import REUSED_SPAWN_OBJECT_EFFECTS
+from ..drift import RETIRED_SPAWN_OBJECT_EFFECTS, SPAWN_OBJECT_SLOTS_UNTIL
 from ..sources import read_enum_names
 from ..tables import Tables
 from ..targets import NO_TARGET, implicit_target_bit
 from .columns import to_amount, to_int, to_int_from_float
+from .flow import Holds, Slot, When, amount, reference, vocabulary, when
 
 EFFECT_APPLY_AURA = 6
 """Applies an aura. Its implicit target says who ends up carrying it."""
@@ -52,8 +54,8 @@ EFFECT_SPAWN_OBJECT = frozenset(
 The four differ in slot and lifetime, never in what the misc value means.
 
 Slots 2 to 4 spawn one too, on the builds where they still mean that; their
-ids are declared in `REUSED_SPAWN_OBJECT_EFFECTS` rather than here, because
-what they select depends on the build being packed.
+ids are `RETIRED_SPAWN_OBJECT_EFFECTS`, declared apart because what they
+select depends on the build being packed.
 """
 
 AURA_MOD_INVISIBILITY = 18
@@ -84,6 +86,14 @@ AURA_OVERRIDE_NAME = 370
 
 AURA_KEYBOUND_OVERRIDE = 406
 """misc0 is a `SpellKeyboundOverride`."""
+
+AURA_MOD_FACTION = 243
+"""misc0 is a `FactionTemplate`: what the target's faction becomes.
+
+A template rather than a faction, because that is what the client sets; the
+template's own faction is the name a reader is after, and its group is what
+tells nine templates named Monster apart.
+"""
 
 SPEED_AURAS = {
     31: "run",
@@ -126,76 +136,6 @@ spellings, so a set covers the drift without a per-version branch.
 """
 
 
-@dataclass(frozen=True)
-class MiscPayload:
-    """One selector whose misc value is an id into another table.
-
-    The declaration a reader consumes rather than contains, so the whole
-    spell-to-payload map is readable without reading the walk, and adding one
-    is a row here plus the field it names.
-    """
-
-    into: Callable[[SpellEffectRows], MaskedIds | dict[int, set[int]]]
-    """Which bundle field this payload lands in."""
-
-    aura: int = 0
-    effects: frozenset[int] = frozenset()
-    """The selector. A payload names one or the other, never both."""
-
-    retired: Mapping[int, tuple[int, ...]] = field(default_factory=dict)
-    """Effect ids that select this payload only on builds older than the
-    version each one maps to, because the game reused the id afterwards.
-
-    Declared beside the selector it widens, so the reader resolves one build's
-    ids without knowing which payload drifts. An id meaning the same thing on
-    every build belongs in `effects`.
-    """
-
-    zero_is_a_value: bool = False
-    """Whether a misc value of zero is data. True only where the number is a
-    channel rather than a row id."""
-
-    roster: str = ""
-    """Names the roster this payload must appear in to be kept, or empty.
-
-    The name is a key into the rosters the reader is handed, so a payload that
-    needs narrowing declares it here rather than adding a parameter.
-    """
-
-    def selects(self, version: str) -> frozenset[int]:
-        """The effect ids that reach this payload on one build.
-
-        Args:
-            version: the build being packed, dotted.
-
-        Returns:
-            The stable ids, plus every retired id this build predates.
-        """
-        build = tuple(int(part) for part in version.split("."))
-        return self.effects | frozenset(
-            effect for effect, reused_in in self.retired.items() if build[: len(reused_in)] < reused_in
-        )
-
-
-MISC_PAYLOADS: tuple[MiscPayload, ...] = (
-    MiscPayload(lambda rows: rows.morphs, aura=AURA_TRANSFORM),
-    MiscPayload(lambda rows: rows.forms, aura=AURA_SHAPESHIFT),
-    MiscPayload(lambda rows: rows.vehicles, aura=AURA_SET_VEHICLE_ID),
-    MiscPayload(lambda rows: rows.invis, aura=AURA_MOD_INVISIBILITY, zero_is_a_value=True),
-    MiscPayload(lambda rows: rows.detect, aura=AURA_MOD_INVISIBILITY_DETECT, zero_is_a_value=True),
-    MiscPayload(lambda rows: rows.screens, aura=AURA_SCREEN_EFFECT, roster="screens"),
-    MiscPayload(lambda rows: rows.keybinds, aura=AURA_KEYBOUND_OVERRIDE, roster="keybounds"),
-    MiscPayload(lambda rows: rows.altnames, aura=AURA_OVERRIDE_NAME),
-    MiscPayload(lambda rows: rows.anim_sets, aura=AURA_ANIM_REPLACEMENT_SET),
-    MiscPayload(lambda rows: rows.objects, effects=EFFECT_SPAWN_OBJECT, retired=REUSED_SPAWN_OBJECT_EFFECTS),
-)
-"""Every payload whose misc value is a reference, declared once.
-
-The payloads that carry a number rather than a reference, or two ids rather
-than one, are not here: a summon, a played sound, a speed and a scale each read
-their row differently and stay written out in the reader.
-"""
-
 SPELL_EFFECT_COLUMNS = [
     "SpellID",
     "Effect",
@@ -207,6 +147,7 @@ SPELL_EFFECT_COLUMNS = [
     "EffectBasePoints",
     "EffectBasePointsF",
     "EffectTriggerSpell",
+    "EffectIndex",
 ]
 """The columns this route reads, in the order it unpacks them.
 
@@ -271,6 +212,13 @@ class EffectRow:
     dedicated pill already shows it, so drawing the raw one would say the same
     thing twice. Per row, so a value whose payload was dropped is unflagged and
     the raw pill remains the only thing that reports it.
+    """
+
+    order: int = 0
+    """`EffectIndex`: the effect's order among the spell's, from nought.
+
+    The order the effects happen in once the spell lands, which is the one
+    sequence the effect rows carry of their own.
     """
 
 
@@ -344,6 +292,9 @@ class SpellEffectRows:
     keybinds: MaskedIds = field(default_factory=MaskedIds)
     """Key overrides it applies."""
 
+    factions: MaskedIds = field(default_factory=MaskedIds)
+    """Faction templates it sets its target to."""
+
     altnames: dict[int, set[int]] = field(default_factory=dict)
     """Spell to the override-name ids its auras carry.
 
@@ -362,6 +313,10 @@ class SpellEffectRows:
 
     summons: dict[int, set[tuple[int, int]]] = field(default_factory=dict)
     """Spell to the creature and summon-control pairs it summons."""
+
+    summon_controls: dict[int, int] = field(default_factory=dict)
+    """Summon-properties id to its control value, read once for the summons
+    to resolve their second slot through."""
 
     summon_targets: dict[tuple[int, int], int] = field(default_factory=dict)
     """Spell and creature to mask.
@@ -421,22 +376,204 @@ class SpellEffectRows:
     """Spell to the union over all its effects: what the whole spell aims at."""
 
 
+class Values(NamedTuple):
+    """What the reader decoded off one effect row, for a payload's record.
+
+    Every column a selector's slots can name arrives here already read, so a
+    record picks what its declaration says it holds and reads nothing itself.
+    """
+
+    effect: int
+    aura: int
+    misc0: int
+    misc1: int
+    amount: float
+    """The row's amount, in whichever of the two spellings this build exports."""
+
+    trigger: int
+
+
+Record = Callable[[SpellEffectRows, int, Values, int], bool]
+"""Where a selected row's values land: the bundle, the spell, the values, the
+mask; and whether anything was recorded, which is what consumes the row."""
+
+SLOT_VALUES: Mapping[str, str] = {
+    "EffectMiscValue_0": "misc0",
+    "EffectMiscValue_1": "misc1",
+    "EffectBasePoints": "amount",
+    "EffectTriggerSpell": "trigger",
+}
+"""Which decoded value each column a slot can name arrives as."""
+
+
+@dataclass(frozen=True)
+class Payload:
+    """One selected meaning of an effect row, and where it lands.
+
+    The `select` is the declaration: which selector column, which values,
+    what each named column then holds. The rest is the reader's wiring for
+    it. A payload holding one reference needs no record of its own, since the
+    slot says which value it is and the bundle field says where it goes.
+    """
+
+    select: When
+    into: Callable[[SpellEffectRows], MaskedIds | dict[int, set[int]]] | None = None
+    """Which bundle field a single reference lands in."""
+
+    record: Record | None = None
+    """Where several slots, or an amount, land; written where one reference
+    into one field does not describe it."""
+
+    roster: str = ""
+    """Names the roster this payload must appear in to be kept, or empty.
+
+    The name is a key into the rosters the reader is handed, so a payload that
+    needs narrowing declares it here rather than adding a parameter.
+    """
+
+    @property
+    def reference(self) -> Slot:
+        """The one slot a default record lands, for a payload declaring no record.
+
+        Raises:
+            ValueError: the payload declares no record and not exactly one
+                slot holding a reference or a vocabulary value.
+        """
+        slots = [slot for slot in self.select.slots if slot.holds is not Holds.AMOUNT]
+        if len(self.select.slots) != 1 or len(slots) != 1:
+            raise ValueError(f"a payload with {len(self.select.slots)} slots needs a record saying where they land")
+        return slots[0]
+
+
+def _summon(rows: SpellEffectRows, spell: int, values: Values, mask: int) -> bool:
+    """A creature and how it is controlled, aimed by the creature alone."""
+    rows.summons.setdefault(spell, set()).add((values.misc0, rows.summon_controls.get(values.misc1, 0)))
+    key = (spell, values.misc0)
+    rows.summon_targets[key] = rows.summon_targets.get(key, NO_TARGET) | mask
+    return True
+
+
+def _played_sound(rows: SpellEffectRows, spell: int, values: Values, mask: int) -> bool:
+    """A kit played outright, which merges into the sound column later."""
+    key = (spell, values.misc0)
+    rows.sounds[key] = rows.sounds.get(key, NO_TARGET) | mask
+    return True
+
+
+def _speed(rows: SpellEffectRows, spell: int, values: Values, mask: int) -> bool:
+    """A movement scaled by a signed percentage.
+
+    A zero amount is dropped: a pill made of nothing but the number would
+    promise a change and deliver none, and drag the spell into counts it does
+    not belong in. The mechanics row still carries the aura, unconsumed.
+    """
+    if not values.amount:
+        return False
+    movement = SPEED_AURAS[values.aura]
+    rows.speeds.setdefault(spell, set()).add((movement, values.amount))
+    change = (spell, movement, values.amount)
+    rows.speed_targets[change] = rows.speed_targets.get(change, NO_TARGET) | mask
+    return True
+
+
+def _scale(rows: SpellEffectRows, spell: int, values: Values, mask: int) -> bool:
+    """A size change, as a signed percentage; zero is dropped as a speed is."""
+    if not values.amount:
+        return False
+    rows.scales.setdefault(spell, set()).add(values.amount)
+    sized = (spell, values.amount)
+    rows.scale_targets[sized] = rows.scale_targets.get(sized, NO_TARGET) | mask
+    return True
+
+
+MISC0 = "EffectMiscValue_0"
+MISC1 = "EffectMiscValue_1"
+AMOUNT = "EffectBasePoints"
+"""The columns the selectors below name."""
+
+PAYLOADS: tuple[Payload, ...] = (
+    Payload(when("EffectAura", AURA_TRANSFORM, [reference(MISC0, "creature_template")]), lambda rows: rows.morphs),
+    Payload(when("EffectAura", AURA_SHAPESHIFT, [reference(MISC0, "SpellShapeshiftForm")]), lambda rows: rows.forms),
+    Payload(when("EffectAura", AURA_SET_VEHICLE_ID, [reference(MISC0, "Vehicle")]), lambda rows: rows.vehicles),
+    Payload(
+        when("EffectAura", AURA_MOD_INVISIBILITY, [vocabulary(MISC0, "channels", zero_is_a_value=True)]),
+        lambda rows: rows.invis,
+    ),
+    Payload(
+        when("EffectAura", AURA_MOD_INVISIBILITY_DETECT, [vocabulary(MISC0, "channels", zero_is_a_value=True)]),
+        lambda rows: rows.detect,
+    ),
+    Payload(
+        when("EffectAura", AURA_SCREEN_EFFECT, [reference(MISC0, "ScreenEffect")]),
+        lambda rows: rows.screens,
+        roster="screens",
+    ),
+    Payload(
+        when("EffectAura", AURA_KEYBOUND_OVERRIDE, [reference(MISC0, "SpellKeyboundOverride")]),
+        lambda rows: rows.keybinds,
+        roster="keybounds",
+    ),
+    Payload(
+        when("EffectAura", AURA_OVERRIDE_NAME, [reference(MISC0, "SpellOverrideName")]), lambda rows: rows.altnames
+    ),
+    Payload(
+        when("EffectAura", AURA_ANIM_REPLACEMENT_SET, [reference(MISC0, "AnimReplacementSet")]),
+        lambda rows: rows.anim_sets,
+    ),
+    Payload(when("EffectAura", AURA_MOD_FACTION, [reference(MISC0, "FactionTemplate")]), lambda rows: rows.factions),
+    Payload(
+        when("Effect", sorted(EFFECT_SPAWN_OBJECT), [reference(MISC0, "gameobject_template")]),
+        lambda rows: rows.objects,
+    ),
+    # The three slots the game later handed to other effects: a gameobject
+    # entry through Wrath, and something else from the patch that reused them.
+    Payload(
+        when(
+            "Effect",
+            sorted(RETIRED_SPAWN_OBJECT_EFFECTS),
+            [reference(MISC0, "gameobject_template")],
+            until=SPAWN_OBJECT_SLOTS_UNTIL,
+        ),
+        lambda rows: rows.objects,
+    ),
+    Payload(
+        when("Effect", EFFECT_SUMMON, [reference(MISC0, "creature_template"), reference(MISC1, "SummonProperties")]),
+        record=_summon,
+    ),
+    Payload(when("Effect", sorted(EFFECT_PLAYS_SOUND), [reference(MISC0, "SoundKit")]), record=_played_sound),
+    Payload(when("EffectAura", sorted(SPEED_AURAS), [amount(AMOUNT)]), record=_speed),
+    Payload(when("EffectAura", sorted(SCALE_AURAS), [amount(AMOUNT)]), record=_scale),
+)
+"""Every meaning an effect row's columns take, declared once.
+
+A selector column and a value choose the meaning, and the slots say what the
+row's other columns then hold: a reference into a table, a value a vocabulary
+names, a number. The reader dispatches off these, the shipped selector table
+is read off these, and adding a payload is a row here plus the field it lands
+in. The link through the trigger column is not here, because nothing selects
+it: every row carries it.
+"""
+
+EFFECT_SELECTORS: tuple[When, ...] = tuple(payload.select for payload in PAYLOADS)
+"""The declarations alone, for the table the pack ships."""
+
+
 def _record(
-    payload: MiscPayload | None,
+    payload: Payload | None,
     rows: SpellEffectRows,
     spell: int,
-    misc: int,
+    values: Values,
     mask: int,
     rosters: Mapping[str, Container[int]],
 ) -> bool:
-    """Record one misc value against the payload its selector chose.
+    """Record one row's values against the payload its selector chose.
 
     Args:
         payload: the declaration the selector matched, or None for a selector
             no payload claims.
         rows: the bundle being filled.
         spell: the spell whose effect this is.
-        misc: the row's first misc value.
+        values: what the reader decoded off the row.
         mask: who the row was aimed at.
         rosters: the payloads narrowed to what this build has, by roster name.
 
@@ -445,11 +582,21 @@ def _record(
     """
     if payload is None:
         return False
-    if misc <= 0 and not payload.zero_is_a_value:
-        return False
+    # A reference of nought names no row unless the slot says nought is data,
+    # and that holds for every slot whichever record the payload lands in.
+    for slot in payload.select.slots:
+        if slot.holds is Holds.AMOUNT or slot.zero_is_a_value:
+            continue
+        if getattr(values, SLOT_VALUES[slot.column]) <= 0:
+            return False
+    if payload.record is not None:
+        return payload.record(rows, spell, values, mask)
+    misc = getattr(values, SLOT_VALUES[payload.reference.column])
     roster = rosters.get(payload.roster) if payload.roster else None
     if roster is not None and misc not in roster:
         return False
+    if payload.into is None:
+        raise ValueError(f"the payload on {payload.select.on} {payload.select.values} lands nowhere")
     into = payload.into(rows)
     if isinstance(into, MaskedIds):
         into.add(spell, misc, mask)
@@ -490,8 +637,8 @@ def read_spell_effect_rows(
             effect or key override the build lacks has nothing to show.
         target_bits: implicit-target id to target bit, from
             `implicit_target_bits`.
-        version: the build being packed, which decides the effect ids a
-            payload with a retired selector claims.
+        version: the build being packed, which decides whether a selector a
+            later patch retired still holds.
 
     Returns:
         Every payload, with the mechanics rows left over after consumption.
@@ -501,11 +648,12 @@ def read_spell_effect_rows(
             which would otherwise keep every row of that payload silently.
     """
     rows = SpellEffectRows()
-    control = read_summon_control(tables)
-    if missing := {p.roster for p in MISC_PAYLOADS if p.roster} - set(rosters):
-        raise KeyError(f"MISC_PAYLOADS names rosters nobody supplied: {sorted(missing)}")
-    by_aura = {p.aura: p for p in MISC_PAYLOADS if p.aura}
-    by_effect = {effect: p for p in MISC_PAYLOADS for effect in p.selects(version)}
+    rows.summon_controls = read_summon_control(tables)
+    if missing := {p.roster for p in PAYLOADS if p.roster} - set(rosters):
+        raise KeyError(f"PAYLOADS names rosters nobody supplied: {sorted(missing)}")
+    live = [p for p in PAYLOADS if p.select.holds(version)]
+    by_aura = {value: p for p in live if p.select.on == "EffectAura" for value in p.select.values}
+    by_effect = {value: p for p in live if p.select.on == "Effect" for value in p.select.values}
 
     for row in tables.rows("SpellEffect", SPELL_EFFECT_COLUMNS):
         spell = to_int(row[0])
@@ -514,9 +662,9 @@ def read_spell_effect_rows(
         effect, aura = to_int(row[1]), to_int(row[2])
         misc0, misc1 = to_int_from_float(row[3]), to_int_from_float(row[4])
         first, second = to_int(row[5]), to_int(row[6])
-        amount = to_amount(row[7], row[8])
         trigger = to_int(row[9])
         mask = target_bits.get(first, NO_TARGET) | target_bits.get(second, NO_TARGET)
+        values = Values(effect, aura, misc0, misc1, to_amount(row[7], row[8]), trigger)
 
         # A link the pack cannot name is dropped, because the chip is an icon
         # and a name and an unnameable one renders as a bare id. A self-link
@@ -526,7 +674,7 @@ def read_spell_effect_rows(
             key = (spell, trigger)
             rows.link_targets[key] = rows.link_targets.get(key, NO_TARGET) | mask
 
-        # The whole-spell views resolve_target_mask reads: every effect, and
+        # The whole-spell views resolve_target_bit reads: every effect, and
         # the apply-aura effects on their own.
         rows.cast_target_bits[spell] = rows.cast_target_bits.get(spell, NO_TARGET) | mask
         if effect == EFFECT_APPLY_AURA:
@@ -535,38 +683,8 @@ def read_spell_effect_rows(
         # The two selectors are asked separately rather than under one shared
         # guard, because a row's effect and its aura are independent and a
         # roster declared for one must not veto the other.
-        consumed_aura = _record(by_aura.get(aura), rows, spell, misc0, mask, rosters)
-        consumed_effect = _record(by_effect.get(effect), rows, spell, misc0, mask, rosters)
-
-        if effect == EFFECT_SUMMON and misc0 > 0:
-            rows.summons.setdefault(spell, set()).add((misc0, control.get(misc1, 0)))
-            key = (spell, misc0)
-            rows.summon_targets[key] = rows.summon_targets.get(key, NO_TARGET) | mask
-            consumed_effect = True
-        if effect in EFFECT_PLAYS_SOUND and misc0 > 0:
-            key = (spell, misc0)
-            rows.sounds[key] = rows.sounds.get(key, NO_TARGET) | mask
-            consumed_effect = True
-
-        # Speed and scale carry a number rather than a reference, and a zero
-        # amount is dropped for both. These pills are made of nothing but the
-        # number, so a "+0%" one promises a change and delivers none, and it
-        # drags the spell into fx:speed and fx:scale counts it does not belong
-        # in. The amount is genuinely elsewhere on those rows -- a talent, the
-        # morph the spell applies, a script -- and nothing in the pack can
-        # reach it. What survives is the mechanics row, which still carries the
-        # aura: "has a speed aura at all" is a question with a home, and this
-        # is not it.
-        if amount and (movement := SPEED_AURAS.get(aura)) is not None:
-            rows.speeds.setdefault(spell, set()).add((movement, amount))
-            change = (spell, movement, amount)
-            rows.speed_targets[change] = rows.speed_targets.get(change, NO_TARGET) | mask
-            consumed_aura = True
-        if amount and aura in SCALE_AURAS:
-            rows.scales.setdefault(spell, set()).add(amount)
-            sized = (spell, amount)
-            rows.scale_targets[sized] = rows.scale_targets.get(sized, NO_TARGET) | mask
-            consumed_aura = True
+        consumed_aura = _record(by_aura.get(aura), rows, spell, values, mask, rosters)
+        consumed_effect = _record(by_effect.get(effect), rows, spell, values, mask, rosters)
 
         # The row is recorded whole whether or not either half was consumed, so
         # every effect and aura the spell has stays searchable. The flags say
@@ -575,6 +693,8 @@ def read_spell_effect_rows(
         # a new axis flags its own selector the moment it is declared above.
         if effect or aura:
             rows.mechanics.add(
-                EffectRow(spell, effect, aura, first, second, misc0, misc1, consumed_effect, consumed_aura)
+                EffectRow(
+                    spell, effect, aura, first, second, misc0, misc1, consumed_effect, consumed_aura, to_int(row[10])
+                )
             )
     return rows

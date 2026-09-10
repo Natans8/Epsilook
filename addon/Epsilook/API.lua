@@ -396,6 +396,35 @@ function Epsilook:GetPartExtras(part)
 	return out
 end
 
+--- What a discriminated row's columns are ids into, once its selector has
+-- decided. A mechanics part carries both misc values raw; this says what
+-- the effect or aura beside them makes of each.
+-- @param table the source table, "SpellEffect" for a mechanics part
+-- @param column the selector column, "Effect" or "EffectAura"
+-- @param value the selector's value, the effect or aura id
+-- @return a list of { column, holds, into }, each what one column holds
+--   under this meaning: a reference into `into`, a value the vocabulary
+--   `into` names, an amount, or a parameter another slot decides; empty
+--   where the pack declares nothing for the value
+function Epsilook:GetSelectorReads(table, column, value)
+	mounted(self)
+	local tables = Data.ReadAll("mech", "selectors", "tables") or {}
+	local columns = Data.ReadAll("mech", "selectors", "columns") or {}
+	local values = Data.ReadAll("mech", "selectors", "values") or {}
+	local slotColumns = Data.ReadAll("mech", "selectors", "slotColumns") or {}
+	local holds = Data.ReadAll("mech", "selectors", "holds") or {}
+	local intos = Data.ReadAll("mech", "selectors", "intos") or {}
+	local out = {}
+	-- One row per slot, so a selector reading several columns is several
+	-- rows agreeing on the first three.
+	for i = 1, #values do
+		if tables[i] == table and columns[i] == column and values[i] == value then
+			out[#out + 1] = { column = slotColumns[i], holds = holds[i], into = intos[i] }
+		end
+	end
+	return out
+end
+
 --- The two kits a music set or an ambience plays, by day and by night.
 -- @param section "zoneMusic" or "ambiences"
 -- @param id the set's id

@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from ..tables import Tables
 from .attachments import seat_attachment_name
 from .columns import to_int
+from .route import route
 
 PASSENGER_ROLE_NAMES = {0: "enter", 1: "sit", 2: "exit"}
 """What a rider is doing while an animation plays, by role id.
@@ -65,6 +66,7 @@ class VehicleSeats:
     """Vehicle -> the anim kits either of them plays."""
 
 
+@route("vehicles")
 def read_vehicle_seats(tables: Tables) -> VehicleSeats:
     """Walk each vehicle to its seats and collect what they carry.
 

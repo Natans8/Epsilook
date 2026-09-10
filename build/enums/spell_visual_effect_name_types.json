@@ -7,16 +7,81 @@
   ],
   "keys": "Type",
   "values": {
-    "0":  {"name": "Model (FileDataID)", "handler": "model_file", "payload": "ModelFileDataID"},
-    "1":  {"name": "Item",               "handler": "item",       "payload": "GenericID = Item::ID"},
-    "2":  {"name": "CreatureDisplayInfo","handler": "display",     "payload": "GenericID = CreatureDisplayInfo::ID"},
-    "3":  {"name": "Unit-Item main hand","handler": "weapon", "slot": "main hand"},
-    "4":  {"name": "Unit-Item off hand", "handler": "weapon", "slot": "off hand"},
-    "5":  {"name": "Unit-Item ranged",   "handler": "weapon", "slot": "ranged"},
-    "6":  {"name": "Unit-Ammo basic",    "handler": "weapon", "slot": "ammo"},
-    "7":  {"name": "Unit-Ammo preferred","handler": "weapon", "slot": "ammo"},
-    "8":  {"name": "Unit-Item main hand (ignore disarmed)", "handler": "weapon", "slot": "main hand"},
-    "9":  {"name": "Unit-Item off hand (ignore disarmed)",  "handler": "weapon", "slot": "off hand"},
-    "10": {"name": "Unit-Item ranged (ignore disarmed)",    "handler": "weapon", "slot": "ranged"}
+    "0": {
+      "name": "Model (FileDataID)",
+      "handler": "model_file",
+      "payload": "ModelFileDataID",
+      "reads": [
+        {
+          "column": "ModelFileDataID",
+          "holds": "reference",
+          "into": "listfile"
+        }
+      ]
+    },
+    "1": {
+      "name": "Item",
+      "handler": "item",
+      "payload": "GenericID = Item::ID",
+      "reads": [
+        {
+          "column": "GenericID",
+          "holds": "reference",
+          "into": "Item"
+        }
+      ]
+    },
+    "2": {
+      "name": "CreatureDisplayInfo",
+      "handler": "display",
+      "payload": "GenericID = CreatureDisplayInfo::ID",
+      "reads": [
+        {
+          "column": "GenericID",
+          "holds": "reference",
+          "into": "CreatureDisplayInfo"
+        }
+      ]
+    },
+    "3": {
+      "name": "Unit-Item main hand",
+      "handler": "weapon",
+      "slot": "main hand"
+    },
+    "4": {
+      "name": "Unit-Item off hand",
+      "handler": "weapon",
+      "slot": "off hand"
+    },
+    "5": {
+      "name": "Unit-Item ranged",
+      "handler": "weapon",
+      "slot": "ranged"
+    },
+    "6": {
+      "name": "Unit-Ammo basic",
+      "handler": "weapon",
+      "slot": "ammo"
+    },
+    "7": {
+      "name": "Unit-Ammo preferred",
+      "handler": "weapon",
+      "slot": "ammo"
+    },
+    "8": {
+      "name": "Unit-Item main hand (ignore disarmed)",
+      "handler": "weapon",
+      "slot": "main hand"
+    },
+    "9": {
+      "name": "Unit-Item off hand (ignore disarmed)",
+      "handler": "weapon",
+      "slot": "off hand"
+    },
+    "10": {
+      "name": "Unit-Item ranged (ignore disarmed)",
+      "handler": "weapon",
+      "slot": "ranged"
+    }
   }
 }

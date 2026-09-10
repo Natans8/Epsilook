@@ -171,16 +171,16 @@ describe("the shipped schema", () => {
         // dispatch between them the way two notations of one subject do.
         assert.ok(KINDS.has("mech.invis"));
         assert.ok(KINDS.has("mech.detect"));
-        assert.deepEqual(Object.keys(KINDS.get("mech.invis")!.props), ["channel", "target"]);
+        assert.deepEqual(Object.keys(KINDS.get("mech.invis")!.props), ["channel", "target", "phase"]);
     });
 
     it("names both ends of a beam apart", () => {
         // Two thirds of beam rows have a different source and destination attachment, so a single unioned attachment
         // property cannot say which end a reader meant.
         assert.deepEqual(Object.keys(KINDS.get("fx.chain")!.props),
-            ["texture", "from", "to", "colour", "target"]);
+            ["texture", "from", "to", "colour", "arcing", "flickering", "jagged", "wavy", "width", "target", "phase"]);
         assert.deepEqual(Object.keys(KINDS.get("model.missile")!.props),
-            ["file", "from", "to", "motion", "projectiles", "target"]);
+            ["file", "from", "to", "motion", "projectiles", "target", "phase"]);
     });
 
     it("gives every kind a hint and every property a declared type", () => {

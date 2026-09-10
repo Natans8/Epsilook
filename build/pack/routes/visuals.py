@@ -11,10 +11,28 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass, field
+from typing import NamedTuple
 
+from ..phases import PHASES_ENUM
+from ..sources import load_local_enum
 from ..tables import Tables
-from ..targets import AURA_PHASE_EVENTS, NO_TARGET, TARGET_BITS, VISUAL_REDIRECTS
+from ..targets import NO_TARGET, TARGET_BITS, VISUAL_REDIRECTS
 from .columns import to_int
+from .route import route
+
+
+class KitEvent(NamedTuple):
+    """One `SpellVisualEvent` row: a kit, when it starts, and who sees it.
+
+    The unit the walk collects: the same kit starting at the cast and again at
+    the impact is two of these, and each keeps its own audience.
+    """
+
+    kit: int
+    phase: int
+    """The `StartEvent`, a value of the vendored phase enum."""
+    bit: int
+    """The target bit `TargetType` contributes, or `NO_TARGET`."""
 
 
 @dataclass
@@ -29,16 +47,26 @@ class VisualGraph:
     redirect carries the bits of the columns the path went through.
     """
 
-    visual_kits: dict[int, dict[int, tuple[int, int]]] = field(default_factory=dict)
-    """Visual -> {kit -> (aura-phase mask, every-other-phase mask)}.
+    visual_events: dict[int, list[KitEvent]] = field(default_factory=dict)
+    """Visual -> its event rows, distinct, in table order.
 
-    "Target" means a different unit in the two phases: an aura-phase visual
-    plays on whoever carries the aura, every other phase shares the cast's
-    frame.
+    Kept per event rather than folded per kit, because the phase is what the
+    pack ships: a row says what plays, when, and for whom, and folding the
+    events of one kit would lose which audience went with which moment.
     """
 
     visual_sounds: dict[int, int] = field(default_factory=dict)
     """Visual -> the SoundKit its animation events play."""
+
+
+def phase_words() -> list[str]:
+    """The word for each event a kit can start at, indexed by event id.
+
+    Empty where the enum leaves a value unnamed, so a row storing one reads as
+    no word rather than as a neighbour's.
+    """
+    names = load_local_enum(PHASES_ENUM)
+    return [str(names.get(event, "")) for event in range(max(names) + 1)]
 
 
 def expand_redirects(seeds: set[int], redirects: dict[int, list[tuple[int, int]]]) -> dict[int, int]:
@@ -65,6 +93,7 @@ def expand_redirects(seeds: set[int], redirects: dict[int, list[tuple[int, int]]
     return reached
 
 
+@route("graph")
 def read_visual_graph(tables: Tables) -> VisualGraph:
     """Read both hops of the visual graph, redirects expanded.
 
@@ -93,20 +122,18 @@ def read_visual_graph(tables: Tables) -> VisualGraph:
 
     graph.spell_visuals = {spell: expand_redirects(visuals, redirects) for spell, visuals in direct.items()}
 
-    kits: dict[int, dict[int, tuple[int, int]]] = defaultdict(dict)
+    events: dict[int, list[KitEvent]] = defaultdict(list)
+    seen: set[tuple[int, KitEvent]] = set()
     for visual_id, kit_id, target_type, start_event in tables.rows(
         "SpellVisualEvent", ["SpellVisualID", "SpellVisualKitID", "TargetType", "StartEvent"]
     ):
         visual, kit = to_int(visual_id), to_int(kit_id)
         if not (visual and kit):
             continue
-        bit = TARGET_BITS.get(to_int(target_type), NO_TARGET)
-        aura, other = kits[visual].get(kit, (NO_TARGET, NO_TARGET))
-        # Within a phase the bits union rather than replace: one visual reaches
-        # the same kit through several event rows.
-        if to_int(start_event) in AURA_PHASE_EVENTS:
-            kits[visual][kit] = (aura | bit, other)
-        else:
-            kits[visual][kit] = (aura, other | bit)
-    graph.visual_kits = dict(kits)
+        event = KitEvent(kit, to_int(start_event), TARGET_BITS.get(to_int(target_type), NO_TARGET))
+        # The table repeats an event row verbatim now and then; one is enough.
+        if (visual, event) not in seen:
+            seen.add((visual, event))
+            events[visual].append(event)
+    graph.visual_events = dict(events)
     return graph

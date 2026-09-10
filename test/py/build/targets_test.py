@@ -17,9 +17,12 @@ import support
 from pack import pipeline
 from pack.derive import CONTEXT_FIELDS
 from pack.model import SECTIONS
+from pack.routes import ROUTES
 from pack.sources.cache import CACHE_DIR
 
 MODULES = sorted({section.module for section in SECTIONS})
+FILLED = {route.field for route in ROUTES}
+"""Every field some registered route fills."""
 
 
 def test_every_declared_read_is_a_field_the_build_can_derive() -> None:
@@ -28,9 +31,7 @@ def test_every_declared_read_is_a_field_the_build_can_derive() -> None:
     for section in SECTIONS:
         for name in section.reads:
             assert name in CONTEXT_FIELDS, f"{section.name} reads {name!r}"
-            assert name == "build" or hasattr(pipeline.Derivations, name), (
-                f"{section.name} reads {name!r}, which no derivation produces"
-            )
+            assert name == "build" or name in FILLED, f"{section.name} reads {name!r}, which no route fills"
 
 
 def test_every_module_selects_at_least_one_section() -> None:

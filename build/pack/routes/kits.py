@@ -19,6 +19,7 @@ from .columns import to_int
 from .fx import ChainEffect, FxPayloads, expand_chain
 from .models import MODEL_CAT_AREA, MODEL_CAT_BARRAGE, SCALE_UNIT, UNPLACED, AttachModel, ModelSources
 from .procedures import ProcEffects
+from .route import route
 
 _KIT_EFFECT_TYPES = load_local_enum("spell_visual_kit_effect_types")
 EFFECT_TYPE_PROC = enum_id_where(_KIT_EFFECT_TYPES, "proc")
@@ -103,6 +104,7 @@ def add_chains(
     into.update((chain, source, destination) for chain in expanded)
 
 
+@route("kits")
 def read_kit_effects(tables: Tables, models: ModelSources, procs: ProcEffects, fx: FxPayloads) -> KitEffects:
     """Dispatch every kit effect row into the bucket its type chose."""
     kits = KitEffects(

@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 
 from ..tables import Tables
 from .columns import to_int
+from .route import route
 
 ASSIGNMENT = re.compile(r"\s*\$(\w+)\s*=\s*(.*)$")
 """One `$name=body` line of a description-variables row."""
@@ -112,6 +113,7 @@ def read_encounter_notes(tables: Tables) -> dict[int, str]:
     return {spell: "\n\n".join(parts) for spell, parts in notes.items()}
 
 
+@route("templates")
 def read_spell_text(tables: Tables) -> SpellText:
     """Every raw template in one bundle, which is how the cooker takes them."""
     descriptions, auras = read_templates(tables)

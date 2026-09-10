@@ -13,9 +13,41 @@ vocabulary module of their own.
 from __future__ import annotations
 
 from ...derive import Reads
+from ...routes import interrupt_words
+from ...routes.selectors import SELECTORS
 from ...targets import IMPLICIT_PREFIX
 from ..registry import register
 from ..section import Layout, Scope, Section, SectionColumns, size
+
+
+def selectors(reads: Reads) -> SectionColumns:
+    """Every discriminated reference, one row per selector value and slot.
+
+    What a raw value on a mechanics row is an id into: the row's own effect
+    or aura picks the meaning, and this table says which table or vocabulary
+    each of its columns then indexes. Shipped rather than left in the build,
+    because the mechanics rows carry both misc values raw and a reader with
+    this can resolve them. Flat rather than a list per selector, so both
+    media carry it as plain columns; a selector reading several columns is
+    several rows agreeing on the first three.
+    """
+    del reads  # a declaration, the same on every build
+    rows = [
+        (declared.table, declared.select, value, slot)
+        for declared in SELECTORS
+        for value in declared.select.values
+        for slot in declared.select.slots
+    ]
+    return {
+        "tables": [table for table, _select, _value, _slot in rows],
+        "columns": [chosen.on for _table, chosen, _value, _slot in rows],
+        "values": [value for _table, _select, value, _slot in rows],
+        "slotColumns": [slot.column for _table, _select, _value, slot in rows],
+        "holds": [slot.holds.value for _table, _select, _value, slot in rows],
+        "intos": [slot.into for _table, _select, _value, slot in rows],
+        # The first patch on which the value stopped meaning this, or empty.
+        "untils": [chosen.until for _table, chosen, _value, _slot in rows],
+    }
 
 
 def used_targets(reads: Reads) -> list[int]:
@@ -91,6 +123,39 @@ IMPLICIT_TARGET_NAMES = register(
         layout=Layout.BARE,
         reads=("rows", "declared"),
         counts=(size("implicitTargets", "names"),),
+    )
+)
+
+SELECTORS_TABLE = register(
+    Section(
+        name="selectors",
+        doc="What each column of a discriminated row is an id into, per selector value.",
+        module="universal",
+        produce=selectors,
+        columns=("tables", "columns", "values", "slotColumns", "holds", "intos", "untils"),
+        scope=Scope.UNIVERSAL,
+        counts=(size("selectors", "values"),),
+    )
+)
+
+
+def interrupt_names(reads: Reads) -> SectionColumns:
+    """The word for each aura-interrupt bit, indexed by bit; empty where a bit
+    is housekeeping or unnamed."""
+    del reads  # a vendored enum, the same on every build
+    words = interrupt_words()
+    return {"names": [words.get(bit, "") for bit in range(max(words) + 1)]}
+
+
+INTERRUPT_NAMES = register(
+    Section(
+        name="interruptNames",
+        doc="The word for each event that removes an aura, by the bit that says so.",
+        module="universal",
+        produce=interrupt_names,
+        columns=("names",),
+        layout=Layout.BARE,
+        scope=Scope.UNIVERSAL,
     )
 )
 

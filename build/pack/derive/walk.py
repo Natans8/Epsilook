@@ -5,12 +5,15 @@ over every kit every one of its visuals names, plus whatever its missile sets
 carry. Every payload family merges the same way, so the families are declared
 once and the walk is a loop rather than a dozen near-identical statements.
 
-Each payload carries the audience it was reached through. A row of the visual
-graph says who a kit plays for, a spell to visual edge can add bits of its own
-when it was reached through a redirect, and a missile set has no event row at
-all so its content carries none. Every family carries a mask even where the
-pack does not ship one today, so giving a family an audience later is a section
-change rather than a walk change.
+Each payload is collected as an occurrence: the thing, and the phase of the
+spell it happens in. A row of the visual graph says when a kit starts and who
+it plays for, so the same model at the cast and at the impact is two
+occurrences with their own audiences rather than one wearing both. A spell to
+visual edge can add bits of its own when it was reached through a redirect. A
+missile set has no event row, and needs none: it is what fills the travel, so
+it starts there, and its content carries only what the edge gave it. Every
+family carries a mask even where the pack does not ship one today, so giving a
+family an audience later is a section change rather than a walk change.
 """
 
 from __future__ import annotations
@@ -18,12 +21,13 @@ from __future__ import annotations
 from collections import defaultdict
 from collections.abc import Callable, Container, Iterable, Mapping
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, NamedTuple
 
 from ..routes import (
     Ambience,
     FxPayloads,
     KitEffects,
+    MaskedIds,
     ScreenRow,
     SpellEffectRows,
     VisualGraph,
@@ -31,10 +35,29 @@ from ..routes import (
     ZoneMusic,
 )
 from ..routes.models import MODEL_CAT_MISSILE, SCALE_UNIT, UNPLACED, AttachModel
-from ..targets import merge_masked, resolve_target_mask
+from ..phases import PHASE_AURA, PHASE_NONE, PHASE_TRAVEL, landing
+from ..routes.route import route
+from ..targets import merge_masked, resolve_target_bit
 
-Bucket = defaultdict[int, dict[Any, int]]
-"""Spell to its payload items, each with the union of the masks it arrived by.
+
+class Occurrence(NamedTuple):
+    """One thing a spell reaches, at one phase of the spell.
+
+    The key every bucket holds. The two together are what a row is: a model at
+    the impact is a different fact from the same model at the cast, and the
+    audience is unioned per occurrence rather than per model.
+    """
+
+    item: Any
+    """The family's own payload: a model record, a sound pair, a chain tuple.
+    One bucket holds one family's shape, and the walk only moves it through."""
+
+    phase: int
+    """A value of the vendored phase enum: where in the spell it starts."""
+
+
+Bucket = defaultdict[int, dict[Occurrence, int]]
+"""Spell to its occurrences, each with the union of the masks it arrived by.
 
 A `defaultdict` in the type and not only in the default, because the walk
 merges into `bucket[spell]` before that spell has one. Declaring it as a plain
@@ -81,6 +104,10 @@ class SpellVisuals:
     tints: Bucket = field(default_factory=_bucket)
     desats: Bucket = field(default_factory=_bucket)
     transps: Bucket = field(default_factory=_bucket)
+
+    visual_kits: Bucket = field(default_factory=_bucket)
+    """The visual kits themselves, by id: the handle a model frame renders a
+    spell's look by, kept beside what each kit contributes."""
 
     screens: Bucket = field(default_factory=_bucket)
     """The screen effects a spell's kits grade the frame with.
@@ -145,6 +172,7 @@ the walk rather than to a section.
 """
 
 
+@route("visuals", phase="walk_spells", spell_names="names.names", delayed="props.delayed")
 def walk_spells(
     spell_names: Container[int],
     graph: VisualGraph,
@@ -155,6 +183,7 @@ def walk_spells(
     effects: SpellEffectRows,
     zone_music: Mapping[int, ZoneMusic] | None = None,
     ambiences: Mapping[int, Ambience] | None = None,
+    delayed: Container[int] = frozenset(),
 ) -> SpellVisuals:
     """Walk every spell's visuals once, unioning what each one reaches.
 
@@ -171,10 +200,12 @@ def walk_spells(
             means the caster, and the screen effects the auras name.
         zone_music: the music sets a screen effect can name, by id.
         ambiences: the ambiences a screen effect can name, by id.
+        delayed: the spells whose effects land at the impact rather than the
+            cast, which places the sound an effect plays outright.
 
     Returns:
-        Every family, keyed by spell, each item carrying the union of the masks
-        it was reached by. Nothing it was handed is modified.
+        Every family, keyed by spell, each occurrence carrying the union of the
+        masks it was reached by. Nothing it was handed is modified.
     """
     vis = SpellVisuals()
     # The pairs a kit expands to, and the two ends of every family, resolved
@@ -196,14 +227,24 @@ def walk_spells(
             # rather than off a kit or a missile, but is a sound kit like any
             # other once found. Asked for only where there is one, so a visual
             # without a sound does not conjure the spell an empty bucket.
+            # No event names its moment, so it is placed nowhere rather than
+            # somewhere guessed.
             if soundkit := graph.visual_sounds.get(visual, 0):
-                merge_masked(vis.sounds[spell], pairs.get(soundkit, ()), extra)
+                occurred(vis.sounds[spell], pairs.get(soundkit, ()), PHASE_NONE, extra)
             _walk_kits(vis, spell, visual, graph, kits, pairs, families, aimed, extra)
 
     _fold_chain_sounds(vis, fx, pairs)
-    _fold_effect_sounds(vis, effects, pairs)
+    _fold_effect_sounds(vis, effects, pairs, delayed)
     _fold_screen_sounds(vis, fx, effects, zone_music or {}, ambiences or {}, pairs)
     return vis
+
+
+def occurred(into: dict[Occurrence, int], items: Iterable[Any], phase: int, mask: int) -> None:
+    """Record items happening at one phase, unioning the audience per occurrence.
+
+    The one way anything enters a bucket, so the key is spelled once.
+    """
+    merge_masked(into, (Occurrence(item, phase) for item in items), mask)
 
 
 def _walk_missiles(
@@ -213,12 +254,14 @@ def _walk_missiles(
 
     Missile content has no `SpellVisualEvent` row, so it carries only whatever
     the spell-to-visual edge contributed and never a target type of its own.
-    The projectile's own fields are widened to the model shape the rest of the
-    walk uses, which is what lets missiles share the models bucket.
+    Its phase needs no row: a missile is what the travel phase is, and it
+    starts where the travel starts. The projectile's own fields are widened to
+    the model shape the rest of the walk uses, which is what lets missiles
+    share the models bucket.
     """
     if launched is None:
         return
-    merge_masked(
+    occurred(
         vis.models[spell],
         (
             AttachModel(
@@ -234,11 +277,12 @@ def _walk_missiles(
             )
             for shot in launched.models
         ),
+        PHASE_TRAVEL,
         mask,
     )
-    merge_masked(vis.animkits[spell], launched.animkits, mask)
+    occurred(vis.animkits[spell], launched.animkits, PHASE_TRAVEL, mask)
     for soundkit in launched.soundkits:
-        merge_masked(vis.sounds[spell], pairs.get(soundkit, ()), mask)
+        occurred(vis.sounds[spell], pairs.get(soundkit, ()), PHASE_TRAVEL, mask)
 
 
 def _walk_kits(
@@ -252,11 +296,12 @@ def _walk_kits(
     aimed: tuple[int, int],
     extra: int,
 ) -> None:
-    """Collect every kit one visual names, into every family.
+    """Collect every event one visual names, into every family.
 
-    The kit's two phase masks are folded into one first, because "the target"
-    means the caster on a self-cast spell and only the spell's own effects can
-    say whether it is one.
+    An event is one kit at one phase for one audience, and the event's phase
+    is the occurrence's. The audience is resolved per event, because "the
+    target" means the caster on a self-cast spell and only the spell's own
+    effects can say whether it is one.
 
     Args:
         vis: what the walk has attributed to this spell so far.
@@ -269,49 +314,53 @@ def _walk_kits(
         aimed: the spell's aura and cast target bits.
         extra: the bits the spell-to-visual edge contributed.
     """
-    for kit, (aura_mask, other_mask) in graph.visual_kits.get(visual, {}).items():
-        mask = resolve_target_mask(aura_mask, other_mask, *aimed) | extra
+    for kit, phase, bit in graph.visual_events.get(visual, ()):
+        mask = resolve_target_bit(bit, phase, *aimed) | extra
+        occurred(vis.visual_kits[spell], (kit,), phase, mask)
         for of_kit, of_spell in families:
             # Asked before indexing, so a family this kit contributes nothing
             # to does not leave the spell an empty bucket in it.
             if contributed := of_kit.get(kit):
-                merge_masked(of_spell[spell], contributed, mask)
+                occurred(of_spell[spell], contributed, phase, mask)
         for soundkit in kits.soundkits.get(kit, ()):
-            merge_masked(vis.sounds[spell], pairs.get(soundkit, ()), mask)
+            occurred(vis.sounds[spell], pairs.get(soundkit, ()), phase, mask)
         if kit in kits.freezes:
             vis.freezes.add(spell)
         if kit in kits.camos:
             vis.camos.add(spell)
 
 
-def _fold_effect_sounds(vis: SpellVisuals, effects: SpellEffectRows, pairs: SoundPairs) -> None:
+def _fold_effect_sounds(
+    vis: SpellVisuals, effects: SpellEffectRows, pairs: SoundPairs, delayed: Container[int]
+) -> None:
     """Fold the sound an effect plays outright into the spell's sounds.
 
     A spell can play a sound without any visual doing it: `PLAY_SOUND` and
     `PLAY_MUSIC` name a kit on the effect row itself. It is the same fact as a
     kit's sound once found -- the same kit, the same files, masked by the
-    effect row's own implicit target -- so it merges into the same family
-    rather than becoming a route of its own.
+    effect row's own implicit target, happening where the spell's effects land
+    -- so it merges into the same family rather than becoming a route of its
+    own.
     """
     for (spell, soundkit), mask in effects.sounds.items():
-        merge_masked(vis.sounds[spell], pairs.get(soundkit, ()), mask)
+        occurred(vis.sounds[spell], pairs.get(soundkit, ()), landing(spell in delayed), mask)
 
 
 def _fold_chain_sounds(vis: SpellVisuals, fx: FxPayloads, pairs: SoundPairs) -> None:
     """Fold each drawn chain's own sound into the spell's sounds.
 
     A chain carries a sound kit of its own, which belongs in the sounds family
-    like any other and inherits the mask the chain itself was reached by. Done
-    after the walk because a chain can be reached more than once and its mask
-    is only final once every visual has been followed.
+    like any other and inherits the phase and the mask the chain itself was
+    reached by. Done after the walk because a chain can be reached more than
+    once and its mask is only final once every visual has been followed.
     """
     for spell, chains in vis.chains.items():
-        for chain, mask in chains.items():
+        for (chain, phase), mask in chains.items():
             # A kit can name a chain the payload pass did not keep, so this
             # asks rather than indexes. Exiting on it would make one unresolved
             # row fatal to a build that renders perfectly well without it.
             if (row := fx.chains.get(chain[0])) and (soundkit := row.sound):
-                merge_masked(vis.sounds[spell], pairs.get(soundkit, ()), mask)
+                occurred(vis.sounds[spell], pairs.get(soundkit, ()), phase, mask)
 
 
 def _fold_screen_sounds(
@@ -326,21 +375,43 @@ def _fold_screen_sounds(
 
     A screen effect row bundles paint with a music set and an ambience, and the
     two sound halves name kits like any visual does, so they merge into the
-    same family under the audience the screen was reached by. The aura's mask
-    wins where both routes reach one screen, since the kit route records no
-    audience for a screen today.
+    same family under the phase and the audience the screen was reached by.
     """
-    for spell, screen in screen_reach(effects.screens.ids, vis.screens):
+    for (spell, screen, phase), mask in screen_occurrences(effects.screens, vis.screens).items():
         row = fx.screens.get(screen)
         if row is None:
             continue
-        mask = effects.screens.masks.get((spell, screen), vis.screens[spell].get(screen, 0))
         music = zone_music.get(row.music)
         ambience = ambiences.get(row.ambience)
         kits = {*(music[1:] if music else ()), *(ambience if ambience else ())}
         for soundkit in kits:
             if soundkit:
-                merge_masked(vis.sounds[spell], pairs.get(soundkit, ()), mask)
+                occurred(vis.sounds[spell], pairs.get(soundkit, ()), phase, mask)
+
+
+def screen_occurrences(by_aura: MaskedIds, by_kit: Bucket) -> dict[tuple[int, int, int], int]:
+    """Every screen effect a spell reaches, when, and for whom.
+
+    An aura naming the effect holds it for the aura phase, under the aura's
+    own audience; a visual kit playing it starts it at the kit's event. Where
+    both reach one screen at one phase the audiences union, as everywhere.
+
+    Args:
+        by_aura: the screen effects the aura rows name, with their masks.
+        by_kit: the walk's screens family.
+
+    Returns:
+        `(spell, screen effect, phase)` to the mask it plays under.
+    """
+    out: dict[tuple[int, int, int], int] = {}
+    for spell, screens in by_aura.ids.items():
+        for screen in screens:
+            out[(spell, screen, PHASE_AURA)] = by_aura.masks.get((spell, screen), 0)
+    for spell, played in by_kit.items():
+        for (screen, phase), mask in played.items():
+            key = (spell, screen, phase)
+            out[key] = out.get(key, 0) | mask
+    return out
 
 
 def sky_spells(reached: Iterable[tuple[int, int]], screens: Mapping[int, ScreenRow]) -> dict[int, list[int]]:
@@ -366,21 +437,25 @@ def sky_spells(reached: Iterable[tuple[int, int]], screens: Mapping[int, ScreenR
     return {preset: sorted(spells) for preset, spells in sorted(out.items())}
 
 
-def screen_reach(by_aura: Mapping[int, Iterable[int]], by_kit: Mapping[int, Iterable[int]]) -> set[tuple[int, int]]:
+def screen_reach(
+    by_aura: Mapping[int, Iterable[int]], by_kit: Mapping[int, Iterable[Occurrence]]
+) -> set[tuple[int, int]]:
     """Every spell paired with a screen effect it reaches, by either route.
 
     An aura naming the effect and a visual kit playing it are the same fact
-    about the spell, so they union. Everything that asks which spells reach a
-    screen effect asks here: the row is a bundle of independent payloads, and a
-    consumer rebuilding this union beside the others is how two of them would
-    come to disagree about which spells carry one.
+    about the spell, so they union, and the phase is dropped: this answers
+    WHICH screens a spell reaches, for the rosters and the sky edge, while
+    `screen_occurrences` answers when. Everything that asks which spells reach
+    a screen effect asks here: the row is a bundle of independent payloads,
+    and a consumer rebuilding this union beside the others is how two of them
+    would come to disagree about which spells carry one.
 
     Args:
         by_aura: spell -> the screen effects its aura rows name.
-        by_kit: spell -> the screen effects its visual kits play.
+        by_kit: spell -> the screen occurrences its visual kits play.
 
     Returns:
         Every reached `(spell, screen effect)` pair, unordered.
     """
     reached = {(spell, screen) for spell, screens in by_aura.items() for screen in screens}
-    return reached | {(spell, screen) for spell, screens in by_kit.items() for screen in screens}
+    return reached | {(spell, screen) for spell, played in by_kit.items() for (screen, _phase) in played}

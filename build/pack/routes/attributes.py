@@ -12,6 +12,7 @@ import sys
 from collections.abc import Mapping, Sequence
 
 from ..sources import load_local_enum
+from .route import route
 
 WORD_BITS = 32
 """Width of one `Attributes_N` column."""
@@ -83,6 +84,7 @@ def shipped_attributes() -> dict[int, Mapping[str, object]]:
     return shipped
 
 
+@route("attributes", attribute_words="props.attribute_words")
 def read_spell_attributes(attribute_words: Mapping[int, Sequence[int]]) -> dict[str, list[int]]:
     """Group spells by the declared attribute flags they carry.
 

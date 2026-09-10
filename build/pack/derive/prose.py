@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 
 from ..progress import log
 from ..routes import SpellNames, SpellText
+from ..routes.route import route
 from ..routes.values import DescriptionValues
 from .spelltext import ENGLISH, DescriptionCooker, TextLocale
 
@@ -54,6 +55,7 @@ class CookedText:
     """
 
 
+@route("prose", phase="cook descriptions")
 def cook_text(
     templates: SpellText, values: DescriptionValues, names: SpellNames, locale: TextLocale = ENGLISH
 ) -> CookedText:

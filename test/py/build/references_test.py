@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pack.derive.displays import Display, ResolvedDisplays
 from pack.derive.references import References, collect_references
-from pack.derive.walk import SpellVisuals
+from pack.derive.walk import Occurrence, SpellVisuals
 from pack.routes import (
     ChainEffect,
     CreatureModels,
@@ -16,13 +16,17 @@ from pack.routes import (
     SpellEffectRows,
 )
 from pack.routes.models import MODEL_CAT_DISPLAY, MODEL_CAT_ITEM, SCALE_UNIT, UNPLACED, AttachModel
+from pack.phases import PHASE_CAST
 from pack.targets import NO_TARGET
 
 
 def visuals(**buckets: dict[int, dict[object, int]]) -> SpellVisuals:
+    """A walk result from bare items, every one placed at the cast: the
+    collection reads what a spell reaches and never when."""
     found = SpellVisuals()
     for name, rows in buckets.items():
-        getattr(found, name).update(rows)
+        for spell, items in rows.items():
+            getattr(found, name)[spell] = {Occurrence(item, PHASE_CAST): mask for item, mask in items.items()}
     return found
 
 

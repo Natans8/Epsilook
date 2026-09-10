@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 
 from ..tables import Tables
 from .columns import to_int
+from .route import route
 
 
 @dataclass
@@ -27,6 +28,7 @@ class GameObjectData:
     it to link to."""
 
 
+@route("objects")
 def read_gameobjects(tables: Tables, world: Tables | None) -> GameObjectData:
     """Read each spawnable object's name, model and type.
 

@@ -10,7 +10,8 @@ from collections.abc import Sequence
 
 from ..sources import load_local_enum
 from ..tables import Tables
-from .columns import to_int
+from .columns import to_float, to_int
+from .route import route
 
 BONESET_FULL_BODY = "Full Body"
 """The default region. Never shown, because it distinguishes nothing."""
@@ -18,7 +19,11 @@ BONESET_FULL_BODY = "Full Body"
 NO_EMOTE = 0
 """What an animation Epsilon exposes no emote for carries."""
 
+SPEED_UNIT = 1000
+"""Stored units per whole factor: a kit playing at its animation's own pace ships as 1000."""
 
+
+@route("emotes")
 def read_anim_emotes(anim_names: Sequence[str]) -> tuple[list[int], list[int]]:
     """The Epsilon emote that performs each animation, one-shot and looping.
 
@@ -48,6 +53,7 @@ def read_anim_emotes(anim_names: Sequence[str]) -> tuple[list[int], list[int]]:
     return oneshots, loops
 
 
+@route("animkit_anims")
 def read_animkit_anims(tables: Tables, anim_names: Sequence[str]) -> dict[int, set[int]]:
     """Anim kit -> the animations it segments."""
     anims: dict[int, set[int]] = {}
@@ -58,6 +64,25 @@ def read_animkit_anims(tables: Tables, anim_names: Sequence[str]) -> dict[int, s
     return anims
 
 
+@route("animkit_speeds")
+def read_animkit_speeds(tables: Tables) -> dict[tuple[int, int], int]:
+    """Anim kit and animation -> the pace the kit plays it at, in thousandths.
+
+    Negative plays it backwards and nought holds it on its first frame; both
+    are real on the client and the pace is the whole of what separates two
+    kits playing one animation. A kit segmenting one animation twice at two
+    paces keeps the first segment's, since one row per pace would be a row
+    per segment.
+    """
+    speeds: dict[tuple[int, int], int] = {}
+    for kit_id, anim_id, speed in tables.rows("AnimKitSegment", ["ParentAnimKitID", "AnimID", "Speed"]):
+        key = (to_int(kit_id), to_int(anim_id))
+        if key[0] and key not in speeds:
+            speeds[key] = round(to_float(speed) * SPEED_UNIT)
+    return speeds
+
+
+@route("animkit_bonesets")
 def read_animkit_bonesets(tables: Tables) -> dict[int, dict[int, list[str]]]:
     """Anim kit -> {animation -> the body regions that segment moves}.
 
@@ -92,6 +117,7 @@ def read_animkit_bonesets(tables: Tables) -> dict[int, dict[int, list[str]]]:
     return bonesets
 
 
+@route("anim_replacements")
 def read_anim_replacements(tables: Tables, anim_names: Sequence[str]) -> dict[int, set[tuple[int, int]]]:
     """Replacement set -> the (from, to) animation swaps it makes.
 

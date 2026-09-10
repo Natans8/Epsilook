@@ -13,6 +13,7 @@ from collections.abc import Callable
 
 from ...derive import Reads
 from ...derive.kinds import WHOLE_MODEL
+from ...routes import phase_words
 from ...routes.colors import hue_word, hue_words, pack_rgb
 from ..registry import register
 from ..section import Column, Layout, Scope, Section, SectionColumns, size
@@ -28,7 +29,7 @@ what a player sees.
 
 def used(reads: Reads, bucket: str) -> list[int]:
     """The distinct rows of one family some spell reaches, sorted."""
-    return sorted({row for rows in getattr(reads.visuals, bucket).values() for row in rows})
+    return sorted({played.item for spells in getattr(reads.visuals, bucket).values() for played in spells})
 
 
 def fx_chains(reads: Reads) -> SectionColumns:
@@ -207,6 +208,25 @@ ANCHOR_NAMES = register(
         columns=("names",),
         layout=Layout.BARE,
         reads=("declared",),
+        scope=Scope.UNIVERSAL,
+    )
+)
+
+
+def phase_names(reads: Reads) -> SectionColumns:
+    """The word for each phase, indexed by the event id a row stores."""
+    del reads  # a vendored enum, the same on every build
+    return {"names": phase_words()}
+
+
+VISUAL_PHASES = register(
+    Section(
+        name="visualPhases",
+        doc="The word for each phase of a spell, by the event id every timed row stores.",
+        module="universal",
+        produce=phase_names,
+        columns=("names",),
+        layout=Layout.BARE,
         scope=Scope.UNIVERSAL,
     )
 )

@@ -86,12 +86,13 @@ AXES: Mapping[str, str] = {
     "fx": (
         "fxRows fxChains fxTextures dissolves dissolveTextures glows "
         "shadowies ghostMats tints screens screenTextures zoneMusic "
-        "ambiences anchorNames attachmentNames missileMotions"
+        "ambiences anchorNames attachmentNames missileMotions visualPhases"
     ),
     "mech": (
         "mechRows spellDelivery spellRanges areas keybinds "
         "linkKindNames effectNames auraNames implicitTargetNames "
-        "implicitTargetBits targetNames speedModeNames spellAttrs"
+        "implicitTargetBits targetNames speedModeNames spellAttrs "
+        "selectors factionNames interruptNames"
     ),
     "spell": "spells expansions iconNames iconFids",
     # The sky is not reached through a query at all: nothing about a spell

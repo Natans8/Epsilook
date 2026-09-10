@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 
 from ..tables import Tables
 from .columns import to_int
+from .route import route
 
 
 @dataclass
@@ -35,6 +36,7 @@ class ItemModels:
         return bool(self.model_fid.get(item_id))
 
 
+@route("items")
 def read_item_models(tables: Tables) -> ItemModels:
     """Read an item's name, quality, icon and model.
 

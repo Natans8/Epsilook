@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 
 from ..routes import CreatureModels, FxPayloads, GameObjectData, ItemModels, MountData, SpellEffectRows
 from ..routes.models import MODEL_CAT_DISPLAY, MODEL_CAT_ITEM
+from ..routes.route import route
 from .displays import ResolvedDisplays
 from .walk import SpellVisuals, screen_reach
 
@@ -69,6 +70,7 @@ class References:
         return self.assets | self.icons
 
 
+@route("references", phase="collect_references", spell_icons="props.icon_fid")
 def collect_references(
     visuals: SpellVisuals,
     effects: SpellEffectRows,
@@ -98,8 +100,8 @@ def collect_references(
     """
     found = References()
 
-    found.chains = {draw[0] for drawn in visuals.chains.values() for draw in drawn}
-    found.dissolves = {row for rows in visuals.dissolves.values() for row in rows}
+    found.chains = {draw.item[0] for drawn in visuals.chains.values() for draw in drawn}
+    found.dissolves = {row.item for rows in visuals.dissolves.values() for row in rows}
     # An aura applies one with no visual involved and a kit applies one with no
     # aura; the roster is the spells side of that union dropped.
     found.screens = {screen for _spell, screen in screen_reach(effects.screens.ids, visuals.screens)}
@@ -108,7 +110,7 @@ def collect_references(
     # own file and the inventory icon an item pill shows come out of it, so it
     # is visited once for the two.
     for models in visuals.models.values():
-        for model in models:
+        for model, _phase in models:
             # A negative file id is the build's own equipped-weapon slot: it
             # stands for whatever the caster is holding and names no asset, so
             # asking the listfile about it would report a name missing forever.
@@ -120,7 +122,7 @@ def collect_references(
             if model.category == MODEL_CAT_DISPLAY:
                 found.displays.add(model.ref)
     for sounds in visuals.sounds.values():
-        found.assets.update(file for _kit, file in sounds)
+        found.assets.update(file for (_kit, file), _phase in sounds)
     for chain in found.chains:
         found.assets.update(fx.chains[chain].textures)
     for dissolve in found.dissolves:

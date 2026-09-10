@@ -53,11 +53,12 @@ interface SpellsSection {
     readonly altNames: readonly string[];
 }
 
-/** The three cooked prose pools of the `spellText` section. */
+/** The four prose pools of the `spellText` section: three cooked, and the mount flavour text as written. */
 interface SpellTextSection {
     readonly descriptions: TextPool;
     readonly auras: TextPool;
     readonly encounters: TextPool;
+    readonly flavours: TextPool;
 }
 
 /** The expansion ladder the pack ships, parallel arrays in rung order. */
@@ -303,6 +304,9 @@ export class PackRowSource implements RowSource {
         for (const [name, prop] of Object.entries(kind.props)) {
             const stored = storedAt(this.table, at, name);
             if (stored === undefined) continue;
+            // The pack says which stored number means the property has no value here; a row holding it has no
+            // such property, which is what lets a flag ship as nought or one.
+            if (stored === this.table.absent[at.kind]?.[name]) continue;
             // A spanning property arrives already joined, as the value its composite type reads, and resolves
             // through no vocabulary -- what a vocabulary keys is one stored number, and it has none to key.
             if (typeof stored !== "number") {
@@ -349,7 +353,7 @@ function spellRows(l: LoadedPack, i: number): Row[] {
     const id = spells.ids[i];
     const rows: Row[] = [row(nameKind, {text: spells.names[i]})];
     if (spells.subtexts[i]) rows.push(row(nameKind, {text: spells.subtexts[i]}));
-    for (const pool of [text.descriptions, text.encounters, text.auras]) {
+    for (const pool of [text.descriptions, text.encounters, text.auras, text.flavours]) {
         const at = pool.of[i];
         if (at) rows.push(row(description, {text: pool.text[at]}));
     }
@@ -520,7 +524,7 @@ function invert(l: LoadedPack, sources: ReadonlyMap<Column, PackRowSource>): Inv
 
     const namesSq = l.spells.names.map((name, i) =>
         squash([name, l.spells.subtexts[i], l.spells.altNames[i]].filter(Boolean).join(" ")));
-    const pools = [l.text.descriptions, l.text.encounters, l.text.auras].map((pool) => ({
+    const pools = [l.text.descriptions, l.text.encounters, l.text.auras, l.text.flavours].map((pool) => ({
         sq: pool.text.map(squash), of: pool.of,
     }));
     const iconsSq = l.iconNames.map(squash);

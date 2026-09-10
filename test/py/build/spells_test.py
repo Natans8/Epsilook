@@ -7,7 +7,10 @@ from support import BuildTables
 
 SPELLS = frozenset({100, 200})
 
-HEADER = "SpellID,DifficultyID,SpellIconFileDataID,SchoolMask,CastingTimeIndex,DurationIndex,RangeIndex,Attributes_0"
+HEADER = (
+    "SpellID,DifficultyID,SpellIconFileDataID,SchoolMask,CastingTimeIndex,DurationIndex,RangeIndex,"
+    "Speed,LaunchDelay,Attributes_0"
+)
 
 
 def test_the_base_difficulty_row_wins(tables: BuildTables) -> None:
@@ -17,10 +20,10 @@ def test_the_base_difficulty_row_wins(tables: BuildTables) -> None:
         tables(
             SpellMisc=f"""\
 {HEADER}
-100,23,700,32,9,9,13,4
-100,0,701,4,3,5,5,8
-200,0,702,2,0,0,0,16
-200,23,703,64,9,9,13,32
+100,23,700,32,9,9,13,0,0,4
+100,0,701,4,3,5,5,0,0,8
+200,0,702,2,0,0,0,0,0,16
+200,23,703,64,9,9,13,0,0,32
 """
         ),
         SPELLS,
@@ -38,8 +41,8 @@ def test_a_spell_with_no_base_row_keeps_the_first_it_has(tables: BuildTables) ->
         tables(
             SpellMisc=f"""\
 {HEADER}
-100,23,700,32,3,5,5,4
-100,24,701,64,7,9,13,8
+100,23,700,32,3,5,5,0,0,4
+100,24,701,64,7,9,13,0,0,8
 """
         ),
         SPELLS,
@@ -57,8 +60,8 @@ def test_an_icon_of_zero_never_displaces_one(tables: BuildTables) -> None:
         tables(
             SpellMisc=f"""\
 {HEADER}
-100,23,700,32,3,5,5,0
-100,0,0,0,0,0,0,0
+100,23,700,32,3,5,5,0,0,0
+100,0,0,0,0,0,0,0,0,0
 """
         ),
         SPELLS,
@@ -74,8 +77,8 @@ def test_the_index_columns_follow_the_same_rule_as_the_school(tables: BuildTable
         tables(
             SpellMisc=f"""\
 {HEADER}
-100,23,700,32,3,5,5,0
-100,0,700,32,0,0,0,0
+100,23,700,32,3,5,5,0,0,0
+100,0,700,32,0,0,0,0,0,0
 """
         ),
         SPELLS,
@@ -91,7 +94,7 @@ def test_a_schoolless_spell_is_recorded_as_such(tables: BuildTables) -> None:
         tables(
             SpellMisc=f"""\
 {HEADER}
-100,0,700,0,0,0,0,0
+100,0,700,0,0,0,0,0,0,0
 """
         ),
         SPELLS,
@@ -104,7 +107,7 @@ def test_a_spell_the_build_does_not_list_is_skipped(tables: BuildTables) -> None
         tables(
             SpellMisc=f"""\
 {HEADER}
-999,0,700,4,3,5,5,8
+999,0,700,4,3,5,5,0,0,8
 """
         ),
         SPELLS,
@@ -120,10 +123,28 @@ def test_every_attribute_column_the_build_exports_is_read(tables: BuildTables) -
         tables(
             SpellMisc="""\
 SpellID,DifficultyID,SpellIconFileDataID,SchoolMask,CastingTimeIndex,\
-DurationIndex,RangeIndex,Attributes_0,Attributes_1,Attributes_2
-100,0,700,4,3,5,5,1,2,3
+DurationIndex,RangeIndex,Speed,LaunchDelay,Attributes_0,Attributes_1,Attributes_2
+100,0,700,4,3,5,5,0,0,1,2,3
 """
         ),
         SPELLS,
     )
     assert spells.attribute_words == {100: (1, 2, 3)}
+
+
+def test_a_speed_or_a_launch_delay_delays_the_landing(tables: BuildTables) -> None:
+    """Either alone puts time between the cast and the effects, and the base
+    row decides it like every other column."""
+    spells = read_spell_properties(
+        tables(
+            SpellMisc=f"""\
+{HEADER}
+100,0,700,4,3,5,5,45.0,0,0
+200,0,701,4,3,5,5,0,0.5,0
+300,23,702,4,3,5,5,20,0,0
+300,0,703,4,3,5,5,0,0,0
+"""
+        ),
+        frozenset({100, 200, 300}),
+    )
+    assert spells.delayed == {100, 200}

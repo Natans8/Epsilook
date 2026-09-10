@@ -1,8 +1,10 @@
 """What a spell says it does, cooked to placeholder-free prose.
 
-Three bodies of text under one section because they answer one question -- what
-does this spell say -- from three places: the cast's own tooltip, the buff's
-line while it is on you, and the dungeon journal's note on a boss ability.
+Four bodies of text under one section because they answer one question -- what
+does this spell say -- from four places: the cast's own tooltip, the buff's
+line while it is on you, the dungeon journal's note on a boss ability, and the
+flavour text of the mount a spell grants, which is prose about the mount and
+the only real text most mount spells have.
 
 Every column is deduped. Nineteen thousand descriptions on the product's build
 are a bare redirect, so cooking them yields the same string as their target;
@@ -32,6 +34,8 @@ def spell_text(reads: Reads) -> SectionColumns:
         "descriptions": aligned(prose.descriptions, ids),
         "auras": aligned(prose.auras, ids),
         "encounters": aligned(prose.encounters, ids),
+        # Not cooked: a mount's flavour is plain prose with no placeholders.
+        "flavours": aligned(reads.mounts.flavour, ids),
     }
 
 
@@ -68,12 +72,17 @@ SPELL_TEXT = register(
         doc="Every spell's cooked description, aura line and encounter note.",
         module="text",
         produce=spell_text,
-        columns=("descriptions", "auras", "encounters"),
+        columns=("descriptions", "auras", "encounters", "flavours"),
         # Every one of them is shared: a redirect cooks to the same prose as its
         # target, so the distinct strings are far fewer than the spells carrying
         # them.
-        cardinality={"descriptions": Cardinality.SHARED, "auras": Cardinality.SHARED, "encounters": Cardinality.SHARED},
-        reads=("spell_ids", "prose"),
+        cardinality={
+            "descriptions": Cardinality.SHARED,
+            "auras": Cardinality.SHARED,
+            "encounters": Cardinality.SHARED,
+            "flavours": Cardinality.SHARED,
+        },
+        reads=("spell_ids", "prose", "mounts"),
         degraded_without=(
             "SpellDescriptionVariables",
             "SpellRadius",
@@ -83,8 +92,9 @@ SPELL_TEXT = register(
             "SpellScaling",
             "JournalEncounterSection",
         ),
-        localizable=("descriptions", "auras", "encounters"),
+        localizable=("descriptions", "auras", "encounters", "flavours"),
         counts=(
+            Count("spellFlavours", carrying("flavours")),
             Count("spellDescriptions", carrying("descriptions")),
             Count("descriptionTexts", distinct("descriptions")),
             Count("spellEncounterNotes", carrying("encounters")),

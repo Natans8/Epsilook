@@ -46,6 +46,7 @@
     "door": ""
   },
   "target": "",
+  "phase": "",
   "kind": {
     "name": {
       "hint": ""
@@ -148,7 +149,8 @@
       "hint": "",
       "props": {
         "id": "",
-        "boneset": ""
+        "boneset": "",
+        "speed": ""
       }
     },
     "loose": {
@@ -180,7 +182,12 @@
       "props": {
         "from": "",
         "to": "",
-        "colour": ""
+        "colour": "",
+        "arcing": "",
+        "flickering": "",
+        "jagged": "",
+        "wavy": "",
+        "width": ""
       }
     },
     "dissolve": {
@@ -260,7 +267,8 @@
     "effect": {
       "hint": "",
       "props": {
-        "name": ""
+        "name": "",
+        "index": ""
       }
     },
     "aura": {
@@ -320,6 +328,24 @@
     },
     "debuff": {
       "hint": ""
+    },
+    "faction": {
+      "hint": "",
+      "props": {
+        "name": ""
+      }
+    },
+    "visualKit": {
+      "hint": "",
+      "props": {
+        "id": ""
+      }
+    },
+    "breaks": {
+      "hint": "",
+      "props": {
+        "on": ""
+      }
     }
   }
 }

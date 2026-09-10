@@ -3,13 +3,16 @@
 A row of the visual graph carries the audience it plays for: the caster, the
 target, an area, or a combination. The bits are named here because they are
 set while reading the source tables, resolved while walking the graph, and
-shipped in the pack -- three layers, one vocabulary.
+shipped in the pack -- three layers, one vocabulary. WHEN a row plays is the
+other half of the same question, and `phases.py` declares that.
 """
 
 from __future__ import annotations
 
 from collections.abc import Iterable
 from typing import TypeVar
+
+from .phases import AURA_PHASE_EVENTS
 
 T = TypeVar("T")
 
@@ -50,22 +53,6 @@ Two pairs share a word deliberately: "target, never caster" is still a target,
 and a missile's destination is a place like any other area. Each keeps its own
 bit and icon. "Both" is derived from the caster and target bits app-side.
 """
-
-AURA_PHASE_EVENTS = frozenset({7, 8})
-"""The `SpellVisualEvent.StartEvent` values meaning the aura phase.
-
-The one phase that can disagree with the rest of the spell, which is why it is
-split out. `TargetType` is relative to the cast rather than a claim about which
-unit owns the visual, so a spell cast on its own caster still records "target"
-and a self-buff would otherwise show a target icon.
-
-An aura-phase visual belongs to the aura and plays on whoever carries it, so
-believe the apply-aura effects' implicit target. Every other phase shares the
-cast's frame, so "target" means the caster only when the whole spell is
-self-cast; believing every effect's target there also catches self-cast impact
-visuals that the aura test alone would miss.
-"""
-
 
 IMPLICIT_PREFIX = "TARGET_"
 """The prefix every implicit-target enum name opens with. What follows it names
@@ -136,28 +123,33 @@ def implicit_target_bit(name: str) -> int:
     return NO_TARGET
 
 
-def resolve_target_mask(aura_mask: int, other_mask: int, aura_bits: int, cast_bits: int) -> int:
-    """Fold a kit's two phase masks into the one its row ships with.
+def resolve_target_bit(bit: int, phase: int, aura_bits: int, cast_bits: int) -> int:
+    """The mask one event's target bit ships as, given the phase it starts in.
 
-    A target bit becomes a caster bit wherever the matching test says the spell
-    aims only at its caster, since there "the target" is the caster. Only the
-    plain target bit is rewritten: `TARGET_NOT_CASTER` says outright that it is
-    not the caster, so it can never mean one.
+    `TargetType` is relative to the cast rather than a claim about which unit
+    owns the visual, so a spell cast on its own caster still records "target"
+    and a self-buff would otherwise show a target icon. A target bit becomes a
+    caster bit wherever the matching test says the spell aims only at its
+    caster, since there "the target" is the caster. An aura-phase event belongs
+    to the aura and plays on whoever carries it, so believe the apply-aura
+    effects' implicit target; every other phase shares the cast's frame, so
+    believe every effect's, which also catches self-cast impact visuals the
+    aura test alone would miss. Only the plain target bit is rewritten:
+    `TARGET_NOT_CASTER` says outright that it is not the caster.
 
     Args:
-        aura_mask: the mask from the kit's aura-phase events.
-        other_mask: the mask from its every other phase.
+        bit: the event row's own target bit.
+        phase: the event the row starts at.
         aura_bits: the union of the spell's apply-aura implicit targets.
         cast_bits: the union over all of the spell's effects.
 
     Returns:
-        The single mask the row ships with.
+        The bit the occurrence ships with.
     """
-    if aura_mask & TARGET_TARGET and aura_bits == TARGET_CASTER:
-        aura_mask = (aura_mask & ~TARGET_TARGET) | TARGET_CASTER
-    if other_mask & TARGET_TARGET and cast_bits == TARGET_CASTER:
-        other_mask = (other_mask & ~TARGET_TARGET) | TARGET_CASTER
-    return aura_mask | other_mask
+    aimed = aura_bits if phase in AURA_PHASE_EVENTS else cast_bits
+    if bit & TARGET_TARGET and aimed == TARGET_CASTER:
+        return (bit & ~TARGET_TARGET) | TARGET_CASTER
+    return bit
 
 
 def merge_masked(into: dict[T, int], items: Iterable[T], mask: int) -> None:

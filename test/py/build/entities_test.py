@@ -18,10 +18,10 @@ ID,Function,Type,Data
 """
 
 MOUNT = """\
-ID,Name_lang,SourceSpellID
-10,  Swift Ram  ,100
-11,Unreachable,999
-12,,101
+ID,Name_lang,SourceSpellID,Description_lang
+10,  Swift Ram  ,100, A ram of some swiftness.
+11,Unreachable,999,Never read
+12,,101,
 """
 
 MOUNT_X_DISPLAY = """\
@@ -141,3 +141,11 @@ ID,Name_lang,CreatureDisplayID
         )
     )
     assert forms.displays == {1: [50], 2: []}
+
+
+def test_a_mounts_flavour_text_rides_its_granting_spell(tables: BuildTables) -> None:
+    """Prose about the mount, keyed by the spell that grants it and trimmed."""
+    mounts = read_mounts(
+        tables(Mount=MOUNT, MountXDisplay=MOUNT_X_DISPLAY), {100: "Summon Ram", 101: "Summon Nothing"}, CREATURES
+    )
+    assert mounts.flavour == {100: "A ram of some swiftness."}

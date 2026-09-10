@@ -1,5 +1,5 @@
-"""The per-spell columns of `SpellMisc`: icon, school, timing, reach and
-attributes.
+"""The per-spell columns of `SpellMisc`: icon, school, timing, reach,
+whether the landing is delayed, and attributes.
 
 A spell may carry one `SpellMisc` row per difficulty, and the base row is the
 one a player sees, so every column here resolves the same way: the base row
@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 
 from ..tables import Tables, array_columns
 from .columns import BASE_DIFFICULTY, to_int
+from .route import route
 
 ATTRIBUTE_COLUMNS_MAX = 32
 """Upper bound when probing for `SpellMisc.Attributes_N`.
@@ -50,7 +51,18 @@ class SpellProperties:
     range_index: dict[int, int] = field(default_factory=dict)
     """Spell to its `SpellRange` id. Zero where it names no row."""
 
+    delayed: set[int] = field(default_factory=set)
+    """The spells whose effects land at the impact rather than the cast.
 
+    A missile speed or a launch delay is what puts time between the cast and
+    the landing; either alone does it, and a speed that is really a delay in
+    seconds delays the landing all the same. This is the client's own test
+    for whether a spell has a hit delay, and it places every effect the spell
+    has.
+    """
+
+
+@route("props", spell_names="names.names")
 def read_spell_properties(tables: Tables, spell_names: Container[int]) -> SpellProperties:
     """Read the icon, school and attribute flags of every listed spell.
 
@@ -75,6 +87,8 @@ def read_spell_properties(tables: Tables, spell_names: Container[int]) -> SpellP
             "CastingTimeIndex",
             "DurationIndex",
             "RangeIndex",
+            "Speed",
+            "LaunchDelay",
             *columns,
         ],
     ):
@@ -92,5 +106,9 @@ def read_spell_properties(tables: Tables, spell_names: Container[int]) -> SpellP
             spells.cast_index[spell] = to_int(row[4])
             spells.duration_index[spell] = to_int(row[5])
             spells.range_index[spell] = to_int(row[6])
-            spells.attribute_words[spell] = tuple(to_int(value) for value in row[7:])
+            if float(row[7] or 0) > 0 or float(row[8] or 0) > 0:
+                spells.delayed.add(spell)
+            else:
+                spells.delayed.discard(spell)
+            spells.attribute_words[spell] = tuple(to_int(value) for value in row[9:])
     return spells

@@ -11,6 +11,8 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 
+from ..routes.route import route
+
 ICON_DIRECTORY = "interface/icons/"
 """Where an icon lives. Compared against a folded path, since the listfile is
 taken with its own casing and only the comparison may assume one."""
@@ -39,6 +41,7 @@ class IconIndex:
     """Each spell's 1-based index into `names`, or `NO_ICON`."""
 
 
+@route("icons", phase="build_icon_index", spells="spell_ids", icon_fid="props.icon_fid")
 def build_icon_index(spells: Sequence[int], icon_fid: Mapping[int, int], paths: Mapping[int, str]) -> IconIndex:
     """Reduce every spell's icon to an index into one deduped name table.
 

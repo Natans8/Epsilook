@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 
 from ..tables import Tables
 from .columns import to_int
+from .route import route
 
 UI_MAP_TYPE_ZONE = 3
 """`UiMap.Type` for a zone map, the only type worth opening.
@@ -131,6 +132,7 @@ def _match_zone_maps(tables: Tables, names: dict[int, str]) -> dict[int, int]:
     return maps
 
 
+@route("areas", maps="zone_maps")
 def read_area_gates(tables: Tables, maps: Mapping[int, int]) -> AreaGates:
     """Read every spell's area gate, and describe the areas they name.
 

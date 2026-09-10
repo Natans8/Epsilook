@@ -153,8 +153,19 @@ const PROBES: Probe[] = [
         note: "",
     },
     {v1: 'anim:"boneset Head"', v2: "anim:{boneset:head}", was: 538, note: ""},
-    {v1: "model:>4", v2: "model:>4", was: 16415, note: "the count desugar carries over"},
-    {v1: "sound:>2", v2: "sound:>2", was: 75887, note: ""},
+    {
+        v1: "model:>4",
+        v2: "model:>4",
+        was: 16415,
+        note: "the count desugar carries over; a row is a thing at a phase since format 63, so a model recurring at "
+            + "another phase is another row (19,000 with the phase stripped, 23,329 with it)",
+    },
+    {
+        v1: "sound:>2",
+        v2: "sound:>2",
+        was: 75887,
+        note: "a sound at two phases is two rows since format 63 (76,081 with the phase stripped, 76,274 with it)",
+    },
     {
         v1: "anim:=0",
         v2: "anim:=0",

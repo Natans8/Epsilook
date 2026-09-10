@@ -20,6 +20,7 @@ from dataclasses import dataclass
 
 from ..tables import Tables
 from .columns import to_float, to_int
+from .route import route
 from .spells import SpellProperties
 
 MELEE = 1 << 0
@@ -68,6 +69,7 @@ class Reach:
     """`MELEE` and `WEAPON`."""
 
 
+@route("reach", spells="props")
 def read_spell_reach(tables: Tables, spells: SpellProperties) -> list[Reach]:
     """Read the band of every spell that reaches past its caster.
 

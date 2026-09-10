@@ -7,26 +7,178 @@
   ],
   "keys": "EffectType",
   "values": {
-    "0":  {"name": "None", "note": "an empty row: Effect is 0 too. 5 rows on 1.15.9, none on 9.2.7"},
-    "1":  {"name": "SpellProceduralEffect", "handler": "proc",     "points_at": "SpellProceduralEffect.ID"},
-    "2":  {"name": "SpellVisualKitModelAttach", "points_at": "SpellVisualKitModelAttach.ID", "note": "reached directly from the kit by the walk, so reading it here would be redundant rather than new"},
-    "3":  {"name": "CameraEffect",          "points_at": "CameraEffect.ID", "note": "2,550 rows over 2,544 kits on 9.2.7, the most common unrouted type; table not downloaded"},
-    "4":  {"name": "CameraEffect2",         "points_at": "CameraEffect.ID", "note": "a second camera slot; 12 rows on 9.2.7"},
-    "5":  {"name": "Sound",                 "handler": "sound",    "points_at": "SoundKitID"},
-    "6":  {"name": "SpellVisualAnim",       "handler": "anim",     "points_at": "SpellVisualAnim.ID"},
-    "7":  {"name": "ShadowyEffect",         "handler": "shadowy",  "points_at": "ShadowyEffect.ID"},
-    "8":  {"name": "SpellEffectEmission",   "handler": "emission", "points_at": "SpellEffectEmission.ID (area-model emitter)"},
-    "9":  {"name": "OutlineEffect",         "points_at": "OutlineEffect.ID", "note": "126 rows over 91 kits on 9.2.7; table not downloaded"},
-    "10": {"name": "UnitSoundType",         "note": "plays the target unit's own sound; no concrete file"},
-    "11": {"name": "DissolveEffect",        "handler": "dissolve", "points_at": "DissolveEffect.ID"},
-    "12": {"name": "EdgeGlowEffect",        "handler": "edge_glow","points_at": "EdgeGlowEffect.ID"},
-    "13": {"name": "BeamEffect",            "handler": "beam",     "points_at": "BeamEffect.ID"},
-    "14": {"name": "ClientSceneEffect",     "points_at": "ClientSceneEffect.ID", "note": "29 rows on 9.2.7; table not downloaded"},
-    "15": {"name": "CloneEffect",           "points_at": "CloneEffect.ID", "note": "marked unused upstream, and no pack carries a row"},
-    "16": {"name": "GradientEffect",        "points_at": "GradientEffect.ID", "note": "266 rows over 265 kits on 9.2.7; table not downloaded"},
-    "17": {"name": "BarrageEffect",         "handler": "barrage",  "points_at": "BarrageEffect.ID (multi-model volley)"},
-    "18": {"name": "RopeEffect",            "points_at": "RopeEffect.ID", "note": "2 rows on 9.2.7; table not downloaded"},
-    "19": {"name": "SpellVisualScreenEffect","handler": "screen",  "points_at": "SpellVisualScreenEffect.ID"},
-    "20": {"name": "SpellVisualKitDecalAttach", "points_at": "SpellVisualKitDecalAttach.ID", "note": "absent before 12.1.0, where it carries 245 rows"}
+    "0": {
+      "name": "None",
+      "note": "an empty row: Effect is 0 too. 5 rows on 1.15.9, none on 9.2.7"
+    },
+    "1": {
+      "name": "SpellProceduralEffect",
+      "handler": "proc",
+      "points_at": "SpellProceduralEffect.ID",
+      "reads": [
+        {
+          "column": "Effect",
+          "holds": "reference",
+          "into": "SpellProceduralEffect"
+        }
+      ]
+    },
+    "2": {
+      "name": "SpellVisualKitModelAttach",
+      "points_at": "SpellVisualKitModelAttach.ID",
+      "note": "reached directly from the kit by the walk, so reading it here would be redundant rather than new"
+    },
+    "3": {
+      "name": "CameraEffect",
+      "points_at": "CameraEffect.ID",
+      "note": "2,550 rows over 2,544 kits on 9.2.7, the most common unrouted type; table not downloaded"
+    },
+    "4": {
+      "name": "CameraEffect2",
+      "points_at": "CameraEffect.ID",
+      "note": "a second camera slot; 12 rows on 9.2.7"
+    },
+    "5": {
+      "name": "Sound",
+      "handler": "sound",
+      "points_at": "SoundKitID",
+      "reads": [
+        {
+          "column": "Effect",
+          "holds": "reference",
+          "into": "SoundKit"
+        }
+      ]
+    },
+    "6": {
+      "name": "SpellVisualAnim",
+      "handler": "anim",
+      "points_at": "SpellVisualAnim.ID",
+      "reads": [
+        {
+          "column": "Effect",
+          "holds": "reference",
+          "into": "SpellVisualAnim"
+        }
+      ]
+    },
+    "7": {
+      "name": "ShadowyEffect",
+      "handler": "shadowy",
+      "points_at": "ShadowyEffect.ID",
+      "reads": [
+        {
+          "column": "Effect",
+          "holds": "reference",
+          "into": "ShadowyEffect"
+        }
+      ]
+    },
+    "8": {
+      "name": "SpellEffectEmission",
+      "handler": "emission",
+      "points_at": "SpellEffectEmission.ID (area-model emitter)",
+      "reads": [
+        {
+          "column": "Effect",
+          "holds": "reference",
+          "into": "SpellEffectEmission"
+        }
+      ]
+    },
+    "9": {
+      "name": "OutlineEffect",
+      "points_at": "OutlineEffect.ID",
+      "note": "126 rows over 91 kits on 9.2.7; table not downloaded"
+    },
+    "10": {
+      "name": "UnitSoundType",
+      "note": "plays the target unit's own sound; no concrete file"
+    },
+    "11": {
+      "name": "DissolveEffect",
+      "handler": "dissolve",
+      "points_at": "DissolveEffect.ID",
+      "reads": [
+        {
+          "column": "Effect",
+          "holds": "reference",
+          "into": "DissolveEffect"
+        }
+      ]
+    },
+    "12": {
+      "name": "EdgeGlowEffect",
+      "handler": "edge_glow",
+      "points_at": "EdgeGlowEffect.ID",
+      "reads": [
+        {
+          "column": "Effect",
+          "holds": "reference",
+          "into": "EdgeGlowEffect"
+        }
+      ]
+    },
+    "13": {
+      "name": "BeamEffect",
+      "handler": "beam",
+      "points_at": "BeamEffect.ID",
+      "reads": [
+        {
+          "column": "Effect",
+          "holds": "reference",
+          "into": "BeamEffect"
+        }
+      ]
+    },
+    "14": {
+      "name": "ClientSceneEffect",
+      "points_at": "ClientSceneEffect.ID",
+      "note": "29 rows on 9.2.7; table not downloaded"
+    },
+    "15": {
+      "name": "CloneEffect",
+      "points_at": "CloneEffect.ID",
+      "note": "marked unused upstream, and no pack carries a row"
+    },
+    "16": {
+      "name": "GradientEffect",
+      "points_at": "GradientEffect.ID",
+      "note": "266 rows over 265 kits on 9.2.7; table not downloaded"
+    },
+    "17": {
+      "name": "BarrageEffect",
+      "handler": "barrage",
+      "points_at": "BarrageEffect.ID (multi-model volley)",
+      "reads": [
+        {
+          "column": "Effect",
+          "holds": "reference",
+          "into": "BarrageEffect"
+        }
+      ]
+    },
+    "18": {
+      "name": "RopeEffect",
+      "points_at": "RopeEffect.ID",
+      "note": "2 rows on 9.2.7; table not downloaded"
+    },
+    "19": {
+      "name": "SpellVisualScreenEffect",
+      "handler": "screen",
+      "points_at": "SpellVisualScreenEffect.ID",
+      "reads": [
+        {
+          "column": "Effect",
+          "holds": "reference",
+          "into": "SpellVisualScreenEffect"
+        }
+      ]
+    },
+    "20": {
+      "name": "SpellVisualKitDecalAttach",
+      "points_at": "SpellVisualKitDecalAttach.ID",
+      "note": "absent before 12.1.0, where it carries 245 rows"
+    }
   }
 }

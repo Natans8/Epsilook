@@ -61,6 +61,7 @@ const CANONICAL: [string, string[]][] = [
     ["itemId", ["19019"]],
     ["fileId", ["135812"]],
     ["animKitId", ["1119"]],
+    ["visualKitId", ["86426"]],
     ["channelId", ["0", "3"]],
     ["count", ["0", "4", "128"]],
     ["seconds", ["1.5s", "0s", "120s"]],
@@ -82,7 +83,7 @@ describe("the type registry", () => {
             "count", "creatureId", "displayId", "door", "enum", "fileId", "flag",
             "itemId", "length", "multiplier", "objectId", "offset", "ordinal",
             "path", "percent", "percentChange", "rotation", "seconds", "soundKitId",
-            "spellId", "text",
+            "spellId", "text", "visualKitId",
         ]);
     });
 

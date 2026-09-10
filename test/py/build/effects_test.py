@@ -23,10 +23,11 @@ from pack.routes.effects import (
     EFFECT_PLAY_SOUND,
     EFFECT_SUMMON,
     EFFECT_SPAWN_OBJECT,
-    MISC_PAYLOADS,
+    PAYLOADS,
     EffectRow,
     read_spell_effect_rows,
 )
+from pack.routes.flow import Holds
 from pack.routes.effects import SpellEffectRows
 from pack.targets import TARGET_AREA, TARGET_CASTER, TARGET_TARGET
 from support import BuildTables
@@ -50,13 +51,16 @@ ID,Control
 
 
 def effect_rows(*rows: str) -> str:
-    """A `SpellEffect` table built from `SpellID,Effect,Aura,misc0,misc1,t0,t1,...`."""
+    """A `SpellEffect` table built from `SpellID,Effect,Aura,misc0,misc1,t0,t1,...`.
+
+    A row may leave the trailing effect index off, and then it is nought.
+    """
     header = (
         "SpellID,Effect,EffectAura,EffectMiscValue_0,EffectMiscValue_1,"
         "ImplicitTarget_0,ImplicitTarget_1,EffectBasePoints,"
-        "EffectBasePointsF,EffectTriggerSpell\n"
+        "EffectBasePointsF,EffectTriggerSpell,EffectIndex\n"
     )
-    return header + "".join(row + "\n" for row in rows)
+    return header + "".join((row if row.count(",") == 10 else row + ",0") + "\n" for row in rows)
 
 
 ROSTERS = {"screens": frozenset({50}), "keybounds": frozenset({60})}
@@ -358,23 +362,29 @@ def test_an_implicit_target_the_build_does_not_name_contributes_nothing(tables: 
     assert rows.morphs.masks == {(100, 900): 0}
 
 
-def test_every_reference_payload_is_declared_not_branched() -> None:
+def test_every_payload_is_declared_not_branched() -> None:
     """The extension point, pinned.
 
-    Adding a payload whose misc value is a reference must be a row in
-    `MISC_PAYLOADS` plus the field it names, with no edit to the walk. A
-    declaration that stopped covering a selector would show up as a branch
-    somewhere in the reader instead.
+    Adding a payload must be a row in `PAYLOADS` plus the field it lands in,
+    with no edit to the walk. A declaration that stopped covering a selector
+    would show up as a branch somewhere in the reader instead.
     """
-    for payload in MISC_PAYLOADS:
-        assert bool(payload.aura) != bool(payload.effects), "a payload selects on an aura or on effects, never both"
-        assert callable(payload.into)
-    auras = [p.aura for p in MISC_PAYLOADS if p.aura]
-    assert len(auras) == len(set(auras)), "two payloads claim one aura"
-    # The effect half resolves the same way, so an overlap there would also
-    # silently leave the last declaration holding the selector.
-    effects = [effect for p in MISC_PAYLOADS for effect in (*p.effects, *p.retired)]
-    assert len(effects) == len(set(effects)), "two payloads claim one effect"
+    for payload in PAYLOADS:
+        assert payload.select.on in ("EffectAura", "Effect"), "a payload selects on the aura or the effect column"
+        assert (payload.into is None) != (payload.record is None), "a payload lands in a field or through a record"
+        if payload.record is None:
+            assert payload.reference.holds is not Holds.AMOUNT
+    for column in ("EffectAura", "Effect"):
+        claimed = [value for p in PAYLOADS if p.select.on == column for value in p.select.values]
+        assert len(claimed) == len(set(claimed)), f"two payloads claim one {column} value"
+
+
+def test_a_faction_override_lands_as_its_template(tables: BuildTables) -> None:
+    """The misc value is a template, which is what the client sets, and the
+    faction a reader is after is one join further on."""
+    rows = read(tables, effect_rows("100,6,243,2577,0,2,0,0,0,0"))
+    assert rows.factions.ids == {100: {2577}}
+    assert rows.factions.masks == {(100, 2577): TARGET_TARGET}
 
 
 def test_a_roster_nobody_supplied_is_refused(tables: BuildTables) -> None:

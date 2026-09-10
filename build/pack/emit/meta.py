@@ -20,8 +20,18 @@ from ..derive import DeriveContext
 from ..model import SECTIONS, CountFamily, Section, SectionColumns
 from ..progress import detail
 
-PACK_FORMAT = 62
+PACK_FORMAT = 63
 """What shape the artifact is in.
+
+63 makes a row an occurrence: one thing at one phase of the spell. Every kind
+that happens at a moment carries `phase`, resolved through `visualPhases`,
+and the same model at the cast and at the impact is two rows with their own
+audiences rather than one wearing both. The visual kit rows are the spine
+that ordering reads. A missile starts the travel, an effect lands at the cast
+or, where a speed or a launch delay carries it, at the impact, and an aura
+holds from its start; the effect kind also carries `index`, its order among
+the spell's. A reader of 62 that pooled on the old columns finds one row
+where it now finds several.
 
 62 takes a screen effect apart into what it bundles. `screens` gains the light
 preset a row swaps the sky to and the two fades around it, the hour it pins

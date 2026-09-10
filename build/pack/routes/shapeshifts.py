@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 
 from ..tables import Tables, array_columns
 from .columns import to_int
+from .route import route
 
 FORM_DISPLAY_SLOTS = 4
 """How many creature displays a form's array holds where it is an array. A
@@ -28,6 +29,7 @@ class ShapeshiftForms:
     order. Empty for forms that change no appearance."""
 
 
+@route("forms")
 def read_shapeshift_forms(tables: Tables) -> ShapeshiftForms:
     """Read each form's name and its creature displays."""
     forms = ShapeshiftForms()

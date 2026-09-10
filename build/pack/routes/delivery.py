@@ -20,6 +20,7 @@ from ..sources import enum_id_where, load_local_enum
 from ..tables import Tables, array_columns
 from .attributes import bit_test, carries
 from .columns import BASE_DIFFICULTY, to_int
+from .route import route
 from .spells import SpellProperties
 
 CHANNELLED = 1 << 0
@@ -116,6 +117,7 @@ def _breaks_on_move(tables: Tables, spells: SpellProperties) -> set[int]:
     return breaks
 
 
+@route("delivery", spells="props")
 def read_spell_delivery(tables: Tables, spells: SpellProperties) -> list[Delivery]:
     """Read the cast time and channel of every spell that has either.
 

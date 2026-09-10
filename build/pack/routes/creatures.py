@@ -15,6 +15,7 @@ from ..drift import CREATURE_DISPLAY_SOURCES
 from ..progress import log
 from ..tables import Tables
 from .columns import to_int
+from .route import route
 
 
 @dataclass
@@ -108,6 +109,7 @@ def skin_columns(tables: Tables) -> list[str]:
     return sorted(found, key=lambda column: int(column[len(SKIN_COLUMN) :]))
 
 
+@route("creatures")
 def read_creature_models(tables: Tables, world: Tables | None) -> CreatureModels:
     """Read the creature chain morphs, forms and mounts all end at.
 

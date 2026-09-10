@@ -48,7 +48,7 @@ import type {AxisType} from "../vocabulary/value-types";
 import {
     animKitId, bitmask, channelId, colour, count, creatureId, displayId, enumeration, fileId, flag, itemId, length,
     multiplier, objectId, offset, ordinal, path, percent, percentChange, rotation, seconds, soundKitId,
-    spellId as spellIdentity, text,
+    spellId as spellIdentity, text, visualKitId,
 } from "../vocabulary/value-types";
 
 /** A property with no role in chipless search. */
@@ -81,6 +81,17 @@ const named = (what: AxisType, hint: string, tier?: number): Prop => {
 const target = (): Prop => ({
     types: [bitmask],
     hint: t("tooltips:target"),
+    qualifier: true,
+});
+
+/**
+ * When in the spell a row happens: the event that starts a kit, the travel for a missile, the landing for an effect,
+ * the aura for whatever holds under one. The words are the pack's own phase vocabulary, so a start and its end are
+ * distinct words and `phase:aura` reaches both by the substring rule.
+ */
+const phase = (): Prop => ({
+    types: [enumeration],
+    hint: t("tooltips:phase"),
     qualifier: true,
 });
 
@@ -241,6 +252,7 @@ export const missile = defineKind({
             hint: t("tooltips:kind.missile.props.projectiles"),
         },
         target: target(),
+        phase: phase(),
     },
 });
 
@@ -251,13 +263,14 @@ export const barrage = defineKind({
         file: corpus(TIER.asset, path),
         where: attachPoint(t("tooltips:kind.barrage.props.where"), "point"),
         target: target(),
+        phase: phase(),
     },
 });
 
 export const ground = defineKind({
     column: modelColumn, word: "ground", group: "world",
     hint: t("tooltips:kind.ground.hint"),
-    props: {file: corpus(TIER.asset, path), target: target()},
+    props: {file: corpus(TIER.asset, path), target: target(), phase: phase()},
 });
 
 export const attach = defineKind({
@@ -267,6 +280,7 @@ export const attach = defineKind({
         file: corpus(TIER.asset, path),
         where: attachPoint(t("tooltips:kind.attach.props.where"), "point"),
         target: target(),
+        phase: phase(),
         ...placement(),
     },
 });
@@ -274,7 +288,7 @@ export const attach = defineKind({
 export const trail = defineKind({
     column: modelColumn, word: "trail", group: "attach",
     hint: t("tooltips:kind.trail.hint"),
-    props: {file: corpus(TIER.asset, path), target: target()},
+    props: {file: corpus(TIER.asset, path), target: target(), phase: phase()},
 });
 
 export const display = defineKind({
@@ -286,6 +300,7 @@ export const display = defineKind({
         file: corpus(TIER.asset, path),
         where: attachPoint(t("tooltips:kind.display.props.where"), "point"),
         target: target(),
+        phase: phase(),
         ...placement(),
     },
 });
@@ -303,6 +318,7 @@ export const item = defineKind({
         file: corpus(TIER.asset, path),
         where: attachPoint(t("tooltips:kind.item.props.where"), "point"),
         target: target(),
+        phase: phase(),
         ...placement(),
     },
 });
@@ -315,6 +331,7 @@ export const equipped = defineKind({
         slot: {types: [enumeration], hint: t("tooltips:kind.equipped.props.slot")},
         where: attachPoint(t("tooltips:kind.equipped.props.where"), "point"),
         target: target(),
+        phase: phase(),
         ...placement(),
     },
 });
@@ -339,6 +356,7 @@ export const sound = defineKind({
         kit: named(soundKitId, t("tooltips:kind.sound.props.kit"), TIER.asset),
         type: {types: [enumeration], hint: t("tooltips:kind.sound.props.type")},
         target: target(),
+        phase: phase(),
     },
 });
 
@@ -351,7 +369,9 @@ export const animKit = defineKind({
         id: {types: [animKitId], hint: t("tooltips:kind.animKit.props.id")},
         anim: corpus(TIER.asset, enumeration),
         boneset: {types: [enumeration], hint: t("tooltips:kind.animKit.props.boneset")},
+        speed: {types: [multiplier], qualifier: true, hint: t("tooltips:kind.animKit.props.speed")},
         target: target(),
+        phase: phase(),
     },
 });
 
@@ -362,6 +382,7 @@ export const loose = defineKind({
         anim: corpus(TIER.asset, enumeration),
         boneset: {types: [enumeration], hint: t("tooltips:kind.loose.props.boneset")},
         target: target(),
+        phase: phase(),
     },
 });
 
@@ -378,6 +399,7 @@ export const replace = defineKind({
             hint: t("tooltips:kind.replace.props.from")
         },
         target: target(),
+        phase: phase(),
     },
 });
 
@@ -404,6 +426,7 @@ export const passenger = defineKind({
             types: [enumeration], plain: [enumeration], tier: TIER.asset,
             hint: t("tooltips:kind.passenger.props.exit")
         },
+        phase: phase(),
     },
 });
 
@@ -417,7 +440,24 @@ export const chain = defineKind({
         from: attachPoint(t("tooltips:kind.chain.props.from")),
         to: attachPoint(t("tooltips:kind.chain.props.to")),
         colour: {types: [colour], synonyms: ["color"], hint: t("tooltips:kind.chain.props.colour")},
+        arcing: {types: [flag], hint: t("tooltips:kind.chain.props.arcing")},
+        flickering: {types: [flag], hint: t("tooltips:kind.chain.props.flickering")},
+        jagged: {types: [flag], hint: t("tooltips:kind.chain.props.jagged")},
+        wavy: {types: [flag], hint: t("tooltips:kind.chain.props.wavy")},
+        width: {types: [length], qualifier: true, hint: t("tooltips:kind.chain.props.width")},
         target: target(),
+        phase: phase(),
+    },
+});
+
+/** A visual kit by id: the handle a model frame renders a spell's look by. */
+export const visualKit = defineKind({
+    column: fxColumn, word: "visual", group: "kit",
+    hint: t("tooltips:kind.visualKit.hint"),
+    props: {
+        id: {types: [visualKitId], hint: t("tooltips:kind.visualKit.props.id")},
+        target: target(),
+        phase: phase(),
     },
 });
 
@@ -428,6 +468,7 @@ export const dissolve = defineKind({
         where: attachPoint(t("tooltips:kind.dissolve.props.where"), "point"),
         texture: corpus(TIER.asset, path),
         target: target(),
+        phase: phase(),
     },
 });
 
@@ -444,6 +485,7 @@ export const shadowy = defineKind({
         where: attachPoint(t("tooltips:kind.shadowy.props.where"), "point"),
         colour: {types: [colour], synonyms: ["color"], hint: t("tooltips:kind.shadowy.props.colour")},
         target: target(),
+        phase: phase(),
     },
 });
 
@@ -454,6 +496,7 @@ export const ghost = defineKind({
     props: {
         colour: {types: [colour], synonyms: ["color"], hint: t("tooltips:kind.ghost.props.colour")},
         target: target(),
+        phase: phase(),
     },
 });
 
@@ -464,6 +507,7 @@ export const glow = defineKind({
     props: {
         colour: {types: [colour], synonyms: ["color"], hint: t("tooltips:kind.glow.props.colour")},
         target: target(),
+        phase: phase(),
     },
 });
 
@@ -474,19 +518,20 @@ export const tint = defineKind({
     props: {
         colour: {types: [colour], synonyms: ["color"], hint: t("tooltips:kind.tint.props.colour")},
         target: target(),
+        phase: phase(),
     },
 });
 
 export const transparency = defineKind({
     column: fxColumn, word: "transparency", group: "overlay",
     hint: t("tooltips:kind.transparency.hint"),
-    props: {percent: of(percent), target: target()},
+    props: {percent: of(percent), target: target(), phase: phase()},
 });
 
 export const desaturate = defineKind({
     column: fxColumn, word: "desaturate", group: "overlay",
     hint: t("tooltips:kind.desaturate.hint"),
-    props: {percent: of(percent), target: target()},
+    props: {percent: of(percent), target: target(), phase: phase()},
 });
 
 export const freeze = defineKind({
@@ -504,13 +549,13 @@ export const camo = defineKind({
 export const morph = defineKind({
     column: fxColumn, word: "morph", global: true, group: "transform",
     hint: t("tooltips:kind.morph.hint"),
-    props: {creature: named(creatureId, t("tooltips:kind.morph.props.creature"), TIER.asset), target: target()},
+    props: {creature: named(creatureId, t("tooltips:kind.morph.props.creature"), TIER.asset), target: target(), phase: phase()},
 });
 
 export const shapeshift = defineKind({
     column: fxColumn, word: "shapeshift", group: "transform",
     hint: t("tooltips:kind.shapeshift.hint"),
-    props: {form: corpus(TIER.asset, enumeration), target: target()},
+    props: {form: corpus(TIER.asset, enumeration), target: target(), phase: phase()},
 });
 
 export const scale = defineKind({
@@ -522,6 +567,7 @@ export const scale = defineKind({
             hint: t("tooltips:kind.scale.props.amount"),
         },
         target: target(),
+        phase: phase(),
     },
 });
 
@@ -532,13 +578,14 @@ export const summon = defineKind({
         creature: named(creatureId, t("tooltips:kind.summon.props.creature"), TIER.asset),
         control: corpus(TIER.asset, enumeration),
         target: target(),
+        phase: phase(),
     },
 });
 
 export const gameObject = defineKind({
     column: fxColumn, word: "object", group: "spawn", full: "gameobject",
     hint: t("tooltips:kind.gameObject.hint"),
-    props: {object: named(objectId, t("tooltips:kind.gameObject.props.object"), TIER.asset), target: target()},
+    props: {object: named(objectId, t("tooltips:kind.gameObject.props.object"), TIER.asset), target: target(), phase: phase()},
 });
 
 /** A full-screen effect. Searched by its textures; the effect-type words are not part of the vocabulary. */
@@ -548,6 +595,7 @@ export const screen = defineKind({
     props: {
         texture: corpus(TIER.asset, path),
         target: target(),
+        phase: phase(),
     },
 });
 
@@ -559,6 +607,8 @@ export const effect = defineKind({
     props: {
         name: {types: [enumeration], hint: t("tooltips:kind.effect.props.name")},
         target: target(),
+        index: {types: [count], hint: t("tooltips:kind.effect.props.index"), qualifier: true},
+        phase: phase(),
     },
 });
 
@@ -568,6 +618,7 @@ export const aura = defineKind({
     props: {
         name: {types: [enumeration], hint: t("tooltips:kind.aura.props.name")},
         target: target(),
+        phase: phase(),
     },
 });
 
@@ -579,6 +630,7 @@ export const triggers = defineKind({
         spell: named(spellIdentity, t("tooltips:kind.triggers.props.spell")),
         how: of(enumeration),
         target: target(),
+        phase: phase(),
     },
 });
 
@@ -589,6 +641,7 @@ export const origin = defineKind({
         spell: named(spellIdentity, t("tooltips:kind.origin.props.spell")),
         how: of(enumeration),
         target: target(),
+        phase: phase(),
     },
 });
 
@@ -606,6 +659,7 @@ export const invis = defineKind({
     props: {
         channel: {types: [channelId], hint: t("tooltips:kind.invis.props.channel")},
         target: target(),
+        phase: phase(),
     },
 });
 
@@ -616,6 +670,7 @@ export const detect = defineKind({
         channel: {types: [channelId], hint: t("tooltips:kind.detect.props.channel")},
         count: {types: [count], hint: t("tooltips:kind.detect.props.count")},
         target: target(),
+        phase: phase(),
     },
 });
 
@@ -626,6 +681,7 @@ export const vehicle = defineKind({
         seats: {types: [count], hint: t("tooltips:kind.vehicle.props.seats")},
         where: attachPoint(t("tooltips:kind.vehicle.props.where"), "point"),
         target: target(),
+        phase: phase(),
     },
 });
 
@@ -639,17 +695,39 @@ export const speed = defineKind({
         },
         mode: {types: [enumeration], hint: t("tooltips:kind.speed.props.mode")},
         target: target(),
+        phase: phase(),
     },
 });
 
 export const keybind = defineKind({
     column: mechColumn, word: "keybind", group: "ui",
     hint: t("tooltips:kind.keybind.hint"),
-    props: {key: of(text), target: target()},
+    props: {key: of(text), target: target(), phase: phase()},
 });
 
 export const debuff = defineKind({
     column: mechColumn, word: "debuff", group: "ui",
     hint: t("tooltips:kind.debuff.hint"),
     props: {},
+});
+
+/** What removes a spell's aura once it is on you: moving, mounting, entering water, and the rest. */
+export const breaks = defineKind({
+    column: mechColumn, word: "breaks", global: true, group: "gate",
+    hint: t("tooltips:kind.breaks.hint"),
+    props: {on: {types: [enumeration], hint: t("tooltips:kind.breaks.props.on")}},
+});
+
+/**
+ * The faction a spell turns its target into. Stored as the template the aura sets and spoken as the faction's name,
+ * since that is the word a reader knows; the template's group is what other players actually read off the unit.
+ */
+export const faction = defineKind({
+    column: mechColumn, word: "faction", global: true, group: "transform",
+    hint: t("tooltips:kind.faction.hint"),
+    props: {
+        name: {types: [enumeration], hint: t("tooltips:kind.faction.props.name")},
+        target: target(),
+        phase: phase(),
+    },
 });

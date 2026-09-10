@@ -33,6 +33,7 @@ from collections import Counter
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 
+from ..phases import PHASE_AURA, landing
 from ..routes.colors import pack_rgb
 from ..routes.effects import MOVEMENT_NAMES
 from ..routes.models import (
@@ -47,7 +48,7 @@ from ..routes.models import (
 from ..routes.vehicles import PASSENGER_ROLE_NAMES
 from .context import Reads
 from .rows import ModelRow, id_rows, masked_rows, replacement_rows, spell_role_rows, spell_rows
-from .walk import screen_reach
+from .walk import screen_occurrences
 
 RowValue = int | float
 """One stored value.
@@ -91,6 +92,13 @@ spell absence the way an attached model's does.
 
 NO_ANCHOR = -2
 """The gap for an anchor, which is neither a point nor the whole model."""
+
+NO_PACE = -1_000_000
+"""The stored pace of a kit row that plays no animation.
+
+Far outside any pace a kit carries, because a negative pace is a real one: the
+client plays the animation backwards.
+"""
 
 UNTINTED = 0xFFFFFF
 """The colour a chain carries when it is drawn in its texture's own.
@@ -372,6 +380,9 @@ def _models(
     the game did there is show the carried weapon flying or trailing rather than
     name a slot.
 
+    Every model kind happens at a moment, so the phase closes each one's
+    properties rather than being repeated in every declaration.
+
     Args:
         carried: which half of the attach category this kind takes -- `True`
             the carried-weapon sentinels, `False` the real models, `None` every
@@ -383,11 +394,11 @@ def _models(
         for row in reads.rows.models:
             if row.category != cat or (carried is not None and (row.file < 0) is not carried):
                 continue
-            yield row.spell, pick(row)
+            yield row.spell, (*pick(row), row.phase)
 
     return Family(
         kind=kind,
-        props=props,
+        props=(*props, "phase"),
         rows=rows,
         vocab={
             "file": "files",
@@ -399,6 +410,7 @@ def _models(
             "projectiles": "motionProjectiles",
             "name": "items",
             "anim": "anims",
+            "phase": "phases",
         },
         absent={"where": ABSENT, "from": ABSENT, "to": ABSENT},
         spans=PLACEMENT_SPANS,
@@ -470,16 +482,16 @@ def _sounds(reads: Reads) -> Iterable[SpellRow]:
     so a spell whose noise is an emote or a death can be told from the many
     whose noise is simply a spell.
     """
-    for spell, kit, fid, mask in reads.rows.sounds:
-        yield spell, (fid, kit, reads.kit_types.get(kit, ABSENT), mask)
+    for row in reads.rows.sounds:
+        yield row.spell, (row.file, row.kit, reads.kit_types.get(row.kit, ABSENT), row.mask, row.phase)
 
 
 SOUND_FAMILIES: tuple[Family, ...] = (
     Family(
         kind="sound",
-        props=("file", "kit", "type", "target"),
+        props=("file", "kit", "type", "target", "phase"),
         rows=_sounds,
-        vocab={"file": "files", "kit": "kits", "type": "soundTypes"},
+        vocab={"file": "files", "kit": "kits", "type": "soundTypes", "phase": "phases"},
         absent={"type": ABSENT},
     ),
 )
@@ -496,17 +508,18 @@ def _animkits(reads: Reads) -> Iterable[SpellRow]:
     answered by a row that merely joined every region its kit touches.
     """
     pool = {name: at for at, name in enumerate(reads.rows.boneset_names)}
-    for spell, kit, mask in reads.rows.animkits:
+    for spell, kit, phase, mask in reads.rows.animkits:
         anims = sorted(reads.animkit_anims.get(kit, ()))
         if not anims:
-            yield spell, (kit, ABSENT, ABSENT, mask)
+            yield spell, (kit, ABSENT, ABSENT, NO_PACE, mask, phase)
             continue
         for anim in anims:
+            pace = reads.animkit_speeds.get((kit, anim), NO_PACE)
             regions = reads.animkit_bonesets.get(kit, {}).get(anim) or []
             if not regions:
-                yield spell, (kit, anim, ABSENT, mask)
+                yield spell, (kit, anim, ABSENT, pace, mask, phase)
             for region in regions:
-                yield spell, (kit, anim, pool[region], mask)
+                yield spell, (kit, anim, pool[region], pace, mask, phase)
 
 
 def _loose(reads: Reads) -> Iterable[SpellRow]:
@@ -514,21 +527,22 @@ def _loose(reads: Reads) -> Iterable[SpellRow]:
 
     A vehicle's OWN animations are loose too -- they are the vehicle's
     behaviour rather than the rider's, so they belong beside the animations a
-    kit plays and not under the passenger kind. They carry no mask, and one
-    already reached through a visual is not repeated: the two routes describe
-    the same animation playing, and a reader asking which spells play it wants
-    one row, not one per route that found it.
+    kit plays and not under the passenger kind. They carry no mask, they hold
+    for as long as the vehicle aura does, and one already reached through a
+    visual is not repeated: the two routes describe the same animation
+    playing, and a reader asking which spells play it wants one row, not one
+    per route that found it.
     """
     limit = len(reads.declared.anim_names)
     seen: dict[int, set[int]] = {}
     for spell, anims in reads.visuals.visual_anims.items():
-        for anim, mask in anims.items():
+        for (anim, phase), mask in anims.items():
             if anim < limit:
                 seen.setdefault(spell, set()).add(anim)
-                yield spell, (anim, mask)
+                yield spell, (anim, mask, phase)
     for spell, anim in spell_rows(reads.vehicles.vehicle_anims, reads.rows.vehicles, limit):
         if anim not in seen.get(spell, ()):
-            yield spell, (anim, 0)
+            yield spell, (anim, 0, PHASE_AURA)
 
 
 def _replacements(reads: Reads) -> Iterable[SpellRow]:
@@ -537,10 +551,10 @@ def _replacements(reads: Reads) -> Iterable[SpellRow]:
     The replacement leads: it is what the character is seen doing, and the
     one the kind's own word reaches.
     """
-    for spell, source, destination, mask in replacement_rows(
+    for spell, source, destination, phase, mask in replacement_rows(
         reads.visuals, reads.effects, reads.anim_replacements, len(reads.declared.anim_names)
     ):
-        yield spell, (destination, source, mask)
+        yield spell, (destination, source, mask, phase)
 
 
 def _poses(reads: Reads) -> Iterable[SpellRow]:
@@ -562,38 +576,44 @@ def _passengers(reads: Reads) -> Iterable[SpellRow]:
 
     One property per role rather than one row carrying all three, because a
     query asking what a rider does on the way in must not be answered by the
-    animation it holds once seated.
+    animation it holds once seated. All of them hold for the vehicle aura.
     """
     for spell, anim, role in spell_role_rows(
         reads.vehicles.passenger_anims, reads.rows.vehicles, len(reads.declared.anim_names)
     ):
-        values = [ABSENT] * len(PASSENGER_ROLE_NAMES)
+        values: list[RowValue] = [ABSENT] * len(PASSENGER_ROLE_NAMES)
         values[role] = anim
-        yield spell, tuple(values)
+        yield spell, (*values, PHASE_AURA)
 
 
 ANIM_FAMILIES: tuple[Family, ...] = (
     Family(
         kind="kit",
-        props=("id", "anim", "boneset", "target"),
+        props=("id", "anim", "boneset", "speed", "target", "phase"),
         rows=_animkits,
-        vocab={"anim": "anims", "boneset": "bonesets"},
-        absent={"anim": ABSENT, "boneset": ABSENT},
+        vocab={"anim": "anims", "boneset": "bonesets", "phase": "phases"},
+        absent={"anim": ABSENT, "boneset": ABSENT, "speed": NO_PACE},
     ),
-    Family(kind="loose", props=("anim", "target"), rows=_loose, vocab={"anim": "anims"}, absent={"anim": ABSENT}),
+    Family(
+        kind="loose",
+        props=("anim", "target", "phase"),
+        rows=_loose,
+        vocab={"anim": "anims", "phase": "phases"},
+        absent={"anim": ABSENT},
+    ),
     Family(
         kind="replace",
-        props=("to", "from", "target"),
+        props=("to", "from", "target", "phase"),
         rows=_replacements,
-        vocab={"to": "anims", "from": "anims"},
+        vocab={"to": "anims", "from": "anims", "phase": "phases"},
         absent={"to": ABSENT, "from": ABSENT},
     ),
     Family(kind="pose", props=(), rows=_poses),
     Family(
         kind="passenger",
-        props=_ROLES,
+        props=(*_ROLES, "phase"),
         rows=_passengers,
-        vocab={role: "anims" for role in _ROLES},
+        vocab={**{role: "anims" for role in _ROLES}, "phase": "phases"},
         absent={role: ABSENT for role in _ROLES},
     ),
 )
@@ -622,21 +642,29 @@ def _per_texture(painted: Sequence[int]) -> Iterable[int]:
     return painted or (0,)
 
 
+def _visual_kits(reads: Reads) -> Iterable[SpellRow]:
+    """Every visual kit a spell's visuals name, by id, when it starts and for
+    whom: the spine of the spell's timeline."""
+    for spell, kit, phase, mask in masked_rows(reads.visuals.visual_kits):
+        yield spell, (kit, mask, phase)
+
+
 def _chains(reads: Reads) -> Iterable[SpellRow]:
     """The beams a spell draws, one row per texture each paints with."""
-    for spell, chain, mask, source, destination in reads.rows.chains:
+    for spell, chain, source, destination, phase, mask in reads.rows.chains:
         payload = reads.fx.chains[chain]
         tint = 0 if pack_rgb(payload.red, payload.green, payload.blue) == UNTINTED else chain
+        character = (int(payload.arcing), int(payload.flickering), int(payload.jagged), int(payload.wavy))
         for texture in _per_texture(_painted(reads, payload.textures)):
-            yield spell, (texture, source, destination, tint, mask, chain)
+            yield spell, (texture, source, destination, tint, *character, payload.width, mask, phase, chain)
 
 
 def _dissolves(reads: Reads) -> Iterable[SpellRow]:
     """The dissolves a spell applies, one row per texture each blends."""
-    for spell, dissolve, mask in masked_rows(reads.visuals.dissolves):
+    for spell, dissolve, phase, mask in masked_rows(reads.visuals.dissolves):
         _duration, textures, attach = reads.fx.dissolves[dissolve]
         for texture in _per_texture(_painted(reads, textures)):
-            yield spell, (attach, texture, mask, dissolve)
+            yield spell, (attach, texture, mask, phase, dissolve)
 
 
 def _shadowies(reads: Reads) -> Iterable[SpellRow]:
@@ -646,16 +674,17 @@ def _shadowies(reads: Reads) -> Iterable[SpellRow]:
     PRIMARY of its two colours: the secondary is the pass's falloff, not a
     second answer to what colour it is.
     """
-    for spell, shadowy, mask in masked_rows(reads.visuals.shadowies):
-        yield spell, (reads.fx.shadowies[shadowy][2], shadowy, mask)
+    for spell, shadowy, phase, mask in masked_rows(reads.visuals.shadowies):
+        yield spell, (reads.fx.shadowies[shadowy][2], shadowy, mask, phase)
 
 
 def _coloured(bucket: str) -> Callable[[Reads], Iterable[SpellRow]]:
-    """One colour-only family: the row is which recolour, and who it plays on."""
+    """One colour-only family: the row is which recolour, when, and who it
+    plays on."""
 
     def rows(reads: Reads) -> Iterable[SpellRow]:
-        for spell, row, mask in masked_rows(getattr(reads.visuals, bucket)):
-            yield spell, (row, mask)
+        for spell, row, phase, mask in masked_rows(getattr(reads.visuals, bucket)):
+            yield spell, (row, mask, phase)
 
     return rows
 
@@ -663,18 +692,18 @@ def _coloured(bucket: str) -> Callable[[Reads], Iterable[SpellRow]]:
 def _percents(bucket: str, value_of: Callable[[Reads, int], int]) -> Callable[[Reads], Iterable[SpellRow]]:
     """A percent-only family: the percent IS the row, so there is no id table.
 
-    Two rows resolving to one percent are one row wearing both audiences, so
-    the masks union rather than splitting the percent in two.
+    Two rows resolving to one percent at one phase are one row wearing both
+    audiences, so the masks union rather than splitting the percent in two.
     """
 
     def rows(reads: Reads) -> Iterable[SpellRow]:
-        masks: dict[tuple[int, int], int] = {}
+        masks: dict[tuple[int, int, int], int] = {}
         for spell, values in getattr(reads.visuals, bucket).items():
-            for row, mask in values.items():
-                key = (spell, value_of(reads, row))
+            for (row, phase), mask in values.items():
+                key = (spell, value_of(reads, row), phase)
                 masks[key] = masks.get(key, 0) | mask
-        for (spell, percent), mask in sorted(masks.items()):
-            yield spell, (percent, mask)
+        for (spell, percent, phase), mask in sorted(masks.items()):
+            yield spell, (percent, mask, phase)
 
     return rows
 
@@ -699,13 +728,21 @@ def _attributed(flag: str) -> Callable[[Reads], Iterable[SpellRow]]:
     return rows
 
 
+def _held(reads: Reads, spell: int) -> int:
+    """Where a spell's non-aura effects happen."""
+    return landing(spell in reads.props.delayed)
+
+
 def _entities(payload: str) -> Callable[[Reads], Iterable[SpellRow]]:
-    """One entity route: which thing a spell reaches, and who it was aimed at."""
+    """One aura payload: which thing a spell reaches, and who it was aimed at.
+
+    Every payload read this way is an aura's, so it holds from the aura phase.
+    """
 
     def rows(reads: Reads) -> Iterable[SpellRow]:
         ids = getattr(reads.effects, payload)
         for spell, entity in id_rows(ids):
-            yield spell, (entity, ids.masks.get((spell, entity), 0))
+            yield spell, (entity, ids.masks.get((spell, entity), 0), PHASE_AURA)
 
     return rows
 
@@ -714,91 +751,139 @@ def _scales(reads: Reads) -> Iterable[SpellRow]:
     """Every size change a spell applies, as a signed percentage."""
     for spell, percents in sorted(reads.effects.scales.items()):
         for percent in sorted(percents):
-            yield spell, (percent, reads.effects.scale_targets.get((spell, percent), 0))
+            yield spell, (percent, reads.effects.scale_targets.get((spell, percent), 0), PHASE_AURA)
 
 
 def _summons(reads: Reads) -> Iterable[SpellRow]:
     """The creatures a spell brings, and who commands each.
 
     The audience belongs to the creature alone: one creature summoned under two
-    control words is one thing summoned, aimed once.
+    control words is one thing summoned, aimed once. A summon is an effect,
+    so it happens where the spell lands.
     """
     for spell, summoned in sorted(reads.effects.summons.items()):
         for creature, control in sorted(summoned):
-            yield spell, (creature, control, reads.effects.summon_targets.get((spell, creature), 0))
+            yield (
+                spell,
+                (creature, control, reads.effects.summon_targets.get((spell, creature), 0), _held(reads, spell)),
+            )
 
 
 def _objects(reads: Reads) -> Iterable[SpellRow]:
-    """The gameobjects a spell places in the world."""
+    """The gameobjects a spell places in the world, where it lands."""
     for spell, entry in reads.references.object_rows:
-        yield spell, (entry, reads.effects.objects.masks.get((spell, entry), 0))
+        yield spell, (entry, reads.effects.objects.masks.get((spell, entry), 0), _held(reads, spell))
 
 
 def _screens(reads: Reads) -> Iterable[SpellRow]:
     """The screen effects a spell grades the frame with.
 
-    Two routes reach one -- an aura naming the effect, and a visual kit playing
-    it -- and they union here because they are the same fact about the spell.
-    The audience comes from the aura, which is the route that records one.
+    Two routes reach one -- an aura naming the effect, which holds it for the
+    aura phase, and a visual kit playing it, which starts it at the kit's
+    event -- and each is an occurrence of its own.
     """
-    for spell, screen in sorted(screen_reach(reads.effects.screens.ids, reads.visuals.screens)):
+    for (spell, screen, phase), mask in sorted(
+        screen_occurrences(reads.effects.screens, reads.visuals.screens).items()
+    ):
         payload = reads.fx.screens.get(screen)
         drawn = sorted((role, fid) for fid, role in payload.textures) if payload else []
-        mask = reads.effects.screens.masks.get((spell, screen), 0)
         for texture in _per_texture(_painted(reads, [fid for _role, fid in drawn])):
-            yield spell, (texture, mask, screen)
+            yield spell, (texture, mask, phase, screen)
 
+
+PHASED = {"phase": "phases"}
+"""The phase's vocabulary entry, for every family that happens at a moment.
+
+A family with no phase is one that does not happen: a pose and a freeze are
+membership, a mount is a link from the spell, a location is a gate.
+"""
 
 FX_FAMILIES: tuple[Family, ...] = (
+    Family(kind="visual", props=("id", "target", "phase"), rows=_visual_kits, vocab=PHASED),
     Family(
         kind="chain",
-        props=("texture", "from", "to", "colour", "target"),
+        props=("texture", "from", "to", "colour", "arcing", "flickering", "jagged", "wavy", "width", "target", "phase"),
         rows=_chains,
         carried=("chain",),
-        vocab={"texture": "files", "from": "attachments", "to": "attachments", "colour": "chainColours"},
-        absent={"from": ABSENT, "to": ABSENT},
+        vocab={"texture": "files", "from": "attachments", "to": "attachments", "colour": "chainColours", **PHASED},
+        # A trait ships as one where the beam has it and nought where it does
+        # not, and nought is the absence of the property rather than a value.
+        absent={"from": ABSENT, "to": ABSENT, "arcing": 0, "flickering": 0, "jagged": 0, "wavy": 0},
     ),
     Family(
         kind="dissolve",
-        props=("where", "texture", "target"),
+        props=("where", "texture", "target", "phase"),
         rows=_dissolves,
         carried=("dissolve",),
-        vocab={"where": "anchors", "texture": "files"},
+        vocab={"where": "anchors", "texture": "files", **PHASED},
         absent={"where": NO_ANCHOR},
     ),
     Family(
         kind="shadowy",
-        props=("where", "colour", "target"),
+        props=("where", "colour", "target", "phase"),
         rows=_shadowies,
-        vocab={"where": "anchors", "colour": "shadowyColours"},
+        vocab={"where": "anchors", "colour": "shadowyColours", **PHASED},
         absent={"where": NO_ANCHOR},
     ),
-    Family(kind="ghost", props=("colour", "target"), rows=_coloured("ghost_mats"), vocab={"colour": "ghostColours"}),
-    Family(kind="glow", props=("colour", "target"), rows=_coloured("glows"), vocab={"colour": "glowColours"}),
-    Family(kind="tint", props=("colour", "target"), rows=_coloured("tints"), vocab={"colour": "tintColours"}),
+    Family(
+        kind="ghost",
+        props=("colour", "target", "phase"),
+        rows=_coloured("ghost_mats"),
+        vocab={"colour": "ghostColours", **PHASED},
+    ),
+    Family(
+        kind="glow",
+        props=("colour", "target", "phase"),
+        rows=_coloured("glows"),
+        vocab={"colour": "glowColours", **PHASED},
+    ),
+    Family(
+        kind="tint",
+        props=("colour", "target", "phase"),
+        rows=_coloured("tints"),
+        vocab={"colour": "tintColours", **PHASED},
+    ),
     Family(
         kind="transparency",
-        props=("percent", "target"),
+        props=("percent", "target", "phase"),
         rows=_percents("transps", lambda reads, row: reads.procs.transps[row]),
+        vocab=PHASED,
     ),
     Family(
         kind="desaturate",
-        props=("percent", "target"),
+        props=("percent", "target", "phase"),
         rows=_percents("desats", lambda reads, row: reads.procs.desats[row]),
+        vocab=PHASED,
     ),
     Family(kind="freeze", props=(), rows=_flagged("freezes")),
     Family(kind="camo", props=(), rows=_flagged("camos")),
-    Family(kind="morph", props=("creature", "target"), rows=_entities("morphs"), vocab={"creature": "morphs"}),
-    Family(kind="shapeshift", props=("form", "target"), rows=_entities("forms"), vocab={"form": "shapeshifts"}),
-    Family(kind="scale", props=("amount", "target"), rows=_scales),
+    Family(
+        kind="morph",
+        props=("creature", "target", "phase"),
+        rows=_entities("morphs"),
+        vocab={"creature": "morphs", **PHASED},
+    ),
+    Family(
+        kind="shapeshift",
+        props=("form", "target", "phase"),
+        rows=_entities("forms"),
+        vocab={"form": "shapeshifts", **PHASED},
+    ),
+    Family(kind="scale", props=("amount", "target", "phase"), rows=_scales, vocab=PHASED),
     Family(
         kind="summon",
-        props=("creature", "control", "target"),
+        props=("creature", "control", "target", "phase"),
         rows=_summons,
-        vocab={"creature": "creatures", "control": "controls"},
+        vocab={"creature": "creatures", "control": "controls", **PHASED},
     ),
-    Family(kind="object", props=("object", "target"), rows=_objects, vocab={"object": "objects"}),
-    Family(kind="screen", props=("texture", "target"), rows=_screens, carried=("screen",), vocab={"texture": "files"}),
+    Family(kind="object", props=("object", "target", "phase"), rows=_objects, vocab={"object": "objects", **PHASED}),
+    Family(
+        kind="screen",
+        props=("texture", "target", "phase"),
+        rows=_screens,
+        carried=("screen",),
+        vocab={"texture": "files", **PHASED},
+    ),
 )
 
 
@@ -831,13 +916,26 @@ def _effects(reads: Reads) -> Iterable[SpellRow]:
             mechanics section would silently lose a row rather than fail.
     """
     bits = reads.declared.target_bits
-    for spell, effect, aura, first, second, misc_a, misc_b in reads.rows.mechanics:
-        if not effect:
+    for row in reads.rows.mechanics:
+        if not row.effect:
             raise ValueError(
-                f"spell {spell} has an effect row with aura {aura} and no "
+                f"spell {row.spell} has an effect row with aura {row.aura} and no "
                 f"effect; the row model carries the row on its effect"
             )
-        yield spell, (effect, _mask_of(bits, first, second), aura, first, second, misc_a, misc_b)
+        yield (
+            row.spell,
+            (
+                row.effect,
+                _mask_of(bits, row.target_a, row.target_b),
+                row.order,
+                row.phase,
+                row.aura,
+                row.target_a,
+                row.target_b,
+                row.misc_a,
+                row.misc_b,
+            ),
+        )
 
 
 def _auras(reads: Reads) -> Iterable[SpellRow]:
@@ -847,9 +945,9 @@ def _auras(reads: Reads) -> Iterable[SpellRow]:
     one row and "an aura aimed this way" is a question about the aura.
     """
     bits = reads.declared.target_bits
-    for spell, _effect, aura, first, second, _a, _b in reads.rows.mechanics:
-        if aura:
-            yield spell, (aura, _mask_of(bits, first, second))
+    for row in reads.rows.mechanics:
+        if row.aura:
+            yield row.spell, (row.aura, _mask_of(bits, row.target_a, row.target_b), row.phase)
 
 
 def _links(forward: bool) -> Callable[[Reads], Iterable[SpellRow]]:
@@ -862,8 +960,10 @@ def _links(forward: bool) -> Callable[[Reads], Iterable[SpellRow]]:
     """
 
     def rows(reads: Reads) -> Iterable[SpellRow]:
-        for source, destination, word, mask in reads.rows.links:
-            yield ((source, (destination, word, mask)) if forward else (destination, (source, word, mask)))
+        for source, destination, word, phase, mask in reads.rows.links:
+            yield (
+                (source, (destination, word, mask, phase)) if forward else (destination, (source, word, mask, phase))
+            )
 
     return rows
 
@@ -892,7 +992,7 @@ def _channels(payload: str, paired: bool) -> Callable[[Reads], Iterable[SpellRow
             (spell, kind) for spell, kinds in source.ids.items() for kind in kinds if not paired or kind in hiding
         ):
             mask = source.masks.get((spell, kind), 0)
-            yield spell, ((kind, hiding[kind], mask) if paired else (kind, mask))
+            yield spell, ((kind, hiding[kind], mask, PHASE_AURA) if paired else (kind, mask, PHASE_AURA))
 
     return rows
 
@@ -913,7 +1013,7 @@ def _seats(reads: Reads) -> Iterable[SpellRow]:
         count = len(reads.vehicles.seats[vehicle])
         mask = reads.effects.vehicles.masks.get((spell, vehicle), 0)
         for slot in range(count):
-            yield spell, (count, at[vehicle] + slot, mask, vehicle)
+            yield spell, (count, at[vehicle] + slot, mask, PHASE_AURA, vehicle)
 
 
 def _speeds(reads: Reads) -> Iterable[SpellRow]:
@@ -930,69 +1030,91 @@ def _speeds(reads: Reads) -> Iterable[SpellRow]:
                     percent,
                     MOVEMENT_NAMES.index(movement),
                     reads.effects.speed_targets.get((spell, movement, percent), 0),
+                    PHASE_AURA,
                 ),
             )
+
+
+def _breaks(reads: Reads) -> Iterable[SpellRow]:
+    """Every event that removes a spell's aura, one row each."""
+    for spell, bits in sorted(reads.aura_interrupts.items()):
+        for bit in bits:
+            yield spell, (bit,)
 
 
 def _keybinds(reads: Reads) -> Iterable[SpellRow]:
     """Which keybound override an aura suppresses while it holds."""
     for spell, override in id_rows(reads.effects.keybinds):
-        yield spell, (override, reads.effects.keybinds.masks.get((spell, override), 0))
+        yield spell, (override, reads.effects.keybinds.masks.get((spell, override), 0), PHASE_AURA)
 
 
 MECH_FAMILIES: tuple[Family, ...] = (
+    # The index is the effect's place in its spell's own order, which nothing
+    # else on the row says; the phase is where that order happens.
     Family(
         kind="effect",
-        props=("name", "target"),
+        props=("name", "target", "index", "phase"),
         rows=_effects,
         carried=("aura", "targetA", "targetB", "misc0", "misc1"),
-        vocab={"name": "effects"},
+        vocab={"name": "effects", **PHASED},
     ),
-    Family(kind="aura", props=("name", "target"), rows=_auras, vocab={"name": "auras"}),
+    Family(kind="aura", props=("name", "target", "phase"), rows=_auras, vocab={"name": "auras", **PHASED}),
     # The word is an INDEX into the pool, so nought is the first word rather
     # than no word: an edge always prints one, and the gap has to be a value
     # the pool cannot hold.
     Family(
         kind="triggers",
-        props=("spell", "how", "target"),
+        props=("spell", "how", "target", "phase"),
         rows=_links(True),
-        vocab={"spell": "spells", "how": "linkWords"},
+        vocab={"spell": "spells", "how": "linkWords", **PHASED},
         absent={"how": ABSENT},
     ),
     Family(
         kind="origin",
-        props=("spell", "how", "target"),
+        props=("spell", "how", "target", "phase"),
         rows=_links(False),
-        vocab={"spell": "spells", "how": "linkWords"},
+        vocab={"spell": "spells", "how": "linkWords", **PHASED},
         absent={"how": ABSENT},
     ),
     Family(kind="location", props=("area",), rows=_areas, vocab={"area": "areas"}),
     Family(
-        kind="invis", props=("channel", "target"), rows=_channels("invis", paired=False), absent={"channel": ABSENT}
+        kind="invis",
+        props=("channel", "target", "phase"),
+        rows=_channels("invis", paired=False),
+        vocab=PHASED,
+        absent={"channel": ABSENT},
     ),
     Family(
         kind="detect",
-        props=("channel", "count", "target"),
+        props=("channel", "count", "target", "phase"),
         rows=_channels("detect", paired=True),
+        vocab=PHASED,
         absent={"channel": ABSENT},
     ),
     Family(
         kind="vehicle",
-        props=("seats", "where", "target"),
+        props=("seats", "where", "target", "phase"),
         rows=_seats,
         carried=("vehicle",),
-        vocab={"where": "seatAnchors"},
+        vocab={"where": "seatAnchors", **PHASED},
         absent={"where": ABSENT},
     ),
     Family(
         kind="speed",
-        props=("amount", "mode", "target"),
+        props=("amount", "mode", "target", "phase"),
         rows=_speeds,
-        vocab={"mode": "movements"},
+        vocab={"mode": "movements", **PHASED},
         absent={"mode": ABSENT},
     ),
-    Family(kind="keybind", props=("key", "target"), rows=_keybinds, vocab={"key": "keybinds"}),
+    Family(kind="keybind", props=("key", "target", "phase"), rows=_keybinds, vocab={"key": "keybinds", **PHASED}),
     Family(kind="debuff", props=(), rows=_attributed("auraisdebuff")),
+    Family(
+        kind="faction",
+        props=("name", "target", "phase"),
+        rows=_entities("factions"),
+        vocab={"name": "factions", **PHASED},
+    ),
+    Family(kind="breaks", props=("on",), rows=_breaks, vocab={"on": "interrupts"}),
 )
 
 COLUMN_FAMILIES: Mapping[str, tuple[Family, ...]] = {
@@ -1023,9 +1145,32 @@ COLUMN_READS: Mapping[str, tuple[str, ...]] = {
         "anim_replacements",
         "animkit_anims",
         "animkit_bonesets",
+        "animkit_speeds",
     ),
-    "fx": ("spell_ids", "rows", "visuals", "effects", "declared", "attributes", "fx", "procs", "references", "paths"),
-    "mech": ("spell_ids", "rows", "visuals", "effects", "declared", "vehicles", "attributes", "areas"),
+    "fx": (
+        "spell_ids",
+        "rows",
+        "visuals",
+        "effects",
+        "declared",
+        "attributes",
+        "fx",
+        "procs",
+        "references",
+        "paths",
+        "props",
+    ),
+    "mech": (
+        "spell_ids",
+        "rows",
+        "visuals",
+        "effects",
+        "declared",
+        "vehicles",
+        "attributes",
+        "areas",
+        "aura_interrupts",
+    ),
 }
 """What each column's families map FROM, per column rather than in one union.
 
@@ -1074,6 +1219,9 @@ VOCABULARIES: Mapping[str, Mapping[str, str]] = {
     "seatAnchors": {"in": "vehicleSeats", "values": "attachments"},
     "movements": {"in": "speedModeNames"},
     "keybinds": {"in": "keybinds", "keys": "ids", "values": "keys"},
+    "factions": {"in": "factionNames", "keys": "ids", "values": "names"},
+    "interrupts": {"in": "interruptNames"},
+    "phases": {"in": "visualPhases"},
 }
 """Where each vocabulary lives, and how it is keyed.
 

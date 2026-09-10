@@ -28,7 +28,7 @@ def files(reads: Reads) -> SectionColumns:
     """
     ids = sorted(reads.references.assets)
     paths = [reads.paths.get(fid, "") for fid in ids]
-    used = {worn.file for models in reads.visuals.models.values() for worn in models}
+    used = {worn.file for models in reads.visuals.models.values() for worn, _phase in models}
     for fid, name in SYNTHETIC_MODEL_FILES.items():
         if fid in used:
             ids.append(fid)

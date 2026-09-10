@@ -199,6 +199,36 @@ SUMMON_CONTROL_NAMES = register(
     )
 )
 
+
+def faction_names(reads: Reads) -> SectionColumns:
+    """Each faction template a spell sets: the faction's name, its group, its faction.
+
+    Keyed by the template, since that is what the aura carries and what the
+    game sets; the name is the word a reader searches by, the group is what
+    separates same-named templates, and the faction id is the link.
+    """
+    rows = reads.factions
+    return {
+        "ids": [row.template for row in rows],
+        "names": [row.name for row in rows],
+        "groups": [row.group for row in rows],
+        "factionIds": [row.faction for row in rows],
+    }
+
+
+FACTION_NAMES = register(
+    Section(
+        name="factionNames",
+        doc="Each faction template a spell sets, named through its faction, with its group.",
+        module="core",
+        produce=faction_names,
+        columns=("ids", "names", "groups", "factionIds"),
+        reads=("factions",),
+        counts=(size("factionNames", "ids"),),
+        localizable=("names",),
+    )
+)
+
 OBJECTS = register(
     Section(
         name="objects",

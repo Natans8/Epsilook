@@ -10,8 +10,10 @@ from __future__ import annotations
 
 from ..tables.listfile_tables import ID, PATH, TABLE
 from ..tables.provider import Tables
+from .route import route
 
 
+@route("paths", phase="resolve paths (listfile)", wanted="references.wanted")
 def resolve_paths(listfile: Tables, wanted: set[int]) -> dict[int, str]:
     """The asset paths of the file ids asked for.
 

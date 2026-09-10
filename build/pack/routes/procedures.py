@@ -17,6 +17,7 @@ from .attachments import NO_ATTACHMENT, NO_MOTION
 from .colors import RGB_MASK
 from .columns import to_float, to_int, to_int_from_float
 from .models import MODEL_CAT_AREA, MODEL_CAT_TRAIL, SCALE_UNIT, UNPLACED, AttachModel, ModelSources
+from .route import route
 
 _PROC_TYPES = load_local_enum("spell_procedural_effect_types")
 PROC_TYPES_CHAIN = enum_ids_where(_PROC_TYPES, "chain")
@@ -68,6 +69,7 @@ class ProcEffects:
     """Procedure -> the (base, replacement) animation pairs it swaps in."""
 
 
+@route("procs")
 def read_proc_effects(tables: Tables, models: ModelSources) -> ProcEffects:
     """Read every procedure row and bucket it by what its Type means.
 

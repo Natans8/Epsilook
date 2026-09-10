@@ -94,6 +94,11 @@ TABLES = [
     # Both predate every rostered build.
     "ZoneMusic",
     "SoundAmbience",
+    # The faction an aura sets its target to is a template, and the template's
+    # own faction is the name; its group is what tells same-named templates
+    # apart. Both predate every rostered build.
+    "FactionTemplate",
+    "Faction",
     # The sky. A LightSkybox is the dome's model, a LightParams the preset that
     # picks one and colours the day around it, and LightData the preset's ramp,
     # one row per moment of the 2,880-half-minute day.
@@ -164,6 +169,7 @@ LOCALIZED_TABLES = [
     "Mount",
     "SpellShapeshiftForm",
     "JournalEncounterSection",
+    "Faction",
 ]
 """The tables above a route reads a translated column from.
 

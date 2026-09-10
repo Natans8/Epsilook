@@ -17,6 +17,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from ..routes import CreatureModels, ShapeshiftForms, SpellEffectRows
+from ..routes.route import route
 
 
 @dataclass(frozen=True)
@@ -88,6 +89,7 @@ def _reached_displays(creature: int, creatures: CreatureModels, extra: dict[int,
     return [*own, *(display for display in extra.get(creature, ()) if display not in seen)]
 
 
+@route("displays", phase="resolve_displays")
 def resolve_displays(effects: SpellEffectRows, creatures: CreatureModels, forms: ShapeshiftForms) -> ResolvedDisplays:
     """Flatten both display routes to rows, dropping what cannot be named.
 

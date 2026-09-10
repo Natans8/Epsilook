@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 
 from ..tables import Tables
 from .columns import to_int
+from .route import route
 
 CONDITIONS = (
     "",
@@ -267,6 +268,7 @@ def spaced_name(name: str) -> str:
     return "".join(out).strip()
 
 
+@route("skies")
 def read_skies(tables: Tables) -> SkyRoster:
     """Read the whole sky: the domes, the presets that pick them, and the places.
 

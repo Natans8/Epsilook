@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from ..tables import Tables
 from .columns import to_int
 from .creatures import CreatureModels
+from .route import route
 
 
 @dataclass
@@ -27,7 +28,16 @@ class MountData:
     fid: dict[int, int] = field(default_factory=dict)
     """Display -> its model file, 0 where it does not resolve."""
 
+    flavour: dict[int, str] = field(default_factory=dict)
+    """Granting spell -> the mount's own flavour text, for the spells that carry one.
 
+    Prose about the mount rather than about the spell, which is why it joins
+    the description corpus instead of becoming an axis: nearly every mount
+    spell's own description is one line of boilerplate.
+    """
+
+
+@route("mounts", spell_names="names.names")
 def read_mounts(tables: Tables, spell_names: dict[int, str], creatures: CreatureModels) -> MountData:
     """Read the mount displays each mount-granting spell reaches.
 
@@ -40,10 +50,14 @@ def read_mounts(tables: Tables, spell_names: dict[int, str], creatures: Creature
 
     mounts = MountData()
     links: set[tuple[int, int]] = set()
-    for mount_id, name, source in tables.rows("Mount", ["ID", "Name_lang", "SourceSpellID"]):
+    for mount_id, name, source, flavour in tables.rows(
+        "Mount", ["ID", "Name_lang", "SourceSpellID", "Description_lang"]
+    ):
         spell = to_int(source)
         if spell not in spell_names:
             continue
+        if (prose := (flavour or "").strip()) and spell not in mounts.flavour:
+            mounts.flavour[spell] = prose
         for display in displays.get(to_int(mount_id), ()):
             links.add((spell, display))
             mounts.name.setdefault(display, (name or "").strip())

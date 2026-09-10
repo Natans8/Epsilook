@@ -12,8 +12,38 @@ from typing import cast
 from pack.build import Build
 from pack.derive import DeriveContext
 from pack.model.section import Section
-from pack.pipeline import degraded_sections, produce, switched_off, unavailable_tables
+from pack.pipeline import DERIVED_FIELDS, GIVEN, degraded_sections, produce, switched_off, unavailable_tables
+from pack.routes import ROUTES, Route
 from pack.sources.tdb import TDB_TABLES
+
+REGISTERED: tuple[Route, ...] = tuple(ROUTES)
+
+
+def test_every_context_field_has_exactly_one_route() -> None:
+    """A field the registries do not fill would arrive empty in every pack,
+    and one filled twice would be whichever registry came last."""
+    fields = [route.field for route in REGISTERED]
+    assert len(fields) == len(set(fields)), "a field is filled by two routes"
+    assert DERIVED_FIELDS <= set(fields)
+
+
+def test_every_need_names_a_given_or_a_field() -> None:
+    """The graph is the registries, so a need naming nothing is a build that
+    fails on the first field to ask for it."""
+    fields = {route.field for route in REGISTERED}
+    for route in REGISTERED:
+        unknown = route.fields_named() - fields - set(GIVEN)
+        assert not unknown, f"{route.field} needs {', '.join(sorted(unknown))}, which nothing supplies"
+
+
+def test_the_routes_form_no_cycle() -> None:
+    """A field naming itself through others would resolve forever."""
+    needs = {route.field: route.fields_named() - set(GIVEN) for route in REGISTERED}
+    settled: set[str] = set()
+    while len(settled) < len(needs):
+        ready = {name for name, upstream in needs.items() if name not in settled and upstream <= settled}
+        assert ready, f"a cycle among {sorted(set(needs) - settled)}"
+        settled |= ready
 
 
 def a_section(name: str, *, needs: tuple[str, ...] = (), degraded_without: tuple[str, ...] = ()) -> Section:

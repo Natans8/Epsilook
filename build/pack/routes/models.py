@@ -19,6 +19,7 @@ from .attachments import NO_ATTACHMENT, NO_MOTION
 from .columns import to_float, to_int
 from .creatures import CreatureModels
 from .items import ItemModels
+from .route import route
 
 MODEL_CAT_ATTACH = 0
 MODEL_CAT_MISSILE = 1
@@ -398,6 +399,7 @@ def file_for_effect_name(models: ModelSources, name_id: int) -> int:
     return EFFECT_NAME_TYPE_WEAPON.get(models.effect_name_type.get(name_id, 0), 0)
 
 
+@route("models")
 def read_model_sources(
     tables: Tables, creatures: CreatureModels, items: ItemModels, named: Callable[[set[int]], set[int]]
 ) -> ModelSources:

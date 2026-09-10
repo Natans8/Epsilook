@@ -397,12 +397,13 @@ local function kindCtx(kind, countFallback)
 	for _, prop in ipairs(kind.props) do
 		refs[#refs + 1] = { kind = kind, prop = prop }
 		-- A qualifier refines a row rather than naming a subject of its own,
-		-- so a comparison written on the KIND's word was never about it:
+		-- so an operand written on the KIND's word was never about it:
 		-- `attach>2` asks how many models a spell attaches, not how big one of
-		-- them is drawn. It stays reachable by name, which is where a reader
-		-- who meant it says so. Without this a kind's count meaning is taken
-		-- by whichever qualifier is declared first and happens to accept the
-		-- operator.
+		-- them is drawn, and `attach:impact` names no model. It stays
+		-- reachable by name, which is where a reader who meant it says so.
+		-- Without this a kind's count meaning is taken by whichever qualifier
+		-- is declared first and happens to accept the operator, and its value
+		-- by whichever qualifier reads any word at all.
 		if not prop.qualifier then
 			comparable[#comparable + 1] = refs[#refs]
 		end
@@ -468,8 +469,11 @@ local function kindCtx(kind, countFallback)
 		if #flags > 0 then
 			return props(flags, opExpr("contains", { text = text }))
 		end
+		-- The subjects alone: a qualifier is reached by name, as in the
+		-- comparison above, or an open vocabulary among them would claim
+		-- every bare operand.
 		local claimants = {}
-		for _, ref in ipairs(refs) do
+		for _, ref in ipairs(comparable) do
 			if Schema.ParseValue(ref.prop, text) ~= nil then
 				claimants[#claimants + 1] = ref
 			end
@@ -486,7 +490,7 @@ local function kindCtx(kind, countFallback)
 	-- vocabularies -- sentinels, roles, rungs -- then anything that reads it.
 	function ctx.phrase(text)
 		local textual, wordy, readable = {}, {}, {}
-		for _, ref in ipairs(refs) do
+		for _, ref in ipairs(comparable) do
 			local prop = ref.prop
 			local value, typeName = Schema.ParseValue(prop, text)
 			local isTextual = false

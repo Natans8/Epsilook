@@ -14,12 +14,14 @@ layer and never on another section.
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Container, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import NamedTuple
 
+from ..phases import PHASE_AURA, landing
 from ..routes import MaskedIds, SpellEffectRows, VehicleSeats
 from ..routes.models import MODEL_CAT_ITEM, Placement
+from ..routes.route import route
 from .links import link_kind_word
 from .walk import Bucket, SpellVisuals
 
@@ -36,6 +38,9 @@ class ModelRow(NamedTuple):
     file: int
     category: int
     mask: int
+    phase: int
+    """Where in the spell the model appears: the event that started its kit,
+    or the travel for a missile."""
     source: int
     """The attachment the model hangs from."""
     destination: int
@@ -64,11 +69,70 @@ class MechanicRow(NamedTuple):
     target_b: int
     misc_a: int
     misc_b: int
+    order: int
+    """The effect's `EffectIndex`: its order among the spell's, from nought."""
+    phase: int
+    """Where it happens: an aura holds from the aura phase, anything else
+    lands where the spell lands."""
 
 
-def masked_rows(bucket: Bucket) -> list[tuple[int, int, int]]:
-    """One masked bucket as (spell, payload, mask) rows, sorted."""
-    return sorted((spell, payload, mask) for spell, payloads in bucket.items() for payload, mask in payloads.items())
+class SoundRow(NamedTuple):
+    """One sound file a spell plays, under the kit that plays it."""
+
+    spell: int
+    kit: int
+    file: int
+    phase: int
+    mask: int
+
+
+class AnimKitRow(NamedTuple):
+    """One anim kit a spell plays."""
+
+    spell: int
+    kit: int
+    phase: int
+    mask: int
+
+
+class ChainRow(NamedTuple):
+    """One chain a spell draws, between the two attachments it spans."""
+
+    spell: int
+    chain: int
+    source: int
+    destination: int
+    phase: int
+    mask: int
+
+
+class LinkRow(NamedTuple):
+    """One edge from a spell to a spell it triggers."""
+
+    source: int
+    destination: int
+    word: int
+    """An index into `PackRows.link_words`."""
+    phase: int
+    mask: int
+
+
+def masked_rows(bucket: Bucket) -> list[tuple[int, int, int, int]]:
+    """One masked bucket as (spell, payload, phase, mask) rows, sorted."""
+    return sorted(
+        (spell, occurrence.item, occurrence.phase, mask)
+        for spell, occurrences in bucket.items()
+        for occurrence, mask in occurrences.items()
+    )
+
+
+def effect_phase(aura: int, spell: int, delayed: Container[int]) -> int:
+    """Where one effect row happens.
+
+    An aura holds from the aura phase whatever applied it; every other effect
+    happens where the spell lands, which the delayed set decides per spell.
+    """
+    return PHASE_AURA if aura else landing(spell in delayed)
 
 
 def id_rows(ids: MaskedIds) -> list[tuple[int, int]]:
@@ -85,9 +149,9 @@ class PackRows:
     """Every flattening at least two sections read."""
 
     models: list[ModelRow] = field(default_factory=list)
-    sounds: list[tuple[int, int, int, int]] = field(default_factory=list)
-    animkits: list[tuple[int, int, int]] = field(default_factory=list)
-    chains: list[tuple[int, int, int, int, int]] = field(default_factory=list)
+    sounds: list[SoundRow] = field(default_factory=list)
+    animkits: list[AnimKitRow] = field(default_factory=list)
+    chains: list[ChainRow] = field(default_factory=list)
     mechanics: list[MechanicRow] = field(default_factory=list)
 
     motions: list[int] = field(default_factory=list)
@@ -107,8 +171,8 @@ class PackRows:
     used_animkits: set[int] = field(default_factory=set)
     """Anim kits some spell reaches, whether through a visual or a seat."""
 
-    links: list[tuple[int, int, int, int]] = field(default_factory=list)
-    """(source, destination, word, mask) for every edge between two spells.
+    links: list[LinkRow] = field(default_factory=list)
+    """Every edge between two spells.
 
     The word is an index into `link_words`, pooled here rather than by whoever
     ships it: the link section and the mechanics rows both name the same words,
@@ -177,24 +241,34 @@ def spell_role_rows(
 
 
 def link_rows(
-    effects: SpellEffectRows, effect_names: Mapping[int, str], aura_names: Mapping[int, str]
-) -> tuple[list[tuple[int, int, int, int]], list[str]]:
+    effects: SpellEffectRows,
+    effect_names: Mapping[int, str],
+    aura_names: Mapping[int, str],
+    delayed: Container[int],
+) -> tuple[list[LinkRow], list[str]]:
     """Every edge between two spells, and the words they print.
 
     The word replaces the effect and aura the edge came from, so two rows that
     differ only in a column the pack does not ship become one edge. The words
     are pooled in first-seen order over the sorted edges, which is what makes
-    the numbering stable without a sort over unrelated strings.
+    the numbering stable without a sort over unrelated strings. The edge
+    happens where the effect that carries it does: an aura's trigger holds
+    from the aura phase, an effect's fires where the spell lands.
     """
     words: dict[str, int] = {}
     rows = {
-        (source, destination, words.setdefault(link_kind_word(effect, aura, effect_names, aura_names), len(words)))
+        (
+            source,
+            destination,
+            words.setdefault(link_kind_word(effect, aura, effect_names, aura_names), len(words)),
+            effect_phase(aura, source, delayed),
+        )
         for source, destination, effect, aura in sorted(effects.links)
     }
     return (
         [
-            (source, destination, word, effects.link_targets.get((source, destination), 0))
-            for source, destination, word in sorted(rows)
+            LinkRow(source, destination, word, phase, effects.link_targets.get((source, destination), 0))
+            for source, destination, word, phase in sorted(rows)
         ],
         list(words),
     )
@@ -210,6 +284,15 @@ def seat_rows(vehicle_ids: Sequence[int], seats: Mapping[int, Sequence[str]]) ->
     return [(vehicle, name) for vehicle in vehicle_ids for name in seats[vehicle]]
 
 
+@route(
+    "rows",
+    phase="build_rows",
+    seats="vehicles",
+    effect_names="declared.effect_names",
+    aura_names="declared.aura_names",
+    bonesets="animkit_bonesets",
+    delayed="props.delayed",
+)
 def build_rows(
     visuals: SpellVisuals,
     effects: SpellEffectRows,
@@ -217,14 +300,21 @@ def build_rows(
     effect_names: Mapping[int, str],
     aura_names: Mapping[int, str],
     bonesets: Mapping[int, Mapping[int, list[str]]],
+    delayed: Container[int],
 ) -> PackRows:
-    """Flatten everything at least two sections read, once."""
+    """Flatten everything at least two sections read, once.
+
+    Args:
+        delayed: the spells whose effects land at the impact, which places
+            every effect row and every edge.
+    """
     models = sorted(
         ModelRow(
             spell,
             worn.file,
             worn.category,
             mask,
+            phase,
             worn.source,
             worn.destination,
             worn.ref,
@@ -233,36 +323,46 @@ def build_rows(
             worn.built,
         )
         for spell, payloads in visuals.models.items()
-        for worn, mask in payloads.items()
+        for (worn, phase), mask in payloads.items()
     )
     vehicles = sorted(
         (spell, vehicle) for spell, ids in effects.vehicles.ids.items() for vehicle in ids if seats.seats.get(vehicle)
     )
-    animkits = masked_rows(visuals.animkits)
-    used = {kit for _spell, kit, _mask in animkits}
+    animkits = [AnimKitRow(*row) for row in masked_rows(visuals.animkits)]
+    used = {row.kit for row in animkits}
     used |= {kit for _spell, kit in spell_rows(seats.animkits, vehicles)}
     vehicle_ids = sorted({vehicle for _spell, vehicle in vehicles})
-    edges, words = link_rows(effects, effect_names, aura_names)
+    edges, words = link_rows(effects, effect_names, aura_names, delayed)
     boneset_pairs, boneset_pool = boneset_rows(bonesets, used)
     return PackRows(
         models=models,
         sounds=sorted(
-            (spell, kit, file, mask)
+            SoundRow(spell, kit, file, phase, mask)
             for spell, payloads in visuals.sounds.items()
-            for (kit, file), mask in payloads.items()
+            for ((kit, file), phase), mask in payloads.items()
         ),
         animkits=animkits,
         chains=sorted(
-            (spell, chain, mask, source, destination)
+            ChainRow(spell, chain, source, destination, phase, mask)
             for spell, payloads in visuals.chains.items()
-            for (chain, source, destination), mask in payloads.items()
+            for ((chain, source, destination), phase), mask in payloads.items()
         ),
         # Deduped on what ships: two effect rows differing only in a flag the
         # pack does not carry are one row once the shipped columns are what
         # identifies them.
         mechanics=sorted(
             {
-                MechanicRow(row.spell, row.effect, row.aura, row.target_a, row.target_b, row.misc_a, row.misc_b)
+                MechanicRow(
+                    row.spell,
+                    row.effect,
+                    row.aura,
+                    row.target_a,
+                    row.target_b,
+                    row.misc_a,
+                    row.misc_b,
+                    row.order,
+                    effect_phase(row.aura, row.spell, delayed),
+                )
                 for row in effects.mechanics
             }
         ),
@@ -300,7 +400,7 @@ def boneset_rows(
 
 def replacement_rows(
     visuals: SpellVisuals, effects: SpellEffectRows, replacements: Mapping[int, set[tuple[int, int]]], limit: int
-) -> list[tuple[int, int, int, int]]:
+) -> list[tuple[int, int, int, int, int]]:
     """Every animation a spell swaps for another, from both sources merged.
 
     Two routes describe one thing -- a character wearing a different animation
@@ -308,23 +408,30 @@ def replacement_rows(
     an aura naming a replacement set, and both are pairs of animation ids, so
     they union into one per-spell set rather than shipping as two families a
     reader would have to merge. Deduped, since a spell commonly carries the same
-    pair from both; the two sources' masks union with them, because one pair
-    reached both ways plays on everyone either way reaches.
-    """
-    pairs: dict[tuple[int, int, int], int] = {}
+    pair from both at one phase; the two sources' masks union with them,
+    because one pair reached both ways plays on everyone either way reaches.
+    The aura route holds from the aura phase, the visual route starts where
+    its event does.
 
-    def keep(of_spell: int, base: int, worn: int, mask: int) -> None:
+    Returns:
+        `(spell, base, replacement, phase, mask)` rows, sorted.
+    """
+    pairs: dict[tuple[int, int, int, int], int] = {}
+
+    def keep(of_spell: int, base: int, worn: int, phase: int, mask: int) -> None:
         """Record one swap, dropping either half past the name table."""
         if 0 <= base < limit and 0 <= worn < limit:
-            swap = (of_spell, base, worn)
+            swap = (of_spell, base, worn, phase)
             pairs[swap] = pairs.get(swap, 0) | mask
 
     for spell, swapped in visuals.anims.items():
-        for (source, destination), mask in swapped.items():
-            keep(spell, source, destination, mask)
+        for ((source, destination), phase), mask in swapped.items():
+            keep(spell, source, destination, phase, mask)
     for spell, sets in effects.anim_sets.ids.items():
         for identifier in sets:
             mask = effects.anim_sets.masks.get((spell, identifier), 0)
             for source, destination in replacements.get(identifier, ()):
-                keep(spell, source, destination, mask)
-    return sorted((spell, source, destination, mask) for (spell, source, destination), mask in pairs.items())
+                keep(spell, source, destination, PHASE_AURA, mask)
+    return sorted(
+        (spell, source, destination, phase, mask) for (spell, source, destination, phase), mask in pairs.items()
+    )

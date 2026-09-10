@@ -14,6 +14,7 @@ from ..tables import Tables
 from .attachments import DEFAULT_MISSILE_SOURCE
 from .columns import to_int
 from .models import ModelSources, file_for_effect_name
+from .route import route
 
 
 class Missile(NamedTuple):
@@ -76,6 +77,7 @@ class MissileMotion:
     """
 
 
+@route("motions")
 def read_missile_motions(tables: Tables) -> dict[int, MissileMotion]:
     """Missile motion id -> the arc a projectile flies.
 
@@ -88,6 +90,7 @@ def read_missile_motions(tables: Tables) -> dict[int, MissileMotion]:
     }
 
 
+@route("missiles")
 def read_missiles(tables: Tables, models: ModelSources) -> dict[int, VisualMissiles]:
     """Read each visual's projectiles, attachments resolved.
 

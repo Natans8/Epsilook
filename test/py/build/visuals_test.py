@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pack.routes.visuals import VisualGraph, expand_redirects, read_visual_graph
+from pack.routes.visuals import KitEvent, VisualGraph, expand_redirects, phase_words, read_visual_graph
 from pack.targets import NO_TARGET, TARGET_CASTER, TARGET_MISSILE_DEST, TARGET_TARGET
 from support import BuildTables
 
@@ -77,13 +77,24 @@ def test_a_spell_reaches_every_visual_its_visuals_redirect_to(tables: BuildTable
     }
 
 
-def test_the_kit_edge_splits_the_mask_by_phase(tables: BuildTables) -> None:
-    """ "Target" means a different unit in the two phases."""
-    assert graph(tables).visual_kits[10] == {
-        900: (NO_TARGET, TARGET_CASTER | TARGET_TARGET),  # impact, two rows
-        901: (TARGET_CASTER, NO_TARGET),  # aura start
-    }
+def test_the_kit_edge_keeps_one_entry_per_event(tables: BuildTables) -> None:
+    """A kit playing for two audiences at one phase is two events, each with
+    its own bit, and the phase rides on each rather than being folded."""
+    assert graph(tables).visual_events[10] == [
+        KitEvent(900, 6, TARGET_CASTER),
+        KitEvent(900, 6, TARGET_TARGET),
+        KitEvent(901, 7, TARGET_CASTER),
+    ]
 
 
 def test_a_visual_carries_its_own_animation_sound(tables: BuildTables) -> None:
     assert graph(tables).visual_sounds == {10: 700}
+
+
+def test_the_phase_words_index_by_event_and_leave_the_unnamed_blank() -> None:
+    """A row stores the event id, so the word must sit at that index; an event
+    the enum leaves unnamed reads as no word rather than as a neighbour's."""
+    words = phase_words()
+    assert words[3] == "cast" and words[6] == "impact" and words[7] == "aura"
+    assert words[0] == "none"
+    assert len(words) == 14 and "" not in words

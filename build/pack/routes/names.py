@@ -16,6 +16,7 @@ from ..drift import SPELL_NAME_SOURCES
 from ..progress import log
 from ..tables import Tables
 from .columns import to_int
+from .route import route
 
 
 @dataclass
@@ -37,6 +38,7 @@ class SpellNames:
     """
 
 
+@route("names")
 def read_spell_names(tables: Tables) -> SpellNames:
     """Read the spell list and its subtexts.
 
@@ -61,6 +63,7 @@ def read_spell_names(tables: Tables) -> SpellNames:
     return spells
 
 
+@route("alt_names", by_spell="effects.altnames")
 def read_override_names(tables: Tables, by_spell: Mapping[int, set[int]]) -> dict[int, str]:
     """Spell -> its override names as one searchable string.
 

@@ -433,6 +433,9 @@ export const fileId = identity({name: "fileId"});
 /** An animation kit: the row a played kit names. */
 export const animKitId = identity({name: "animKitId"});
 
+/** A visual kit: the row a spell's look is drawn from, and what a model frame renders a look by. */
+export const visualKitId = identity({name: "visualKitId"});
+
 /**
  * An invisibility channel: which of the game's channels something hides in, or can see into.
  *

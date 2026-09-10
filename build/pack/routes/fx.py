@@ -15,6 +15,7 @@ from typing import NamedTuple
 from ..tables import Tables, array_columns
 from .colors import RGB_MASK, pack_rgb, to_channel
 from .columns import to_float, to_int
+from .route import route
 
 SCREEN_EFFECT_FOG = 3
 """The screen effect whose parameter carries a fog tint rather than a grade."""
@@ -24,6 +25,14 @@ TEX_OVERLAY, TEX_MASK = 0, 1
 by the grade colours; an overlay is finished art in its own colours."""
 
 ARGB_ALPHA_SHIFT = 24
+
+WAVE_VISIBLE = 0.5
+"""The wave height below which a ripple is not a ripple anyone sees.
+
+A frequency with no amplitude is a wave nobody can see, and most chains carry
+one: a non-zero test would call two thirds of them wavy, and at this height
+the word sits level with its siblings.
+"""
 
 # (offsetY, size multiplier, power)
 Vignette = tuple[float, float, float]
@@ -49,6 +58,16 @@ class ChainEffect(NamedTuple):
     them in."""
     nested: tuple[int, ...]
     """The chains this one draws in turn. The graph may contain a cycle."""
+    arcing: bool = False
+    """Whether the beam bows away from the straight line between its ends."""
+    flickering: bool = False
+    """Whether the beam switches on and off while it holds."""
+    jagged: bool = False
+    """Whether the beam's joints scatter off the line, as lightning does."""
+    wavy: bool = False
+    """Whether the beam ripples along its length, at a visible amplitude."""
+    width: float = 0.0
+    """How wide the beam starts, in yards."""
 
 
 @dataclass
@@ -242,6 +261,7 @@ def read_screens(tables: Tables, full_screen: dict[int, tuple[int, int, Vignette
     return screens
 
 
+@route("fx")
 def read_fx_payloads(tables: Tables) -> FxPayloads:
     """Read every fx payload table."""
     blend_sets = read_blend_sets(tables)
@@ -287,16 +307,26 @@ def read_fx_payloads(tables: Tables) -> FxPayloads:
     # wave columns are tuning.
     textures = array_columns(tables, "SpellChainEffects", "TextureFileDataID", 3)
     nested = array_columns(tables, "SpellChainEffects", "SpellChainEffectID", 11)
-    for row in tables.rows("SpellChainEffects", ["ID", "Red", "Green", "Blue", "SoundKitID", *textures, *nested]):
-        first = 5 + len(textures)
+    character = ["ArcHeight", "MaxFlickerOnDuration", "JointOffsetRadius", "WaveHeight", "StartWidth"]
+    for row in tables.rows(
+        "SpellChainEffects", ["ID", "Red", "Green", "Blue", "SoundKitID", *character, *textures, *nested]
+    ):
+        drawn = 5 + len(character)
+        first = drawn + len(textures)
         chain_red, chain_green, chain_blue, sound = (to_int(value) for value in row[1:5])
+        arc, flicker, joint, wave, width = (to_float(value) for value in row[5:drawn])
         payloads.chains[to_int(row[0])] = ChainEffect(
             chain_red,
             chain_green,
             chain_blue,
             sound,
-            tuple(dict.fromkeys(file for file in (to_int(value) for value in row[5:first]) if file)),
+            tuple(dict.fromkeys(file for file in (to_int(value) for value in row[drawn:first]) if file)),
             tuple(chain for chain in (to_int(value) for value in row[first:]) if chain),
+            arcing=arc > 0,
+            flickering=flicker > 0,
+            jagged=joint > 0,
+            wavy=wave >= WAVE_VISIBLE,
+            width=round(width, 2),
         )
 
     # A beam attaches at both ends, so the pair rides with the chain it draws

@@ -383,7 +383,7 @@ erDiagram
         int SpellVisualID FK
         int SpellVisualKitID FK
         int TargetType"where the target mask comes from"
-        int StartEvent"the phase; which values mean aura is declared"
+        int StartEvent"the phase every row of the pack ships"
         int EndEvent"in the table, not read: the pack keeps no timing"
     }
     SpellVisualKit {
@@ -547,6 +547,7 @@ The recurring joins, for reference:
 | `ZoneLight`                 | `LightID`                                                  | the `Light` whose zone it names                       |
 | `ScreenEffect`              | `LightParamsID`                                            | `LightParams`, the preset it swaps the sky to         |
 | `ScreenEffect`              | `ZoneMusicID`, `SoundAmbienceID`                           | `ZoneMusic`, `SoundAmbience`: a day and a night kit each |
+| `FactionTemplate`           | `Faction`                                                  | `Faction`, whose name is the word; the group stays on the template |
 
 ### As shipped
 
@@ -735,14 +736,15 @@ Fireball's three events has four zeros. So a diagram of this with a time axis wo
 ordering above is what the data actually says.
 
 It also carries `TargetType`, so the same visual can play different content to different people, which is where the
-target mask comes from. The events are enumerated by `SpellVisualEventEvent` in WoWDBDefs' `meta/enums`, but the app
-needs only which of them mean the aura phase, and that is declared.
+target mask comes from. The events are enumerated by `SpellVisualEventEvent` in WoWDBDefs' `meta/enums`, vendored as
+`build/enums/spell_visual_events.json` with one search word per value, and shipped as `visualPhases`.
 
-**The pack keeps none of the timing, and the read says so.** Four of the row's ten columns are read — the visual, the
-kit, `StartEvent` and `TargetType` — so `EndEvent` and all four offsets are untouched. The walk uses the phase to
-separate aura events and then flattens the event away, and a payload reaches the pack attached to its spell rather than
-to the moment it fires. That is a deliberate simplification rather than an oversight: the pack's shape is spell to
-payload, and a moment would be a grouping level between them.
+**The pack keeps the phase and not the clock, and the read says so.** Four of the row's ten columns are read — the
+visual, the kit, `StartEvent` and `TargetType` — so `EndEvent` and all four offsets are untouched. An event row is the
+unit the walk collects: one kit, starting at one phase, for one audience. Every payload the kit contributes reaches
+the pack as an occurrence, the thing at that phase, so the same model at the cast and at the impact is two rows with
+their own audiences rather than one wearing both. The pack's shape is still spell to payload; the phase is a column on
+the payload rather than a grouping level between them, because a search scope binds to one row.
 
 **A kit is a bundle, and it used to be a record with fixed slots.** In the original client a kit was one row with a
 column per attachment — head, chest, base, left hand, right hand, breath, three special slots — plus a sound, a camera
@@ -763,10 +765,18 @@ Following redirects is what makes that content visible at all, because the redir
 other way. **The redirect graph contains cycles** — a visual can name itself, and two can name each other — so the
 expansion is a worklist over a mask that only ever gains bits, which terminates whatever shape the data takes.
 
-**A kit is reached through an event, and the event's phase matters.** Every phase but one shares the cast's frame; the
-*aura* phase belongs to the aura and plays on whoever carries it. The two are carried apart until the spell's own
-effects are known, because folding them together loses the distinction that rescues a spell whose self-aura rides
-alongside effects aimed at someone else.
+**A kit is reached through an event, and the event's phase matters twice.** It is the phase the occurrence ships
+with. And every phase but one shares the cast's frame; the *aura* phase belongs to the aura and plays on whoever
+carries it, so an event's target bit is resolved against the spell's apply-aura effects in that phase and against all
+of its effects in any other. Resolved per event, because folding the events of one kit would lose the distinction
+that rescues a spell whose self-aura rides alongside effects aimed at someone else.
+
+**What has no event row is placed by a rule rather than left unplaced.** A missile set is what the travel phase is, so
+it starts there. An effect lands where the spell lands: at the impact when `SpellMisc.Speed` or `LaunchDelay` is
+non-zero, which is the client's own hit-delay test, and at the cast otherwise; an aura, and every payload read off one,
+holds from the aura's start; a summon, an object and a triggered spell land with the effect that carries them. The
+effect row also carries its `EffectIndex`, the order the effects happen in once the spell lands. The one thing placed
+nowhere is the visual's own animation-event sound, which no event names.
 
 **The kit is the fan-out point,** and it is the single most important thing to picture. One row says "this kit plays
 effect E of type T", and the *type* decides which table E is an id in. Reading the effect without first reading its type
@@ -952,6 +962,7 @@ effect and aura remains searchable and the mechanics column is always the whole 
 | screen-effect aura     | a screen effect   | `fxRows`, `screens`                                                         |
 | invisibility auras     | a channel number  | `mechRows` (`invis` and `detect` kinds)                                     |
 | keybound-override aura | a key override    | `mechRows`, `keybinds`                                                      |
+| faction-override aura  | a faction template | `mechRows` (`faction` kind), `factionNames`                                 |
 | anim-replacement aura  | a replacement set | `animRows` (`replace`)                                                      |
 | override-name aura     | an override name  | folded into the search corpus                                               |
 | summon effect          | a creature        | `fxRows`, `summons`, `creatureDisplays`, `displaySkins`                     |
@@ -991,12 +1002,21 @@ carried it and with both of its raw misc values. The granularity is per effect a
 search scope binds its axes to one row, so asking for an effect that is a jump *and* aims at a unit must mean a single
 effect that is both.
 
-**The misc values ship raw, because their meaning is the reader's to apply.** What a misc value refers to is a function
-of the effect or aura beside it, and that pairing is already in the pack — so shipping the number turns a future axis
-over one into a declaration rather than another format bump. It is not a skeleton key: a misc value that indexes a table
-the pack does not carry is an id nobody can search by name, and giving it a name still means shipping its vocabulary.
-Carrying them also makes the row identity finer, since two effects alike in everything the pack shows but summoning
-different creatures are two rows rather than one.
+**The misc values ship raw, and `selectors` says what each one means.** What a misc value refers to is a function of
+the effect or aura beside it, and every such pairing the build reads is declared once, as a selector: the column that
+decides, the value it holds, and what each other column of the row is then an id into, a word for, or a number of. The
+same declaration covers the kit effect's id under its type, the effect name's generic id under its type and the
+procedure's four values under its type, so the pack ships one table for all four and a reader holding a raw value can
+resolve it. It is not a skeleton key: a value that indexes a table the pack does not carry is an id nobody can search by
+name, and giving it a name still means shipping its vocabulary. Carrying the values also makes the row identity finer,
+since two effects alike in everything the pack shows but summoning different creatures are two rows rather than one.
+
+**A route is a flow, and the steps are a small vocabulary.** Every route reads a table and follows a few hops, and the
+hops are of seven data kinds: read a table, join through a key, fan an array out into rows, select rows by a
+discriminator and say what their columns then mean, read whichever of several tables this build has, keep what a
+roster admits, and resolve an id to a word. `routes/flow.py` states them as steps that compose with `|`, each a generator
+over rows, and the flow carries its schema as data so a step naming a column the flow does not carry fails when it is
+written. Walks that recurse and cookers that parse are functions over a flow's rows rather than steps.
 
 **A value that reached a parsed payload is marked consumed.** It stays on its row and stays searchable; the flag only
 tells the renderer that a dedicated pill already shows it, so the raw one is not drawn a second time. That makes the
@@ -1114,10 +1134,11 @@ so the rolled-up name would be false on almost every pill it was printed on.
 Anything more than one section needs is computed once here rather than by each reader. That is what keeps the section
 declarations flat, with no ordering between them and no section depending on another.
 
-- **The graph walk.** One pass over every spell, following the spine to its kits and unioning each payload it reaches.
-  Every payload bucket is the same shape — content item to target mask — so adding a kit's contribution is one operation
-  rather than one per payload kind, and the walk stays a loop over kits rather than a switch over payloads. Target masks
-  are resolved here; see below.
+- **The graph walk.** One pass over every spell, following the spine to its events and collecting each payload the
+  event's kit contributes as an occurrence. Every payload bucket is the same shape — the thing at a phase, to the
+  union of the target masks it arrived by — so adding a kit's contribution is one operation rather than one per
+  payload kind, and the walk stays a loop over events rather than a switch over payloads. Target masks are resolved
+  here; see below.
 - **Display resolution.** A creature or a form to the model file behind it, which is two hops for a creature and is what
   several routes would otherwise each walk.
 - **Reference collection.** Every file id anything reached, gathered into the one set worth asking the listfile about.
@@ -1169,8 +1190,13 @@ different tables, and sharing it is what lets the two be compared at all.
 
 The comparison matters because **the client writes "target" whenever a spell is cast at a unit, including when that unit
 is the caster.** A self-buff would otherwise show a target icon for content that plays on you. So a target bit becomes a
-caster bit wherever the matching test says the spell aims only at its caster: for the aura phase, believe the spell's
-apply-aura effects; for every other phase, believe all of them.
+caster bit wherever the matching test says the spell aims only at its caster: for an aura-phase event, believe the
+spell's apply-aura effects; for every other event, believe all of them.
+
+**The mask is unioned per occurrence, never across phases.** The client ships its impact kits as duplicate event rows
+differing only in the audience, and those are one occurrence to a reader: "at impact, for both". A thing reached at two
+phases is two rows, each with the audience of its own events. Measured on 9.2.7, keying by the phase adds 0.6% to the
+spell-to-kit references, and keying by the phase and the target as well would add 13.3% and lose the "both" reading.
 
 **Every row the game aims somewhere ships the mask.** Several families used to carry one and drop it on the way out — a
 tint, a fade, a colour drain, an animation replacement — because the pill they render did not need it. A row that cannot
@@ -1184,7 +1210,7 @@ nothing:
 | kind                                       | why there is no mask                                                     |
 |--------------------------------------------|--------------------------------------------------------------------------|
 | `mount`                                    | It comes from `Mount.SourceSpellID` — a property of the mount, not a row |
-| `passenger`                                | A seat's animation belongs to a role, and the role is the question       |
+| `passenger`                                | A seat's animation belongs to a role, and the role is the question; it still holds for the vehicle aura, so it carries a phase |
 | `location`                                 | An area gate is where a spell may be cast, not who it plays on           |
 | `freeze` `camo` `tracking` `pose` `debuff` | Valueless: the kind IS the fact, so there is no row to aim               |
 

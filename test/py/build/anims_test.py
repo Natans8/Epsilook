@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pack.routes.anims import read_anim_emotes
+from pack.routes.anims import read_animkit_speeds, read_anim_emotes
 from pack.routes.anims import read_anim_replacements, read_animkit_anims, read_animkit_bonesets
 from support import BuildTables
 
@@ -10,12 +10,12 @@ ANIM_NAMES = ["Stand", "Death", "Spell", "Walk", "Run"]
 
 # Anim 9 is past the end of the name list.
 ANIM_KIT_SEGMENT = """\
-ParentAnimKitID,AnimID,AnimKitConfigID
-1,2,50
-1,3,51
-1,2,52
-2,9,50
-2,4,0
+ParentAnimKitID,AnimID,AnimKitConfigID,Speed
+1,2,50,-1
+1,3,51,1
+1,2,52,-1
+2,9,50,0.5
+2,4,0,0.5
 """
 
 ANIM_KIT_BONE_SET = """\
@@ -142,3 +142,12 @@ def test_emotes_past_the_animation_table_are_dropped() -> None:
     oneshots, loops = read_anim_emotes(["x"] * 100)
     assert len(oneshots) == len(loops) == 100
     assert max(oneshots) == 2099
+
+
+def test_a_kits_pace_is_kept_per_animation_in_thousandths(tables: BuildTables) -> None:
+    """Backwards, held and hurried are all real paces, and the first segment
+    of an animation a kit plays twice is the one that speaks for it."""
+    speeds = read_animkit_speeds(tables(AnimKitSegment=ANIM_KIT_SEGMENT))
+    assert speeds[(1, 2)] == -1000
+    assert speeds[(1, 3)] == 1000
+    assert speeds[(2, 4)] == 500

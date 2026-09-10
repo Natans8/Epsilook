@@ -13,6 +13,7 @@ from ..routes import (
     AreaGates,
     CreatureModels,
     Delivery,
+    FactionTemplateRow,
     FxPayloads,
     GameObjectData,
     ItemModels,
@@ -122,6 +123,8 @@ class DeriveContext:
     forms: ShapeshiftForms = field(default_factory=ShapeshiftForms)
     vehicles: VehicleSeats = field(default_factory=VehicleSeats)
     areas: AreaGates = field(default_factory=AreaGates)
+    factions: Sequence[FactionTemplateRow] = ()
+    """The faction templates some spell sets, each named through its faction."""
 
     missiles: Mapping[int, VisualMissiles] = field(default_factory=dict)
     motions: Mapping[int, MissileMotion] = field(default_factory=dict)
@@ -130,11 +133,15 @@ class DeriveContext:
     ambiences: Mapping[int, Ambience] = field(default_factory=dict)
     """The music sets and ambiences a screen effect can swap in, by id."""
     animkit_anims: Mapping[int, set[int]] = field(default_factory=dict)
+    animkit_speeds: Mapping[tuple[int, int], int] = field(default_factory=dict)
+    """Anim kit and animation -> the pace it is played at, in thousandths."""
     animkit_bonesets: Mapping[int, dict[int, list[str]]] = field(default_factory=dict)
     anim_replacements: Mapping[int, set[tuple[int, int]]] = field(default_factory=dict)
     keybinds: Mapping[int, KeyboundOverride] = field(default_factory=dict)
     delivery: Sequence[Delivery] = ()
     reach: Sequence[Reach] = ()
+    aura_interrupts: Mapping[int, Sequence[int]] = field(default_factory=dict)
+    """Spell -> the events that remove its aura, as bits of the vendored enum."""
     attributes: Mapping[str, Sequence[int]] = field(default_factory=dict)
     alt_names: Mapping[int, str] = field(default_factory=dict)
     kit_names: Sequence[tuple[int, str]] = ()
@@ -240,6 +247,9 @@ class Spoken:
 
     areas: AreaGates
     """Gated area names."""
+
+    factions: Sequence[FactionTemplateRow]
+    """Faction names, through the templates the auras set."""
 
     prose: CookedText
     """The templates cooked with this language's own wording."""
