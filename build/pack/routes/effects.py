@@ -251,6 +251,11 @@ class MaskedIds:
         key = (spell, payload)
         self.masks[key] = self.masks.get(key, NO_TARGET) | mask
 
+    @property
+    def named(self) -> frozenset[int]:
+        """Every payload named, as the roster a flow narrows on."""
+        return frozenset(payload for payloads in self.ids.values() for payload in payloads)
+
     def distinct(self) -> list[int]:
         """Every payload named, sorted and deduplicated.
 

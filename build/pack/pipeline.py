@@ -52,7 +52,6 @@ from .routes import (
     implicit_target_bits,
     read_area_gates,
     read_creature_models,
-    read_faction_templates,
     read_gameobjects,
     read_item_models,
     read_mounts,
@@ -65,6 +64,7 @@ from .routes import (
     resolve_paths,
     route,
 )
+from .routes import flows
 from .routes.values import DescriptionValues
 from .sources import (
     ExpansionLadder,
@@ -400,7 +400,7 @@ def read_spoken(
         objects = read_gameobjects(tables, world)
         forms = read_shapeshift_forms(tables)
         areas = read_area_gates(tables, zone_maps)
-        factions = read_faction_templates(tables, faction_templates)
+        factions = flows.factions.run(tables, needs={"effects.factions.named": faction_templates})
         alt_names = read_override_names(tables, altnames)
         templates = read_spell_text(tables)
 

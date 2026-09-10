@@ -24,7 +24,11 @@ import dataclasses
 import inspect
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from typing import TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
+
+if TYPE_CHECKING:
+    from ..tables import Tables
+    from .flow import Runnable
 
 Produce = Callable[..., object]
 """What fills a field, called with the inputs the record names, by keyword.
@@ -104,3 +108,65 @@ def route(field: str, *, phase: str = "", **sources: str) -> Callable[[Filler], 
         return filler
 
     return register
+
+
+DECLARED: dict[str, list[tuple[str, Any]]] = {}
+"""Per declared field, its plans by the version each holds from, in order.
+
+Any: a plan's result type is the field's, and the field types it on the way
+into the context; the registry only picks which plan runs.
+"""
+
+
+def _plan_for(field: str, version: str) -> Any:
+    """The plan a build runs for a field: the last one declared for a version
+    at or before this build's."""
+    from .flow import before  # noqa: PLC0415  -- the flow imports this module's decorator
+
+    chosen = None
+    for since, plan in DECLARED[field]:
+        if not since or not before(version, since):
+            chosen = plan
+    if chosen is None:
+        raise ValueError(f"{field}: no plan holds on {version}")
+    return chosen
+
+
+def _needs_of(plan: Any) -> frozenset[str]:
+    """What a runnable names: its flow's needs, and a post-step's wants."""
+    named = getattr(plan, "needs", None)
+    return named if isinstance(named, frozenset) else plan.flow.needs
+
+
+def declare[T](field: str, plan: Runnable[T], *, phase: str = "", since: str = "") -> Runnable[T]:
+    """Register a plan as what fills `field`.
+
+    The plan's needs are read off the plan itself, so a flow narrowing on a
+    path names its dependency once. A second declaration of the same field
+    with `since` is the version override: the plan a build at or past that
+    version runs instead, the same field, the same place.
+
+    Args:
+        field: the context field the plan's result lands in.
+        plan: the flow and its terminal.
+        phase: the name the build times it under; empty means `read <field>`.
+        since: the dotted version this plan holds from; empty means always.
+
+    Returns:
+        The plan, so the declaration can be held by a name too.
+    """
+    plans = DECLARED.setdefault(field, [])
+    plans.append((since, plan))
+    plans.sort(key=lambda held: tuple(int(part) for part in held[0].split(".")) if held[0] else ())
+    paths = sorted({path for _since, held in plans for path in _needs_of(held)})
+    # A need's path is not a parameter name, so each is keyed by position and
+    # mapped back when the plan runs.
+    keys = {f"need{at}": path for at, path in enumerate(paths)}
+
+    def produce(tables: Tables, version: str, **found: Any) -> Any:
+        needs = {keys[key]: value for key, value in found.items()}
+        return _plan_for(field, version).run(tables, version, needs)
+
+    ROUTES[:] = [registered for registered in ROUTES if registered.field != field]
+    ROUTES.append(Route(field, produce, {"tables": "tables", "version": "version", **keys}, phase))
+    return plan

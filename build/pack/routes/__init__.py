@@ -15,7 +15,8 @@ from .attributes import attribute_bit, read_spell_attributes
 from .creatures import CreatureModels, read_creature_models
 from .delivery import Delivery, read_spell_delivery
 from .effects import EffectRow, MaskedIds, SpellEffectRows, implicit_target_bits, read_spell_effect_rows
-from .factions import FactionTemplateRow, read_faction_templates
+from . import flows as _flows
+from .factions import FactionTemplateRow
 from .fx import ChainEffect, FxPayloads, ScreenRow, expand_chain, read_fx_payloads
 from .gameobjects import GameObjectData, read_gameobjects
 from .interrupts import interrupt_words, read_aura_interrupts
@@ -86,7 +87,6 @@ __all__ = [
     "read_area_gates",
     "read_aura_interrupts",
     "read_creature_models",
-    "read_faction_templates",
     "read_fx_payloads",
     "read_gameobjects",
     "read_item_models",

@@ -4,9 +4,25 @@ named wrongly fails when the flow is written rather than when a build runs.
 
 from __future__ import annotations
 
+from typing import NamedTuple
+
 import pytest
 
-from pack.routes.flow import Join, When, amount, flow, join, nonzero, read, reference, vocabulary
+from pack.routes.flow import (
+    Join,
+    Read,
+    When,
+    amount,
+    as_ids,
+    as_map,
+    as_rows,
+    as_sets,
+    c,
+    flow,
+    reference,
+    text,
+    vocabulary,
+)
 from support import BuildTables
 
 SCREEN_EFFECT = """\
@@ -131,7 +147,7 @@ def test_a_retired_selector_holds_only_before_the_patch_that_reused_it(tables: B
 
 
 def test_the_first_available_table_answers(tables: BuildTables) -> None:
-    names = flow("names").first_of(read("SpellName", "ID", "Name_lang"), read("Spell", "ID", "Name_lang"))
+    names = flow("names").first_of(Read("SpellName", ("ID", "Name_lang")), Read("Spell", ("ID", "Name_lang")))
     assert names.schema().columns == ("ID", "Name_lang")
     old = tables(Spell="ID,Name_lang\n1,Frostbolt\n", absent={"SpellName": "split out later"})
     assert list(names.rows(old)) == [("1", "Frostbolt")]
@@ -140,15 +156,15 @@ def test_the_first_available_table_answers(tables: BuildTables) -> None:
 
 def test_an_alternative_must_line_up_positionally() -> None:
     with pytest.raises(ValueError, match="same number of columns"):
-        flow("bad").first_of(read("SpellName", "ID", "Name_lang"), read("Spell", "ID"))
+        flow("bad").first_of(Read("SpellName", ("ID", "Name_lang")), Read("Spell", ("ID",)))
 
 
 def test_where_and_narrow_keep_what_they_say(tables: BuildTables) -> None:
     kept = (
         flow("kept")
         .read("ScreenEffect", "ID", "ZoneMusicID", "SoundAmbienceID")
-        .where("ZoneMusicID", nonzero)
-        .narrow("ID", {30, 31})
+        .where(c.ZoneMusicID != 0)
+        .narrow(c.ID, {30, 31})
     )
     assert list(kept.rows(tables(ScreenEffect=SCREEN_EFFECT))) == [("30", "1807", "0")]
 
@@ -170,6 +186,84 @@ def test_the_steps_of_one_kind_are_readable_off_the_flow() -> None:
 def test_a_step_built_elsewhere_is_appended_with_the_operator() -> None:
     """The methods are spellings of the one append; a step held in a variable
     joins the same way."""
-    hop = join("Faction", "Faction", "Name_lang")
+    hop = Join("Faction", "Faction", ("Name_lang",))
     route = flow("route").read("FactionTemplate", "ID", "Faction") | hop
     assert route.schema().columns == ("ID", "Faction", "Name_lang")
+
+
+SPELL_MISC = """SpellID,DifficultyID,Speed,LaunchDelay,Attributes_0,Attributes_1
+100,23,45,0,0,4
+100,0,45,0,1,0
+200,0,0,0.5,0,0
+300,0,0,0,2,0
+"""
+
+X_VISUAL = """SpellID,SpellVisualID
+1,10
+"""
+
+SPELL_VISUAL = """ID,CasterSpellVisualID,HostileSpellVisualID
+10,20,0
+20,0,21
+21,20,0
+"""
+
+
+def test_a_condition_is_an_expression_that_prints_as_itself() -> None:
+    """A lambda in a plan is opaque; a comparison built on a column is data a
+    reader, a document and a second executor can all see."""
+    asked = (c.Speed > 0) | (c.LaunchDelay > 0)
+    assert repr(asked) == "(c.Speed > 0) | (c.LaunchDelay > 0)"
+    assert asked.columns() == {"Speed", "LaunchDelay"}
+    assert repr(~c.Name_lang.is_empty()) == "~(c.Name_lang == '')"
+
+
+def test_prefer_keeps_the_base_row_wherever_it_comes(tables: BuildTables) -> None:
+    """The mythic copy arrives first and must not stand for the spell; a key
+    with no base row keeps its first."""
+    props = flow("props").read("SpellMisc", c.SpellID, c.DifficultyID, c.Attributes[:]).prefer(
+        c.SpellID, base=c.DifficultyID == 0
+    ) >> as_map(c.SpellID, text(c.DifficultyID))
+    assert props.run(tables(SpellMisc=SPELL_MISC)) == {100: "0", 200: "0", 300: "0"}
+    first = flow("first").read("SpellMisc", c.SpellID, c.DifficultyID).prefer(c.SpellID, base=c.DifficultyID == 99)
+    assert list(first.rows(tables(SpellMisc=SPELL_MISC)))[0] == ("100", "23")
+
+
+def test_an_array_column_reads_whole_and_a_bit_addresses_the_words(tables: BuildTables) -> None:
+    """Every Attributes_N the build has, as one cell, and bit 34 is the third
+    bit of the second word; the mythic copy's bits do not count."""
+    words = flow("words").read("SpellMisc", c.SpellID, c.DifficultyID, c.Attributes[:]).prefer(
+        c.SpellID, base=c.DifficultyID == 0
+    ).where(c.Attributes[:].bit(0) | c.Attributes[:].bit(34)) >> as_ids(c.SpellID)
+    assert words.run(tables(SpellMisc=SPELL_MISC)) == {100}
+
+
+def test_expand_walks_the_redirects_and_stops_on_the_cycle(tables: BuildTables) -> None:
+    """Two visuals naming each other terminate, and the bits of the path
+    union onto the reached row."""
+    reach = flow("reach").read("SpellXSpellVisual", c.SpellID, c.SpellVisualID).expand(
+        c.SpellVisualID,
+        "SpellVisual",
+        {"CasterSpellVisualID": 1, "HostileSpellVisualID": 2},
+        into="visual",
+        bits="bits",
+    ) >> as_sets(c.SpellID, text("visual"))
+    got = reach.run(tables(SpellXSpellVisual=X_VISUAL, SpellVisual=SPELL_VISUAL))
+    assert got == {1: {"10", "20", "21"}}
+    rows = list(reach.flow.rows(tables(SpellXSpellVisual=X_VISUAL, SpellVisual=SPELL_VISUAL)))
+    assert ("1", "10", "21", "3") in rows and ("1", "10", "10", "0") in rows
+
+
+def test_a_terminal_lands_the_rows_as_a_record_and_a_narrow_names_its_need(tables: BuildTables) -> None:
+    class Kit(NamedTuple):
+        kit: int
+        file: int
+
+    kits = flow("kits").read("SoundKitEntry", c.SoundKitID, c.FileDataID).narrow(c.SoundKitID, "used_kits") >> as_rows(
+        Kit, c.SoundKitID, c.FileDataID
+    )
+    assert kits.flow.needs == {"used_kits"}
+    assert kits.run(tables(SoundKitEntry=SOUND_KIT_ENTRY), needs={"used_kits": {79829}}) == [
+        Kit(79829, 500),
+        Kit(79829, 501),
+    ]

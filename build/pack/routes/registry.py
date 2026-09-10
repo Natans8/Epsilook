@@ -12,7 +12,6 @@ from collections.abc import Container, Mapping
 from ..sources import read_anim_names
 from ..tables import Tables
 from .effects import MaskedIds, SpellEffectRows, implicit_target_bits, read_spell_effect_rows
-from .factions import FactionTemplateRow, read_faction_templates
 from .fx import ScreenRow
 from .keybinds import KeyboundOverride
 from .route import route
@@ -44,12 +43,6 @@ def effects(
     return read_spell_effect_rows(
         tables, spell_names, {"screens": screens, "keybounds": keybinds}, implicit_target_bits(version), version
     )
-
-
-@route("factions", templates="effects.factions")
-def factions(tables: Tables, templates: MaskedIds) -> list[FactionTemplateRow]:
-    """The faction templates the auras set, named."""
-    return read_faction_templates(tables, set(templates.distinct()))
 
 
 @route("used_kits", sounds="visuals.sounds")
