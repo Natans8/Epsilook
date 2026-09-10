@@ -1,21 +1,21 @@
 {
   "pack": "11.2.7.65299",
   "meta": {
-    "format": 60,
+    "format": 63,
     "version": "11.2.7.65299",
     "label": "The War Within 11.2.7",
-    "built": "2026-09-04",
-    "listfileTag": "202609032221",
+    "built": "2026-09-11",
+    "listfileTag": "202609081819",
     "tdbTag": "TDB1127.26011",
     "absentTables": [],
     "degradedSections": {},
-    "counts": {"animKitAnims": 25283, "animKitAnimBoneset": 6317, "animEmotes": 1730, "icons": 13449, "files": 61278, "gobModels": 14337, "morphs": 2939, "creatureDisplays": 34624, "displaySkins": 19289, "mounts": 1532, "shapeshiftDisplays": 24, "summons": 21259, "objects": 1421, "expansion.vanilla": 5809, "expansion.tbc": 14545, "expansion.wotlk": 16589, "expansion.cata": 23746, "expansion.mop": 15311, "expansion.wod": 42551, "expansion.legion": 57078, "expansion.bfa": 51071, "expansion.shadowlands": 49202, "expansion.dragonflight": 50745, "expansion.tww": 49248, "expansion.midnight": 0, "expansion.unknown": 0, "fxChains": 5224, "dissolves": 1081, "glows": 3171, "shadowies": 530, "ghostMats": 532, "tints": 2571, "spellAttrs.actionsduringchannel": 1074, "spellAttrs.auraisdebuff": 24710, "spellAttrs.preventsanim": 967, "spellAttrs.tracktargetinchannel": 3711, "spellAttrs.unbreakablechannel": 861, "spellDelivery": 80871, "delivery.casttime": 66672, "delivery.channelled": 18646, "delivery.both": 4447, "delivery.breaksOnMove": 8753, "delivery.instant": 295024, "spellRanges": 175654, "range.bands": 144, "range.unlimited": 41092, "range.minimum": 1553, "range.melee": 8514, "range.weapon": 503, "range.self": 200241, "areas": 4519, "keybinds": 121, "linkKinds": 205, "implicitTargets": 133, "missileMotions": 1423, "items": 764, "namedItems": 497, "spellModels": 449854, "spellDisplayModels": 2406, "spellItemModels": 1657, "spellWeaponModels": 761, "spellMissileMotions": 19730, "spellMounts": 1568, "spellSounds": 1102103, "spellAnimKits": 70542, "spellVisualAnims": 155265, "spellReplaceAnims": 4231, "spellPassengerAnims": 2077, "spellFx": 24916, "spellDissolves": 3092, "spellScreens": 3588, "spellGlows": 4838, "spellShadowies": 1497, "spellGhostMats": 784, "spellTints": 7359, "spellDesaturates": 583, "spellTransparencies": 2077, "spellFreezes": 657, "spellCamos": 74, "spellMorphs": 4129, "spellShapeshifts": 132, "spellScales": 4426, "spellSummons": 23639, "spellObjects": 1651, "spellMechanics": 522232, "spellLinks": 83570, "spellAreas": 73985, "spellInvis": 789, "invisChannels": 37, "spellDetects": 1268, "spellVehicles": 323, "spellSpeeds": 7575, "spellKeybinds": 197, "screens": 942, "soundKitNames": 27769, "soundTypes": 32, "spells": 375895, "spellDescriptions": 174406, "descriptionTexts": 104372, "spellEncounterNotes": 659, "spellAuraTexts": 80908, "auraTexts": 46848, "encounterTexts": 550, "vehicles": 262, "vehicleSeats": 464, "spellVehicleAnims": 100, "spellVehicleAnimKits": 57},
+    "counts": {"animKitAnims": 25283, "animKitAnimBoneset": 6317, "animEmotes": 1730, "icons": 13449, "files": 61278, "gobModels": 14337, "morphs": 2939, "creatureDisplays": 34618, "displaySkins": 19288, "mounts": 1532, "shapeshiftDisplays": 24, "summons": 21253, "factionNames": 97, "objects": 1421, "expansion.vanilla": 5809, "expansion.tbc": 14545, "expansion.wotlk": 16589, "expansion.cata": 23746, "expansion.mop": 15311, "expansion.wod": 42551, "expansion.legion": 57078, "expansion.bfa": 51071, "expansion.shadowlands": 49202, "expansion.dragonflight": 50745, "expansion.tww": 49248, "expansion.midnight": 0, "expansion.unknown": 0, "fxChains": 5224, "dissolves": 1081, "glows": 3171, "shadowies": 530, "ghostMats": 532, "tints": 2571, "spellAttrs.actionsduringchannel": 1074, "spellAttrs.auraisdebuff": 24710, "spellAttrs.preventsanim": 967, "spellAttrs.tracktargetinchannel": 3711, "spellAttrs.unbreakablechannel": 861, "spellDelivery": 80871, "delivery.casttime": 66672, "delivery.channelled": 18646, "delivery.both": 4447, "delivery.breaksOnMove": 8753, "delivery.instant": 295024, "spellRanges": 175654, "range.bands": 144, "range.unlimited": 41092, "range.minimum": 1553, "range.melee": 8514, "range.weapon": 503, "range.self": 200241, "areas": 4519, "keybinds": 121, "linkKinds": 205, "implicitTargets": 133, "selectors": 64, "missileMotions": 1423, "items": 764, "namedItems": 497, "spellModels": 469348, "spellDisplayModels": 2436, "spellItemModels": 1753, "spellWeaponModels": 773, "spellMissileMotions": 19730, "spellMounts": 1568, "spellSounds": 1118246, "spellAnimKits": 70542, "spellVisualAnims": 158563, "spellReplaceAnims": 4231, "spellPassengerAnims": 2077, "spellFx": 25048, "spellDissolves": 3092, "spellScreens": 3588, "spellGlows": 4841, "spellShadowies": 1521, "spellGhostMats": 784, "spellTints": 7366, "spellDesaturates": 590, "spellTransparencies": 2093, "spellFreezes": 657, "spellCamos": 74, "spellMorphs": 4129, "spellShapeshifts": 132, "spellScales": 4426, "spellSummons": 23632, "spellObjects": 1651, "spellMechanics": 543063, "spellLinks": 83570, "spellAreas": 73985, "spellInvis": 789, "invisChannels": 37, "spellDetects": 1268, "spellVehicles": 323, "spellSpeeds": 7575, "spellKeybinds": 197, "screens": 942, "screens.sky": 508, "screens.music": 119, "screens.ambience": 259, "screens.hour": 192, "zoneMusic": 51, "ambiences": 97, "skyboxes": 405, "skySpells": 581, "soundKitNames": 27769, "soundTypes": 32, "spells": 375895, "spellFlavours": 1490, "spellDescriptions": 174406, "descriptionTexts": 104372, "spellEncounterNotes": 659, "spellAuraTexts": 80908, "auraTexts": 46848, "encounterTexts": 550, "vehicles": 262, "vehicleSeats": 464, "spellVehicleAnims": 100, "spellVehicleAnimKits": 57},
     "domains": {
       "casttime": {"n": 66672, "min": 1, "max": 600000, "distinct": 141, "mean": 2461.1152, "median": 2000, "p1": 250, "p99": 10000, "clipped": true, "step": 4, "mode": 2000, "modeShare": 0.2931, "signed": false, "sentinels": 0, "ui": "range", "unit": "ms"},
       "channel": {"n": 10730, "min": 1, "max": 86400000, "distinct": 142, "mean": 160287.661, "median": 6000, "p1": 1000, "p99": 600000, "clipped": true, "step": 50, "mode": 5000, "modeShare": 0.1414, "signed": false, "sentinels": 6955, "ui": "range", "unit": "ms"},
       "range": {"n": 134562, "min": 0.1, "max": 1000.0, "distinct": 63, "mean": 85.7576, "median": 50.0, "p1": 5.0, "p99": 1000.0, "clipped": true, "step": 0.5, "mode": 100.0, "modeShare": 0.3189, "signed": false, "sentinels": 41092, "ui": "range", "unit": "yd"},
-      "count.model": {"n": 174574, "min": 1, "max": 158, "distinct": 52, "mean": 2.5769, "median": 2, "p1": 1, "p99": 8, "clipped": true, "step": 1, "mode": 1, "modeShare": 0.3881, "signed": false, "sentinels": 0, "ui": "range"},
-      "count.sound": {"n": 160156, "min": 1, "max": 523, "distinct": 96, "mean": 6.8814, "median": 5, "p1": 1, "p99": 33, "clipped": true, "step": 1, "mode": 1, "modeShare": 0.2258, "signed": false, "sentinels": 0, "ui": "range"},
+      "count.model": {"n": 174574, "min": 1, "max": 162, "distinct": 53, "mean": 2.6885, "median": 2, "p1": 1, "p99": 9, "clipped": true, "step": 1, "mode": 1, "modeShare": 0.3809, "signed": false, "sentinels": 0, "ui": "range"},
+      "count.sound": {"n": 160156, "min": 1, "max": 533, "distinct": 102, "mean": 6.9822, "median": 5, "p1": 1, "p99": 34, "clipped": true, "step": 1, "mode": 1, "modeShare": 0.2211, "signed": false, "sentinels": 0, "ui": "range"},
       "count.anim": {
         "n": 51943,
         "min": 1,
@@ -38,42 +38,42 @@
         "n": 11179,
         "min": 1,
         "max": 21,
-        "distinct": 17,
-        "mean": 2.2288,
+        "distinct": 19,
+        "mean": 2.2406,
         "median": 1,
         "p1": 1,
         "p99": 9,
         "clipped": true,
         "step": 1,
         "mode": 1,
-        "modeShare": 0.5116,
+        "modeShare": 0.5087,
         "signed": false,
         "sentinels": 0,
         "ui": "picker",
-        "values": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 20, 21]
+        "values": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 18, 20, 21]
       },
       "desaturate": {
-        "n": 583,
+        "n": 590,
         "min": 5,
         "max": 100,
         "distinct": 20,
-        "mean": 78.4305,
+        "mean": 78.3475,
         "median": 80,
         "p1": 15,
         "p99": 100,
         "clipped": true,
         "step": 5,
         "mode": 100,
-        "modeShare": 0.4563,
+        "modeShare": 0.4559,
         "signed": false,
         "sentinels": 0,
         "ui": "picker",
         "values": [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100],
         "unit": "%"
       },
-      "transparency": {"n": 2077, "min": 1, "max": 100, "distinct": 31, "mean": 50.8859, "median": 50, "p1": 10, "p99": 100, "clipped": true, "step": 1, "mode": 30, "modeShare": 0.2759, "signed": false, "sentinels": 0, "ui": "range", "unit": "%"},
+      "transparency": {"n": 2093, "min": 1, "max": 100, "distinct": 31, "mean": 50.8299, "median": 50, "p1": 10, "p99": 100, "clipped": true, "step": 1, "mode": 30, "modeShare": 0.2747, "signed": false, "sentinels": 0, "ui": "range", "unit": "%"},
       "scale": {"n": 4426, "min": -1000.0, "max": 1500.0, "distinct": 126, "mean": 32.455, "median": 20.0, "p1": -90.0, "p99": 350.0, "clipped": true, "step": 0.1, "mode": 20.0, "modeShare": 0.1306, "signed": true, "sentinels": 0, "ui": "range", "unit": "%"},
-      "count.mech": {"n": 375721, "min": 1, "max": 32, "distinct": 28, "mean": 1.3899, "median": 1, "p1": 1, "p99": 4, "clipped": true, "step": 1, "mode": 1, "modeShare": 0.7327, "signed": false, "sentinels": 0, "ui": "range"},
+      "count.mech": {"n": 375721, "min": 1, "max": 32, "distinct": 32, "mean": 1.4454, "median": 1, "p1": 1, "p99": 5, "clipped": true, "step": 1, "mode": 1, "modeShare": 0.7181, "signed": false, "sentinels": 0, "ui": "range"},
       "invis": {"n": 789, "min": 0, "max": 37, "distinct": 37, "mean": 9.3384, "median": 7, "p1": 0, "p99": 37, "clipped": false, "step": 1, "mode": 0, "modeShare": 0.1926, "signed": false, "sentinels": 0, "ui": "range"},
       "speed": {"n": 7575, "min": -1000.0, "max": 1000.0, "distinct": 139, "mean": 16.3457, "median": 10.0, "p1": -95.0, "p99": 300.0, "clipped": true, "step": 0.2, "mode": -50.0, "modeShare": 0.1683, "signed": true, "sentinels": 0, "ui": "range", "unit": "%"},
       "seat": {
@@ -97,25 +97,26 @@
     }
   },
   "modules": {
-    "core": {"file": "data/modules/core-3ba8aa0be979.json.gz", "bytes": 11880691},
-    "universal": {"file": "data/modules/universal-8786c54c00b0.json.gz", "bytes": 25216}
+    "core": {"file": "data/modules/core-811852b5df50.json.gz", "bytes": 14084131},
+    "universal": {"file": "data/modules/universal-6c02ecea11e5.json.gz", "bytes": 26251},
+    "sky": {"file": "data/modules/sky-7421c58e0759.json.gz", "bytes": 82765}
   },
   "locales": {
     "enUS": {
-      "names": {"file": "data/modules/names-3b068aa3a273.json.gz", "bytes": 2297573},
-      "text": {"file": "data/modules/text-406cf8482908.json.gz", "bytes": 4122547}
+      "names": {"file": "data/modules/names-f218944f5a88.json.gz", "bytes": 2298024},
+      "text": {"file": "data/modules/text-ba77ddc0dc26.json.gz", "bytes": 4190592}
     },
     "ruRU": {
-      "names": {"file": "data/modules/names-2b47f4b801bd.json.gz", "bytes": 3151482},
-      "text": {"file": "data/modules/text-079c172bd2aa.json.gz", "bytes": 5383306}
+      "names": {"file": "data/modules/names-8c2ea9f78ce5.json.gz", "bytes": 3151960},
+      "text": {"file": "data/modules/text-f96611a48e4f.json.gz", "bytes": 5469853}
     },
     "frFR": {
-      "names": {"file": "data/modules/names-148fba62b25c.json.gz", "bytes": 2643790},
-      "text": {"file": "data/modules/text-f9aedf9d4742.json.gz", "bytes": 4671179}
+      "names": {"file": "data/modules/names-dc78006ac5d0.json.gz", "bytes": 2644289},
+      "text": {"file": "data/modules/text-5f3627621488.json.gz", "bytes": 4745507}
     },
     "esES": {
-      "names": {"file": "data/modules/names-063e7f5e536f.json.gz", "bytes": 2600337},
-      "text": {"file": "data/modules/text-e4aba0b84942.json.gz", "bytes": 4382416}
+      "names": {"file": "data/modules/names-d866bdd965f3.json.gz", "bytes": 2600771},
+      "text": {"file": "data/modules/text-55689494b3df.json.gz", "bytes": 4454540}
     }
   },
   "absentSections": []
