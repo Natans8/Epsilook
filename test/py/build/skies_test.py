@@ -17,7 +17,6 @@ from pack.routes.skies import (
     SkyPreset,
     SkyRoster,
     read_skies,
-    read_skybox_spells,
     spaced_name,
 )
 
@@ -104,26 +103,6 @@ def test_a_map_a_light_names_but_the_table_does_not_still_reads(tables: BuildTab
     lights = LIGHT_HEADER + light_row(1, 99, "5,5,5", "10,20", {0: 10})
     roster = read_skies(tables(LightSkybox=SKYBOX, LightParams=PARAMS, Light=lights, Map=MAPS))
     assert roster.places[10].maps == ["map 99"]
-
-
-def test_the_spell_edge_is_parsed_out_of_the_name(tables: BuildTables) -> None:
-    """No table carries it: Epsilon puts the preset id in the spell's name.
-
-    It is read here rather than from the derived spell list because that list
-    is rebuilt per language and an id is not language.
-    """
-    names = (
-        "ID,Name_lang\n"
-        "1002455,Skybox LightData 2124: shadowmoonskybox\n"
-        "1002456,Skybox LightData 2124: shadowmoonskybox\n"
-        "1000387,Skybox ScreenEffect 1211 TestCustomEffect\n"
-        "133,Frostbolt\n"
-    )
-    assert read_skybox_spells(tables(SpellName=names)) == {2124: [1002455, 1002456]}
-
-
-def test_a_pack_with_no_epsilon_spells_finds_none(tables: BuildTables) -> None:
-    assert read_skybox_spells(tables(SpellName="ID,Name_lang\n133,Frostbolt\n")) == {}
 
 
 def test_the_preset_a_dome_stands_for_is_the_one_most_lights_draw() -> None:

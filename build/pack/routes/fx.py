@@ -80,6 +80,25 @@ class ScreenRow:
     textures: Textures = ()
     """The textures it draws, each with the role it plays."""
 
+    sky: int = 0
+    """The `LightParams` preset it applies, or zero for a row that applies none.
+
+    Independent of everything above it: a row may carry a preset and no paint at
+    all, which is a sky change wearing a screen effect's id.
+    """
+
+    sky_fade: tuple[int, int] = (0, 0)
+    """How long the preset takes to fade in and back out, in milliseconds."""
+
+    ambience: int = 0
+    """The `SoundAmbience` it swaps the surroundings to, or zero for none."""
+
+    music: int = 0
+    """The `ZoneMusic` it plays over the top, or zero for none."""
+
+    time_of_day: int = -1
+    """The minute of the day it pins the sky to, or -1 to leave the clock alone."""
+
 
 @dataclass
 class FxPayloads:
@@ -167,10 +186,41 @@ def read_screens(tables: Tables, full_screen: dict[int, tuple[int, int, Vignette
     """Screen effect -> its payload, the full-screen half folded in.
 
     The fog parameter is AARRGGBB, not the RRGGBBXX the wiki claims.
+
+    A row is a bundle rather than one thing: the paint it puts on the frame, the
+    light preset it applies, the sound it swaps to and the hour it pins are four
+    independent payloads, and most rows carry only some of them. They are read
+    together because they share a row, and separated by the sections that ship
+    them.
     """
     screens: dict[int, ScreenRow] = {}
-    for screen_id, name, parameter, effect, full_screen_id in tables.rows(
-        "ScreenEffect", ["ID", "Name", "Param_0", "Effect", "FullScreenEffectID"]
+    for (
+        screen_id,
+        name,
+        parameter,
+        effect,
+        full_screen_id,
+        preset,
+        fade_in,
+        fade_out,
+        ambience,
+        music,
+        hour,
+    ) in tables.rows(
+        "ScreenEffect",
+        [
+            "ID",
+            "Name",
+            "Param_0",
+            "Effect",
+            "FullScreenEffectID",
+            "LightParamsID",
+            "LightParamsFadeIn",
+            "LightParamsFadeOut",
+            "SoundAmbienceID",
+            "ZoneMusicID",
+            "TimeOfDayOverride",
+        ],
     ):
         is_fog = to_int(effect) == SCREEN_EFFECT_FOG
         packed = to_int(parameter)
@@ -183,6 +233,11 @@ def read_screens(tables: Tables, full_screen: dict[int, tuple[int, int, Vignette
             add=add,
             mask=mask,
             textures=textures,
+            sky=to_int(preset),
+            sky_fade=(to_int(fade_in), to_int(fade_out)),
+            ambience=to_int(ambience),
+            music=to_int(music),
+            time_of_day=to_int(hour),
         )
     return screens
 

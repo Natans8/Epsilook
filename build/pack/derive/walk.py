@@ -16,11 +16,20 @@ change rather than a walk change.
 from __future__ import annotations
 
 from collections import defaultdict
-from collections.abc import Callable, Container, Mapping
+from collections.abc import Callable, Container, Iterable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
-from ..routes import FxPayloads, KitEffects, SpellEffectRows, VisualGraph, VisualMissiles
+from ..routes import (
+    Ambience,
+    FxPayloads,
+    KitEffects,
+    ScreenRow,
+    SpellEffectRows,
+    VisualGraph,
+    VisualMissiles,
+    ZoneMusic,
+)
 from ..routes.models import MODEL_CAT_MISSILE, SCALE_UNIT, UNPLACED, AttachModel
 from ..targets import merge_masked, resolve_target_mask
 
@@ -144,6 +153,8 @@ def walk_spells(
     soundkit_files: Mapping[int, set[int]],
     fx: FxPayloads,
     effects: SpellEffectRows,
+    zone_music: Mapping[int, ZoneMusic] | None = None,
+    ambiences: Mapping[int, Ambience] | None = None,
 ) -> SpellVisuals:
     """Walk every spell's visuals once, unioning what each one reaches.
 
@@ -154,9 +165,12 @@ def walk_spells(
         missiles: visual to the projectiles it launches.
         kits: what each kit contributes, by family.
         soundkit_files: sound kit to the files it plays.
-        fx: the payload tables, for the sound a chain carries.
+        fx: the payload tables, for the sound a chain carries and the music
+            and ambience a screen effect swaps in.
         effects: the per-spell target bits, which decide when "the target"
-            means the caster.
+            means the caster, and the screen effects the auras name.
+        zone_music: the music sets a screen effect can name, by id.
+        ambiences: the ambiences a screen effect can name, by id.
 
     Returns:
         Every family, keyed by spell, each item carrying the union of the masks
@@ -188,6 +202,7 @@ def walk_spells(
 
     _fold_chain_sounds(vis, fx, pairs)
     _fold_effect_sounds(vis, effects, pairs)
+    _fold_screen_sounds(vis, fx, effects, zone_music or {}, ambiences or {}, pairs)
     return vis
 
 
@@ -297,3 +312,75 @@ def _fold_chain_sounds(vis: SpellVisuals, fx: FxPayloads, pairs: SoundPairs) -> 
             # row fatal to a build that renders perfectly well without it.
             if (row := fx.chains.get(chain[0])) and (soundkit := row.sound):
                 merge_masked(vis.sounds[spell], pairs.get(soundkit, ()), mask)
+
+
+def _fold_screen_sounds(
+    vis: SpellVisuals,
+    fx: FxPayloads,
+    effects: SpellEffectRows,
+    zone_music: Mapping[int, ZoneMusic],
+    ambiences: Mapping[int, Ambience],
+    pairs: SoundPairs,
+) -> None:
+    """Fold the music and ambience a screen effect swaps in into the spell's sounds.
+
+    A screen effect row bundles paint with a music set and an ambience, and the
+    two sound halves name kits like any visual does, so they merge into the
+    same family under the audience the screen was reached by. The aura's mask
+    wins where both routes reach one screen, since the kit route records no
+    audience for a screen today.
+    """
+    for spell, screen in screen_reach(effects.screens.ids, vis.screens):
+        row = fx.screens.get(screen)
+        if row is None:
+            continue
+        mask = effects.screens.masks.get((spell, screen), vis.screens[spell].get(screen, 0))
+        music = zone_music.get(row.music)
+        ambience = ambiences.get(row.ambience)
+        kits = {*(music[1:] if music else ()), *(ambience if ambience else ())}
+        for soundkit in kits:
+            if soundkit:
+                merge_masked(vis.sounds[spell], pairs.get(soundkit, ()), mask)
+
+
+def sky_spells(reached: Iterable[tuple[int, int]], screens: Mapping[int, ScreenRow]) -> dict[int, list[int]]:
+    """LightParams id -> the spells that set it, ascending.
+
+    The edge from a spell to a sky is the screen effect its aura names and the
+    preset that row carries. It is the same on every pack: a retail spell that
+    darkens the sky and a private server's spell that exists only to set a
+    preset both reach it this way, so nothing is parsed out of a name.
+
+    Args:
+        reached: every `(spell, screen effect)` pair, from `screen_reach`.
+        screens: screen effect -> its payload.
+
+    Returns:
+        Each preset some spell sets, with those spells in id order.
+    """
+    out: dict[int, set[int]] = {}
+    for spell, screen in reached:
+        row = screens.get(screen)
+        if row is not None and row.sky:
+            out.setdefault(row.sky, set()).add(spell)
+    return {preset: sorted(spells) for preset, spells in sorted(out.items())}
+
+
+def screen_reach(by_aura: Mapping[int, Iterable[int]], by_kit: Mapping[int, Iterable[int]]) -> set[tuple[int, int]]:
+    """Every spell paired with a screen effect it reaches, by either route.
+
+    An aura naming the effect and a visual kit playing it are the same fact
+    about the spell, so they union. Everything that asks which spells reach a
+    screen effect asks here: the row is a bundle of independent payloads, and a
+    consumer rebuilding this union beside the others is how two of them would
+    come to disagree about which spells carry one.
+
+    Args:
+        by_aura: spell -> the screen effects its aura rows name.
+        by_kit: spell -> the screen effects its visual kits play.
+
+    Returns:
+        Every reached `(spell, screen effect)` pair, unordered.
+    """
+    reached = {(spell, screen) for spell, screens in by_aura.items() for screen in screens}
+    return reached | {(spell, screen) for spell, screens in by_kit.items() for screen in screens}

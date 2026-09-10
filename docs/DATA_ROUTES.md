@@ -545,6 +545,8 @@ The recurring joins, for reference:
 | `Light`                     | `LightParamsID_0` to `_7`, meaning set by the SLOT         | `LightParams`, one per condition                      |
 | `LightParams`               | `LightSkyboxID`                                            | `LightSkybox`, the dome's model                       |
 | `ZoneLight`                 | `LightID`                                                  | the `Light` whose zone it names                       |
+| `ScreenEffect`              | `LightParamsID`                                            | `LightParams`, the preset it swaps the sky to         |
+| `ScreenEffect`              | `ZoneMusicID`, `SoundAmbienceID`                           | `ZoneMusic`, `SoundAmbience`: a day and a night kit each |
 
 ### As shipped
 
@@ -835,7 +837,7 @@ the route that knows what a type means is the one that decided, and the walk doe
 | **dissolves**  | A duration, textures and an anchor                  | `fxRows`, `dissolves`                                                                          |
 | **glows**      | A packed colour and an alpha                        | `fxRows`, `glows`                                                                              |
 | **ghosts**     | Two packed colours and an anchor                    | `fxRows`, `shadowies`                                                                          |
-| **screens**    | A full-frame colour grade, vignette and textures    | `fxRows`, `screens`                                                                            |
+| **screens**    | A bundle: a frame grade, a sky preset, a sound swap, an hour | `fxRows`, `screens`, `zoneMusic`, `ambiences`; the preset via `skySpells`, the kits via `soundRows` |
 | **procedures** | Whatever its type says: thirteen different meanings | `fxRows`, and the tables it points into                                                        |
 
 **Nine kinds end in a model and share almost nothing upstream.** What they share is the ending, so the kind is what
@@ -1012,16 +1014,20 @@ rather than the thing it hangs off, so the roster is the domes and the spell col
 | **place**     | `skyPlaces`                         | A `ZoneLight` name where there is one, else the map it stands on   |
 | **condition** | `skyboxes.conditions`, `skyConditions` | A mask over a `Light` row's eight slots, and what each bit means |
 | **ramp**      | `skyRamps`                          | The preset's day, one row per stop; a reader between two interpolates |
-| **spell**     | `skySpells`                         | Epsilon only, and the edge lives in the spell's NAME, not a table  |
+| **spell**     | `skySpells`                         | Through the screen effect a spell's aura names and the preset that row carries |
 
 **A `Light` row carries eight LightParams, and they are conditions rather than a set.** Clear, clear underwater, storm,
 storm underwater, death, and three the client documents as unknown. Reading them together is not a rounding error: the
 death sky sits in slot four of nearly every light in the game, so a union reports it as the sky of everywhere instead
 of the sky of being dead. The mask ships so a reader cannot make that mistake by accident.
 
-**No table joins a spell to a sky.** Epsilon names its own spells `Skybox LightData <preset>: <model>`, and that name
-is the only mapping there is, which is why the section parses it rather than a route reading it. On every pack but
-Epsilon's the column is empty, and the roster still ships.
+**A spell reaches a sky through a screen effect.** The screen-effect aura's row is a bundle of four independent
+payloads, and one of them is a light preset; a spell whose aura names such a row sets that sky while the aura holds,
+whether it also paints the frame or not. That is the same edge on every pack, so the column is derived from the effect
+rows and the screen payloads rather than read from any sky table, and a private server's spells that exist only to set
+a preset arrive through it beside the retail spells that darken the sky. The screen's other two payloads are sound: a
+music set and an ambience, each a day kit and a night kit, and those kits join the spell's sound rows the way a
+chain's own sound does.
 
 **Where a light stands is not a place, and no table makes it one.** A light is a sphere with a radius, and turning its
 coordinates into an area needs the terrain, which the pack does not read. So a sky with no `ZoneLight` name is placed

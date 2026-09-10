@@ -9,6 +9,7 @@ from typing import Any
 from ..build import Build
 from ..declarations import Declarations
 from ..routes import (
+    Ambience,
     AreaGates,
     CreatureModels,
     Delivery,
@@ -31,6 +32,7 @@ from ..routes import (
     VehicleSeats,
     VisualGraph,
     VisualMissiles,
+    ZoneMusic,
 )
 from .displays import ResolvedDisplays
 from .icons import IconIndex
@@ -124,6 +126,9 @@ class DeriveContext:
     missiles: Mapping[int, VisualMissiles] = field(default_factory=dict)
     motions: Mapping[int, MissileMotion] = field(default_factory=dict)
     soundkit_files: Mapping[int, set[int]] = field(default_factory=dict)
+    zone_music: Mapping[int, ZoneMusic] = field(default_factory=dict)
+    ambiences: Mapping[int, Ambience] = field(default_factory=dict)
+    """The music sets and ambiences a screen effect can swap in, by id."""
     animkit_anims: Mapping[int, set[int]] = field(default_factory=dict)
     animkit_bonesets: Mapping[int, dict[int, list[str]]] = field(default_factory=dict)
     anim_replacements: Mapping[int, set[tuple[int, int]]] = field(default_factory=dict)
@@ -148,6 +153,11 @@ class DeriveContext:
     # What this layer derived from them.
     visuals: SpellVisuals = field(default_factory=SpellVisuals)
     """What the graph walk attributed to each spell."""
+
+    sky_spells: Mapping[int, list[int]] = field(default_factory=dict)
+    """LightParams id -> the spells that set it, through the screen effect
+    each one's aura names. Derived from the effect rows and the screen
+    payloads, so it is the same edge on every pack."""
 
     icons: IconIndex = field(default_factory=IconIndex)
     """The deduped icon table and each spell's place in it."""

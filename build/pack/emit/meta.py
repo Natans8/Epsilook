@@ -20,8 +20,17 @@ from ..derive import DeriveContext
 from ..model import SECTIONS, CountFamily, Section, SectionColumns
 from ..progress import detail
 
-PACK_FORMAT = 61
+PACK_FORMAT = 62
 """What shape the artifact is in.
+
+62 takes a screen effect apart into what it bundles. `screens` gains the light
+preset a row swaps the sky to and the two fades around it, the hour it pins
+the day to, and the music set and ambience it swaps the sound to; `zoneMusic`
+and `ambiences` ship those two as vocabularies of kits, and the kits join the
+spell's sound rows. `skySpells` is derived from that same preset column on
+every pack rather than parsed out of a private server's spell names, so it
+now carries retail spells too and a reader of 61 finds spells there it never
+expected.
 
 60 gives every attached model its placement: how big it is drawn, where it sits
 against its point, how it is turned there, and what it animates. The four kinds

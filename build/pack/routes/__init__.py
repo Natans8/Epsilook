@@ -36,9 +36,8 @@ from .skies import (
     SkyStop,
     flat_ramp,
     read_skies,
-    read_skybox_spells,
 )
-from .sounds import read_soundkit_files
+from .sounds import Ambience, ZoneMusic, read_ambiences, read_soundkit_files, read_zone_music
 from .spells import SpellProperties, read_spell_properties
 from .text import SpellText, read_spell_text
 from .values import DescriptionValues, read_spell_values
@@ -46,6 +45,7 @@ from .vehicles import VehicleSeats, read_vehicle_seats
 from .visuals import VisualGraph, read_visual_graph
 
 __all__ = [
+    "Ambience",
     "Area",
     "AreaGates",
     "attribute_bit",
@@ -71,6 +71,7 @@ __all__ = [
     "ProcEffects",
     "RAMP_COLORS",
     "Reach",
+    "read_ambiences",
     "read_anim_replacements",
     "read_animkit_anims",
     "read_animkit_bonesets",
@@ -89,7 +90,6 @@ __all__ = [
     "read_proc_effects",
     "read_shapeshift_forms",
     "read_skies",
-    "read_skybox_spells",
     "read_soundkit_files",
     "read_spell_attributes",
     "read_spell_delivery",
@@ -102,6 +102,7 @@ __all__ = [
     "read_vehicle_seats",
     "read_visual_graph",
     "read_zone_maps",
+    "read_zone_music",
     "resolve_paths",
     "ScreenRow",
     "ShapeshiftForms",
@@ -117,4 +118,5 @@ __all__ = [
     "VehicleSeats",
     "VisualGraph",
     "VisualMissiles",
+    "ZoneMusic",
 ]

@@ -1,9 +1,11 @@
 """The sky a place draws, as one row per dome.
 
 A skybox is not a spell's payload, which is what every other visual family here
-is. It is a property of a PLACE, and it reaches a player through Epsilon's own
-spells -- one per LightParams preset, named for what it sets. So the roster is
-the domes, and the spell is an edge into it rather than the other way round.
+is. It is a property of a PLACE, and it reaches a player through a spell whose
+aura names a screen effect carrying a light preset -- a retail spell that
+darkens the sky, or a private server's spell that exists only to set one. So
+the roster is the domes, and the spell is an edge into it rather than the
+other way round.
 
 One row per dome rather than per preset: 2,884 presets share 414 domes, most of
 them differing only in a colour a reader would not name. The preset a row stands
@@ -64,7 +66,7 @@ def chosen_presets(reads: Reads) -> list[tuple[int, int]]:
     """
     skies: SkyRoster = reads.skies
     by_dome = presets_by_dome(skies)
-    return [(dome, representative(skies, by_dome[dome], skies.spells)) for dome in sorted(by_dome)]
+    return [(dome, representative(skies, by_dome[dome], reads.sky_spells)) for dome in sorted(by_dome)]
 
 
 def dome_place(skies: SkyRoster, presets: list[int]) -> SkyPlace:
@@ -128,14 +130,18 @@ def places(reads: Reads) -> SectionColumns:
 
 
 def spells(reads: Reads) -> SectionColumns:
-    """Every Epsilon spell that sets each dome, one row per spell.
+    """Every spell that sets each dome, one row per spell.
 
     All of them rather than the standing preset's alone: a dome with seventeen
     presets has seventeen ways in, and which one a reader wants depends on the
     zone they are after. `paramIds` says which preset each spell sets, so the
     one matching `skyboxes.params` is the one that draws the row's own picture.
+
+    Only the presets that pick a dome are listed here, since the roster is the
+    domes; a spell setting a domeless preset reaches the sky through the screen
+    section's own preset column instead.
     """
-    found = reads.skies.spells
+    found: Mapping[int, list[int]] = reads.sky_spells
     by_dome = presets_by_dome(reads.skies)
     listed = [
         (dome, preset, spell) for dome in sorted(by_dome) for preset in by_dome[dome] for spell in found.get(preset, [])
@@ -191,7 +197,7 @@ SKYBOXES = register(
         module="sky",
         produce=rows,
         columns=("ids", "names", "files", "celestialFiles", "skyFlags", "params", "presets", "conditions", "flat"),
-        reads=("skies",),
+        reads=("skies", "sky_spells"),
         needs=("LightSkybox", "LightParams"),
         degraded_without=("LightData", "Light"),
         counts=(size("skyboxes", "ids"),),
@@ -205,7 +211,7 @@ SKY_PLACES = register(
         module="sky",
         produce=places,
         columns=("skyboxIds", "kinds", "names"),
-        reads=("skies",),
+        reads=("skies", "sky_spells"),
         needs=("LightSkybox", "LightParams"),
         degraded_without=("Light", "ZoneLight", "Map"),
     )
@@ -214,12 +220,13 @@ SKY_PLACES = register(
 SKY_SPELLS = register(
     Section(
         name="skySpells",
-        doc="The Epsilon spells that set each dome, which is how a player reaches one.",
+        doc="The spells that set each dome, which is how a player reaches one.",
         module="sky",
         produce=spells,
         columns=("skyboxIds", "paramIds", "spells"),
-        reads=("skies",),
-        needs=("LightSkybox", "LightParams"),
+        reads=("skies", "sky_spells"),
+        needs=("LightSkybox", "LightParams", "ScreenEffect"),
+        counts=(size("skySpells", "spells"),),
     )
 )
 
@@ -230,7 +237,7 @@ SKY_RAMPS = register(
         module="sky",
         produce=ramps,
         columns=("skyboxIds", "times", "fogEnds", "shadowOpacities", "cloudDensities", *RAMP_COLUMNS),
-        reads=("skies",),
+        reads=("skies", "sky_spells"),
         needs=("LightSkybox", "LightParams", "LightData"),
     )
 )

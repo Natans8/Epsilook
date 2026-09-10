@@ -85,8 +85,8 @@ AXES: Mapping[str, str] = {
     ),
     "fx": (
         "fxRows fxChains fxTextures dissolves dissolveTextures glows "
-        "shadowies ghostMats tints screens screenTextures anchorNames "
-        "attachmentNames missileMotions"
+        "shadowies ghostMats tints screens screenTextures zoneMusic "
+        "ambiences anchorNames attachmentNames missileMotions"
     ),
     "mech": (
         "mechRows spellDelivery spellRanges areas keybinds "

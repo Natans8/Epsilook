@@ -19,7 +19,7 @@ from .locales import DEFAULT_LOCALE, LOCALES, Locale, locale_of, locales_named
 from .prose import CookedText, cook_text
 from .references import References, collect_references
 from .rows import PackRows, build_rows, id_rows, masked_rows, replacement_rows, spell_role_rows, spell_rows
-from .walk import KIT_BUCKETS, SpellVisuals, walk_spells
+from .walk import KIT_BUCKETS, SpellVisuals, screen_reach, sky_spells, walk_spells
 
 __all__ = [
     "COLUMN_FAMILIES",
@@ -57,6 +57,8 @@ __all__ = [
     "masked_rows",
     "replacement_rows",
     "resolve_displays",
+    "screen_reach",
+    "sky_spells",
     "spell_role_rows",
     "spell_rows",
     "walk_spells",

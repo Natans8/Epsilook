@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from ..routes import CreatureModels, FxPayloads, GameObjectData, ItemModels, MountData, SpellEffectRows
 from ..routes.models import MODEL_CAT_DISPLAY, MODEL_CAT_ITEM
 from .displays import ResolvedDisplays
-from .walk import SpellVisuals
+from .walk import SpellVisuals, screen_reach
 
 
 @dataclass
@@ -100,12 +100,9 @@ def collect_references(
 
     found.chains = {draw[0] for drawn in visuals.chains.values() for draw in drawn}
     found.dissolves = {row for rows in visuals.dissolves.values() for row in rows}
-    # The two halves of the screen route meet here: an aura applies one with no
-    # visual involved, a kit applies one with no aura. Unioned where they are
-    # read, so neither pass writes into the other's bundle.
-    found.screens = {
-        row for source in (effects.screens.ids, visuals.screens) for rows in source.values() for row in rows
-    }
+    # An aura applies one with no visual involved and a kit applies one with no
+    # aura; the roster is the spells side of that union dropped.
+    found.screens = {screen for _spell, screen in screen_reach(effects.screens.ids, visuals.screens)}
 
     # The models bucket is the largest the walk produces, and both a model's
     # own file and the inventory icon an item pill shows come out of it, so it

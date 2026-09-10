@@ -7,8 +7,19 @@ rather than a convenience.
 
 from __future__ import annotations
 
-from pack.derive.walk import KIT_BUCKETS, SpellVisuals, walk_spells
-from pack.routes import ChainEffect, FxPayloads, KitEffects, Missile, SpellEffectRows, VisualGraph, VisualMissiles
+from pack.derive.walk import KIT_BUCKETS, SpellVisuals, screen_reach, sky_spells, walk_spells
+from pack.routes import (
+    Ambience,
+    ChainEffect,
+    FxPayloads,
+    KitEffects,
+    Missile,
+    ScreenRow,
+    SpellEffectRows,
+    VisualGraph,
+    VisualMissiles,
+    ZoneMusic,
+)
 from pack.routes.models import MODEL_CAT_MISSILE, SCALE_UNIT, UNPLACED, AttachModel
 from pack.targets import NO_TARGET, TARGET_AREA, TARGET_CASTER, TARGET_TARGET, merge_masked
 
@@ -45,6 +56,8 @@ def walk(
     soundkit_files: dict[int, set[int]] | None = None,
     fx: FxPayloads | None = None,
     effects: SpellEffectRows | None = None,
+    zone_music: dict[int, ZoneMusic] | None = None,
+    ambiences: dict[int, Ambience] | None = None,
 ) -> SpellVisuals:
     """Run the walk with everything not under test left empty."""
     return walk_spells(
@@ -55,6 +68,8 @@ def walk(
         soundkit_files or {},
         fx or FxPayloads(),
         effects or SpellEffectRows(),
+        zone_music,
+        ambiences,
     )
 
 
@@ -152,6 +167,47 @@ def test_the_kits_screen_effects_are_collected_without_touching_the_auras() -> N
     # for a screen today -- giving it one later is then a section change.
     assert vis.screens == {100: {22: TARGET_CASTER}}
     assert effects.screens.ids == {100: {21}}
+
+
+def test_a_screens_music_and_ambience_join_the_spells_sounds() -> None:
+    """The bundle's two sound halves are kits like any visual's, under the
+    audience the screen was reached by; a kit named twice is one entry."""
+    effects = SpellEffectRows()
+    effects.screens.add(100, 21, TARGET_TARGET)
+    vis = walk(
+        graph(),
+        effects=effects,
+        fx=FxPayloads(screens={21: ScreenRow(music=7, ambience=8)}),
+        soundkit_files={70: {700}, 71: {710}, 80: {800}},
+        zone_music={7: ZoneMusic("Zone-Test", 70, 71)},
+        ambiences={8: Ambience(80, 80)},
+    )
+    assert vis.sounds[100] == {(70, 700): TARGET_TARGET, (71, 710): TARGET_TARGET, (80, 800): TARGET_TARGET}
+
+
+def test_a_screen_reached_by_a_kit_alone_still_plays_its_music() -> None:
+    """The aura route is not the only way to a screen, and the kit route's
+    mask is what the sound wears then."""
+    vis = walk(
+        graph(),
+        KitEffects(screens={9: {22}}),
+        fx=FxPayloads(screens={22: ScreenRow(music=7)}),
+        soundkit_files={70: {700}},
+        zone_music={7: ZoneMusic("Zone-Test", 70, 0)},
+    )
+    assert vis.sounds[100] == {(70, 700): TARGET_CASTER}
+
+
+def test_the_sky_edge_is_the_preset_on_the_reached_screen() -> None:
+    """A spell sets a sky through the screen its aura names, on every pack;
+    a screen with no preset sets none."""
+    effects = SpellEffectRows()
+    effects.screens.add(100, 21, NO_TARGET)
+    effects.screens.add(101, 21, NO_TARGET)
+    effects.screens.add(102, 23, NO_TARGET)
+    screens = {21: ScreenRow(sky=2124), 22: ScreenRow(sky=2124), 23: ScreenRow()}
+    reached = screen_reach(effects.screens.ids, {99: {22}})
+    assert sky_spells(reached, screens) == {2124: [99, 100, 101]}
 
 
 def test_a_visual_with_no_sound_conjures_no_empty_bucket() -> None:

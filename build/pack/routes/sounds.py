@@ -6,9 +6,56 @@ are what the player hears. A kit with no entries is not shipped.
 
 from __future__ import annotations
 
+from typing import NamedTuple
+
 from ..sources.enums import load_local_enum
 from ..tables import Tables
 from .columns import to_int
+
+
+class ZoneMusic(NamedTuple):
+    """One `ZoneMusic` row: a named pair of kits the client plays over a place.
+
+    The two kits are the day's and the night's, and most rows name the same kit
+    twice. A screen effect that carries one plays it while its aura holds, so
+    the kits reach a spell exactly as a kit named on a visual does.
+    """
+
+    name: str
+    """The set's own internal name, `Zone-Forest`."""
+
+    day: int
+    night: int
+    """The sound kits, either of which may be zero."""
+
+
+class Ambience(NamedTuple):
+    """One `SoundAmbience` row: the looping kits a place is heard through.
+
+    The day's and the night's loops. The row also names the kits that play as
+    one ambience gives way to another and a wind loop beside them; none of
+    those is what a reader means by the sound of a place, so they are not read.
+    """
+
+    day: int
+    night: int
+
+
+def read_zone_music(tables: Tables) -> dict[int, ZoneMusic]:
+    """Every music set, by its own id."""
+    return {
+        to_int(row_id): ZoneMusic(name=(name or "").strip(), day=to_int(day), night=to_int(night))
+        for row_id, name, day, night in tables.rows("ZoneMusic", ["ID", "SetName", "Sounds_0", "Sounds_1"])
+    }
+
+
+def read_ambiences(tables: Tables) -> dict[int, Ambience]:
+    """Every ambience, by its own id."""
+    return {
+        to_int(row_id): Ambience(day=to_int(day), night=to_int(night))
+        for row_id, day, night in tables.rows("SoundAmbience", ["ID", "AmbienceID_0", "AmbienceID_1"])
+    }
+
 
 SOUND_TYPE_ENUM = "sound_types"
 """The checked-in names for `SoundKit.SoundType`.

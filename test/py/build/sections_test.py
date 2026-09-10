@@ -68,6 +68,8 @@ REGISTERED_ORDER = (
     "rowVocabs",
     "screens",
     "screenTextures",
+    "zoneMusic",
+    "ambiences",
     "skyboxes",
     "skyPlaces",
     "skySpells",

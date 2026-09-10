@@ -156,15 +156,6 @@ class SkyRoster:
     places: dict[int, SkyPlace]
     """Keyed by `LightParams` id; a preset no light carries is absent."""
 
-    spells: dict[int, list[int]] = field(default_factory=dict)
-    """LightParams id -> the Epsilon spells that set it, ascending.
-
-    Empty on every pack but Epsilon's. The edge is read here rather than from
-    the derived spell list because that list is rebuilt per language and this
-    is not language: what the name carries is an id, and the private client
-    that writes these names ships English alone.
-    """
-
 
 def flat_ramp(preset: SkyPreset) -> bool:
     """Whether every stop holds the same colours, so the hour changes nothing.
@@ -276,34 +267,11 @@ def spaced_name(name: str) -> str:
     return "".join(out).strip()
 
 
-SKYBOX_SPELL_PREFIX = "Skybox LightData "
-"""What Epsilon calls a spell that sets a preset.
-
-The whole name is `Skybox LightData 2124: shadowmoonskybox`, the preset id
-between the prefix and the colon. No table carries this edge: the mapping lives
-in the name, which is why it is parsed rather than joined.
-"""
-
-
-def read_skybox_spells(tables: Tables) -> dict[int, list[int]]:
-    """LightParams id -> the Epsilon spells that set it, ascending."""
-    out: dict[int, list[int]] = {}
-    for spell, name in tables.rows("SpellName", ["ID", "Name_lang"]):
-        if not (name or "").startswith(SKYBOX_SPELL_PREFIX):
-            continue
-        preset = name[len(SKYBOX_SPELL_PREFIX) :].split(":", 1)[0].strip()
-        if preset.isdigit():
-            out.setdefault(int(preset), []).append(to_int(spell))
-    for spells in out.values():
-        spells.sort()
-    return out
-
-
 def read_skies(tables: Tables) -> SkyRoster:
-    """Read the whole sky: the domes, the presets that pick them, and the places."""
-    return SkyRoster(
-        skyboxes=read_skyboxes(tables),
-        presets=read_presets(tables),
-        places=read_places(tables),
-        spells=read_skybox_spells(tables),
-    )
+    """Read the whole sky: the domes, the presets that pick them, and the places.
+
+    Which spells set a preset is not read here. A spell reaches a preset through
+    the screen effect its aura names, and that edge is derived from the effect
+    rows and the screen payloads rather than from any sky table.
+    """
+    return SkyRoster(skyboxes=read_skyboxes(tables), presets=read_presets(tables), places=read_places(tables))

@@ -47,6 +47,7 @@ from ..routes.models import (
 from ..routes.vehicles import PASSENGER_ROLE_NAMES
 from .context import Reads
 from .rows import ModelRow, id_rows, masked_rows, replacement_rows, spell_role_rows, spell_rows
+from .walk import screen_reach
 
 RowValue = int | float
 """One stored value.
@@ -740,9 +741,7 @@ def _screens(reads: Reads) -> Iterable[SpellRow]:
     it -- and they union here because they are the same fact about the spell.
     The audience comes from the aura, which is the route that records one.
     """
-    reached = {(spell, screen) for spell, ids in reads.effects.screens.ids.items() for screen in ids}
-    reached |= {(spell, screen) for spell, screens_of in reads.visuals.screens.items() for screen in screens_of}
-    for spell, screen in sorted(reached):
+    for spell, screen in sorted(screen_reach(reads.effects.screens.ids, reads.visuals.screens)):
         payload = reads.fx.screens.get(screen)
         drawn = sorted((role, fid) for fid, role in payload.textures) if payload else []
         mask = reads.effects.screens.masks.get((spell, screen), 0)

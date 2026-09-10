@@ -89,6 +89,11 @@ TABLES = [
     "SpellVisualScreenEffect",
     "ScreenEffect",
     "FullScreenEffect",
+    # What a screen effect swaps the sound to while it holds: a music set is a
+    # day kit and a night kit under a name, an ambience the same pair unnamed.
+    # Both predate every rostered build.
+    "ZoneMusic",
+    "SoundAmbience",
     # The sky. A LightSkybox is the dome's model, a LightParams the preset that
     # picks one and colours the day around it, and LightData the preset's ramp,
     # one row per moment of the 2,880-half-minute day.

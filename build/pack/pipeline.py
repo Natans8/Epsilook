@@ -48,6 +48,8 @@ from .derive import (
     cook_text,
     locale_of,
     resolve_displays,
+    screen_reach,
+    sky_spells,
     walk_spells,
 )
 from .drift import OPTIONAL_TABLES, TDB_OPTIONAL_TABLES
@@ -58,6 +60,7 @@ from .encode import EMPTY_SLOT, FEWEST_BYTES, encode_column, encode_section, lay
 from .model import SECTIONS, Cardinality, Encoding, Section, SectionColumns
 from .progress import log, phase, step, timed
 from .routes import (
+    Ambience,
     AreaGates,
     CreatureModels,
     Delivery,
@@ -72,6 +75,7 @@ from .routes import (
     MountData,
     ProcEffects,
     Reach,
+    read_ambiences,
     read_anim_replacements,
     read_animkit_anims,
     read_animkit_bonesets,
@@ -102,6 +106,7 @@ from .routes import (
     read_vehicle_seats,
     read_visual_graph,
     read_zone_maps,
+    read_zone_music,
     resolve_paths,
     ShapeshiftForms,
     SkyRoster,
@@ -112,6 +117,7 @@ from .routes import (
     VehicleSeats,
     VisualGraph,
     VisualMissiles,
+    ZoneMusic,
 )
 from .routes.anims import read_anim_emotes
 from .routes.sounds import read_kit_names, read_kit_types, sound_type_names
@@ -356,6 +362,16 @@ class Derivations:
             return read_soundkit_files(self.tables)
 
     @cached_property
+    def zone_music(self) -> dict[int, ZoneMusic]:
+        with phase("read zone music"):
+            return read_zone_music(self.tables)
+
+    @cached_property
+    def ambiences(self) -> dict[int, Ambience]:
+        with phase("read ambiences"):
+            return read_ambiences(self.tables)
+
+    @cached_property
     def anim_names(self) -> list[str]:
         """Not a context field: the three animation routes and the declarations
         all resolve ids through it, and it is a checked-in list rather than a
@@ -456,8 +472,21 @@ class Derivations:
     def visuals(self) -> SpellVisuals:
         with phase("walk_spells"):
             return walk_spells(
-                self.names.names, self.graph, self.missiles, self.kits, self.soundkit_files, self.fx, self.effects
+                self.names.names,
+                self.graph,
+                self.missiles,
+                self.kits,
+                self.soundkit_files,
+                self.fx,
+                self.effects,
+                self.zone_music,
+                self.ambiences,
             )
+
+    @cached_property
+    def sky_spells(self) -> dict[int, list[int]]:
+        with phase("derive sky spells"):
+            return sky_spells(screen_reach(self.effects.screens.ids, self.visuals.screens), self.fx.screens)
 
     @cached_property
     def displays(self) -> ResolvedDisplays:

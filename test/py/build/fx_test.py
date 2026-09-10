@@ -24,13 +24,15 @@ ID,ColorMultiplyRed,ColorMultiplyGreen,ColorMultiplyBlue,ColorAdditionRed,ColorA
 """
 
 # Screen 33 points at the full-screen row whose overlay texture is also in its
-# blend set -- the one file that could take either role.
+# blend set -- the one file that could take either role. Screen 30 also swaps
+# the sky and the music, and 31 the ambience and the hour: the row is a
+# bundle, and each half is read whether or not the others are set.
 SCREEN_EFFECT = """\
-ID,Name,Param_0,Effect,FullScreenEffectID
-30,Shaman - Hex,-2143272448,3,0
-31,Grade,0,8,20
-32,Bare,0,8,0
-33,Both,0,8,21
+ID,Name,Param_0,Effect,FullScreenEffectID,LightParamsID,LightParamsFadeIn,LightParamsFadeOut,SoundAmbienceID,ZoneMusicID,TimeOfDayOverride
+30,Shaman - Hex,-2143272448,3,0,2124,500,1000,0,1807,-1
+31,Grade,0,8,20,0,0,0,22,0,720
+32,Bare,0,8,0,0,0,0,0,0,-1
+33,Both,0,8,21,0,0,0,0,0,-1
 """
 
 SPELL_VISUAL_SCREEN_EFFECT = """\
@@ -180,3 +182,24 @@ def test_a_chain_cycle_terminates(tables: BuildTables) -> None:
     reached: set[int] = set()
     expand_chain(payloads(tables).chains, 72, reached)
     assert reached == {72, 73}
+
+
+def test_a_screen_carries_the_sky_and_sound_it_swaps_in(tables: BuildTables) -> None:
+    """Independent of the paint: a fog row still names a preset and a music set."""
+    screen = payloads(tables).screens[30]
+    assert screen.sky == 2124
+    assert screen.sky_fade == (500, 1000)
+    assert screen.music == 1807
+    assert (screen.ambience, screen.time_of_day) == (0, -1)
+
+
+def test_a_screen_pinning_the_hour_says_which_minute(tables: BuildTables) -> None:
+    screen = payloads(tables).screens[31]
+    assert screen.time_of_day == 720
+    assert screen.ambience == 22
+
+
+def test_a_screen_that_only_paints_swaps_nothing(tables: BuildTables) -> None:
+    """Nought and minus one are the two absences, and neither is a value."""
+    screen = payloads(tables).screens[32]
+    assert (screen.sky, screen.music, screen.ambience, screen.time_of_day) == (0, 0, 0, -1)

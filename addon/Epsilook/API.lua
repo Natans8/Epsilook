@@ -396,14 +396,31 @@ function Epsilook:GetPartExtras(part)
 	return out
 end
 
---- What a screen effect paints, by its id: its name, the colour it fogs
--- the view with, the colour it multiplies over and the one it adds, each -1
--- where the effect paints none, the hue words the build gave it, and the
--- textures it draws. A screen part carries the id as an extra.
+--- The two kits a music set or an ambience plays, by day and by night.
+-- @param section "zoneMusic" or "ambiences"
+-- @param id the set's id
+-- @return { day, night }, either kit nought where the set has none; or nil
+--   where the pack names no such set
+local function kitPair(section, id)
+	local day = Data.Lookup("fx", section, "ids", "dayKits", id)
+	if day == nil then
+		return nil
+	end
+	return { day = day, night = Data.Lookup("fx", section, "ids", "nightKits", id) or 0 }
+end
+
+--- What a screen effect does, by its id. A row bundles four independent
+-- things: the paint it puts on the frame, the light preset it swaps the sky
+-- to, the sound it swaps to, and the hour it pins the day to; most rows
+-- carry only some of them. A screen part carries the id as an extra.
 -- @param screenID the screen effect id
--- @return a table with name, fog, mul, add, hues, and textures, a list of
---   { role, fid } with the finished art (role 0) before the masks it is
---   shaped by (role 1); or nil where unknown
+-- @return a table with name; fog, mul and add, the colours it paints with,
+--   each -1 where it paints none; hues, the build's words for them;
+--   textures, a list of { role, fid } with the finished art (role 0) before
+--   the masks it is shaped by (role 1); sky, the LightParams it swaps to, or
+--   nought, with skyFadeIn and skyFadeOut in milliseconds; hour, the minute
+--   of the day it pins, or -1; music and ambience, each { name?, day, night }
+--   kits or nil where the row names none; or nil where the screen is unknown
 function Epsilook:GetScreenEffect(screenID)
 	mounted(self)
 	local name = Data.Lookup("fx", "screens", "ids", "names", screenID)
@@ -419,6 +436,12 @@ function Epsilook:GetScreenEffect(screenID)
 			textures[#textures + 1] = { role = roles[i], fid = fids[i] }
 		end
 	end
+	local musicID = Data.Lookup("fx", "screens", "ids", "musicIds", screenID) or 0
+	local music = musicID ~= 0 and kitPair("zoneMusic", musicID) or nil
+	if music then
+		music.name = Data.Lookup("fx", "zoneMusic", "ids", "names", musicID) or ""
+	end
+	local ambienceID = Data.Lookup("fx", "screens", "ids", "ambienceIds", screenID) or 0
 	return {
 		name = name,
 		fog = Data.Lookup("fx", "screens", "ids", "fogColors", screenID),
@@ -426,6 +449,12 @@ function Epsilook:GetScreenEffect(screenID)
 		add = Data.Lookup("fx", "screens", "ids", "addColors", screenID),
 		hues = Data.Lookup("fx", "screens", "ids", "hues", screenID) or "",
 		textures = textures,
+		sky = Data.Lookup("fx", "screens", "ids", "skyParams", screenID) or 0,
+		skyFadeIn = Data.Lookup("fx", "screens", "ids", "skyFadeIns", screenID) or 0,
+		skyFadeOut = Data.Lookup("fx", "screens", "ids", "skyFadeOuts", screenID) or 0,
+		hour = Data.Lookup("fx", "screens", "ids", "hours", screenID) or -1,
+		music = music,
+		ambience = ambienceID ~= 0 and kitPair("ambiences", ambienceID) or nil,
 	}
 end
 
@@ -1031,7 +1060,10 @@ function Epsilook:GetSkyPlaces(skyboxID)
 	return zones, maps, whole
 end
 
---- Every Epsilon spell that sets a dome, and the preset each one sets.
+--- Every spell that sets a dome, and the preset each one sets. A spell
+-- reaches a dome through the screen effect its aura names, so a retail spell
+-- that darkens the sky is here beside a private server's spell that exists
+-- only to set the preset.
 -- @param skyboxID the LightSkybox id
 -- @return a list of spell ids, and a parallel list of the LightParams each sets
 function Epsilook:GetSkySpells(skyboxID)
