@@ -520,12 +520,18 @@ export function kindCtx(kind: Kind, countFallback: boolean, pend: Pending[]): Va
     const word = wordOf(kind);
     const refs = Object.keys(kind.props).map((prop): PropRef => ({kind, prop}));
     const subject = refs.length > 0 ? propOf(refs[0]) : COUNT_PROP;
-    // A qualifier refines a row rather than naming a subject of its own, so an operand written on the KIND's word
-    // was never about it: `attach>2` asks how many models a spell attaches, not how big one of them is drawn, and
-    // `attach:impact` names no model. It stays reachable by name, which is where a reader who meant it says so.
-    // Without this a kind's count meaning would be taken by whichever qualifier happened to be declared first and
-    // happened to accept the operator, and its value by whichever qualifier reads any word at all.
+    // A qualifier refines a row rather than naming a subject of its own, so a comparison written on the KIND's word
+    // was never about it: `attach>2` asks how many models a spell attaches, not how big one of them is drawn. It
+    // stays reachable by name, which is where a reader who meant it says so. Without this a kind's count meaning
+    // would be taken by whichever qualifier happened to be declared first and happened to accept the operator.
     const comparable = refs.filter((ref) => propOf(ref).qualifier !== true);
+    // A word, on the other hand, may be claimed by a qualifier that can refuse it: `attach:caster` is the audience,
+    // because the role vocabulary reads nothing else. A qualifier of an open type accepts every word, so it would
+    // claim the number a quantity beside it reads and the typo the kind should refuse; it is reached by name only.
+    const claimable = refs.filter((ref) => {
+        const prop = propOf(ref);
+        return prop.qualifier !== true || !prop.types.every((type) => type.open === true);
+    });
     const countValue = (op: Operator, operand: string): Interp | null => {
         if (!countFallback || !COMPARABLE.has(op.name)) return null;
         const value = countType.parse?.(operand);
@@ -567,7 +573,7 @@ export function kindCtx(kind: Kind, countFallback: boolean, pend: Pending[]): Va
             return null;
         },
         glob: (pattern): Interp => {
-            const globbing = refs.filter((ref) => propOf(ref).types.some((type) => accepts(type, "glob")));
+            const globbing = claimable.filter((ref) => propOf(ref).types.some((type) => accepts(type, "glob")));
             if (globbing.length === 0) {
                 return {r: "fail", rescuable: true, about: "regex", message: i18n.t("diagnostics:axis.noPatterns", {word})};
             }
@@ -582,10 +588,7 @@ export function kindCtx(kind: Kind, countFallback: boolean, pend: Pending[]): Va
             if (flags.length > 0) {
                 return {r: "props", props: flags, value: {op: "contains", operand: {text: t}}};
             }
-            // The subjects alone: a qualifier is reached by name, as in the comparison above. A phase word is one
-            // of an open vocabulary, so left in it would claim every bare operand -- the number a quantity beside
-            // it reads, and the typo the kind should refuse.
-            const claimants = comparable.filter((ref) => parseValue(propOf(ref), t) !== null);
+            const claimants = claimable.filter((ref) => parseValue(propOf(ref), t) !== null);
             if (claimants.length === 0) return illTyped(word, subject);
             if (claimants.length === 1) {
                 return propCtx(claimants, word, pend).bare(t, false);
@@ -606,7 +609,7 @@ export function kindCtx(kind: Kind, countFallback: boolean, pend: Pending[]): Va
             return {r: "props", props: claimants, value: {op: "contains", operand: {text: t}}};
         },
         regex: (pattern): Interp => {
-            const takers = refs.filter((ref) => propOf(ref).types.some((type) => accepts(type, "regex")));
+            const takers = claimable.filter((ref) => propOf(ref).types.some((type) => accepts(type, "regex")));
             if (takers.length === 0) {
                 return {r: "fail", about: "regex", message: i18n.t("diagnostics:axis.noRegex", {word})};
             }
@@ -614,8 +617,7 @@ export function kindCtx(kind: Kind, countFallback: boolean, pend: Pending[]): Va
                 ?? {r: "props", props: takers, value: {op: "regex", operand: {text: pattern}}};
         },
         phrase: (t): Interp => {
-            // The subjects alone, for the reason `bare` gives.
-            const textual = comparable.filter((ref) => propOf(ref).types.some((type) => {
+            const textual = claimable.filter((ref) => propOf(ref).types.some((type) => {
                 if (quantity(type) || !accepts(type, "contains")) return false;
                 const value = type.parse?.(t);
                 return value !== null && value !== undefined;
@@ -628,7 +630,7 @@ export function kindCtx(kind: Kind, countFallback: boolean, pend: Pending[]): Va
             }
             // No textual property reads it, so the string falls to the word vocabularies: sentinels and
             // word-valued properties take a quoted word; a quantity refuses a quoted number.
-            const wordy = comparable.filter((ref) => {
+            const wordy = claimable.filter((ref) => {
                 const prop = propOf(ref);
                 if (sentinelOf(prop, t) !== null) return true;
                 const pv = parseValue(prop, t);
@@ -638,9 +640,9 @@ export function kindCtx(kind: Kind, countFallback: boolean, pend: Pending[]): Va
             // Same rule one level up, and by this point it is already established: neither a textual property
             // nor a word vocabulary reads this operand, so the quotes select nothing. Where something can
             // still read it as a quantity, they are inert rather than an error.
-            const readable = comparable.filter((ref) => parseValue(propOf(ref), t) !== null);
+            const readable = claimable.filter((ref) => parseValue(propOf(ref), t) !== null);
             if (readable.length > 0) return propCtx(readable, word, pend).bare(t, false);
-            const numeric = comparable.some((ref) => parseValue(propOf(ref), t) !== null
+            const numeric = claimable.some((ref) => parseValue(propOf(ref), t) !== null
                 || propOf(ref).types.some(quantity));
             if (numeric) return quotedQuantity(word, subject);
             return illTyped(word, subject);

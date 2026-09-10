@@ -18,7 +18,7 @@ from collections.abc import Container
 from dataclasses import dataclass, field
 
 from ..tables import Tables, array_columns
-from .columns import BASE_DIFFICULTY, to_int
+from .columns import BASE_DIFFICULTY, to_float, to_int
 from .route import route
 
 ATTRIBUTE_COLUMNS_MAX = 32
@@ -106,7 +106,7 @@ def read_spell_properties(tables: Tables, spell_names: Container[int]) -> SpellP
             spells.cast_index[spell] = to_int(row[4])
             spells.duration_index[spell] = to_int(row[5])
             spells.range_index[spell] = to_int(row[6])
-            if float(row[7] or 0) > 0 or float(row[8] or 0) > 0:
+            if to_float(row[7]) > 0 or to_float(row[8]) > 0:
                 spells.delayed.add(spell)
             else:
                 spells.delayed.discard(spell)

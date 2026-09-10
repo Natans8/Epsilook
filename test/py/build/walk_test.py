@@ -7,8 +7,11 @@ rather than a convenience.
 
 from __future__ import annotations
 
+from collections import defaultdict
+
 from pack.derive.walk import (
     KIT_BUCKETS,
+    Bucket,
     Occurrence,
     SpellVisuals,
     screen_occurrences,
@@ -79,8 +82,8 @@ def walk(
         soundkit_files or {},
         fx or FxPayloads(),
         effects or SpellEffectRows(),
-        zone_music,
-        ambiences,
+        zone_music or {},
+        ambiences or {},
         delayed,
     )
 
@@ -280,7 +283,8 @@ def test_the_sky_edge_is_the_preset_on_the_reached_screen() -> None:
     effects.screens.add(101, 21, NO_TARGET)
     effects.screens.add(102, 23, NO_TARGET)
     screens = {21: ScreenRow(sky=2124), 22: ScreenRow(sky=2124), 23: ScreenRow()}
-    reached = screen_reach(effects.screens.ids, {99: {at(22): NO_TARGET}})
+    by_kit: Bucket = defaultdict(dict, {99: {at(22): NO_TARGET}})
+    reached = screen_reach(effects.screens, by_kit)
     assert sky_spells(reached, screens) == {2124: [99, 100, 101]}
 
 

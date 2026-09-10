@@ -537,7 +537,11 @@ PAYLOADS: tuple[Payload, ...] = (
         lambda rows: rows.objects,
     ),
     Payload(
-        when("Effect", EFFECT_SUMMON, [reference(MISC0, "creature_template"), reference(MISC1, "SummonProperties")]),
+        when(
+            "Effect",
+            EFFECT_SUMMON,
+            [reference(MISC0, "creature_template"), reference(MISC1, "SummonProperties", zero_is_a_value=True)],
+        ),
         record=_summon,
     ),
     Payload(when("Effect", sorted(EFFECT_PLAYS_SOUND), [reference(MISC0, "SoundKit")]), record=_played_sound),

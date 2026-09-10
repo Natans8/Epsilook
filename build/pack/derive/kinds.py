@@ -33,7 +33,7 @@ from collections import Counter
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 
-from ..phases import PHASE_AURA, landing
+from ..phases import PHASE_AURA
 from ..routes.colors import pack_rgb
 from ..routes.effects import MOVEMENT_NAMES
 from ..routes.models import (
@@ -47,7 +47,7 @@ from ..routes.models import (
 )
 from ..routes.vehicles import PASSENGER_ROLE_NAMES
 from .context import Reads
-from .rows import ModelRow, id_rows, masked_rows, replacement_rows, spell_role_rows, spell_rows
+from .rows import ModelRow, effect_phase, id_rows, masked_rows, replacement_rows, spell_role_rows, spell_rows
 from .walk import screen_occurrences
 
 RowValue = int | float
@@ -178,6 +178,38 @@ class Family:
     def width(self, prop: str) -> int:
         """How many columns one property occupies."""
         return len(self.spans[prop]) if prop in self.spans else 1
+
+
+PHASED = {"phase": "phases"}
+"""The phase's vocabulary entry: every timed family resolves it the same way."""
+
+
+def timed(
+    kind: str,
+    props: tuple[str, ...],
+    rows: Callable[[Reads], Iterable[SpellRow]],
+    *,
+    vocab: Mapping[str, str] | None = None,
+    absent: Mapping[str, int] | None = None,
+    carried: tuple[str, ...] = (),
+    spans: Mapping[str, tuple[str, ...]] | None = None,
+) -> Family:
+    """A family that happens at a moment of the spell.
+
+    The phase closes its properties and resolves through the phase vocabulary,
+    stated here once so a family cannot declare one half without the other. A
+    family with no phase is one that does not happen: a pose and a freeze are
+    membership, a mount is a link from the spell, a location is a gate.
+    """
+    return Family(
+        kind=kind,
+        props=(*props, "phase"),
+        rows=rows,
+        vocab={**(vocab or {}), **PHASED},
+        absent=absent or {},
+        carried=carried,
+        spans=spans or {},
+    )
 
 
 @dataclass(frozen=True)
@@ -380,9 +412,6 @@ def _models(
     the game did there is show the carried weapon flying or trailing rather than
     name a slot.
 
-    Every model kind happens at a moment, so the phase closes each one's
-    properties rather than being repeated in every declaration.
-
     Args:
         carried: which half of the attach category this kind takes -- `True`
             the carried-weapon sentinels, `False` the real models, `None` every
@@ -396,10 +425,10 @@ def _models(
                 continue
             yield row.spell, (*pick(row), row.phase)
 
-    return Family(
-        kind=kind,
-        props=(*props, "phase"),
-        rows=rows,
+    return timed(
+        kind,
+        props,
+        rows,
         vocab={
             "file": "files",
             "slot": "slots",
@@ -410,7 +439,6 @@ def _models(
             "projectiles": "motionProjectiles",
             "name": "items",
             "anim": "anims",
-            "phase": "phases",
         },
         absent={"where": ABSENT, "from": ABSENT, "to": ABSENT},
         spans=PLACEMENT_SPANS,
@@ -487,11 +515,11 @@ def _sounds(reads: Reads) -> Iterable[SpellRow]:
 
 
 SOUND_FAMILIES: tuple[Family, ...] = (
-    Family(
-        kind="sound",
-        props=("file", "kit", "type", "target", "phase"),
-        rows=_sounds,
-        vocab={"file": "files", "kit": "kits", "type": "soundTypes", "phase": "phases"},
+    timed(
+        "sound",
+        ("file", "kit", "type", "target"),
+        _sounds,
+        vocab={"file": "files", "kit": "kits", "type": "soundTypes"},
         absent={"type": ABSENT},
     ),
 )
@@ -587,33 +615,33 @@ def _passengers(reads: Reads) -> Iterable[SpellRow]:
 
 
 ANIM_FAMILIES: tuple[Family, ...] = (
-    Family(
-        kind="kit",
-        props=("id", "anim", "boneset", "speed", "target", "phase"),
-        rows=_animkits,
-        vocab={"anim": "anims", "boneset": "bonesets", "phase": "phases"},
+    timed(
+        "kit",
+        ("id", "anim", "boneset", "speed", "target"),
+        _animkits,
+        vocab={"anim": "anims", "boneset": "bonesets"},
         absent={"anim": ABSENT, "boneset": ABSENT, "speed": NO_PACE},
     ),
-    Family(
-        kind="loose",
-        props=("anim", "target", "phase"),
-        rows=_loose,
-        vocab={"anim": "anims", "phase": "phases"},
+    timed(
+        "loose",
+        ("anim", "target"),
+        _loose,
+        vocab={"anim": "anims"},
         absent={"anim": ABSENT},
     ),
-    Family(
-        kind="replace",
-        props=("to", "from", "target", "phase"),
-        rows=_replacements,
-        vocab={"to": "anims", "from": "anims", "phase": "phases"},
+    timed(
+        "replace",
+        ("to", "from", "target"),
+        _replacements,
+        vocab={"to": "anims", "from": "anims"},
         absent={"to": ABSENT, "from": ABSENT},
     ),
     Family(kind="pose", props=(), rows=_poses),
-    Family(
-        kind="passenger",
-        props=(*_ROLES, "phase"),
-        rows=_passengers,
-        vocab={**{role: "anims" for role in _ROLES}, "phase": "phases"},
+    timed(
+        "passenger",
+        _ROLES,
+        _passengers,
+        vocab={role: "anims" for role in _ROLES},
         absent={role: ABSENT for role in _ROLES},
     ),
 )
@@ -728,11 +756,6 @@ def _attributed(flag: str) -> Callable[[Reads], Iterable[SpellRow]]:
     return rows
 
 
-def _held(reads: Reads, spell: int) -> int:
-    """Where a spell's non-aura effects happen."""
-    return landing(spell in reads.props.delayed)
-
-
 def _entities(payload: str) -> Callable[[Reads], Iterable[SpellRow]]:
     """One aura payload: which thing a spell reaches, and who it was aimed at.
 
@@ -762,17 +785,21 @@ def _summons(reads: Reads) -> Iterable[SpellRow]:
     so it happens where the spell lands.
     """
     for spell, summoned in sorted(reads.effects.summons.items()):
+        phase = effect_phase(0, spell, reads.props.delayed)
         for creature, control in sorted(summoned):
             yield (
                 spell,
-                (creature, control, reads.effects.summon_targets.get((spell, creature), 0), _held(reads, spell)),
+                (creature, control, reads.effects.summon_targets.get((spell, creature), 0), phase),
             )
 
 
 def _objects(reads: Reads) -> Iterable[SpellRow]:
     """The gameobjects a spell places in the world, where it lands."""
     for spell, entry in reads.references.object_rows:
-        yield spell, (entry, reads.effects.objects.masks.get((spell, entry), 0), _held(reads, spell))
+        yield (
+            spell,
+            (entry, reads.effects.objects.masks.get((spell, entry), 0), effect_phase(0, spell, reads.props.delayed)),
+        )
 
 
 def _screens(reads: Reads) -> Iterable[SpellRow]:
@@ -791,98 +818,89 @@ def _screens(reads: Reads) -> Iterable[SpellRow]:
             yield spell, (texture, mask, phase, screen)
 
 
-PHASED = {"phase": "phases"}
-"""The phase's vocabulary entry, for every family that happens at a moment.
-
-A family with no phase is one that does not happen: a pose and a freeze are
-membership, a mount is a link from the spell, a location is a gate.
-"""
-
 FX_FAMILIES: tuple[Family, ...] = (
-    Family(kind="visual", props=("id", "target", "phase"), rows=_visual_kits, vocab=PHASED),
-    Family(
-        kind="chain",
-        props=("texture", "from", "to", "colour", "arcing", "flickering", "jagged", "wavy", "width", "target", "phase"),
-        rows=_chains,
+    timed("visual", ("id", "target"), _visual_kits),
+    timed(
+        "chain",
+        ("texture", "from", "to", "colour", "arcing", "flickering", "jagged", "wavy", "width", "target"),
+        _chains,
         carried=("chain",),
-        vocab={"texture": "files", "from": "attachments", "to": "attachments", "colour": "chainColours", **PHASED},
+        vocab={"texture": "files", "from": "attachments", "to": "attachments", "colour": "chainColours"},
         # A trait ships as one where the beam has it and nought where it does
         # not, and nought is the absence of the property rather than a value.
         absent={"from": ABSENT, "to": ABSENT, "arcing": 0, "flickering": 0, "jagged": 0, "wavy": 0},
     ),
-    Family(
-        kind="dissolve",
-        props=("where", "texture", "target", "phase"),
-        rows=_dissolves,
+    timed(
+        "dissolve",
+        ("where", "texture", "target"),
+        _dissolves,
         carried=("dissolve",),
-        vocab={"where": "anchors", "texture": "files", **PHASED},
+        vocab={"where": "anchors", "texture": "files"},
         absent={"where": NO_ANCHOR},
     ),
-    Family(
-        kind="shadowy",
-        props=("where", "colour", "target", "phase"),
-        rows=_shadowies,
-        vocab={"where": "anchors", "colour": "shadowyColours", **PHASED},
+    timed(
+        "shadowy",
+        ("where", "colour", "target"),
+        _shadowies,
+        vocab={"where": "anchors", "colour": "shadowyColours"},
         absent={"where": NO_ANCHOR},
     ),
-    Family(
-        kind="ghost",
-        props=("colour", "target", "phase"),
-        rows=_coloured("ghost_mats"),
-        vocab={"colour": "ghostColours", **PHASED},
+    timed(
+        "ghost",
+        ("colour", "target"),
+        _coloured("ghost_mats"),
+        vocab={"colour": "ghostColours"},
     ),
-    Family(
-        kind="glow",
-        props=("colour", "target", "phase"),
-        rows=_coloured("glows"),
-        vocab={"colour": "glowColours", **PHASED},
+    timed(
+        "glow",
+        ("colour", "target"),
+        _coloured("glows"),
+        vocab={"colour": "glowColours"},
     ),
-    Family(
-        kind="tint",
-        props=("colour", "target", "phase"),
-        rows=_coloured("tints"),
-        vocab={"colour": "tintColours", **PHASED},
+    timed(
+        "tint",
+        ("colour", "target"),
+        _coloured("tints"),
+        vocab={"colour": "tintColours"},
     ),
-    Family(
-        kind="transparency",
-        props=("percent", "target", "phase"),
-        rows=_percents("transps", lambda reads, row: reads.procs.transps[row]),
-        vocab=PHASED,
+    timed(
+        "transparency",
+        ("percent", "target"),
+        _percents("transps", lambda reads, row: reads.procs.transps[row]),
     ),
-    Family(
-        kind="desaturate",
-        props=("percent", "target", "phase"),
-        rows=_percents("desats", lambda reads, row: reads.procs.desats[row]),
-        vocab=PHASED,
+    timed(
+        "desaturate",
+        ("percent", "target"),
+        _percents("desats", lambda reads, row: reads.procs.desats[row]),
     ),
     Family(kind="freeze", props=(), rows=_flagged("freezes")),
     Family(kind="camo", props=(), rows=_flagged("camos")),
-    Family(
-        kind="morph",
-        props=("creature", "target", "phase"),
-        rows=_entities("morphs"),
-        vocab={"creature": "morphs", **PHASED},
+    timed(
+        "morph",
+        ("creature", "target"),
+        _entities("morphs"),
+        vocab={"creature": "morphs"},
     ),
-    Family(
-        kind="shapeshift",
-        props=("form", "target", "phase"),
-        rows=_entities("forms"),
-        vocab={"form": "shapeshifts", **PHASED},
+    timed(
+        "shapeshift",
+        ("form", "target"),
+        _entities("forms"),
+        vocab={"form": "shapeshifts"},
     ),
-    Family(kind="scale", props=("amount", "target", "phase"), rows=_scales, vocab=PHASED),
-    Family(
-        kind="summon",
-        props=("creature", "control", "target", "phase"),
-        rows=_summons,
-        vocab={"creature": "creatures", "control": "controls", **PHASED},
+    timed("scale", ("amount", "target"), _scales),
+    timed(
+        "summon",
+        ("creature", "control", "target"),
+        _summons,
+        vocab={"creature": "creatures", "control": "controls"},
     ),
-    Family(kind="object", props=("object", "target", "phase"), rows=_objects, vocab={"object": "objects", **PHASED}),
-    Family(
-        kind="screen",
-        props=("texture", "target", "phase"),
-        rows=_screens,
+    timed("object", ("object", "target"), _objects, vocab={"object": "objects"}),
+    timed(
+        "screen",
+        ("texture", "target"),
+        _screens,
         carried=("screen",),
-        vocab={"texture": "files", **PHASED},
+        vocab={"texture": "files"},
     ),
 )
 
@@ -1051,68 +1069,66 @@ def _keybinds(reads: Reads) -> Iterable[SpellRow]:
 MECH_FAMILIES: tuple[Family, ...] = (
     # The index is the effect's place in its spell's own order, which nothing
     # else on the row says; the phase is where that order happens.
-    Family(
-        kind="effect",
-        props=("name", "target", "index", "phase"),
-        rows=_effects,
+    timed(
+        "effect",
+        ("name", "target", "index"),
+        _effects,
         carried=("aura", "targetA", "targetB", "misc0", "misc1"),
-        vocab={"name": "effects", **PHASED},
+        vocab={"name": "effects"},
     ),
-    Family(kind="aura", props=("name", "target", "phase"), rows=_auras, vocab={"name": "auras", **PHASED}),
+    timed("aura", ("name", "target"), _auras, vocab={"name": "auras"}),
     # The word is an INDEX into the pool, so nought is the first word rather
     # than no word: an edge always prints one, and the gap has to be a value
     # the pool cannot hold.
-    Family(
-        kind="triggers",
-        props=("spell", "how", "target", "phase"),
-        rows=_links(True),
-        vocab={"spell": "spells", "how": "linkWords", **PHASED},
+    timed(
+        "triggers",
+        ("spell", "how", "target"),
+        _links(True),
+        vocab={"spell": "spells", "how": "linkWords"},
         absent={"how": ABSENT},
     ),
-    Family(
-        kind="origin",
-        props=("spell", "how", "target", "phase"),
-        rows=_links(False),
-        vocab={"spell": "spells", "how": "linkWords", **PHASED},
+    timed(
+        "origin",
+        ("spell", "how", "target"),
+        _links(False),
+        vocab={"spell": "spells", "how": "linkWords"},
         absent={"how": ABSENT},
     ),
     Family(kind="location", props=("area",), rows=_areas, vocab={"area": "areas"}),
-    Family(
-        kind="invis",
-        props=("channel", "target", "phase"),
-        rows=_channels("invis", paired=False),
-        vocab=PHASED,
+    timed(
+        "invis",
+        ("channel", "target"),
+        _channels("invis", paired=False),
         absent={"channel": ABSENT},
     ),
-    Family(
-        kind="detect",
-        props=("channel", "count", "target", "phase"),
-        rows=_channels("detect", paired=True),
-        vocab=PHASED,
+    timed(
+        "detect",
+        ("channel", "count", "target"),
+        _channels("detect", paired=True),
         absent={"channel": ABSENT},
     ),
-    Family(
-        kind="vehicle",
-        props=("seats", "where", "target", "phase"),
-        rows=_seats,
+    timed(
+        "vehicle",
+        ("seats", "where", "target"),
+        _seats,
         carried=("vehicle",),
-        vocab={"where": "seatAnchors", **PHASED},
+        vocab={"where": "seatAnchors"},
         absent={"where": ABSENT},
     ),
-    Family(
-        kind="speed",
-        props=("amount", "mode", "target", "phase"),
-        rows=_speeds,
-        vocab={"mode": "movements", **PHASED},
+    timed(
+        "speed",
+        ("amount", "mode", "target"),
+        _speeds,
+        vocab={"mode": "movements"},
         absent={"mode": ABSENT},
     ),
-    Family(kind="keybind", props=("key", "target", "phase"), rows=_keybinds, vocab={"key": "keybinds", **PHASED}),
+    timed("keybind", ("key", "target"), _keybinds, vocab={"key": "keybinds"}),
     Family(kind="debuff", props=(), rows=_attributed("auraisdebuff")),
-    Family(
-        kind="faction",
-        props=("name", "target", "phase"),
-        rows=_entities("factions"),
-        vocab={"name": "factions", **PHASED},
+    timed(
+        "faction",
+        ("name", "target"),
+        _entities("factions"),
+        vocab={"name": "factions"},
     ),
     Family(kind="breaks", props=("on",), rows=_breaks, vocab={"on": "interrupts"}),
 )

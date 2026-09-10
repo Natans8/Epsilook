@@ -394,18 +394,31 @@ local function kindCtx(kind, countFallback)
 	local word = kind.word
 	local refs = {}
 	local comparable = {}
+	local claimable = {}
 	for _, prop in ipairs(kind.props) do
 		refs[#refs + 1] = { kind = kind, prop = prop }
 		-- A qualifier refines a row rather than naming a subject of its own,
-		-- so an operand written on the KIND's word was never about it:
+		-- so a comparison written on the KIND's word was never about it:
 		-- `attach>2` asks how many models a spell attaches, not how big one of
-		-- them is drawn, and `attach:impact` names no model. It stays
-		-- reachable by name, which is where a reader who meant it says so.
-		-- Without this a kind's count meaning is taken by whichever qualifier
-		-- is declared first and happens to accept the operator, and its value
-		-- by whichever qualifier reads any word at all.
+		-- them is drawn. It stays reachable by name, which is where a reader
+		-- who meant it says so. Without this a kind's count meaning is taken
+		-- by whichever qualifier is declared first and happens to accept the
+		-- operator.
 		if not prop.qualifier then
 			comparable[#comparable + 1] = refs[#refs]
+		end
+		-- A word may be claimed by a qualifier that can refuse it: the role
+		-- vocabulary reads nothing but roles. A qualifier of an open type
+		-- accepts every word, so it would claim the number a quantity beside
+		-- it reads and the typo the kind should refuse; it is reached by name.
+		local open = true
+		for _, name in ipairs(prop.types) do
+			if not Schema.IsOpen(name) then
+				open = false
+			end
+		end
+		if not prop.qualifier or not open then
+			claimable[#claimable + 1] = refs[#refs]
 		end
 	end
 	local subject = refs[1] and refs[1].prop or Schema.COUNT_PROP
@@ -469,11 +482,8 @@ local function kindCtx(kind, countFallback)
 		if #flags > 0 then
 			return props(flags, opExpr("contains", { text = text }))
 		end
-		-- The subjects alone: a qualifier is reached by name, as in the
-		-- comparison above, or an open vocabulary among them would claim
-		-- every bare operand.
 		local claimants = {}
-		for _, ref in ipairs(comparable) do
+		for _, ref in ipairs(claimable) do
 			if Schema.ParseValue(ref.prop, text) ~= nil then
 				claimants[#claimants + 1] = ref
 			end
@@ -490,7 +500,7 @@ local function kindCtx(kind, countFallback)
 	-- vocabularies -- sentinels, roles, rungs -- then anything that reads it.
 	function ctx.phrase(text)
 		local textual, wordy, readable = {}, {}, {}
-		for _, ref in ipairs(comparable) do
+		for _, ref in ipairs(claimable) do
 			local prop = ref.prop
 			local value, typeName = Schema.ParseValue(prop, text)
 			local isTextual = false

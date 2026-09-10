@@ -49,7 +49,7 @@
     "unclosedAtEnd": "the { was never closed — it is read as closed at the end",
     "needsPositive": "curly brackets need something to look for — a minus only narrows",
     "contentNegation": "both are plain words, which rarely describe the same thing — exclude a kind or a property instead",
-    "qualifierAlone": "{{name}} only says who it plays on — add what it is",
+    "qualifierAlone": "{{name}} only refines a row — add what it is",
     "spaceAfterClose": "missing space after {{symbol}}",
     "foreignProperty": "{{kind}} has no \"{{word}}\" property",
     "foreignAxis": "{{word}} is not a {{column}} field, so it cannot go inside {{column}}'s curly brackets"

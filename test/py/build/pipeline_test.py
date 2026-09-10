@@ -6,6 +6,7 @@ is under test is the decision, not any route behind it.
 
 from __future__ import annotations
 
+import inspect
 from collections.abc import Iterator, Sequence
 from typing import cast
 
@@ -34,6 +35,22 @@ def test_every_need_names_a_given_or_a_field() -> None:
     for route in REGISTERED:
         unknown = route.fields_named() - fields - set(GIVEN)
         assert not unknown, f"{route.field} needs {', '.join(sorted(unknown))}, which nothing supplies"
+
+
+def test_a_defaulted_parameter_never_shadows_a_field() -> None:
+    """A parameter with a default is left to its default unless mapped, so a
+    route that names a field as a defaulted parameter silently reads none of
+    it: the walk once took its music and ambience that way and folded nothing.
+    """
+    filled = {route.field for route in REGISTERED} | set(GIVEN)
+    for route in REGISTERED:
+        defaulted = {
+            name
+            for name, parameter in inspect.signature(route.produce).parameters.items()
+            if parameter.default is not inspect.Parameter.empty and name not in route.needs
+        }
+        shadowing = sorted(defaulted & filled)
+        assert not shadowing, f"{route.field} leaves {shadowing} to a default where a field of that name exists"
 
 
 def test_the_routes_form_no_cycle() -> None:

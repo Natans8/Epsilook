@@ -245,9 +245,13 @@ class Slot:
     """Whether nought is data here rather than the absence of a reference."""
 
 
-def reference(column: str, table: str) -> Slot:
-    """A column that is an id into ``table`` under this selector."""
-    return Slot(column, Holds.REFERENCE, table)
+def reference(column: str, table: str, *, zero_is_a_value: bool = False) -> Slot:
+    """A column that is an id into ``table`` under this selector.
+
+    Nought names no row, so a row reading it is dropped unless the slot says
+    nought is data: a summon with no properties row is still a summon.
+    """
+    return Slot(column, Holds.REFERENCE, table, zero_is_a_value)
 
 
 def vocabulary(column: str, name: str, *, zero_is_a_value: bool = False) -> Slot:

@@ -91,6 +91,13 @@ export interface AxisType<V extends Value = Value> {
     readonly accepts: readonly Operator[];
 
     /**
+     * Whether the parser accepts any word at all, because the vocabulary is the pack's and not the type's. An open
+     * type can never refuse an operand, so on a kind's word it claims only as a subject: a qualifier of an open type
+     * is reached by name, or a phase word would claim every bare number and every typo a kind should refuse.
+     */
+    readonly open?: boolean;
+
+    /**
      * Every way this type's values may be written, the first being the one they are written AS.
      *
      * Present only on types that take a unit. Read by generated help and by the query surface, so the spellings a
@@ -198,6 +205,7 @@ export const text = defineType<string>({
     accepts: [exact, contains, glob, present, anyOf, regex],
     hint: t("tooltips:type.text"),
     ui: "text",
+    open: true,
 });
 
 /**
@@ -239,6 +247,7 @@ export const enumeration = defineType<string>({
     accepts: [exact, contains, glob, present, anyOf],
     hint: t("tooltips:type.enum"),
     ui: "picker",
+    open: true,
 });
 
 /**
@@ -618,6 +627,22 @@ export const multiplier = numeric({
     },
     accepts: [{unit: "%", factor: 10, sign: "refused", bare: {above: 10}}],
     hint: t("tooltips:type.multiplier"),
+});
+
+/**
+ * How fast an animation plays against its own speed, in thousandths, and it may be negative: the client plays a
+ * negative pace backwards. The same spellings as {@link multiplier}, sign allowed, because a reversed kit is a real
+ * answer and the one word that route was built to earn.
+ */
+export const pace = numeric({
+    name: "pace",
+    storage: "int",
+    display: {
+        unit: "x", aliases: ["×"], glyph: "×", position: "before", factor: 1000, sign: "optional",
+        bare: {atMost: 10},
+    },
+    accepts: [{unit: "%", factor: 10, sign: "optional", bare: {above: 10}}],
+    hint: t("tooltips:type.pace"),
 });
 
 /* -------------------------------------------------------------------------- others */

@@ -181,9 +181,9 @@ def walk_spells(
     soundkit_files: Mapping[int, set[int]],
     fx: FxPayloads,
     effects: SpellEffectRows,
-    zone_music: Mapping[int, ZoneMusic] | None = None,
-    ambiences: Mapping[int, Ambience] | None = None,
-    delayed: Container[int] = frozenset(),
+    zone_music: Mapping[int, ZoneMusic],
+    ambiences: Mapping[int, Ambience],
+    delayed: Container[int],
 ) -> SpellVisuals:
     """Walk every spell's visuals once, unioning what each one reaches.
 
@@ -235,7 +235,7 @@ def walk_spells(
 
     _fold_chain_sounds(vis, fx, pairs)
     _fold_effect_sounds(vis, effects, pairs, delayed)
-    _fold_screen_sounds(vis, fx, effects, zone_music or {}, ambiences or {}, pairs)
+    _fold_screen_sounds(vis, fx, effects, zone_music, ambiences, pairs)
     return vis
 
 
@@ -437,25 +437,19 @@ def sky_spells(reached: Iterable[tuple[int, int]], screens: Mapping[int, ScreenR
     return {preset: sorted(spells) for preset, spells in sorted(out.items())}
 
 
-def screen_reach(
-    by_aura: Mapping[int, Iterable[int]], by_kit: Mapping[int, Iterable[Occurrence]]
-) -> set[tuple[int, int]]:
+def screen_reach(by_aura: MaskedIds, by_kit: Bucket) -> set[tuple[int, int]]:
     """Every spell paired with a screen effect it reaches, by either route.
 
-    An aura naming the effect and a visual kit playing it are the same fact
-    about the spell, so they union, and the phase is dropped: this answers
-    WHICH screens a spell reaches, for the rosters and the sky edge, while
-    `screen_occurrences` answers when. Everything that asks which spells reach
-    a screen effect asks here: the row is a bundle of independent payloads,
-    and a consumer rebuilding this union beside the others is how two of them
-    would come to disagree about which spells carry one.
+    `screen_occurrences` with the phase dropped: this answers WHICH screens a
+    spell reaches, for the rosters and the sky edge, and it is derived rather
+    than written beside the other union so the two cannot disagree about
+    which spells carry one.
 
     Args:
-        by_aura: spell -> the screen effects its aura rows name.
-        by_kit: spell -> the screen occurrences its visual kits play.
+        by_aura: the screen effects the aura rows name, with their masks.
+        by_kit: the walk's screens family.
 
     Returns:
         Every reached `(spell, screen effect)` pair, unordered.
     """
-    reached = {(spell, screen) for spell, screens in by_aura.items() for screen in screens}
-    return reached | {(spell, screen) for spell, played in by_kit.items() for (screen, _phase) in played}
+    return {(spell, screen) for spell, screen, _phase in screen_occurrences(by_aura, by_kit)}

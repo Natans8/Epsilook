@@ -74,6 +74,7 @@ const CANONICAL: [string, string[]][] = [
     ["offset", ["0yd,0yd,1yd", "1.5yd,-2yd,0yd", ",,3yd"]],
     ["rotation", ["90deg,0deg,0deg", ",90deg,", "0deg,0deg,0deg"]],
     ["multiplier", ["x1.5", "x1", "x0.5"]],
+    ["pace", ["x2", "x0", "-x1"]],
 ];
 
 describe("the type registry", () => {
@@ -81,7 +82,7 @@ describe("the type registry", () => {
         assert.deepEqual([...TYPES.keys()].toSorted(), [
             "angle", "animKitId", "bitmask", "channelId", "colour", "coordinate",
             "count", "creatureId", "displayId", "door", "enum", "fileId", "flag",
-            "itemId", "length", "multiplier", "objectId", "offset", "ordinal",
+            "itemId", "length", "multiplier", "objectId", "offset", "ordinal", "pace",
             "path", "percent", "percentChange", "rotation", "seconds", "soundKitId",
             "spellId", "text", "visualKitId",
         ]);

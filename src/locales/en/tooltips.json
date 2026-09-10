@@ -42,6 +42,7 @@
     "bitmask": "who it plays on: caster, target, both, area or others",
     "flag": "either the spell has it or it does not",
     "multiplier": "how big it is drawn against the model it came from, such as x1.5 or 150%",
+    "pace": "how fast it plays against its own speed, such as x2, x0 frozen or -x1 backwards",
     "rotation": "how it is turned, as yaw,pitch,roll in degrees; name one such as pitch=90, or leave a component blank to ignore it",
     "door": "the word an axis is reached by, such as a sort orders by"
   },

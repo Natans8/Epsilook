@@ -47,6 +47,7 @@ import {defineKind, TIER} from "./kinds";
 import type {AxisType} from "../vocabulary/value-types";
 import {
     animKitId, bitmask, channelId, colour, count, creatureId, displayId, enumeration, fileId, flag, itemId, length,
+    pace,
     multiplier, objectId, offset, ordinal, path, percent, percentChange, rotation, seconds, soundKitId,
     spellId as spellIdentity, text, visualKitId,
 } from "../vocabulary/value-types";
@@ -369,7 +370,7 @@ export const animKit = defineKind({
         id: {types: [animKitId], hint: t("tooltips:kind.animKit.props.id")},
         anim: corpus(TIER.asset, enumeration),
         boneset: {types: [enumeration], hint: t("tooltips:kind.animKit.props.boneset")},
-        speed: {types: [multiplier], qualifier: true, hint: t("tooltips:kind.animKit.props.speed")},
+        speed: {types: [pace], qualifier: true, hint: t("tooltips:kind.animKit.props.speed")},
         target: target(),
         phase: phase(),
     },

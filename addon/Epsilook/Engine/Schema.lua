@@ -233,6 +233,13 @@ function Schema.Accepts(typeName, opName)
 	return declaredType ~= nil and declaredType.acceptsSet[opName] == true
 end
 
+--- Whether a type's parser accepts any word at all, its vocabulary being
+-- the pack's rather than the type's.
+function Schema.IsOpen(typeName)
+	local declaredType = Schema.types[typeName]
+	return declaredType ~= nil and declaredType.open == true
+end
+
 --- Whether a type's values are numerals rather than words.
 function Schema.IsQuantity(typeName)
 	local declaredType = Schema.types[typeName]
@@ -690,18 +697,24 @@ function Schema.FormatType(typeName, value)
 		-- it is.
 		shown = floor(shown * 1000000 + 0.5) / 1000000
 		local written
-		if shown == floor(shown) then
-			written = string.format("%d", shown)
+		-- The sign leads the whole spelling, symbol included, which is where
+		-- the reader takes it from: `-x1` is a pace played backwards.
+		local magnitude = abs(shown)
+		if magnitude == floor(magnitude) then
+			written = string.format("%d", magnitude)
 		else
-			written = (string.format("%.6f", shown):gsub("0+$", ""))
+			written = (string.format("%.6f", magnitude):gsub("0+$", ""))
 		end
-		if notation.sign == "required" and shown >= 0 then
-			written = "+" .. written
+		local mark = ""
+		if shown < 0 then
+			mark = "-"
+		elseif notation.sign == "required" then
+			mark = "+"
 		end
 		if notation.position == "before" then
-			return notation.unit .. written
+			return mark .. notation.unit .. written
 		end
-		return written .. notation.unit
+		return mark .. written .. notation.unit
 	end
 	return tostring(value)
 end

@@ -382,11 +382,13 @@ export function writeNotation(notation: Notation, value: number, symbol: string 
     const {factor, offset, sign, position} = notation;
     const shown = Number(((value - (offset ?? 0)) / factor).toFixed(PRECISION));
     // A sign is written where the notation requires one, so that zero round-trips; where it is merely allowed,
-    // only a negative carries its own.
+    // only a negative carries its own. It leads the whole spelling, symbol included, which is where the reader
+    // takes it from: `-x1` is a pace played backwards, and `x-1` reads as nothing.
     const plus = shown > 0 || (shown === 0 && sign === "required");
-    const written = sign === "required" && plus ? `+${shown}` : String(shown);
+    const mark = shown < 0 ? "-" : sign === "required" && plus ? "+" : "";
+    const magnitude = String(Math.abs(shown));
 
-    return position === "before" ? `${symbol}${written}` : `${written}${symbol}`;
+    return position === "before" ? `${mark}${symbol}${magnitude}` : `${mark}${magnitude}${symbol}`;
 }
 
 /**

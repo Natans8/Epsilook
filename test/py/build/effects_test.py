@@ -183,6 +183,15 @@ def test_a_summon_carries_its_control_word_but_is_masked_by_creature(tables: Bui
     assert rows.summon_targets == {(100, 900): TARGET_CASTER}
 
 
+def test_a_summon_with_no_properties_row_is_still_a_summon(tables: BuildTables) -> None:
+    """Nought in the properties slot is data, uncontrolled, and the creature
+    is the summon; refusing the row on that slot dropped real spells."""
+    rows = read(tables, effect_rows(f"100,{EFFECT_SUMMON},0,900,0,1,0,0,0,0"))
+    assert rows.summons == {100: {(900, 0)}}
+    (row,) = rows.mechanics
+    assert row.effect_consumed
+
+
 def test_a_summon_property_the_build_lacks_reads_as_uncontrolled(tables: BuildTables) -> None:
     """0 is a real control value -- uncontrolled -- so an unresolved row lands
     on it rather than being dropped."""

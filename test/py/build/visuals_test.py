@@ -97,4 +97,7 @@ def test_the_phase_words_index_by_event_and_leave_the_unnamed_blank() -> None:
     words = phase_words()
     assert words[3] == "cast" and words[6] == "impact" and words[7] == "aura"
     assert words[0] == "none"
-    assert len(words) == 14 and "" not in words
+    # The enum runs to 24 and names 14 of them; the rest are real events
+    # the data does carry, so they index an entry rather than nothing.
+    assert len(words) == 25
+    assert all(words[event] for event in range(14)) and not any(words[event] for event in range(14, 25))

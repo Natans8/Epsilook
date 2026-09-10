@@ -13,7 +13,7 @@ from typing import cast
 import pytest
 
 from pack.derive.context import Reads
-from pack.derive.kinds import ABSENT, Family, SpellRow, build_column
+from pack.derive.kinds import ABSENT, COLUMN_FAMILIES, Family, SpellRow, build_column
 from pack.model.sections.rows import columns_of, entries, walk
 
 
@@ -227,3 +227,14 @@ def test_a_count_reads_the_effect_rather_than_the_texture() -> None:
     rows = list(walk(table))
     assert len(rows) == 3
     assert len(entries(rows, "dissolve", "dissolve")) == 2
+
+
+def test_every_family_aimed_somewhere_happens_at_a_phase() -> None:
+    """A row that says who it plays on is a row that happens, so it says when;
+    a family declared by hand without its phase would ship rows no `phase:`
+    query can reach and nothing would fail."""
+    for families in COLUMN_FAMILIES.values():
+        for family in families:
+            if "target" in family.props:
+                assert "phase" in family.props, family.kind
+                assert family.vocab.get("phase") == "phases", family.kind

@@ -302,11 +302,10 @@ export class PackRowSource implements RowSource {
         if (!kind) return undefined;
         const props: Record<string, Stored> = {};
         for (const [name, prop] of Object.entries(kind.props)) {
+            // Absence is the row reader's to answer: it knows which stored number means the property has no value
+            // here, which is what lets a flag ship as nought or one.
             const stored = storedAt(this.table, at, name);
             if (stored === undefined) continue;
-            // The pack says which stored number means the property has no value here; a row holding it has no
-            // such property, which is what lets a flag ship as nought or one.
-            if (stored === this.table.absent[at.kind]?.[name]) continue;
             // A spanning property arrives already joined, as the value its composite type reads, and resolves
             // through no vocabulary -- what a vocabulary keys is one stored number, and it has none to key.
             if (typeof stored !== "number") {

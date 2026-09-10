@@ -1,6 +1,6 @@
 {
   "enum": "SpellVisualEvent.StartEvent",
-  "description": "SpellVisualEvent.StartEvent -> where in a spell's life a visual kit starts. Shipped as the phase word on every row that happens at a moment: a kit's payloads carry the event that started them, a missile starts the travel, an effect lands at the cast or the impact, and an aura holds from its start. The names are WoWDBDefs' SpellVisualEventEvent.dbde, spelled as one search word each; an end is its own word because kits do start at ends. Values 14 to 24 exist in the enum unnamed and are rare in the data, so they read as no word.",
+  "description": "SpellVisualEvent.StartEvent -> where in a spell's life a visual kit starts. Shipped as the phase word on every row that happens at a moment: a kit's payloads carry the event that started them, a missile starts the travel, an effect lands at the cast or the impact, and an aura holds from its start. The names are WoWDBDefs' SpellVisualEventEvent.dbde, spelled as one search word each; an end is its own word because kits do start at ends. Values 14 to 24 exist in the enum unnamed and are rare in the data; they are listed as the empty word so a row storing one indexes a real entry that reads as no word.",
   "source": [
     "https://github.com/wowdev/WoWDBDefs/blob/master/meta/enums/SpellVisualEventEvent.dbde"
   ],
@@ -19,6 +19,17 @@
     "10": "triggerend",
     "11": "channel",
     "12": "channelend",
-    "13": "oneshot"
+    "13": "oneshot",
+    "14": "",
+    "15": "",
+    "16": "",
+    "17": "",
+    "18": "",
+    "19": "",
+    "20": "",
+    "21": "",
+    "22": "",
+    "23": "",
+    "24": ""
   }
 }

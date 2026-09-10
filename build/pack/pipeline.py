@@ -260,23 +260,19 @@ class Derivations:
         """Hold what every route reads from, and produce nothing yet."""
         # Any: a given is whatever the wiring holds and a field is whatever its
         # route produced; the context's own fields type each on the way in.
-        self.given: dict[str, Any] = dict(
-            zip(
-                GIVEN,
-                (
-                    providers.tables,
-                    providers.world,
-                    providers.pinned,
-                    providers.listfile,
-                    providers.named,
-                    build.version,
-                    ladder,
-                    values,
-                    zone_maps,
-                ),
-                strict=True,
-            )
-        )
+        self.given: dict[str, Any] = {
+            "tables": providers.tables,
+            "world": providers.world,
+            "pinned": providers.pinned,
+            "listfile": providers.listfile,
+            "named": providers.named,
+            "version": build.version,
+            "ladder": ladder,
+            "values": values,
+            "zone_maps": zone_maps,
+        }
+        if set(self.given) != set(GIVEN):
+            raise ValueError(f"the given inputs are {sorted(self.given)}, not the declared {sorted(GIVEN)}")
         self.routes: dict[str, Route] = {registered.field: registered for registered in ROUTES}
         self.held: dict[str, Any] = {}
         missing = sorted(DERIVED_FIELDS - set(self.routes))

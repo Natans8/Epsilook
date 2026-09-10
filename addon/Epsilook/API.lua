@@ -414,12 +414,15 @@ function Epsilook:GetSelectorReads(table, column, value)
 	local slotColumns = Data.ReadAll("mech", "selectors", "slotColumns") or {}
 	local holds = Data.ReadAll("mech", "selectors", "holds") or {}
 	local intos = Data.ReadAll("mech", "selectors", "intos") or {}
+	local untils = Data.ReadAll("mech", "selectors", "untils") or {}
 	local out = {}
 	-- One row per slot, so a selector reading several columns is several
-	-- rows agreeing on the first three.
+	-- rows agreeing on the first three. A reading a later patch retired
+	-- carries that patch as `until`, empty where it still holds; the table
+	-- is the same on every pack, so the caller judges it against the pack.
 	for i = 1, #values do
 		if tables[i] == table and columns[i] == column and values[i] == value then
-			out[#out + 1] = { column = slotColumns[i], holds = holds[i], into = intos[i] }
+			out[#out + 1] = { column = slotColumns[i], holds = holds[i], into = intos[i], ["until"] = untils[i] or "" }
 		end
 	end
 	return out

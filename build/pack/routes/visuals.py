@@ -62,8 +62,9 @@ class VisualGraph:
 def phase_words() -> list[str]:
     """The word for each event a kit can start at, indexed by event id.
 
-    Empty where the enum leaves a value unnamed, so a row storing one reads as
-    no word rather than as a neighbour's.
+    Empty where the enum leaves a value unnamed, and the vendored file lists
+    every value the enum has, so a row storing an unnamed event indexes an
+    entry that reads as no word rather than running off the end.
     """
     names = load_local_enum(PHASES_ENUM)
     return [str(names.get(event, "")) for event in range(max(names) + 1)]

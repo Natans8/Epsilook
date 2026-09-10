@@ -117,10 +117,29 @@ class LinkRow(NamedTuple):
     mask: int
 
 
-def masked_rows(bucket: Bucket) -> list[tuple[int, int, int, int]]:
-    """One masked bucket as (spell, payload, phase, mask) rows, sorted."""
+class OccurrenceRow(NamedTuple):
+    """One occurrence of a payload, flattened: what, for which spell, when, and for whom."""
+
+    spell: int
+    payload: int
+    phase: int
+    mask: int
+
+
+class ReplacementRow(NamedTuple):
+    """One animation a spell wears in place of another."""
+
+    spell: int
+    source: int
+    destination: int
+    phase: int
+    mask: int
+
+
+def masked_rows(bucket: Bucket) -> list[OccurrenceRow]:
+    """One masked bucket of id-keyed payloads as rows, sorted."""
     return sorted(
-        (spell, occurrence.item, occurrence.phase, mask)
+        OccurrenceRow(spell, occurrence.item, occurrence.phase, mask)
         for spell, occurrences in bucket.items()
         for occurrence, mask in occurrences.items()
     )
@@ -328,7 +347,11 @@ def build_rows(
     vehicles = sorted(
         (spell, vehicle) for spell, ids in effects.vehicles.ids.items() for vehicle in ids if seats.seats.get(vehicle)
     )
-    animkits = [AnimKitRow(*row) for row in masked_rows(visuals.animkits)]
+    animkits = sorted(
+        AnimKitRow(spell, kit, phase, mask)
+        for spell, occurrences in visuals.animkits.items()
+        for (kit, phase), mask in occurrences.items()
+    )
     used = {row.kit for row in animkits}
     used |= {kit for _spell, kit in spell_rows(seats.animkits, vehicles)}
     vehicle_ids = sorted({vehicle for _spell, vehicle in vehicles})
@@ -400,7 +423,7 @@ def boneset_rows(
 
 def replacement_rows(
     visuals: SpellVisuals, effects: SpellEffectRows, replacements: Mapping[int, set[tuple[int, int]]], limit: int
-) -> list[tuple[int, int, int, int, int]]:
+) -> list[ReplacementRow]:
     """Every animation a spell swaps for another, from both sources merged.
 
     Two routes describe one thing -- a character wearing a different animation
@@ -414,7 +437,7 @@ def replacement_rows(
     its event does.
 
     Returns:
-        `(spell, base, replacement, phase, mask)` rows, sorted.
+        The rows, sorted.
     """
     pairs: dict[tuple[int, int, int, int], int] = {}
 
@@ -433,5 +456,6 @@ def replacement_rows(
             for source, destination in replacements.get(identifier, ()):
                 keep(spell, source, destination, PHASE_AURA, mask)
     return sorted(
-        (spell, source, destination, phase, mask) for (spell, source, destination, phase), mask in pairs.items()
+        ReplacementRow(spell, source, destination, phase, mask)
+        for (spell, source, destination, phase), mask in pairs.items()
     )

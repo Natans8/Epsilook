@@ -10,12 +10,13 @@ they are left out here rather than by every reader of the column.
 
 from __future__ import annotations
 
+from collections.abc import Container
+
 from ..sources import load_local_enum
 from ..tables import Tables, array_columns
 from .attributes import bit_test, carries
 from .columns import BASE_DIFFICULTY, to_int
 from .route import route
-from .spells import SpellProperties
 
 AURA_INTERRUPT_ENUM = "spell_interrupt_flags"
 """The vendored enum naming each bit; its `label` is the word the pack prints."""
@@ -36,8 +37,8 @@ def interrupt_words() -> dict[int, str]:
     }
 
 
-@route("aura_interrupts", spells="props")
-def read_aura_interrupts(tables: Tables, spells: SpellProperties) -> dict[int, tuple[int, ...]]:
+@route("aura_interrupts", spell_names="names.names")
+def read_aura_interrupts(tables: Tables, spell_names: Container[int]) -> dict[int, tuple[int, ...]]:
     """Spell -> the events that remove its aura, as enum bits, ascending.
 
     The base difficulty's row is the spell's answer where it has one, and a
@@ -46,7 +47,8 @@ def read_aura_interrupts(tables: Tables, spells: SpellProperties) -> dict[int, t
 
     Args:
         tables: the source to read from.
-        spells: the build's spells; rows for anything absent are skipped.
+        spell_names: the build's spell list; rows for anything absent from it
+            are skipped.
     """
     if not tables.available("SpellInterrupts"):
         return {}
@@ -57,7 +59,7 @@ def read_aura_interrupts(tables: Tables, spells: SpellProperties) -> dict[int, t
     for row in tables.rows("SpellInterrupts", ["SpellID", "DifficultyID", *columns]):
         spell, difficulty = to_int(row[0]), to_int(row[1])
         base = difficulty == BASE_DIFFICULTY
-        if spell not in spells.attribute_words or (spell in seen_base and not base):
+        if spell not in spell_names or (spell in seen_base and not base):
             continue
         if base:
             seen_base.add(spell)

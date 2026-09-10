@@ -73,6 +73,7 @@
     "anim.passenger.enter": [],
     "anim.passenger.sit": [],
     "anim.passenger.exit": [],
+    "anim.passenger.phase": [],
     "anim.replace.to": [],
     "anim.replace.from": [],
     "anim.replace.target": [],

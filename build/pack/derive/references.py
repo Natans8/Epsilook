@@ -104,7 +104,7 @@ def collect_references(
     found.dissolves = {row.item for rows in visuals.dissolves.values() for row in rows}
     # An aura applies one with no visual involved and a kit applies one with no
     # aura; the roster is the spells side of that union dropped.
-    found.screens = {screen for _spell, screen in screen_reach(effects.screens.ids, visuals.screens)}
+    found.screens = {screen for _spell, screen in screen_reach(effects.screens, visuals.screens)}
 
     # The models bucket is the largest the walk produces, and both a model's
     # own file and the inventory icon an item pill shows come out of it, so it

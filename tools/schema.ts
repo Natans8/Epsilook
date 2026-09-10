@@ -102,6 +102,7 @@ function main(): void {
         storage: type.storage,
         accepts: type.accepts.map((op) => op.name),
         quantity: type.quantity ?? false,
+        open: type.open ?? false,
         identity: isIdentity(type),
         members: membersOf(type),
         notations: (type.notations ?? []).map(notation),
