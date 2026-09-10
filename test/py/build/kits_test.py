@@ -15,7 +15,8 @@ from pack.routes.models import (
     ModelSources,
 )
 from pack.routes.procedures import ProcEffects
-from pack.routes.sounds import read_kit_types, read_soundkit_files, sound_type_names
+from pack.routes import flows
+from pack.routes.sounds import sound_type_names
 from pack.sources import load_local_enum
 from support import BuildTables
 
@@ -151,7 +152,7 @@ def test_a_kit_or_effect_of_zero_is_skipped(tables: BuildTables) -> None:
 
 def test_a_sound_kit_keeps_every_file_it_plays(tables: BuildTables) -> None:
     """The client picks between variations, so all of them are the kit's."""
-    assert read_soundkit_files(tables(SoundKitEntry=SOUND_KIT_ENTRY)) == {300: {9000, 9001}}
+    assert flows.soundkit_files.run(tables(SoundKitEntry=SOUND_KIT_ENTRY)) == {300: {9000, 9001}}
 
 
 SOUND_KIT = """ID,SoundType
@@ -166,7 +167,9 @@ def test_a_kit_carries_what_it_is_for(tables: BuildTables) -> None:
     """The type is the kit's, read once per kit; a value the enum does not name
     is left out rather than shipped as a number nobody can read, and a kit the
     pack never reaches is not read at all."""
-    types = read_kit_types(tables(SoundKit=SOUND_KIT), {300, 301, 302})
+    types = flows.kit_types.run(
+        tables(SoundKit=SOUND_KIT), needs={"used_kits": {300, 301, 302}, "sound_type_names": sound_type_names()}
+    )
     # 302 carries the one undocumented value, and 303 is a kit nothing reaches.
     assert types == {300: 29, 301: 1}
     names = sound_type_names()

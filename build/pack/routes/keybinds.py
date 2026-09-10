@@ -9,10 +9,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from ..tables import Tables
-from .columns import to_int
-from .route import route
-
 KEYBOUND_TYPE_WORDS = {0: "", 1: "mid-air"}
 """When an override fires. The ordinary press gets no word."""
 
@@ -36,20 +32,3 @@ def keybound_type_word(type_id: int) -> str:
     if type_id in KEYBOUND_TYPE_WORDS:
         return KEYBOUND_TYPE_WORDS[type_id]
     return f"type {type_id}"
-
-
-@route("keybinds")
-def read_keybound_overrides(tables: Tables) -> dict[int, KeyboundOverride]:
-    """Read every key override.
-
-    The flags column is not read: absent on two builds, all-zero on most, and
-    its nonzero rows carry no recoverable meaning.
-    """
-    return {
-        to_int(override_id): KeyboundOverride(
-            function=(function or "").strip(), when=keybound_type_word(to_int(type_id)), spell=to_int(data)
-        )
-        for override_id, function, type_id, data in tables.rows(
-            "SpellKeyboundOverride", ["ID", "Function", "Type", "Data"]
-        )
-    }

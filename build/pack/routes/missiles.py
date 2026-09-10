@@ -77,19 +77,6 @@ class MissileMotion:
     """
 
 
-@route("motions")
-def read_missile_motions(tables: Tables) -> dict[int, MissileMotion]:
-    """Missile motion id -> the arc a projectile flies.
-
-    The table's remaining column is the path's script, which nothing renders.
-    """
-    return {
-        to_int(motion_id): MissileMotion(name, to_int(projectiles))
-        for motion_id, name, projectiles in tables.rows("SpellMissileMotion", ["ID", "Name", "MissileCount"])
-        if name
-    }
-
-
 @route("missiles")
 def read_missiles(tables: Tables, models: ModelSources) -> dict[int, VisualMissiles]:
     """Read each visual's projectiles, attachments resolved.

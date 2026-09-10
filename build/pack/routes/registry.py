@@ -7,7 +7,7 @@ so the function that assembles it lives beside the record that names it.
 
 from __future__ import annotations
 
-from collections.abc import Container, Mapping
+from collections.abc import Container, Mapping, Sequence
 
 from ..sources import read_anim_names
 from ..tables import Tables
@@ -21,6 +21,13 @@ from .route import route
 def spell_ids(names: Mapping[int, str]) -> list[int]:
     """Every spell the pack lists, sorted: the row order of every per-spell column."""
     return sorted(names)
+
+
+@route("anim_ids")
+def anim_ids(anim_names: Sequence[str]) -> range:
+    """The animation ids this build names: an id past the list is dropped by
+    every animation route, and this is the roster that says so."""
+    return range(len(anim_names))
 
 
 @route("anim_names")

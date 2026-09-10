@@ -295,6 +295,12 @@ class Neither:
         """The inner does not hold."""
         return not self.inner.evaluate(row, schema)
 
+    def __and__(self, other: Expr) -> Both:
+        return Both(self, other)
+
+    def __or__(self, other: Expr) -> Either:
+        return Either(self, other)
+
 
 # The schema.
 
@@ -1115,6 +1121,29 @@ class AsSets[T]:
 
 
 @dataclass(frozen=True)
+class AsRecords[T]:
+    """Key to one record built from the columns, the last row per key
+    standing unless the flow says the first does."""
+
+    key: str
+    record: Callable[..., T]
+    columns: tuple[Typed, ...]
+    first: bool = False
+
+    def collect(self, rows: Rows, schema: Schema) -> dict[int, T]:
+        """The records by key."""
+        key_at = schema.at(self.key)
+        readers = [(schema.at(picked.column), picked.read) for picked in self.columns]
+        out: dict[int, T] = {}
+        for row in rows:
+            key = key_of(row[key_at])
+            if self.first and key in out:
+                continue
+            out[key] = self.record(*(read(row[at]) for at, read in readers))
+        return out
+
+
+@dataclass(frozen=True)
 class AsTree:
     """Key under key to the sorted values beneath: kit to animation to regions."""
 
@@ -1230,6 +1259,21 @@ def as_map(key: str | Column | Sequence[str | Column], value: Picked, *, first: 
 def as_sets(key: str | Column, *value: Picked) -> AsSets[Any]:
     """Land as key to the set of values under it, ids unless typed; several columns make a tuple."""
     return AsSets(column_name(key), tuple(_typed(picked) for picked in value))
+
+
+def as_records[T](key: str | Column, record: Callable[..., T], *columns: Picked, first: bool = False) -> AsRecords[T]:
+    """Land as key to one record per key, its columns in the record's field order."""
+    return AsRecords(column_name(key), record, tuple(_typed(picked) for picked in columns), first)
+
+
+def typed(named: str | Column, read: Callable[[Cell], object]) -> Typed:
+    """The column read through a reader of your own, for the one shape the readers here do not spell."""
+    return Typed(column_name(named), read)
+
+
+def values_of(cell: Cell) -> tuple[str, ...]:
+    """A cell as the texts it holds: an array's every text, a scalar's one."""
+    return cell if isinstance(cell, tuple) else (cell,)
 
 
 def as_tree(*keys: str | Column, value: Picked) -> AsTree:

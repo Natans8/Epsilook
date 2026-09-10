@@ -52,11 +52,8 @@ from .routes import (
     implicit_target_bits,
     read_area_gates,
     read_creature_models,
-    read_gameobjects,
     read_item_models,
-    read_mounts,
     read_override_names,
-    read_shapeshift_forms,
     read_spell_names,
     read_spell_text,
     read_spell_values,
@@ -396,9 +393,9 @@ def read_spoken(
         names = read_spell_names(tables)
         creatures = read_creature_models(tables, world)
         items = read_item_models(tables)
-        mounts = read_mounts(tables, names.names, creatures)
-        objects = read_gameobjects(tables, world)
-        forms = read_shapeshift_forms(tables)
+        mounts = flows.mounts.run(tables, needs={"names.names": names.names, "creatures": creatures})
+        objects = flows.objects.run(tables, needs={"world": world})
+        forms = flows.forms.run(tables)
         areas = read_area_gates(tables, zone_maps)
         factions = flows.factions.run(tables, needs={"effects.factions.named": faction_templates})
         alt_names = read_override_names(tables, altnames)

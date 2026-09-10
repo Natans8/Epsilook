@@ -6,15 +6,17 @@ Moonkin -- so the name and the displays are kept apart.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass, field
+from typing import NamedTuple
 
-from ..tables import Tables, array_columns
-from .columns import to_int
-from .route import route
 
-FORM_DISPLAY_SLOTS = 4
-"""How many creature displays a form's array holds where it is an array. A
-later build narrowed it to a scalar; only the first slot is ever filled."""
+class FormRow(NamedTuple):
+    """One form's row, its display slots read whole."""
+
+    form: int
+    name: str
+    displays: list[int]
 
 
 @dataclass
@@ -28,14 +30,11 @@ class ShapeshiftForms:
     """Form -> the creature displays it turns the character into, in slot
     order. Empty for forms that change no appearance."""
 
-
-@route("forms")
-def read_shapeshift_forms(tables: Tables) -> ShapeshiftForms:
-    """Read each form's name and its creature displays."""
-    forms = ShapeshiftForms()
-    columns = array_columns(tables, "SpellShapeshiftForm", "CreatureDisplayID", FORM_DISPLAY_SLOTS)
-    for form_id, name, *displays in tables.rows("SpellShapeshiftForm", ["ID", "Name_lang", *columns]):
-        form = to_int(form_id)
-        forms.names[form] = name
-        forms.displays[form] = [display for display in (to_int(value) for value in displays) if display > 0]
-    return forms
+    @classmethod
+    def assemble(cls, rows: Iterable[FormRow]) -> ShapeshiftForms:
+        """The bundle from the rows."""
+        forms = cls()
+        for row in rows:
+            forms.names[row.form] = row.name
+            forms.displays[row.form] = row.displays
+        return forms
