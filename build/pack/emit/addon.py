@@ -89,7 +89,7 @@ AXES: Mapping[str, str] = {
         "ambiences anchorNames attachmentNames missileMotions visualPhases"
     ),
     "mech": (
-        "mechRows spellDelivery spellRanges areas keybinds "
+        "mechRows spellTimeline spellDelivery spellRanges areas keybinds "
         "linkKindNames effectNames auraNames implicitTargetNames "
         "implicitTargetBits targetNames speedModeNames spellAttrs "
         "selectors factionNames interruptNames"

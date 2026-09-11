@@ -51,14 +51,17 @@ ID,Control
 def effect_rows(*rows: str) -> str:
     """A `SpellEffect` table built from `SpellID,Effect,Aura,misc0,misc1,t0,t1,...`.
 
-    A row may leave the trailing effect index off, and then it is nought.
+    A row may leave the trailing effect index off, and then it is nought; the
+    period, the chain count and the attribute bits follow it and default to
+    nought as well.
     """
     header = (
         "SpellID,Effect,EffectAura,EffectMiscValue_0,EffectMiscValue_1,"
         "ImplicitTarget_0,ImplicitTarget_1,EffectBasePoints,"
-        "EffectBasePointsF,EffectTriggerSpell,EffectIndex\n"
+        "EffectBasePointsF,EffectTriggerSpell,EffectIndex,"
+        "EffectAuraPeriod,EffectChainTargets,EffectAttributes\n"
     )
-    return header + "".join((row if row.count(",") == 10 else row + ",0") + "\n" for row in rows)
+    return header + "".join(row + ",0" * (13 - row.count(",")) + "\n" for row in rows)
 
 
 ROSTERS = {"screens": frozenset({50}), "keybinds": frozenset({60})}
@@ -359,6 +362,14 @@ def test_both_targets_stay_on_the_row_that_carried_them(tables: BuildTables) -> 
         ),
     )  # a jump, aimed at a destination
     assert rows.mechanics == {EffectRow(100, 3, 0, 2, 0), EffectRow(100, 60, 0, 3, 0)}
+
+
+def test_a_row_carries_its_tick_its_hops_and_its_attribute_bits(tables: BuildTables) -> None:
+    """The three timing and shape columns ride the row raw: the tick in
+    milliseconds, the further targets, the bits as the client stores them."""
+    rows = read(tables, effect_rows(f"100,{EFFECT_APPLY_AURA},3,0,0,1,0,0,0,0,0,3000,2,192"))
+    (row,) = rows.mechanics
+    assert (row.every, row.hops, row.attributes) == (3000, 2, 192)
 
 
 def test_an_effect_that_does_nothing_carries_no_mechanic(tables: BuildTables) -> None:

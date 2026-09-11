@@ -48,7 +48,7 @@ import type {AxisType} from "../vocabulary/value-types";
 import {
     animKitId, bitmask, channelId, colour, count, creatureId, displayId, enumeration, fileId, flag, itemId, length,
     pace,
-    multiplier, objectId, offset, ordinal, path, percent, percentChange, rotation, seconds, soundKitId,
+    multiplier, objectId, offset, ordinal, path, percent, percentChange, rotation, seconds, soundKitId, velocity,
     spellId as spellIdentity, text, visualKitId,
 } from "../vocabulary/value-types";
 
@@ -182,6 +182,23 @@ export const delivery = defineKind({
             hint: t("tooltips:kind.delivery.props.unhindered")
         },
         tracking: {types: [flag], hint: t("tooltips:kind.delivery.props.tracking")},
+    },
+});
+
+/**
+ * The clock between a spell's cast and its landing: the launch delay, then either the projectile's velocity or
+ * a fixed delay before the impact, since the client stores one number under two meanings and its attribute says
+ * which. One row per spell that carries any of the three; the cast time, the channel and an aura's tick already
+ * ride the delivery row and the aura row. Its word selects the spells that have a clock at all, and the three
+ * prefixes are the doors onto its parts.
+ */
+export const clock = defineKind({
+    column: spellColumn, word: "clock", single: true,
+    hint: t("tooltips:kind.clock.hint"),
+    props: {
+        launch: {types: [seconds], prefix: "launch", hint: t("tooltips:kind.clock.props.launch")},
+        velocity: {types: [velocity], prefix: "velocity", hint: t("tooltips:kind.clock.props.velocity")},
+        delay: {types: [seconds], prefix: "delay", hint: t("tooltips:kind.clock.props.delay")},
     },
 });
 
@@ -602,6 +619,12 @@ export const screen = defineKind({
 
 /* Mechanics: what a spell does. A row here renders nothing; anything visible belongs to the effects column. */
 
+/*
+ * The three flags are declarations rather than the whole attribute vocabulary: the pack carries every effect
+ * attribute bit as a word, and the ones the server's own spell code reads are the ones a reader can act on.
+ * `unimplemented` marks the effects the server has no handler for at all, which is a fact about the core rather
+ * than about the spell.
+ */
 export const effect = defineKind({
     column: mechColumn, word: "effect", group: "action",
     hint: t("tooltips:kind.effect.hint"),
@@ -609,6 +632,10 @@ export const effect = defineKind({
         name: {types: [enumeration], hint: t("tooltips:kind.effect.props.name")},
         target: target(),
         index: {types: [count], hint: t("tooltips:kind.effect.props.index"), qualifier: true},
+        hops: {types: [count], hint: t("tooltips:kind.effect.props.hops"), qualifier: true},
+        unimplemented: {types: [flag], hint: t("tooltips:kind.effect.props.unimplemented")},
+        nostack: {types: [flag], hint: t("tooltips:kind.effect.props.nostack")},
+        chainfirst: {types: [flag], hint: t("tooltips:kind.effect.props.chainfirst")},
         phase: phase(),
     },
 });
@@ -619,6 +646,7 @@ export const aura = defineKind({
     props: {
         name: {types: [enumeration], hint: t("tooltips:kind.aura.props.name")},
         target: target(),
+        every: {types: [seconds], hint: t("tooltips:kind.aura.props.every"), qualifier: true},
         phase: phase(),
     },
 });

@@ -44,7 +44,8 @@
     "multiplier": "how big it is drawn against the model it came from, such as x1.5 or 150%",
     "pace": "how fast it plays against its own speed, such as x2, x0 frozen or -x1 backwards",
     "rotation": "how it is turned, as yaw,pitch,roll in degrees; name one such as pitch=90, or leave a component blank to ignore it",
-    "door": "the word an axis is reached by, such as a sort orders by"
+    "door": "the word an axis is reached by, such as a sort orders by",
+    "velocity": "a projectile's speed in yards a second, such as 24 or >40"
   },
   "target": "who it plays on",
   "phase": "when in the spell it happens: precast, cast, travel, impact, aura, channel",
@@ -70,6 +71,14 @@
         "unbreakable": "moving and acting do not break it",
         "unhindered": "the caster can act while channelling",
         "tracking": "the caster stays facing the target while channelling"
+      }
+    },
+    "clock": {
+      "hint": "the clock between the cast and the landing — a launch delay, a projectile's speed, or a fixed delay",
+      "props": {
+        "launch": "seconds between the cast and the launch",
+        "velocity": "the projectile's speed in yards a second",
+        "delay": "a fixed delay before the impact, where the speed is really a delay"
       }
     },
     "range": {
@@ -269,13 +278,18 @@
       "hint": "one of the spell's effects — what it actually does",
       "props": {
         "name": "the effect's name",
-        "index": "its place among the spell's effects, from 0"
+        "index": "its place among the spell's effects, from 0",
+        "hops": "how many further targets it chains to",
+        "unimplemented": "the server has no handler for this effect",
+        "nostack": "the amount does not grow with the stack",
+        "chainfirst": "chains from the first target rather than the caster"
       }
     },
     "aura": {
       "hint": "an aura the spell applies — what it does while it holds",
       "props": {
-        "name": "the aura's name"
+        "name": "the aura's name",
+        "every": "how often it ticks"
       }
     },
     "triggers": {

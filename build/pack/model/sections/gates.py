@@ -10,8 +10,10 @@ from collections.abc import Callable
 
 from ...derive import Reads
 from ...measure import numeric_domain
+from ...routes.attributes import attribute_bit
 from ...routes.delivery import BREAKS_ON_MOVE, CHANNELLED
 from ...routes.reach import MELEE, UNLIMITED, WEAPON
+from ...routes.spells import SPEED_IS_DELAY_BIT
 from ..registry import register
 from ..section import Cardinality, Count, CountFamily, Domain, Layout, Section, SectionColumns, size
 
@@ -40,6 +42,40 @@ def delivery(reads: Reads) -> SectionColumns:
         "castMs": [row.cast_ms for row in rows],
         "durMs": [row.duration_ms for row in rows],
         "flags": [row.flags for row in rows],
+    }
+
+
+MILLISECONDS = 1000
+"""Stored units per second, the way every duration in the pack is kept."""
+
+
+def timeline(reads: Reads) -> SectionColumns:
+    """The clock of every spell that puts time between its cast and its landing.
+
+    `LaunchDelay` is seconds before the launch. `Speed` is either yards a
+    second, the projectile's velocity, or seconds of fixed delay before the
+    impact where the spell's attribute says so, and the two ship as separate
+    columns so neither can hold the other's number. Everything else on the
+    clock, the cast time, the channel and the aura tick, already ships on
+    the delivery row and the aura row.
+    """
+    props = reads.props
+    spells = sorted(set(props.speed) | set(props.launch_delay))
+    velocity: list[float] = []
+    delay: list[int] = []
+    for spell in spells:
+        speed = props.speed.get(spell, 0.0)
+        if attribute_bit(props.attribute_words.get(spell, ()), SPEED_IS_DELAY_BIT):
+            velocity.append(0.0)
+            delay.append(round(speed * MILLISECONDS))
+        else:
+            velocity.append(round(speed, 1))
+            delay.append(0)
+    return {
+        "spellIds": spells,
+        "launchMs": [round(props.launch_delay.get(spell, 0.0) * MILLISECONDS) for spell in spells],
+        "velocity": velocity,
+        "delayMs": delay,
     }
 
 
@@ -147,6 +183,38 @@ SPELL_ATTRS = register(
                 lambda columns, reads: {
                     f"spellAttrs.{handler}": len(spells) for handler, spells in sorted(reads.attributes.items())
                 }
+            ),
+        ),
+    )
+)
+
+SPELL_TIMELINE = register(
+    Section(
+        name="spellTimeline",
+        doc="The launch delay, the projectile velocity and the fixed impact delay of every spell that has any.",
+        module="core",
+        produce=timeline,
+        columns=("spellIds", "launchMs", "velocity", "delayMs"),
+        reads=("props", "spell_ids"),
+        counts=(
+            size("spellTimeline", "spellIds"),
+            Count("timeline.velocity", lambda columns, _r: sum(1 for held in columns["velocity"] if held > 0)),
+            Count("timeline.delay", lambda columns, _r: sum(1 for held in columns["delayMs"] if held > 0)),
+            Count("timeline.launch", lambda columns, _r: sum(1 for held in columns["launchMs"] if held > 0)),
+        ),
+        domains=(
+            Domain(
+                "timeline.velocity",
+                lambda columns, _r: numeric_domain(v for v in columns["velocity"] if v > 0),
+                unit="yd/s",
+            ),
+            Domain(
+                "timeline.delay", lambda columns, _r: numeric_domain(v for v in columns["delayMs"] if v > 0), unit="ms"
+            ),
+            Domain(
+                "timeline.launch",
+                lambda columns, _r: numeric_domain(v for v in columns["launchMs"] if v > 0),
+                unit="ms",
             ),
         ),
     )

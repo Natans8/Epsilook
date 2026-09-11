@@ -18,6 +18,17 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from typing import NamedTuple
 
+from ..sources import load_local_enum
+
+
+SPEED_IS_DELAY_BIT = next(
+    bit
+    for bit, held in load_local_enum("spell_attributes").items()
+    if isinstance(held, dict) and held.get("name") == "MissileSpeedIsDelayInSec"
+)
+"""The attribute saying `Speed` is seconds of delay before the impact rather
+than yards a second, found by its name in the vendored list."""
+
 
 class PropertiesRow(NamedTuple):
     """One spell's base row of `SpellMisc`, its array of flag words read whole."""
@@ -55,6 +66,11 @@ class SpellProperties:
     """Spell to its `SpellRange` id. Zero where it names no row."""
 
     delayed: set[int] = field(default_factory=set)
+    speed: dict[int, float] = field(default_factory=dict)
+    """Spell -> `SpellMisc.Speed`, for the spells that carry one: yards a
+    second, or seconds of delay where `SPEED_IS_DELAY_BIT` says so."""
+    launch_delay: dict[int, float] = field(default_factory=dict)
+    """Spell -> `SpellMisc.LaunchDelay`, in seconds, for the spells that carry one."""
     """The spells whose effects land at the impact rather than the cast.
 
     A missile speed or a launch delay is what puts time between the cast and
@@ -77,6 +93,10 @@ class SpellProperties:
             spells.range_index[row.spell] = row.range_index
             if row.speed > 0 or row.launch_delay > 0:
                 spells.delayed.add(row.spell)
+            if row.speed > 0:
+                spells.speed[row.spell] = row.speed
+            if row.launch_delay > 0:
+                spells.launch_delay[row.spell] = row.launch_delay
             spells.attribute_words[row.spell] = row.attribute_words
         spells.icon_fid = {spell: icon for spell, icon in icons.items() if spell in spells.school}
         return spells

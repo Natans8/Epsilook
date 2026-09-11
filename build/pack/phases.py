@@ -28,6 +28,16 @@ PHASE_TRAVEL = 4
 PHASE_IMPACT = 6
 PHASE_AURA = 7
 PHASE_AURA_END = 8
+PHASE_CHANNEL = 11
+"""Where a channelled spell's effects land and its auras hold: the channel
+start, since the server handles a channel at once whatever its speed."""
+
+PHASE_LAUNCH = 25
+"""The pack's own phase: the server's launch, after the cast and before the
+travel, which the client never names. The effects the server only runs at
+launch, the jumps and the trigger-spell effects, sit here whatever the spell's
+speed. The value is the one past the client's enum, listed in the vendored
+file so it wears a word like the rest."""
 
 AURA_PHASE_EVENTS = frozenset({PHASE_AURA, PHASE_AURA_END})
 """The events meaning the aura phase, the one that can disagree with the rest

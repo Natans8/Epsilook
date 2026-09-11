@@ -33,7 +33,7 @@ import {
 // The kinds this file builds rows for, under their own names. Taken off the catalogue rather than off the door, which
 // carries it as a namespace so the game's nouns do not crowd out the language's. Only the spell and id columns need
 // their kinds by name — every pooled column's rows arrive under the kind word the pack ships.
-const {delivery, description, expansion, icon, name: nameKind, range, spellId: spellIdKind} = catalogue;
+const {delivery, description, expansion, icon, name: nameKind, range, spellId: spellIdKind, clock} = catalogue;
 
 /** One deduplicated prose pool and the per-spell indexes into it; `of[i]` of nought means the spell has none. */
 interface TextPool {
@@ -70,6 +70,16 @@ interface ExpansionsSection {
     /** The expansion's full title. */
     readonly labels?: readonly string[];
     readonly aliases?: readonly (readonly string[])[];
+}
+
+/**
+ * One spell's clock between its cast and its landing, keyed off the `spellTimeline` section: the launch delay,
+ * then a projectile's velocity or a fixed delay, whichever the client's attribute says its one number means.
+ */
+export interface Timeline {
+    readonly launchMs: number;
+    readonly velocity: number;
+    readonly delayMs: number;
 }
 
 /** One spell's cast-and-channel shape, keyed off the `spellDelivery` section. */
@@ -110,6 +120,8 @@ export interface LoadedPack {
     readonly iconFids: readonly number[];
     /** Cast-and-channel per spell id; empty where the pack ships no delivery section. */
     readonly delivery: ReadonlyMap<number, Delivery>;
+    /** The clock per spell id, for the spells that carry any of it; empty where the pack ships no timeline section. */
+    readonly timeline: ReadonlyMap<number, Timeline>;
     /** The distance bands and each spell's own; absent where the pack ships no range section. */
     readonly ranges: RangesSection | undefined;
     /** Spell ids per attribute-flag word. */
@@ -148,6 +160,17 @@ export function fromPack(pack: RowPack, entry: VersionEntry, locale: string): Lo
             });
         }
     }
+    const timelineSection = pack.spellTimeline as
+        { spellIds: number[]; launchMs: number[]; velocity: number[]; delayMs: number[] } | undefined;
+    const timelines = new Map<number, Timeline>();
+    if (timelineSection) {
+        for (let k = 0; k < timelineSection.spellIds.length; k++) {
+            timelines.set(timelineSection.spellIds[k], {
+                launchMs: timelineSection.launchMs[k], velocity: timelineSection.velocity[k],
+                delayMs: timelineSection.delayMs[k],
+            });
+        }
+    }
     const attrs = new Map<string, ReadonlySet<number>>(
         Object.entries((pack.spellAttrs ?? {}) as Record<string, number[]>)
             .map(([word, ids]) => [word, new Set(ids)]));
@@ -158,7 +181,7 @@ export function fromPack(pack: RowPack, entry: VersionEntry, locale: string): Lo
         text: sectionOf(pack, "spellText") as SpellTextSection,
         iconNames: sectionOf(pack, "iconNames") as readonly string[],
         iconFids: sectionOf(pack, "iconFids") as readonly number[],
-        delivery: deliveries, attrs,
+        delivery: deliveries, timeline: timelines, attrs,
         ranges: pack.spellRanges as RangesSection | undefined,
         expansions: sectionOf(pack, "expansions") as ExpansionsSection,
         index,
@@ -379,6 +402,18 @@ function spellRows(l: LoadedPack, i: number): Row[] {
         if (l.attrs.get("actionsduringchannel")?.has(id)) props.unhindered = 1;
         if (l.attrs.get("tracktargetinchannel")?.has(id)) props.tracking = 1;
         rows.push(row(delivery, props));
+    }
+
+    // The clock exists only for the spells that carry any of it: an instant landing has no clock, and a row with
+    // nothing on it would say something happened. Each part is set only where it is non-zero, so the door words
+    // select the spells whose clock has that part rather than every spell with a row.
+    const held = l.timeline.get(id);
+    if (held) {
+        const props: Record<string, Stored> = {};
+        if (held.launchMs > 0) props.launch = held.launchMs;
+        if (held.velocity > 0) props.velocity = held.velocity;
+        if (held.delayMs > 0) props.delay = held.delayMs;
+        rows.push(row(clock, props));
     }
 
     // Range exists only where the pack ships it; on such packs every spell has one row, because reaching no further

@@ -1,0 +1,123 @@
+{
+ "enum": "SpellEffect.EffectAttributes",
+ "description": "The per-effect attribute bits, packed in SpellEffect.EffectAttributes: bit B is 1<<B. Names are wowdev.wiki's SpellEffectAttributes table (10.1.7); the bits the table leaves unnamed are listed by number so a row carrying one indexes a real entry. `server` records what the Epsilon core's spell code does with a bit; every other bit is client-side or unimplemented on that core and ships as a word to search by, never as a claim about behaviour. `handler` marks the bits that ship as flags on the effect kind, which is a data edit here plus the catalogue's own declaration of the word.",
+ "source": [
+  "https://wowdev.wiki/DB/SpellEffect",
+  "https://github.com/EpsilonRP/TrinityCore/blob/master/src/server/game/Spells/SpellInfo.cpp"
+ ],
+ "keys": "EffectAttributes bit",
+ "values": {
+  "0": {
+   "name": "NoImmunity",
+   "word": "noimmunity"
+  },
+  "1": {
+   "name": "PositionIsFacingRelative",
+   "word": "positionisfacingrelative"
+  },
+  "2": {
+   "name": "JumpChargeUnitMeleeRange",
+   "word": "jumpchargeunitmeleerange"
+  },
+  "3": {
+   "name": "JumpChargeUnitStrictPathCheck",
+   "word": "jumpchargeunitstrictpathcheck"
+  },
+  "4": {
+   "name": "ExcludeOwnParty",
+   "word": "excludeownparty"
+  },
+  "5": {
+   "name": "AlwaysAoeLineOfSight",
+   "word": "alwaysaoelineofsight"
+  },
+  "6": {
+   "name": "SuppressPointsStacking",
+   "word": "suppresspointsstacking",
+   "server": "the aura amount does not scale with the stack",
+   "handler": "nostack"
+  },
+  "7": {
+   "name": "ChainFromInitialTarget",
+   "word": "chainfrominitialtarget",
+   "server": "the chain starts from the initial target",
+   "handler": "chainfirst"
+  },
+  "8": {
+   "name": "UncontrolledNoBackwards",
+   "word": "uncontrollednobackwards"
+  },
+  "9": {
+   "name": "AuraPointsStack",
+   "word": "aurapointsstack"
+  },
+  "10": {
+   "name": "NoCopyDamageInterruptsOrProcs",
+   "word": "nocopydamageinterruptsorprocs"
+  },
+  "11": {
+   "name": "AddTargetCombatReachToAOE",
+   "word": "addtargetcombatreachtoaoe"
+  },
+  "12": {
+   "name": "IsHarmful",
+   "word": "isharmful"
+  },
+  "13": {
+   "name": "ForceScaleToOverrideCameraMinHeight",
+   "word": "forcescaletooverridecameraminheight"
+  },
+  "14": {
+   "name": "PlayersOnly",
+   "word": "playersonly"
+  },
+  "15": {
+   "name": "ComputePointsOnlyAtCastTime",
+   "word": "computepointsonlyatcasttime"
+  },
+  "16": {
+   "name": "EnforceLineOfSightToChainTargets",
+   "word": "enforcelineofsighttochaintargets"
+  },
+  "17": {
+   "name": "AreaEffectsUseTargetRadius",
+   "word": "areaeffectsusetargetradius"
+  },
+  "18": {
+   "name": "TeleportWithVehicle",
+   "word": "teleportwithvehicle"
+  },
+  "19": {
+   "name": "ScalePointsByChallengeModeDamageScaler",
+   "word": "scalepointsbychallengemodedamagescaler"
+  },
+  "20": {
+   "name": "DontFailSpellOnTargetingFailure",
+   "word": "dontfailspellontargetingfailure"
+  },
+  "21": {
+   "name": "Bit21",
+   "word": "bit21"
+  },
+  "22": {
+   "name": "Bit22",
+   "word": "bit22"
+  },
+  "23": {
+   "name": "IgnoreDuringCooldownTimeRateCalculation",
+   "word": "ignoreduringcooldowntimeratecalculation"
+  },
+  "24": {
+   "name": "Bit24",
+   "word": "bit24"
+  },
+  "25": {
+   "name": "Bit25",
+   "word": "bit25"
+  },
+  "26": {
+   "name": "DamageOnlyAbsorbShields",
+   "word": "damageonlyabsorbshields"
+  }
+ }
+}

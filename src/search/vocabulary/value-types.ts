@@ -576,6 +576,18 @@ export const length = numeric({
 });
 
 /**
+ * How fast a projectile flies, in yards a second: the one speed the client stores as a rate rather than as a
+ * percentage of a walking pace. A bare number is the rate itself, since nothing else a reader would type here has
+ * a unit to confuse it with.
+ */
+export const velocity = numeric({
+    name: "velocity",
+    storage: "float",
+    display: {unit: "yd/s", factor: 1, sign: "refused"},
+    hint: t("tooltips:type.velocity"),
+});
+
+/**
  * A signed distance along one axis, in yards: where something sits rather than how far away it is.
  *
  * The same unit {@link length} measures and a different question, which is why the sign splits them rather than a

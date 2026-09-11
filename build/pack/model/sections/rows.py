@@ -382,6 +382,8 @@ MECH_ROWS = register(
             ),
             Domain("invis", lambda columns, _r: numeric_domain(amounts(walked(columns), "invis", "channel"))),
             Domain("speed", lambda columns, _r: numeric_domain(amounts(walked(columns), "speed", "amount")), unit="%"),
+            Domain("hops", lambda columns, _r: numeric_domain(amounts(walked(columns), "effect", "hops"))),
+            Domain("every", lambda columns, _r: numeric_domain(amounts(walked(columns), "aura", "every")), unit="ms"),
         ),
     )
 )

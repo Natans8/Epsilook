@@ -114,7 +114,7 @@ describe("the shipped schema", () => {
         assert.equal(HEADS.get("spell")?.role, "column");
         assert.equal(HEADS.get("name")?.role, "kind");
         assert.deepEqual(kindsOf(COLUMNS.get("spell")!).map((k) => k.word),
-            ["name", "desc", "icon", undefined, "range"]);
+            ["name", "desc", "icon", undefined, "clock", "range"]);
     });
 
     it("leaves a column's same-named kind word-less, for the same reason", () => {

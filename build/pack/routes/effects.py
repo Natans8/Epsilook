@@ -23,7 +23,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 
-from ..sources import read_enum_names
+from ..sources import load_local_enum, read_enum_names
 from ..targets import NO_TARGET, implicit_target_bit
 from .flow import Cell, Column, Rows, Schema, column_name, key_of, number_of
 
@@ -136,6 +136,35 @@ MISC1 = "EffectMiscValue_1"
 AMOUNT = "EffectBasePoints"
 """The columns the selectors name."""
 
+_HANDLERS = load_local_enum("spell_effect_handlers")
+LAUNCH_EFFECTS = frozenset(
+    effect for effect, held in _HANDLERS.items() if isinstance(held, dict) and held.get("phase") == "launch"
+)
+"""The effects the server only runs at launch, which sit at the launch phase
+whatever the spell's speed: read off the vendored handler table."""
+
+UNIMPLEMENTED_EFFECTS = frozenset(
+    effect for effect, held in _HANDLERS.items() if isinstance(held, dict) and held.get("phase") == "unimplemented"
+)
+"""The effects the server has no handler for at all."""
+
+_ATTRIBUTES = load_local_enum("spell_effect_attributes")
+EFFECT_ATTRIBUTE_FLAGS: dict[str, int] = {
+    str(held["handler"]): bit
+    for bit, held in sorted(_ATTRIBUTES.items())
+    if isinstance(held, dict) and held.get("handler")
+}
+"""The effect attribute bits that ship as flags, by the word each ships under.
+
+Which bits ship is a declaration in the vendored file; the rest are a
+vocabulary the pack carries and no claim about behaviour.
+"""
+
+
+def carries_attribute(attributes: int, bit: int) -> bool:
+    """Whether an effect's attribute bits carry one bit."""
+    return bool(attributes & (1 << bit))
+
 
 def implicit_target_bits(version: str) -> Mapping[int, int]:
     """Resolve one build's implicit-target ids to target bits.
@@ -203,6 +232,12 @@ class EffectRow:
     The order the effects happen in once the spell lands, which is the one
     sequence the effect rows carry of their own.
     """
+    every: int = 0
+    """`EffectAuraPeriod`: how often a periodic aura ticks, in milliseconds, or nought."""
+    hops: int = 0
+    """`EffectChainTargets`: how many further targets the effect chains to, or nought."""
+    attributes: int = 0
+    """`EffectAttributes`: the row's attribute bits, raw."""
 
 
 @dataclass

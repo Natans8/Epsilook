@@ -14,12 +14,14 @@ layer and never on another section.
 
 from __future__ import annotations
 
-from collections.abc import Container, Mapping, Sequence
+from collections.abc import Container, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import NamedTuple
 
-from ..phases import PHASE_AURA, landing
-from ..routes import MaskedIds, SpellEffectRows, VehicleSeats
+from ..phases import PHASE_AURA, PHASE_CHANNEL, PHASE_LAUNCH, landing
+from ..routes import Delivery, MaskedIds, SpellEffectRows, VehicleSeats
+from ..routes.delivery import channelled_spells
+from ..routes.effects import LAUNCH_EFFECTS
 from ..routes.models import MODEL_CAT_ITEM, Placement
 from ..routes.route import route
 from .links import link_kind_word
@@ -72,8 +74,15 @@ class MechanicRow(NamedTuple):
     order: int
     """The effect's `EffectIndex`: its order among the spell's, from nought."""
     phase: int
-    """Where it happens: an aura holds from the aura phase, anything else
-    lands where the spell lands."""
+    """Where it happens: an aura holds from the aura phase, or the channel;
+    an effect the server only runs at launch sits at the launch phase;
+    anything else lands where the spell lands."""
+    every: int
+    """How often a periodic aura ticks, in milliseconds, or nought."""
+    hops: int
+    """How many further targets the effect chains to, or nought."""
+    attributes: int
+    """The row's effect attribute bits, raw."""
 
 
 class SoundRow(NamedTuple):
@@ -145,13 +154,22 @@ def masked_rows(bucket: Bucket) -> list[OccurrenceRow]:
     )
 
 
-def effect_phase(aura: int, spell: int, delayed: Container[int]) -> int:
+def effect_phase(effect: int, aura: int, spell: int, delayed: Container[int], channelled: Container[int]) -> int:
     """Where one effect row happens.
 
-    An aura holds from the aura phase whatever applied it; every other effect
-    happens where the spell lands, which the delayed set decides per spell.
+    An aura holds from the aura phase whatever applied it, or from the
+    channel where the spell is one; an effect the server only runs at launch
+    sits at the launch phase whatever the spell's speed; every other effect
+    happens where the spell lands, which is the channel start for a channel
+    and otherwise what the delayed set decides per spell.
     """
-    return PHASE_AURA if aura else landing(spell in delayed)
+    if aura:
+        return PHASE_CHANNEL if spell in channelled else PHASE_AURA
+    if effect in LAUNCH_EFFECTS:
+        return PHASE_LAUNCH
+    if spell in channelled:
+        return PHASE_CHANNEL
+    return landing(spell in delayed)
 
 
 def id_rows(ids: MaskedIds) -> list[tuple[int, int]]:
@@ -166,6 +184,11 @@ def id_rows(ids: MaskedIds) -> list[tuple[int, int]]:
 @dataclass
 class PackRows:
     """Every flattening at least two sections read."""
+
+    channelled: frozenset[int] = frozenset()
+    """The spells delivered as a channel, which the phase rule places apart;
+    carried here so a family placing a row reads it off the rows it already
+    reads rather than off the delivery section."""
 
     models: list[ModelRow] = field(default_factory=list)
     sounds: list[SoundRow] = field(default_factory=list)
@@ -264,6 +287,7 @@ def link_rows(
     effect_names: Mapping[int, str],
     aura_names: Mapping[int, str],
     delayed: Container[int],
+    channelled: Container[int],
 ) -> tuple[list[LinkRow], list[str]]:
     """Every edge between two spells, and the words they print.
 
@@ -280,7 +304,7 @@ def link_rows(
             source,
             destination,
             words.setdefault(link_kind_word(effect, aura, effect_names, aura_names), len(words)),
-            effect_phase(aura, source, delayed),
+            effect_phase(effect, aura, source, delayed, channelled),
         )
         for source, destination, effect, aura in sorted(effects.links)
     }
@@ -320,13 +344,17 @@ def build_rows(
     aura_names: Mapping[int, str],
     bonesets: Mapping[int, Mapping[int, list[str]]],
     delayed: Container[int],
+    delivery: Iterable[Delivery],
 ) -> PackRows:
     """Flatten everything at least two sections read, once.
 
     Args:
         delayed: the spells whose effects land at the impact, which places
             every effect row and every edge.
+        delivery: how each spell is delivered, for the channels, whose
+            effects land at the channel start and whose auras hold for it.
     """
+    channelled = frozenset(channelled_spells(delivery))
     models = sorted(
         ModelRow(
             spell,
@@ -355,9 +383,10 @@ def build_rows(
     used = {row.kit for row in animkits}
     used |= {kit for _spell, kit in spell_rows(seats.animkits, vehicles)}
     vehicle_ids = sorted({vehicle for _spell, vehicle in vehicles})
-    edges, words = link_rows(effects, effect_names, aura_names, delayed)
+    edges, words = link_rows(effects, effect_names, aura_names, delayed, channelled)
     boneset_pairs, boneset_pool = boneset_rows(bonesets, used)
     return PackRows(
+        channelled=channelled,
         models=models,
         sounds=sorted(
             SoundRow(spell, kit, file, phase, mask)
@@ -384,7 +413,10 @@ def build_rows(
                     row.misc_a,
                     row.misc_b,
                     row.order,
-                    effect_phase(row.aura, row.spell, delayed),
+                    effect_phase(row.effect, row.aura, row.spell, delayed, channelled),
+                    row.every,
+                    row.hops,
+                    row.attributes,
                 )
                 for row in effects.mechanics
             }

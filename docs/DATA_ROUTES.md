@@ -575,7 +575,7 @@ flowchart TD
         R1["modelRows · soundRows<br/>animRows · fxRows · mechRows<br/><br/>kinds · sizes · values<br/>carried · vocab · absent<br/>counts, one per spell<br/>refs, one flat run"]
     end
     subgraph B["3 · link rows — one per (spell, thing)"]
-        B1["spellDelivery<br/>spellVehicleAnims<br/>spellVehicleAnimKits<br/><br/>spellAttrs inverts it:<br/>a flag naming its spells"]
+        B1["spellDelivery<br/>spellTimeline<br/>spellVehicleAnims<br/>spellVehicleAnimKits<br/><br/>spellAttrs inverts it:<br/>a flag naming its spells"]
     end
     subgraph C["4 · vocabularies — stored once"]
         C1["keyed by an id, or paired<br/>as parallel arrays<br/><br/>files · areas · morphs<br/>screens · soundKitNames<br/>soundTypes · animKitAnims<br/>vehicleSeats"]
@@ -773,10 +773,15 @@ that rescues a spell whose self-aura rides alongside effects aimed at someone el
 
 **What has no event row is placed by a rule rather than left unplaced.** A missile set is what the travel phase is, so
 it starts there. An effect lands where the spell lands: at the impact when `SpellMisc.Speed` or `LaunchDelay` is
-non-zero, which is the client's own hit-delay test, and at the cast otherwise; an aura, and every payload read off one,
-holds from the aura's start; a summon, an object and a triggered spell land with the effect that carries them. The
-effect row also carries its `EffectIndex`, the order the effects happen in once the spell lands. The one thing placed
-nowhere is the visual's own animation-event sound, which no event names.
+non-zero, which is the client's own hit-delay test, and at the cast otherwise, unless the spell is a channel, which
+the server handles at once and whose effects land at the channel start; an effect the server only runs at launch,
+the jumps and the trigger-spell effects, sits at the launch phase whatever the speed, a phase the pack adds one past
+the client's own since the client never names that moment; an aura, and every payload read off one, holds from the
+aura's start, or from the channel where the spell is one; a summon, an object and a triggered spell land with the
+effect that carries them. Which effects run at launch, and which the server has no handler for at all, is the
+vendored `spell_effect_handlers.json`, read off the Epsilon core's handler table. The effect row also carries its
+`EffectIndex`, the order the effects happen in once the spell lands. The one thing placed nowhere is the visual's own
+animation-event sound, which no event names.
 
 **The kit is the fan-out point,** and it is the single most important thing to picture. One row says "this kit plays
 effect E of type T", and the *type* decides which table E is an id in. Reading the effect without first reading its type
@@ -1064,6 +1069,7 @@ anywhere, and it ships as its own kind.
 | **school**      | `spells`                    | A mask; zero is a real value meaning schoolless              |
 | **attributes**  | `spellAttrs`                | Which flags ship is a declaration, not code                  |
 | **delivery**    | `spellDelivery`             | Cast and channel are not a partition; many spells do both    |
+| **clock**       | `spellTimeline`             | The launch delay, and the speed split by attribute into a velocity or a fixed delay |
 | **reach**       | `spellRanges`               | A band the spell names, not a distance it carries            |
 | **description** | `spellText`                 | A template, cooked to prose. See below                       |
 | **area gate**   | `mechRows`, `areas`         | Where a spell may be cast at all                             |
@@ -1591,17 +1597,21 @@ that stops being covered, fails `tools/check.py` rather than silently disagreein
 
 Where a shown thing comes from, by what the reader sees:
 
-| the reader sees   | it came from                                                          |
-|-------------------|-----------------------------------------------------------------------|
-| The spell's name  | The client's spell-name table, hotfixes applied                       |
-| The icon          | The spell's misc row, base difficulty winning                         |
-| A model pill      | One of nine model kinds; the kind says which id space it is in        |
-| A missile pill    | The visual's missile set, with the row's anchors beating the visual's |
-| A sound pill      | A kit, reached five ways, resolved to its audio files                 |
-| An animation pill | An index into the community name list, not a table key                |
-| A morph's name    | The server world tables; absent without a release, and declared so    |
-| A colour          | A packed value from a chain, glow, ghost or procedure row             |
-| A percentage      | An effect's amount, signed, with zero dropped                         |
-| The description   | A template cooked to prose at build time                              |
-| An area name      | The area's own name, never its parent zone                            |
-| A target icon     | The mask on the row, with self-cast resolved                          |
+| the reader sees   | it came from                                                                                    |
+|-------------------|-------------------------------------------------------------------------------------------------|
+| The spell's name  | The client's spell-name table, hotfixes applied                                                 |
+| The icon          | The spell's misc row, base difficulty winning                                                   |
+| A model pill      | One of nine model kinds; the kind says which id space it is in                                  |
+| A missile pill    | The visual's missile set, with the row's anchors beating the visual's                           |
+| A sound pill      | A kit, reached five ways, resolved to its audio files                                           |
+| An animation pill | An index into the community name list, not a table key                                          |
+| A morph's name    | The server world tables; absent without a release, and declared so                              |
+| A colour          | A packed value from a chain, glow, ghost or procedure row                                       |
+| A percentage      | An effect's amount, signed, with zero dropped                                                   |
+| The description   | A template cooked to prose at build time                                                        |
+| An area name      | The area's own name, never its parent zone                                                      |
+| A target icon     | The mask on the row, with self-cast resolved                                                    |
+| A phase word      | The event that started a kit; an effect's is the server's rule: launch, channel, or the landing |
+| A clock           | `SpellMisc.LaunchDelay` and `Speed`, the speed split by attribute into a velocity or a delay    |
+| An aura's tick    | `SpellEffect.EffectAuraPeriod`, on the aura row                                                 |
+| An effect's flags | `EffectAttributes` bits the vendored file tags, plus the server's own gap as `unimplemented`    |

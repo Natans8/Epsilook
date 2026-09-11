@@ -85,6 +85,7 @@ def walk(
         zone_music or {},
         ambiences or {},
         delayed,
+        [],
     )
 
 

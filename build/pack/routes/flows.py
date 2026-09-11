@@ -1080,6 +1080,9 @@ effect_rows = (
         c.EffectBasePointsF,
         c.EffectTriggerSpell,
         c.EffectIndex,
+        c.EffectAuraPeriod,
+        c.EffectChainTargets,
+        c.EffectAttributes,
     )
     .narrow(c.SpellID, "names.names")
     .lookup(c.ImplicitTarget_0, "target_bits", into="bit_a", default=NO_TARGET)
@@ -1192,6 +1195,9 @@ effects = declare(
                     flag(c.consumed_Effect),
                     flag(c.consumed_EffectAura),
                     c.EffectIndex,
+                    c.EffectAuraPeriod,
+                    c.EffectChainTargets,
+                    c.EffectAttributes,
                 )
             ).then(set)
         ),

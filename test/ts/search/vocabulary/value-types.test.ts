@@ -68,6 +68,7 @@ const CANONICAL: [string, string[]][] = [
     ["percent", ["30%", "0%", "7.5%"]],
     ["percentChange", ["+30%", "-30%", "+0%"]],
     ["length", ["5yd", "0.5yd"]],
+    ["velocity", ["24yd/s", "0.5yd/s"]],
     ["coordinate", ["5yd", "-2yd", "0yd"]],
     ["angle", ["60deg", "27.5deg"]],
     ["colour", ["#ff00aa", "#000000"]],
@@ -84,7 +85,7 @@ describe("the type registry", () => {
             "count", "creatureId", "displayId", "door", "enum", "fileId", "flag",
             "itemId", "length", "multiplier", "objectId", "offset", "ordinal", "pace",
             "path", "percent", "percentChange", "rotation", "seconds", "soundKitId",
-            "spellId", "text", "visualKitId",
+            "spellId", "text", "velocity", "visualKitId",
         ]);
     });
 

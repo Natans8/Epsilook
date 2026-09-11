@@ -44,6 +44,7 @@ REGISTERED_ORDER = (
     "anchorNames",
     "visualPhases",
     "spellAttrs",
+    "spellTimeline",
     "spellDelivery",
     "spellRanges",
     "areas",

@@ -747,7 +747,7 @@ def check_pack_sections(rep: Report) -> None:
     # addon reads the pack through its own API, by section name.
     source = "".join(
         (ROOT / part).read_text(encoding="utf-8")
-        for part in ("src/data.ts", "src/packrows.ts", "tools/dataset.ts", "addon/Epsilook/API.lua")
+        for part in ("src/data.ts", "src/packrows.ts", "src/dataset.ts", "tools/dataset.ts", "addon/Epsilook/API.lua")
     )
 
     # Two kinds of section are reached by DECLARATION rather than by name, so

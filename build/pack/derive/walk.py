@@ -24,6 +24,7 @@ from dataclasses import dataclass, field
 from typing import Any, NamedTuple
 
 from ..routes import (
+    Delivery,
     Ambience,
     FxPayloads,
     KitEffects,
@@ -35,7 +36,8 @@ from ..routes import (
     ZoneMusic,
 )
 from ..routes.models import MODEL_CAT_MISSILE, SCALE_UNIT, UNPLACED, AttachModel
-from ..phases import PHASE_AURA, PHASE_NONE, PHASE_TRAVEL, landing
+from ..phases import PHASE_AURA, PHASE_CHANNEL, PHASE_NONE, PHASE_TRAVEL, landing
+from ..routes.delivery import channelled_spells
 from ..routes.route import route
 from ..targets import merge_masked, resolve_target_bit
 
@@ -184,6 +186,7 @@ def walk_spells(
     zone_music: Mapping[int, ZoneMusic],
     ambiences: Mapping[int, Ambience],
     delayed: Container[int],
+    delivery: Iterable[Delivery],
 ) -> SpellVisuals:
     """Walk every spell's visuals once, unioning what each one reaches.
 
@@ -234,7 +237,7 @@ def walk_spells(
             _walk_kits(vis, spell, visual, graph, kits, pairs, families, aimed, extra)
 
     _fold_chain_sounds(vis, fx, pairs)
-    _fold_effect_sounds(vis, effects, pairs, delayed)
+    _fold_effect_sounds(vis, effects, pairs, delayed, channelled_spells(delivery))
     _fold_screen_sounds(vis, fx, effects, zone_music, ambiences, pairs)
     return vis
 
@@ -331,7 +334,11 @@ def _walk_kits(
 
 
 def _fold_effect_sounds(
-    vis: SpellVisuals, effects: SpellEffectRows, pairs: SoundPairs, delayed: Container[int]
+    vis: SpellVisuals,
+    effects: SpellEffectRows,
+    pairs: SoundPairs,
+    delayed: Container[int],
+    channelled: Container[int],
 ) -> None:
     """Fold the sound an effect plays outright into the spell's sounds.
 
@@ -343,7 +350,8 @@ def _fold_effect_sounds(
     own.
     """
     for (spell, soundkit), mask in effects.sounds.items():
-        occurred(vis.sounds[spell], pairs.get(soundkit, ()), landing(spell in delayed), mask)
+        phase = PHASE_CHANNEL if spell in channelled else landing(spell in delayed)
+        occurred(vis.sounds[spell], pairs.get(soundkit, ()), phase, mask)
 
 
 def _fold_chain_sounds(vis: SpellVisuals, fx: FxPayloads, pairs: SoundPairs) -> None:

@@ -1,0 +1,2449 @@
+{
+ "enum": "SpellEffect.Effect handler modes",
+ "description": "When each effect runs on the Epsilon core, read off SpellEffects.cpp: the handler table maps an effect to its handler, and the handler's first line names the modes it runs in. LAUNCH and LAUNCH_TARGET run at the cast or after LaunchDelay, HIT once at the landing, HIT_TARGET per target hit; an effect whose handler is EffectNULL or EffectUnused has no handler at all and is `unimplemented`. `phase` is the pack's own reading: an effect that only runs at launch sits at the launch phase whatever the spell's speed, and every other effect lands where the spell does; the damage and heal handlers only accumulate at launch and deal at the hit, so for the phase they land.",
+ "source": [
+  "https://github.com/EpsilonRP/TrinityCore/blob/master/src/server/game/Spells/SpellEffects.cpp"
+ ],
+ "keys": "Effect",
+ "values": {
+  "0": {
+   "name": "&Spell::EffectInstaKill,",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "2": {
+   "name": "SPELL_EFFECT_SCHOOL_DAMAGE",
+   "handler": "EffectSchoolDMG",
+   "modes": [
+    "LAUNCH_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "3": {
+   "name": "SPELL_EFFECT_DUMMY",
+   "handler": "EffectDummy",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "4": {
+   "name": "SPELL_EFFECT_PORTAL_TELEPORT",
+   "handler": "EffectUnused",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "5": {
+   "name": "SPELL_EFFECT_5",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "6": {
+   "name": "SPELL_EFFECT_APPLY_AURA",
+   "handler": "EffectApplyAura",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "7": {
+   "name": "SPELL_EFFECT_ENVIRONMENTAL_DAMAGE",
+   "handler": "EffectEnvironmentalDMG",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "8": {
+   "name": "SPELL_EFFECT_POWER_DRAIN",
+   "handler": "EffectPowerDrain",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "9": {
+   "name": "SPELL_EFFECT_HEALTH_LEECH",
+   "handler": "EffectHealthLeech",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "10": {
+   "name": "SPELL_EFFECT_HEAL",
+   "handler": "EffectHeal",
+   "modes": [
+    "LAUNCH_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "11": {
+   "name": "SPELL_EFFECT_BIND",
+   "handler": "EffectBind",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "12": {
+   "name": "SPELL_EFFECT_PORTAL",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "13": {
+   "name": "SPELL_EFFECT_TELEPORT_TO_RETURN_POINT",
+   "handler": "EffectTeleportToReturnPoint",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "14": {
+   "name": "SPELL_EFFECT_INCREASE_CURRENCY_CAP",
+   "handler": "EffectIncreaseCurrencyCap",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "15": {
+   "name": "SPELL_EFFECT_TELEPORT_WITH_SPELL_VISUAL_KIT_LOADING_SCREEN",
+   "handler": "EffectTeleportUnitsWithVisualLoadingScreen",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "16": {
+   "name": "SPELL_EFFECT_QUEST_COMPLETE",
+   "handler": "EffectQuestComplete",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "17": {
+   "name": "SPELL_EFFECT_WEAPON_DAMAGE_NOSCHOOL",
+   "handler": "EffectWeaponDmg",
+   "modes": [
+    "LAUNCH_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "18": {
+   "name": "SPELL_EFFECT_RESURRECT",
+   "handler": "EffectResurrect",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "19": {
+   "name": "SPELL_EFFECT_ADD_EXTRA_ATTACKS",
+   "handler": "EffectAddExtraAttacks",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "20": {
+   "name": "SPELL_EFFECT_DODGE",
+   "handler": "EffectUnused",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "21": {
+   "name": "SPELL_EFFECT_EVADE",
+   "handler": "EffectUnused",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "22": {
+   "name": "SPELL_EFFECT_PARRY",
+   "handler": "EffectParry",
+   "modes": [
+    "HIT"
+   ],
+   "phase": "landing"
+  },
+  "23": {
+   "name": "SPELL_EFFECT_BLOCK",
+   "handler": "EffectBlock",
+   "modes": [
+    "HIT"
+   ],
+   "phase": "landing"
+  },
+  "24": {
+   "name": "SPELL_EFFECT_CREATE_ITEM",
+   "handler": "EffectCreateItem",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "25": {
+   "name": "SPELL_EFFECT_WEAPON",
+   "handler": "EffectUnused",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "26": {
+   "name": "SPELL_EFFECT_DEFENSE",
+   "handler": "EffectUnused",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "27": {
+   "name": "SPELL_EFFECT_PERSISTENT_AREA_AURA",
+   "handler": "EffectPersistentAA",
+   "modes": [
+    "HIT"
+   ],
+   "phase": "landing"
+  },
+  "28": {
+   "name": "SPELL_EFFECT_SUMMON",
+   "handler": "EffectSummonType",
+   "modes": [
+    "HIT"
+   ],
+   "phase": "landing"
+  },
+  "29": {
+   "name": "SPELL_EFFECT_LEAP",
+   "handler": "EffectLeap",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "30": {
+   "name": "SPELL_EFFECT_ENERGIZE",
+   "handler": "EffectEnergize",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "31": {
+   "name": "SPELL_EFFECT_WEAPON_PERCENT_DAMAGE",
+   "handler": "EffectWeaponDmg",
+   "modes": [
+    "LAUNCH_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "32": {
+   "name": "SPELL_EFFECT_TRIGGER_MISSILE",
+   "handler": "EffectTriggerMissileSpell",
+   "modes": [
+    "HIT",
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "33": {
+   "name": "SPELL_EFFECT_OPEN_LOCK",
+   "handler": "EffectOpenLock",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "34": {
+   "name": "SPELL_EFFECT_SUMMON_CHANGE_ITEM",
+   "handler": "EffectSummonChangeItem",
+   "modes": [
+    "HIT"
+   ],
+   "phase": "landing"
+  },
+  "35": {
+   "name": "SPELL_EFFECT_APPLY_AREA_AURA_PARTY",
+   "handler": "EffectUnused",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "36": {
+   "name": "SPELL_EFFECT_LEARN_SPELL",
+   "handler": "EffectLearnSpell",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "37": {
+   "name": "SPELL_EFFECT_SPELL_DEFENSE",
+   "handler": "EffectUnused",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "38": {
+   "name": "SPELL_EFFECT_DISPEL",
+   "handler": "EffectDispel",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "39": {
+   "name": "SPELL_EFFECT_LANGUAGE",
+   "handler": "EffectUnused",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "40": {
+   "name": "SPELL_EFFECT_DUAL_WIELD",
+   "handler": "EffectDualWield",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "41": {
+   "name": "SPELL_EFFECT_JUMP",
+   "handler": "EffectJump",
+   "modes": [
+    "LAUNCH_TARGET"
+   ],
+   "phase": "launch"
+  },
+  "42": {
+   "name": "SPELL_EFFECT_JUMP_DEST",
+   "handler": "EffectJumpDest",
+   "modes": [
+    "LAUNCH"
+   ],
+   "phase": "launch"
+  },
+  "43": {
+   "name": "SPELL_EFFECT_TELEPORT_UNITS_FACE_CASTER",
+   "handler": "EffectTeleUnitsFaceCaster",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "44": {
+   "name": "SPELL_EFFECT_SKILL_STEP",
+   "handler": "EffectLearnSkill",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "45": {
+   "name": "SPELL_EFFECT_PLAY_MOVIE",
+   "handler": "EffectPlayMovie",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "46": {
+   "name": "SPELL_EFFECT_SPAWN",
+   "handler": "EffectUnused",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "47": {
+   "name": "SPELL_EFFECT_TRADE_SKILL",
+   "handler": "EffectTradeSkill",
+   "modes": [
+    "HIT"
+   ],
+   "phase": "landing"
+  },
+  "48": {
+   "name": "SPELL_EFFECT_STEALTH",
+   "handler": "EffectUnused",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "49": {
+   "name": "SPELL_EFFECT_DETECT",
+   "handler": "EffectUnused",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "50": {
+   "name": "SPELL_EFFECT_TRANS_DOOR",
+   "handler": "EffectTransmitted",
+   "modes": [
+    "HIT"
+   ],
+   "phase": "landing"
+  },
+  "51": {
+   "name": "SPELL_EFFECT_FORCE_CRITICAL_HIT",
+   "handler": "EffectUnused",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "52": {
+   "name": "SPELL_EFFECT_SET_MAX_BATTLE_PET_COUNT",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "53": {
+   "name": "SPELL_EFFECT_ENCHANT_ITEM",
+   "handler": "EffectEnchantItemPerm",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "54": {
+   "name": "SPELL_EFFECT_ENCHANT_ITEM_TEMPORARY",
+   "handler": "EffectEnchantItemTmp",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "55": {
+   "name": "SPELL_EFFECT_TAMECREATURE",
+   "handler": "EffectTameCreature",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "56": {
+   "name": "SPELL_EFFECT_SUMMON_PET",
+   "handler": "EffectSummonPet",
+   "modes": [
+    "HIT"
+   ],
+   "phase": "landing"
+  },
+  "57": {
+   "name": "SPELL_EFFECT_LEARN_PET_SPELL",
+   "handler": "EffectLearnPetSpell",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "58": {
+   "name": "SPELL_EFFECT_WEAPON_DAMAGE",
+   "handler": "EffectWeaponDmg",
+   "modes": [
+    "LAUNCH_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "59": {
+   "name": "SPELL_EFFECT_CREATE_RANDOM_ITEM",
+   "handler": "EffectCreateRandomItem",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "60": {
+   "name": "SPELL_EFFECT_PROFICIENCY",
+   "handler": "EffectProficiency",
+   "modes": [
+    "HIT"
+   ],
+   "phase": "landing"
+  },
+  "61": {
+   "name": "SPELL_EFFECT_SEND_EVENT",
+   "handler": "EffectSendEvent",
+   "modes": [
+    "HIT",
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "62": {
+   "name": "SPELL_EFFECT_POWER_BURN",
+   "handler": "EffectPowerBurn",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "63": {
+   "name": "SPELL_EFFECT_THREAT",
+   "handler": "EffectThreat",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "64": {
+   "name": "SPELL_EFFECT_TRIGGER_SPELL",
+   "handler": "EffectTriggerSpell",
+   "modes": [
+    "LAUNCH",
+    "LAUNCH_TARGET"
+   ],
+   "phase": "launch"
+  },
+  "65": {
+   "name": "SPELL_EFFECT_APPLY_AREA_AURA_RAID",
+   "handler": "EffectUnused",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "66": {
+   "name": "SPELL_EFFECT_RECHARGE_ITEM",
+   "handler": "EffectRechargeItem",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "67": {
+   "name": "SPELL_EFFECT_HEAL_MAX_HEALTH",
+   "handler": "EffectHealMaxHealth",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "68": {
+   "name": "SPELL_EFFECT_INTERRUPT_CAST",
+   "handler": "EffectInterruptCast",
+   "modes": [
+    "LAUNCH_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "69": {
+   "name": "SPELL_EFFECT_DISTRACT",
+   "handler": "EffectDistract",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "70": {
+   "name": "SPELL_EFFECT_COMPLETE_AND_REWARD_WORLD_QUEST",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "71": {
+   "name": "SPELL_EFFECT_PICKPOCKET",
+   "handler": "EffectPickPocket",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "72": {
+   "name": "SPELL_EFFECT_ADD_FARSIGHT",
+   "handler": "EffectAddFarsight",
+   "modes": [
+    "HIT"
+   ],
+   "phase": "landing"
+  },
+  "73": {
+   "name": "SPELL_EFFECT_UNTRAIN_TALENTS",
+   "handler": "EffectUntrainTalents",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "74": {
+   "name": "SPELL_EFFECT_APPLY_GLYPH",
+   "handler": "EffectApplyGlyph",
+   "modes": [
+    "HIT"
+   ],
+   "phase": "landing"
+  },
+  "75": {
+   "name": "SPELL_EFFECT_HEAL_MECHANICAL",
+   "handler": "EffectHealMechanical",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "76": {
+   "name": "SPELL_EFFECT_SUMMON_OBJECT_WILD",
+   "handler": "EffectSummonObjectWild",
+   "modes": [
+    "HIT"
+   ],
+   "phase": "landing"
+  },
+  "77": {
+   "name": "SPELL_EFFECT_SCRIPT_EFFECT",
+   "handler": "EffectScriptEffect",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "78": {
+   "name": "SPELL_EFFECT_ATTACK",
+   "handler": "EffectUnused",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "79": {
+   "name": "SPELL_EFFECT_SANCTUARY",
+   "handler": "EffectSanctuary",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "80": {
+   "name": "SPELL_EFFECT_MODIFY_FOLLOWER_ITEM_LEVEL",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "81": {
+   "name": "SPELL_EFFECT_PUSH_ABILITY_TO_ACTION_BAR",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "82": {
+   "name": "SPELL_EFFECT_BIND_SIGHT",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "83": {
+   "name": "SPELL_EFFECT_DUEL",
+   "handler": "EffectDuel",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "84": {
+   "name": "SPELL_EFFECT_STUCK",
+   "handler": "EffectStuck",
+   "modes": [
+    "HIT"
+   ],
+   "phase": "landing"
+  },
+  "85": {
+   "name": "SPELL_EFFECT_SUMMON_PLAYER",
+   "handler": "EffectSummonPlayer",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "86": {
+   "name": "SPELL_EFFECT_ACTIVATE_OBJECT",
+   "handler": "EffectActivateObject",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "87": {
+   "name": "SPELL_EFFECT_GAMEOBJECT_DAMAGE",
+   "handler": "EffectGameObjectDamage",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "88": {
+   "name": "SPELL_EFFECT_GAMEOBJECT_REPAIR",
+   "handler": "EffectGameObjectRepair",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "89": {
+   "name": "SPELL_EFFECT_GAMEOBJECT_SET_DESTRUCTION_STATE",
+   "handler": "EffectGameObjectSetDestructionState",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "90": {
+   "name": "SPELL_EFFECT_KILL_CREDIT",
+   "handler": "EffectKillCreditPersonal",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "91": {
+   "name": "SPELL_EFFECT_THREAT_ALL",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "92": {
+   "name": "SPELL_EFFECT_ENCHANT_HELD_ITEM",
+   "handler": "EffectEnchantHeldItem",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "93": {
+   "name": "SPELL_EFFECT_FORCE_DESELECT",
+   "handler": "EffectForceDeselect",
+   "modes": [
+    "HIT"
+   ],
+   "phase": "landing"
+  },
+  "94": {
+   "name": "SPELL_EFFECT_SELF_RESURRECT",
+   "handler": "EffectSelfResurrect",
+   "modes": [
+    "HIT"
+   ],
+   "phase": "landing"
+  },
+  "95": {
+   "name": "SPELL_EFFECT_SKINNING",
+   "handler": "EffectSkinning",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "96": {
+   "name": "SPELL_EFFECT_CHARGE",
+   "handler": "EffectCharge",
+   "modes": [
+    "LAUNCH_TARGET",
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "97": {
+   "name": "SPELL_EFFECT_CAST_BUTTON",
+   "handler": "EffectCastButtons",
+   "modes": [
+    "HIT"
+   ],
+   "phase": "landing"
+  },
+  "98": {
+   "name": "SPELL_EFFECT_KNOCK_BACK",
+   "handler": "EffectKnockBack",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "99": {
+   "name": "SPELL_EFFECT_DISENCHANT",
+   "handler": "EffectDisEnchant",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "100": {
+   "name": "SPELL_EFFECT_INEBRIATE",
+   "handler": "EffectInebriate",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "101": {
+   "name": "SPELL_EFFECT_FEED_PET",
+   "handler": "EffectFeedPet",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "102": {
+   "name": "SPELL_EFFECT_DISMISS_PET",
+   "handler": "EffectDismissPet",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "103": {
+   "name": "SPELL_EFFECT_REPUTATION",
+   "handler": "EffectReputation",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "104": {
+   "name": "SPELL_EFFECT_SUMMON_OBJECT_SLOT1",
+   "handler": "EffectSummonObject",
+   "modes": [
+    "HIT"
+   ],
+   "phase": "landing"
+  },
+  "105": {
+   "name": "SPELL_EFFECT_SURVEY",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "106": {
+   "name": "SPELL_EFFECT_CHANGE_RAID_MARKER",
+   "handler": "EffectChangeRaidMarker",
+   "modes": [
+    "HIT"
+   ],
+   "phase": "landing"
+  },
+  "107": {
+   "name": "SPELL_EFFECT_SHOW_CORPSE_LOOT",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "108": {
+   "name": "SPELL_EFFECT_DISPEL_MECHANIC",
+   "handler": "EffectDispelMechanic",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "109": {
+   "name": "SPELL_EFFECT_RESURRECT_PET",
+   "handler": "EffectResurrectPet",
+   "modes": [
+    "HIT"
+   ],
+   "phase": "landing"
+  },
+  "110": {
+   "name": "SPELL_EFFECT_DESTROY_ALL_TOTEMS",
+   "handler": "EffectDestroyAllTotems",
+   "modes": [
+    "HIT"
+   ],
+   "phase": "landing"
+  },
+  "111": {
+   "name": "SPELL_EFFECT_DURABILITY_DAMAGE",
+   "handler": "EffectDurabilityDamage",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "112": {
+   "name": "SPELL_EFFECT_112",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "113": {
+   "name": "SPELL_EFFECT_CANCEL_CONVERSATION",
+   "handler": "EffectCancelConversation",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "114": {
+   "name": "SPELL_EFFECT_ATTACK_ME",
+   "handler": "EffectTaunt",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "115": {
+   "name": "SPELL_EFFECT_DURABILITY_DAMAGE_PCT",
+   "handler": "EffectDurabilityDamagePCT",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "116": {
+   "name": "SPELL_EFFECT_SKIN_PLAYER_CORPSE",
+   "handler": "EffectSkinPlayerCorpse",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "117": {
+   "name": "SPELL_EFFECT_SPIRIT_HEAL",
+   "handler": "EffectSpiritHeal",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "118": {
+   "name": "SPELL_EFFECT_SKILL",
+   "handler": "EffectSkill",
+   "modes": [
+    "HIT"
+   ],
+   "phase": "landing"
+  },
+  "119": {
+   "name": "SPELL_EFFECT_APPLY_AREA_AURA_PET",
+   "handler": "EffectUnused",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "120": {
+   "name": "SPELL_EFFECT_TELEPORT_GRAVEYARD",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "121": {
+   "name": "SPELL_EFFECT_NORMALIZED_WEAPON_DMG",
+   "handler": "EffectWeaponDmg",
+   "modes": [
+    "LAUNCH_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "122": {
+   "name": "SPELL_EFFECT_122",
+   "handler": "EffectUnused",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "123": {
+   "name": "SPELL_EFFECT_SEND_TAXI",
+   "handler": "EffectSendTaxi",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "124": {
+   "name": "SPELL_EFFECT_PULL_TOWARDS",
+   "handler": "EffectPullTowards",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "125": {
+   "name": "SPELL_EFFECT_MODIFY_THREAT_PERCENT",
+   "handler": "EffectModifyThreatPercent",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "126": {
+   "name": "SPELL_EFFECT_STEAL_BENEFICIAL_BUFF",
+   "handler": "EffectStealBeneficialBuff",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "127": {
+   "name": "SPELL_EFFECT_PROSPECTING",
+   "handler": "EffectProspecting",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "128": {
+   "name": "SPELL_EFFECT_APPLY_AREA_AURA_FRIEND",
+   "handler": "EffectUnused",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "129": {
+   "name": "SPELL_EFFECT_APPLY_AREA_AURA_ENEMY",
+   "handler": "EffectUnused",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "130": {
+   "name": "SPELL_EFFECT_REDIRECT_THREAT",
+   "handler": "EffectRedirectThreat",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "131": {
+   "name": "SPELL_EFFECT_PLAY_SOUND",
+   "handler": "EffectPlaySound",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "132": {
+   "name": "SPELL_EFFECT_PLAY_MUSIC",
+   "handler": "EffectPlayMusic",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "133": {
+   "name": "SPELL_EFFECT_UNLEARN_SPECIALIZATION",
+   "handler": "EffectUnlearnSpecialization",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "134": {
+   "name": "SPELL_EFFECT_KILL_CREDIT",
+   "handler": "EffectKillCredit",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "135": {
+   "name": "SPELL_EFFECT_CALL_PET",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "136": {
+   "name": "SPELL_EFFECT_HEAL_PCT",
+   "handler": "EffectHealPct",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "137": {
+   "name": "SPELL_EFFECT_ENERGIZE_PCT",
+   "handler": "EffectEnergizePct",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "138": {
+   "name": "SPELL_EFFECT_LEAP_BACK",
+   "handler": "EffectLeapBack",
+   "modes": [
+    "LAUNCH_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "139": {
+   "name": "SPELL_EFFECT_CLEAR_QUEST",
+   "handler": "EffectQuestClear",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "140": {
+   "name": "SPELL_EFFECT_FORCE_CAST",
+   "handler": "EffectForceCast",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "141": {
+   "name": "SPELL_EFFECT_FORCE_CAST_WITH_VALUE",
+   "handler": "EffectForceCast",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "142": {
+   "name": "SPELL_EFFECT_TRIGGER_SPELL_WITH_VALUE",
+   "handler": "EffectTriggerSpell",
+   "modes": [
+    "LAUNCH",
+    "LAUNCH_TARGET"
+   ],
+   "phase": "launch"
+  },
+  "143": {
+   "name": "SPELL_EFFECT_APPLY_AREA_AURA_OWNER",
+   "handler": "EffectUnused",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "144": {
+   "name": "SPELL_EFFECT_KNOCK_BACK_DEST",
+   "handler": "EffectKnockBack",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "145": {
+   "name": "SPELL_EFFECT_PULL_TOWARDS_DEST",
+   "handler": "EffectPullTowardsDest",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "146": {
+   "name": "SPELL_EFFECT_RESTORE_GARRISON_TROOP_VITALITY",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "147": {
+   "name": "SPELL_EFFECT_QUEST_FAIL",
+   "handler": "EffectQuestFail",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "148": {
+   "name": "SPELL_EFFECT_TRIGGER_MISSILE_SPELL_WITH_VALUE",
+   "handler": "EffectTriggerMissileSpell",
+   "modes": [
+    "HIT",
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "149": {
+   "name": "SPELL_EFFECT_CHARGE_DEST",
+   "handler": "EffectChargeDest",
+   "modes": [
+    "LAUNCH",
+    "HIT"
+   ],
+   "phase": "landing"
+  },
+  "150": {
+   "name": "SPELL_EFFECT_QUEST_START",
+   "handler": "EffectQuestStart",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "151": {
+   "name": "SPELL_EFFECT_TRIGGER_SPELL_2",
+   "handler": "EffectTriggerRitualOfSummoning",
+   "modes": [
+    "HIT"
+   ],
+   "phase": "landing"
+  },
+  "152": {
+   "name": "SPELL_EFFECT_SUMMON_RAF_FRIEND",
+   "handler": "EffectSummonRaFFriend",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "153": {
+   "name": "SPELL_EFFECT_CREATE_TAMED_PET",
+   "handler": "EffectCreateTamedPet",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "154": {
+   "name": "SPELL_EFFECT_DISCOVER_TAXI",
+   "handler": "EffectDiscoverTaxi",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "155": {
+   "name": "SPELL_EFFECT_TITAN_GRIP",
+   "handler": "EffectTitanGrip",
+   "modes": [
+    "HIT"
+   ],
+   "phase": "landing"
+  },
+  "156": {
+   "name": "SPELL_EFFECT_ENCHANT_ITEM_PRISMATIC",
+   "handler": "EffectEnchantItemPrismatic",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "157": {
+   "name": "SPELL_EFFECT_CREATE_ITEM_2",
+   "handler": "EffectCreateItem2",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "158": {
+   "name": "SPELL_EFFECT_MILLING",
+   "handler": "EffectMilling",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "159": {
+   "name": "SPELL_EFFECT_ALLOW_RENAME_PET",
+   "handler": "EffectRenamePet",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "160": {
+   "name": "SPELL_EFFECT_FORCE_CAST_2",
+   "handler": "EffectForceCast",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "161": {
+   "name": "SPELL_EFFECT_TALENT_SPEC_COUNT",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "162": {
+   "name": "SPELL_EFFECT_TALENT_SPEC_SELECT",
+   "handler": "EffectActivateSpec",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "163": {
+   "name": "SPELL_EFFECT_OBLITERATE_ITEM",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "164": {
+   "name": "SPELL_EFFECT_REMOVE_AURA",
+   "handler": "EffectRemoveAura",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "165": {
+   "name": "SPELL_EFFECT_DAMAGE_FROM_MAX_HEALTH_PCT",
+   "handler": "EffectDamageFromMaxHealthPCT",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "166": {
+   "name": "SPELL_EFFECT_GIVE_CURRENCY",
+   "handler": "EffectGiveCurrency",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "167": {
+   "name": "SPELL_EFFECT_UPDATE_PLAYER_PHASE",
+   "handler": "EffectUpdatePlayerPhase",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "168": {
+   "name": "SPELL_EFFECT_ALLOW_CONTROL_PET",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "169": {
+   "name": "SPELL_EFFECT_DESTROY_ITEM",
+   "handler": "EffectDestroyItem",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "170": {
+   "name": "SPELL_EFFECT_UPDATE_ZONE_AURAS_AND_PHASES",
+   "handler": "EffectUpdateZoneAurasAndPhases",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "171": {
+   "name": "SPELL_EFFECT_SUMMON_PERSONAL_GAMEOBJECT",
+   "handler": "EffectSummonPersonalGameObject",
+   "modes": [
+    "HIT"
+   ],
+   "phase": "landing"
+  },
+  "172": {
+   "name": "SPELL_EFFECT_RESURRECT_WITH_AURA",
+   "handler": "EffectResurrectWithAura",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "173": {
+   "name": "SPELL_EFFECT_UNLOCK_GUILD_VAULT_TAB",
+   "handler": "EffectUnlockGuildVaultTab",
+   "modes": [
+    "HIT"
+   ],
+   "phase": "landing"
+  },
+  "174": {
+   "name": "SPELL_EFFECT_APPLY_AURA_ON_PET",
+   "handler": "EffectApplyAura",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "175": {
+   "name": "SPELL_EFFECT_175",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "176": {
+   "name": "SPELL_EFFECT_SANCTUARY_2",
+   "handler": "EffectSanctuary",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "177": {
+   "name": "SPELL_EFFECT_DESPAWN_PERSISTENT_AREA_AURA",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "178": {
+   "name": "SPELL_EFFECT_178",
+   "handler": "EffectUnused",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "179": {
+   "name": "SPELL_EFFECT_CREATE_AREATRIGGER",
+   "handler": "EffectCreateAreaTrigger",
+   "modes": [
+    "HIT"
+   ],
+   "phase": "landing"
+  },
+  "180": {
+   "name": "SPELL_EFFECT_UPDATE_AREATRIGGER",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "181": {
+   "name": "SPELL_EFFECT_REMOVE_TALENT",
+   "handler": "EffectRemoveTalent",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "182": {
+   "name": "SPELL_EFFECT_DESPAWN_AREATRIGGER",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "183": {
+   "name": "SPELL_EFFECT_183",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "184": {
+   "name": "SPELL_EFFECT_REPUTATION",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "185": {
+   "name": "SPELL_EFFECT_185",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "186": {
+   "name": "SPELL_EFFECT_186",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "187": {
+   "name": "SPELL_EFFECT_RANDOMIZE_ARCHAEOLOGY_DIGSITES",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "188": {
+   "name": "SPELL_EFFECT_SUMMON_STABLED_PET_AS_GUARDIAN",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "189": {
+   "name": "SPELL_EFFECT_LOOT",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "190": {
+   "name": "SPELL_EFFECT_CHANGE_PARTY_MEMBERS",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "191": {
+   "name": "SPELL_EFFECT_TELEPORT_TO_DIGSITE",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "192": {
+   "name": "SPELL_EFFECT_UNCAGE_BATTLEPET",
+   "handler": "EffectUncageBattlePet",
+   "modes": [
+    "HIT"
+   ],
+   "phase": "landing"
+  },
+  "193": {
+   "name": "SPELL_EFFECT_START_PET_BATTLE",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "194": {
+   "name": "SPELL_EFFECT_194",
+   "handler": "EffectUnused",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "195": {
+   "name": "SPELL_EFFECT_PLAY_SCENE_SCRIPT_PACKAGE",
+   "handler": "EffectPlaySceneScriptPackage",
+   "modes": [
+    "HIT"
+   ],
+   "phase": "landing"
+  },
+  "196": {
+   "name": "SPELL_EFFECT_CREATE_SCENE_OBJECT",
+   "handler": "EffectCreateSceneObject",
+   "modes": [
+    "HIT"
+   ],
+   "phase": "landing"
+  },
+  "197": {
+   "name": "SPELL_EFFECT_CREATE_PERSONAL_SCENE_OBJECT",
+   "handler": "EffectCreatePrivateSceneObject",
+   "modes": [
+    "HIT"
+   ],
+   "phase": "landing"
+  },
+  "198": {
+   "name": "SPELL_EFFECT_PLAY_SCENE",
+   "handler": "EffectPlayScene",
+   "modes": [
+    "HIT"
+   ],
+   "phase": "landing"
+  },
+  "199": {
+   "name": "SPELL_EFFECT_DESPAWN_SUMMON",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "200": {
+   "name": "SPELL_EFFECT_HEAL_BATTLEPET_PCT",
+   "handler": "EffectHealBattlePetPct",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "201": {
+   "name": "SPELL_EFFECT_ENABLE_BATTLE_PETS",
+   "handler": "EffectEnableBattlePets",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "202": {
+   "name": "SPELL_EFFECT_APPLY_AREA_AURA_SUMMONS",
+   "handler": "EffectUnused",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "203": {
+   "name": "SPELL_EFFECT_REMOVE_AURA_2",
+   "handler": "EffectRemoveAura",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "204": {
+   "name": "SPELL_EFFECT_CHANGE_BATTLEPET_QUALITY",
+   "handler": "EffectChangeBattlePetQuality",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "205": {
+   "name": "SPELL_EFFECT_LAUNCH_QUEST_CHOICE",
+   "handler": "EffectLaunchQuestChoice",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "206": {
+   "name": "SPELL_EFFECT_ALTER_ITEM",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "207": {
+   "name": "SPELL_EFFECT_LAUNCH_QUEST_TASK",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "208": {
+   "name": "SPELL_EFFECT_SET_REPUTATION",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "209": {
+   "name": "SPELL_EFFECT_209",
+   "handler": "EffectUnused",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "210": {
+   "name": "SPELL_EFFECT_LEARN_GARRISON_BUILDING",
+   "handler": "EffectLearnGarrisonBuilding",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "211": {
+   "name": "SPELL_EFFECT_LEARN_GARRISON_SPECIALIZATION",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "212": {
+   "name": "SPELL_EFFECT_REMOVE_AURA_BY_SPELL_LABEL",
+   "handler": "EffectRemoveAuraBySpellLabel",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "213": {
+   "name": "SPELL_EFFECT_JUMP_DEST_2",
+   "handler": "EffectJumpDest",
+   "modes": [
+    "LAUNCH"
+   ],
+   "phase": "launch"
+  },
+  "214": {
+   "name": "SPELL_EFFECT_CREATE_GARRISON",
+   "handler": "EffectCreateGarrison",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "215": {
+   "name": "SPELL_EFFECT_UPGRADE_CHARACTER_SPELLS",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "216": {
+   "name": "SPELL_EFFECT_CREATE_SHIPMENT",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "217": {
+   "name": "SPELL_EFFECT_UPGRADE_GARRISON",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "218": {
+   "name": "SPELL_EFFECT_218",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "219": {
+   "name": "SPELL_EFFECT_CREATE_CONVERSATION",
+   "handler": "EffectCreateConversation",
+   "modes": [
+    "HIT"
+   ],
+   "phase": "landing"
+  },
+  "220": {
+   "name": "SPELL_EFFECT_ADD_GARRISON_FOLLOWER",
+   "handler": "EffectAddGarrisonFollower",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "221": {
+   "name": "SPELL_EFFECT_ADD_GARRISON_MISSION",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "222": {
+   "name": "SPELL_EFFECT_CREATE_HEIRLOOM_ITEM",
+   "handler": "EffectCreateHeirloomItem",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "223": {
+   "name": "SPELL_EFFECT_CHANGE_ITEM_BONUSES",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "224": {
+   "name": "SPELL_EFFECT_ACTIVATE_GARRISON_BUILDING",
+   "handler": "EffectActivateGarrisonBuilding",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "225": {
+   "name": "SPELL_EFFECT_GRANT_BATTLEPET_LEVEL",
+   "handler": "EffectGrantBattlePetLevel",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "226": {
+   "name": "SPELL_EFFECT_TRIGGER_ACTION_SET",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "227": {
+   "name": "SPELL_EFFECT_TELEPORT_TO_LFG_DUNGEON",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "228": {
+   "name": "SPELL_EFFECT_228",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "229": {
+   "name": "SPELL_EFFECT_SET_FOLLOWER_QUALITY",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "230": {
+   "name": "SPELL_EFFECT_230",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "231": {
+   "name": "SPELL_EFFECT_INCREASE_FOLLOWER_EXPERIENCE",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "232": {
+   "name": "SPELL_EFFECT_REMOVE_PHASE",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "233": {
+   "name": "SPELL_EFFECT_RANDOMIZE_FOLLOWER_ABILITIES",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "234": {
+   "name": "SPELL_EFFECT_234",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "235": {
+   "name": "SPELL_EFFECT_235",
+   "handler": "EffectUnused",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "236": {
+   "name": "SPELL_EFFECT_GIVE_EXPERIENCE",
+   "handler": "EffectGiveExperience",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "237": {
+   "name": "SPELL_EFFECT_GIVE_RESTED_EXPERIENCE_BONUS",
+   "handler": "EffectGiveRestedExperience",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "238": {
+   "name": "SPELL_EFFECT_INCREASE_SKILL",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "239": {
+   "name": "SPELL_EFFECT_END_GARRISON_BUILDING_CONSTRUCTION",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "240": {
+   "name": "SPELL_EFFECT_GIVE_ARTIFACT_POWER",
+   "handler": "EffectGiveArtifactPower",
+   "modes": [
+    "LAUNCH_TARGET"
+   ],
+   "phase": "launch"
+  },
+  "241": {
+   "name": "SPELL_EFFECT_241",
+   "handler": "EffectUnused",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "242": {
+   "name": "SPELL_EFFECT_GIVE_ARTIFACT_POWER_NO_BONUS",
+   "handler": "EffectGiveArtifactPowerNoBonus",
+   "modes": [
+    "LAUNCH_TARGET"
+   ],
+   "phase": "launch"
+  },
+  "243": {
+   "name": "SPELL_EFFECT_APPLY_ENCHANT_ILLUSION",
+   "handler": "EffectApplyEnchantIllusion",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "244": {
+   "name": "SPELL_EFFECT_LEARN_FOLLOWER_ABILITY",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "245": {
+   "name": "SPELL_EFFECT_UPGRADE_HEIRLOOM",
+   "handler": "EffectUpgradeHeirloom",
+   "modes": [
+    "HIT"
+   ],
+   "phase": "landing"
+  },
+  "246": {
+   "name": "SPELL_EFFECT_FINISH_GARRISON_MISSION",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "247": {
+   "name": "SPELL_EFFECT_ADD_GARRISON_MISSION_SET",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "248": {
+   "name": "SPELL_EFFECT_FINISH_SHIPMENT",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "249": {
+   "name": "SPELL_EFFECT_FORCE_EQUIP_ITEM",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "250": {
+   "name": "SPELL_EFFECT_TAKE_SCREENSHOT",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "251": {
+   "name": "SPELL_EFFECT_SET_GARRISON_CACHE_SIZE",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "252": {
+   "name": "SPELL_EFFECT_TELEPORT_UNITS",
+   "handler": "EffectTeleportUnits",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "253": {
+   "name": "SPELL_EFFECT_GIVE_HONOR",
+   "handler": "EffectGiveHonor",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "254": {
+   "name": "SPELL_EFFECT_JUMP_CHARGE",
+   "handler": "EffectJumpCharge",
+   "modes": [
+    "LAUNCH"
+   ],
+   "phase": "launch"
+  },
+  "255": {
+   "name": "SPELL_EFFECT_LEARN_TRANSMOG_SET",
+   "handler": "EffectLearnTransmogSet",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "256": {
+   "name": "SPELL_EFFECT_256",
+   "handler": "EffectUnused",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "257": {
+   "name": "SPELL_EFFECT_257",
+   "handler": "EffectUnused",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "258": {
+   "name": "SPELL_EFFECT_MODIFY_KEYSTONE",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "259": {
+   "name": "SPELL_EFFECT_RESPEC_AZERITE_EMPOWERED_ITEM",
+   "handler": "EffectRespecAzeriteEmpoweredItem",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "260": {
+   "name": "SPELL_EFFECT_SUMMON_STABLED_PET",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "261": {
+   "name": "SPELL_EFFECT_SCRAP_ITEM",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "262": {
+   "name": "SPELL_EFFECT_262",
+   "handler": "EffectUnused",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "263": {
+   "name": "SPELL_EFFECT_REPAIR_ITEM",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "264": {
+   "name": "SPELL_EFFECT_REMOVE_GEM",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "265": {
+   "name": "SPELL_EFFECT_LEARN_AZERITE_ESSENCE_POWER",
+   "handler": "EffectLearnAzeriteEssencePower",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "266": {
+   "name": "SPELL_EFFECT_SET_ITEM_BONUS_LIST_GROUP_ENTRY",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "267": {
+   "name": "SPELL_EFFECT_CREATE_PRIVATE_CONVERSATION",
+   "handler": "EffectCreatePrivateConversation",
+   "modes": [
+    "HIT"
+   ],
+   "phase": "landing"
+  },
+  "268": {
+   "name": "SPELL_EFFECT_APPLY_MOUNT_EQUIPMENT",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "269": {
+   "name": "SPELL_EFFECT_INCREASE_ITEM_BONUS_LIST_GROUP_STEP",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "270": {
+   "name": "SPELL_EFFECT_270",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "271": {
+   "name": "SPELL_EFFECT_APPLY_AREA_AURA_PARTY_NONRANDOM",
+   "handler": "EffectUnused",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "272": {
+   "name": "SPELL_EFFECT_SET_COVENANT",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "273": {
+   "name": "SPELL_EFFECT_CRAFT_RUNEFORGE_LEGENDARY",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "274": {
+   "name": "SPELL_EFFECT_274",
+   "handler": "EffectUnused",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "275": {
+   "name": "SPELL_EFFECT_275",
+   "handler": "EffectUnused",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "276": {
+   "name": "SPELL_EFFECT_LEARN_TRANSMOG_ILLUSION",
+   "handler": "EffectLearnTransmogIllusion",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "277": {
+   "name": "SPELL_EFFECT_SET_CHROMIE_TIME",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "278": {
+   "name": "SPELL_EFFECT_278",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "279": {
+   "name": "SPELL_EFFECT_LEARN_GARR_TALENT",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "280": {
+   "name": "SPELL_EFFECT_280",
+   "handler": "EffectUnused",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "281": {
+   "name": "SPELL_EFFECT_LEARN_SOULBIND_CONDUIT",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "282": {
+   "name": "SPELL_EFFECT_CONVERT_ITEMS_TO_CURRENCY",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "283": {
+   "name": "SPELL_EFFECT_COMPLETE_CAMPAIGN",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "284": {
+   "name": "SPELL_EFFECT_SEND_CHAT_MESSAGE",
+   "handler": "EffectSendChatMessage",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "285": {
+   "name": "SPELL_EFFECT_MODIFY_KEYSTONE_2",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "286": {
+   "name": "SPELL_EFFECT_GRANT_BATTLEPET_EXPERIENCE",
+   "handler": "EffectGrantBattlePetExperience",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "287": {
+   "name": "SPELL_EFFECT_SET_GARRISON_FOLLOWER_LEVEL",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "288": {
+   "name": "SPELL_EFFECT_CRAFT_ITEM",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "289": {
+   "name": "SPELL_EFFECT_MODIFY_AURA_STACKS",
+   "handler": "EffectModifyAuraStacks",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "290": {
+   "name": "SPELL_EFFECT_MODIFY_COOLDOWN",
+   "handler": "EffectModifyCooldown",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "291": {
+   "name": "SPELL_EFFECT_MODIFY_COOLDOWNS",
+   "handler": "EffectModifyCooldowns",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "292": {
+   "name": "SPELL_EFFECT_MODIFY_COOLDOWNS_BY_CATEGORY",
+   "handler": "EffectModifyCooldownsByCategory",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "293": {
+   "name": "SPELL_EFFECT_MODIFY_CHARGES",
+   "handler": "EffectModifySpellCharges",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "294": {
+   "name": "SPELL_EFFECT_CRAFT_LOOT",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "295": {
+   "name": "SPELL_EFFECT_SALVAGE_ITEM",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "296": {
+   "name": "SPELL_EFFECT_CRAFT_SALVAGE_ITEM",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "297": {
+   "name": "SPELL_EFFECT_RECRAFT_ITEM",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "298": {
+   "name": "SPELL_EFFECT_CANCEL_ALL_PRIVATE_CONVERSATIONS",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "299": {
+   "name": "SPELL_EFFECT_299",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "300": {
+   "name": "SPELL_EFFECT_300",
+   "handler": "EffectUnused",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "301": {
+   "name": "SPELL_EFFECT_CRAFT_ENCHANT",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "302": {
+   "name": "SPELL_EFFECT_GATHERING",
+   "handler": "EffectNULL",
+   "modes": [
+    "unimplemented"
+   ],
+   "phase": "unimplemented"
+  },
+  "303": {
+   "name": "SPELL_EFFECT_CREATE_TRAIT_TREE_CONFIG",
+   "handler": "EffectCreateTraitTreeConfig",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  },
+  "304": {
+   "name": "SPELL_EFFECT_CHANGE_ACTIVE_COMBAT_TRAIT_CONFIG",
+   "handler": "EffectChangeActiveCombatTraitConfig",
+   "modes": [
+    "HIT_TARGET"
+   ],
+   "phase": "landing"
+  }
+ }
+}

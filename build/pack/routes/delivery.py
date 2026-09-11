@@ -83,6 +83,11 @@ class DeliveryRow(NamedTuple):
     channelled: bool
 
 
+def channelled_spells(rows: Iterable[Delivery]) -> set[int]:
+    """The spells delivered as a channel, which the phase rule places apart."""
+    return {row.spell for row in rows if row.flags & CHANNELLED}
+
+
 def assemble_delivery(rows: Iterable[DeliveryRow], breaks: Container[int]) -> list[Delivery]:
     """The entries: one per spell with a cast time or a channel, sorted.
 

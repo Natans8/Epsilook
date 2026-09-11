@@ -44,7 +44,8 @@
     "multiplier": "",
     "pace": "",
     "rotation": "",
-    "door": ""
+    "door": "",
+    "velocity": ""
   },
   "target": "",
   "phase": "",
@@ -70,6 +71,14 @@
         "unbreakable": "",
         "unhindered": "",
         "tracking": ""
+      }
+    },
+    "clock": {
+      "hint": "",
+      "props": {
+        "launch": "",
+        "velocity": "",
+        "delay": ""
       }
     },
     "range": {
@@ -269,13 +278,18 @@
       "hint": "",
       "props": {
         "name": "",
-        "index": ""
+        "index": "",
+        "hops": "",
+        "unimplemented": "",
+        "nostack": "",
+        "chainfirst": ""
       }
     },
     "aura": {
       "hint": "",
       "props": {
-        "name": ""
+        "name": "",
+        "every": ""
       }
     },
     "triggers": {

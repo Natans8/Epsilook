@@ -35,7 +35,13 @@ from dataclasses import dataclass, field
 
 from ..phases import PHASE_AURA
 from ..routes.colors import pack_rgb
-from ..routes.effects import MOVEMENT_NAMES
+from ..routes.effects import (
+    EFFECT_ATTRIBUTE_FLAGS,
+    EFFECT_SUMMON,
+    MOVEMENT_NAMES,
+    UNIMPLEMENTED_EFFECTS,
+    carries_attribute,
+)
 from ..routes.models import (
     MODEL_CAT_AREA,
     MODEL_CAT_ATTACH,
@@ -785,7 +791,7 @@ def _summons(reads: Reads) -> Iterable[SpellRow]:
     so it happens where the spell lands.
     """
     for spell, summoned in sorted(reads.effects.summons.items()):
-        phase = effect_phase(0, spell, reads.props.delayed)
+        phase = effect_phase(EFFECT_SUMMON, 0, spell, reads.props.delayed, reads.rows.channelled)
         for creature, control in sorted(summoned):
             yield (
                 spell,
@@ -798,7 +804,11 @@ def _objects(reads: Reads) -> Iterable[SpellRow]:
     for spell, entry in reads.references.object_rows:
         yield (
             spell,
-            (entry, reads.effects.objects.masks.get((spell, entry), 0), effect_phase(0, spell, reads.props.delayed)),
+            (
+                entry,
+                reads.effects.objects.masks.get((spell, entry), 0),
+                effect_phase(0, 0, spell, reads.props.delayed, reads.rows.channelled),
+            ),
         )
 
 
@@ -946,6 +956,9 @@ def _effects(reads: Reads) -> Iterable[SpellRow]:
                 row.effect,
                 _mask_of(bits, row.target_a, row.target_b),
                 row.order,
+                row.hops,
+                int(row.effect in UNIMPLEMENTED_EFFECTS),
+                *(int(carries_attribute(row.attributes, bit)) for bit in EFFECT_ATTRIBUTE_FLAGS.values()),
                 row.phase,
                 row.aura,
                 row.target_a,
@@ -965,7 +978,7 @@ def _auras(reads: Reads) -> Iterable[SpellRow]:
     bits = reads.declared.target_bits
     for row in reads.rows.mechanics:
         if row.aura:
-            yield row.spell, (row.aura, _mask_of(bits, row.target_a, row.target_b), row.phase)
+            yield row.spell, (row.aura, _mask_of(bits, row.target_a, row.target_b), row.every, row.phase)
 
 
 def _links(forward: bool) -> Callable[[Reads], Iterable[SpellRow]]:
@@ -1071,12 +1084,13 @@ MECH_FAMILIES: tuple[Family, ...] = (
     # else on the row says; the phase is where that order happens.
     timed(
         "effect",
-        ("name", "target", "index"),
+        ("name", "target", "index", "hops", "unimplemented", *EFFECT_ATTRIBUTE_FLAGS),
         _effects,
         carried=("aura", "targetA", "targetB", "misc0", "misc1"),
         vocab={"name": "effects"},
+        absent={"hops": 0, "unimplemented": 0, **dict.fromkeys(EFFECT_ATTRIBUTE_FLAGS, 0)},
     ),
-    timed("aura", ("name", "target"), _auras, vocab={"name": "auras"}),
+    timed("aura", ("name", "target", "every"), _auras, vocab={"name": "auras"}, absent={"every": 0}),
     # The word is an INDEX into the pool, so nought is the first word rather
     # than no word: an edge always prints one, and the gap has to be a value
     # the pool cannot hold.
