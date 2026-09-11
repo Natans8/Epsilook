@@ -1554,18 +1554,27 @@ def check_localized_tables(rep: Report) -> None:
     different languages matched nothing and the button vanished from a whole
     language.
 
-    The test is per statement: wherever a `_lang` column is named, a table the
-    roster covers has to be named alongside it. That reads both spellings the
-    build uses -- a table asked for a column outright, and the drift lists that
-    pair a table with its columns for a build to choose between.
+    The test is per simple statement: wherever a `_lang` column is named, a
+    table the roster covers has to be named alongside it. A compound statement
+    such as a class body is not the unit, because one covered name anywhere in
+    it would answer for every line. It reads the three spellings the build
+    uses -- a column and a table as strings, the drift lists pairing a table
+    with its columns, and a column off the catalogue, `T.Spell.Name_lang` or
+    the same through an alias bound to `T.Spell`. The catalogue itself lists
+    every column a table has and reads none, so it is not scanned.
     """
     root = ROOT / BUILD_PACKAGE
-    modules = sorted(p for p in root.rglob("*.py") if not p.name.endswith("_test.py")) if root.is_dir() else []
+    modules = (
+        sorted(p for p in root.rglob("*.py") if not p.name.endswith("_test.py") and p.name != "catalogue.py")
+        if root.is_dir()
+        else []
+    )
     if not modules:
         rep.skip("localized tables", f"{BUILD_PACKAGE} not present yet")
         return
     try:
         sys.path.insert(0, str(ROOT / "build"))
+        from pack.drift import SPELL_NAME_SOURCES  # pylint: disable=import-outside-toplevel
         from pack.sources.wago import (  # pylint: disable=import-outside-toplevel
             LOCALIZED_TABLES,
             READ_IN_ONE_LANGUAGE,
@@ -1575,14 +1584,33 @@ def check_localized_tables(rep: Report) -> None:
         return
 
     covered = set(LOCALIZED_TABLES) | set(READ_IN_ONE_LANGUAGE)
+    # A drift list names its tables for the statement that iterates it.
+    lists = {"SPELL_NAME_SOURCES": {table for table, _ in SPELL_NAME_SOURCES}}
     problems: list[str] = []
     named = 0
+
+    def table_of(value: ast.expr, aliases: dict[str, str]) -> str | None:
+        """The table an expression names: `T.Spell`, or an alias bound to one."""
+        if isinstance(value, ast.Attribute) and isinstance(value.value, ast.Name) and value.value.id == "T":
+            return value.attr
+        if isinstance(value, ast.Name):
+            return aliases.get(value.id)
+        return None
+
     for path in modules:
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        aliases = {
+            node.targets[0].id: table
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name)
+            if (table := table_of(node.value, {})) is not None
+        }
         wanted: set[int] = set()
         answered: set[int] = set()
         for node in ast.walk(tree):
-            if not isinstance(node, ast.stmt):
+            if not isinstance(node, ast.stmt) or any(
+                isinstance(child, ast.stmt) for child in ast.iter_child_nodes(node)
+            ):
                 continue
             texts, lines = set(), set()
             for inner in ast.walk(node):
@@ -1590,6 +1618,14 @@ def check_localized_tables(rep: Report) -> None:
                     texts.add(inner.value)
                     if LANG_COLUMN_RE.match(inner.value):
                         lines.add(inner.lineno)
+                elif isinstance(inner, ast.Attribute):
+                    if LANG_COLUMN_RE.match(inner.attr):
+                        lines.add(inner.lineno)
+                        texts.add(table_of(inner.value, aliases) or "")
+                    if (table := table_of(inner, aliases)) is not None:
+                        texts.add(table)
+                elif isinstance(inner, ast.Name) and inner.id in lists:
+                    texts |= lists[inner.id]
             wanted |= lines
             if texts & covered:
                 answered |= lines
