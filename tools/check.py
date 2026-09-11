@@ -2656,6 +2656,12 @@ def check_toolchain(rep: Report) -> None:
         ["uv", "run", "python", "tools/routes.py", "--check"],
         "docs/DATA_ROUTES.md carries the route table the registry prints",
     )
+    run_tool(
+        rep,
+        "catalogue",
+        ["uv", "run", "python", "tools/catalogue.py", "--check"],
+        "build/pack/routes/catalogue.py is the table catalogue the source roster declares",
+    )
 
 
 # ---------------------------------------------------------------------- main

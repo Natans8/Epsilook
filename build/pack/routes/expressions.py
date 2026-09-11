@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import Any, ClassVar, Protocol
 from .columns import to_int_from_float
 
 Cell = str | tuple[str, ...]
@@ -34,19 +34,24 @@ says what it expects of it.
 class Column:
     """A column of the flow, named; the operators on it build expressions.
 
-    ``c.Speed != 1.0`` is a comparison, not a bool: the dunder methods return
-    the expression as data, the way a lazy frame's columns do, so a flow can
-    say what it asks without running it. Equality on a column is therefore an
-    expression too, and a column is hashed by its name.
+    ``T.SpellMisc.Speed != 1.0`` is a comparison, not a bool: the dunder
+    methods return the expression as data, the way a lazy frame's columns do,
+    so a flow can say what it asks without running it. Equality on a column
+    is therefore an expression too, and a column is hashed by its name.
     """
 
-    __slots__ = ("name",)
+    __slots__ = ("name", "table", "array")
 
-    def __init__(self, name: str) -> None:
+    def __init__(self, name: str, table: str = "", array: bool | None = None) -> None:
         self.name = name
+        self.table = table
+        """The table the column belongs to; empty for a computed one, or one
+        named through ``c`` without its table."""
+        self.array = array
+        """Whether the column is an array on some build; None where nothing says."""
 
     def __repr__(self) -> str:
-        return f"c.{self.name}"
+        return f"T.{self.table}.{self.name}" if self.table else f"c.{self.name}"
 
     def __hash__(self) -> int:
         return hash(self.name)
@@ -84,31 +89,65 @@ class Column:
         """Whether the id this column holds is one of the values."""
         return Compare(self.name, "in", frozenset(values))
 
-    def __getitem__(self, span: slice) -> Column:
-        """The array column ``Name_*``: every ``Name_N`` the build has, read as one cell.
+    def __getitem__(self, span: slice | int) -> Column:
+        """The array column: ``Name[:]`` is every ``Name_N`` the build has, read
+        as one cell and carried under the name with the star, so a step after
+        the read names it the same way; ``Name[2]`` is the one slot ``Name_2``.
 
-        Written as ``c.Attributes[:]`` and carried under the name with the
-        star, so a step after the read names it the same way.
+        Raises:
+            ValueError: the column is no array, or the slice is not the whole.
         """
+        if self.array is False:
+            raise ValueError(f"{self!r} is no array column")
+        if isinstance(span, int):
+            return Column(f"{self.name}_{span}", self.table, array=False)
         if span != slice(None):
-            raise ValueError("an array column is read whole; write c.Name[:]")
-        return Column(f"{self.name}_*")
+            raise ValueError("an array column is read whole; write Name[:]")
+        return Column(f"{self.name}_*", self.table, array=False)
 
 
 class Columns:
-    """The namespace a column is named through: ``c.Speed`` is the column ``Speed``."""
+    """The namespace a column is named without its table: ``c.mask`` is the
+    computed column ``mask``, and ``c.DifficultyID`` the column several tables
+    carry, whichever the flow is on."""
 
     def __getattr__(self, name: str) -> Column:
         return Column(name)
 
 
 c = Columns()
-"""The one namespace every flow names its columns through."""
+"""The namespace for a column named without its table."""
+
+
+class Table:
+    """A table a flow reads, named by its class, its columns the attributes.
+
+    ``T.SpellEffect`` is the table ``SpellEffect`` and ``T.SpellEffect.SpellID``
+    its column, so a misspelt name is the checker's error rather than the
+    build's. The classes are generated from the source roster into
+    ``catalogue.py``, one per table a build can read.
+    """
+
+    __tablename__: ClassVar[str] = ""
+
+    def __init_subclass__(cls) -> None:
+        super().__init_subclass__()
+        cls.__tablename__ = cls.__name__
+        for value in vars(cls).values():
+            if isinstance(value, Column):
+                value.table = cls.__name__
+                if value.array is None:
+                    value.array = False
 
 
 def column_name(named: str | Column) -> str:
-    """A column by name, whether it was written as a string or through ``c``."""
+    """A column by name, whether it was written as a string or as a column."""
     return named.name if isinstance(named, Column) else named
+
+
+def table_name(named: str | type[Table]) -> str:
+    """A table by name, whether it was written as a string or as its class."""
+    return named if isinstance(named, str) else named.__tablename__
 
 
 class Expr(Protocol):

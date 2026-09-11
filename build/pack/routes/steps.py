@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Protocol, runtime_checkable
 from ..tables import Tables
-from .expressions import Cell, Expr, Needs, Row, Rows, Schema, key_of
+from .expressions import Cell, Column, Expr, Needs, Row, Rows, Schema, Table, column_name, key_of, table_name
 
 
 class Step(Protocol):
@@ -404,28 +404,28 @@ class Slot:
     """Whether nought is data here rather than the absence of a reference."""
 
 
-def reference(column: str, table: str, *, zero_is_a_value: bool = False) -> Slot:
+def reference(column: str | Column, table: str | type[Table], *, zero_is_a_value: bool = False) -> Slot:
     """A column that is an id into ``table`` under this selector.
 
     Nought names no row, so a row reading it is dropped unless the slot says
     nought is data: a summon with no properties row is still a summon.
     """
-    return Slot(column, Holds.REFERENCE, table, zero_is_a_value)
+    return Slot(column_name(column), Holds.REFERENCE, table_name(table), zero_is_a_value)
 
 
-def vocabulary(column: str, name: str, *, zero_is_a_value: bool = False) -> Slot:
+def vocabulary(column: str | Column, name: str, *, zero_is_a_value: bool = False) -> Slot:
     """A column that a checked-in vocabulary names under this selector."""
-    return Slot(column, Holds.VOCABULARY, name, zero_is_a_value)
+    return Slot(column_name(column), Holds.VOCABULARY, name, zero_is_a_value)
 
 
-def amount(column: str) -> Slot:
+def amount(column: str | Column) -> Slot:
     """A column that is a number under this selector."""
-    return Slot(column, Holds.AMOUNT)
+    return Slot(column_name(column), Holds.AMOUNT)
 
 
-def parameter(column: str) -> Slot:
+def parameter(column: str | Column) -> Slot:
     """A column whose meaning another slot decides under this selector."""
-    return Slot(column, Holds.PARAMETER)
+    return Slot(column_name(column), Holds.PARAMETER)
 
 
 def before(version: str, threshold: str) -> bool:
@@ -631,10 +631,10 @@ class Lookup:
         return None if found is None else (*row, str(found))
 
 
-def when(on: str, values: int | Sequence[int], slots: Sequence[Slot], until: str = "") -> When:
+def when(on: str | Column, values: int | Sequence[int], slots: Sequence[Slot], until: str = "") -> When:
     """The discriminated reference: the rows whose selector holds a value, and
     what their columns then mean. Not `select`, which everywhere else means
     choosing columns. Built on its own where the declaration is the point,
     as the payload table does."""
     chosen = (values,) if isinstance(values, int) else tuple(values)
-    return When(on, chosen, tuple(slots), until)
+    return When(column_name(on), chosen, tuple(slots), until)

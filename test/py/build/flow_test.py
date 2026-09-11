@@ -33,6 +33,7 @@ from pack.routes.flow import (
     vocabulary,
     when,
 )
+from pack.routes import catalogue as T
 from support import BuildTables
 
 SCREEN_EFFECT = """\
@@ -460,3 +461,35 @@ def test_a_terminal_lands_the_rows_as_a_record_and_a_narrow_names_its_need(table
         Kit(79829, 500),
         Kit(79829, 501),
     ]
+
+
+def test_a_table_is_its_class_and_a_column_carries_it() -> None:
+    """The catalogue's classes are the tables, so a name a flow writes is one
+    the checker resolves rather than one a build discovers."""
+    assert T.SpellEffect.__tablename__ == "SpellEffect"
+    assert repr(T.SpellEffect.SpellID) == "T.SpellEffect.SpellID"
+    assert T.creature_template.entry.name == "entry"
+
+
+def test_an_array_column_has_slots_and_a_scalar_refuses_one() -> None:
+    """A slot is the export's own column, the whole is the starred name, and
+    a column no build stores as an array cannot be indexed."""
+    assert T.SpellEffect.EffectMiscValue[0].name == "EffectMiscValue_0"
+    assert T.SpellMisc.Attributes[:].name == "Attributes_*"
+    with pytest.raises(ValueError, match="no array"):
+        _ = T.SpellEffect.Effect[0]
+
+
+def test_a_table_written_as_its_class_is_the_same_step_as_its_name(tables: BuildTables) -> None:
+    typed = (
+        flow("factions")
+        .read(T.SpellEffect, T.SpellEffect.SpellID, T.SpellEffect.EffectAura, T.SpellEffect.EffectMiscValue[0])
+        .when(T.SpellEffect.EffectAura, 243, [reference(T.SpellEffect.EffectMiscValue[0], T.FactionTemplate)])
+    )
+    plain = (
+        flow("factions")
+        .read("SpellEffect", "SpellID", "EffectAura", "EffectMiscValue_0")
+        .when("EffectAura", 243, [reference("EffectMiscValue_0", "FactionTemplate")])
+    )
+    assert typed.steps == plain.steps
+    assert list(typed.rows(tables(SpellEffect=SPELL_EFFECT))) == [("100", "243", "35")]

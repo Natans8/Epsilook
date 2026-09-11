@@ -25,6 +25,7 @@ from dataclasses import dataclass, field
 
 from ..sources import load_local_enum, read_enum_names
 from ..targets import NO_TARGET, implicit_target_bit
+from . import catalogue as T
 from .flow import Cell, Column, Rows, Schema, column_name, key_of, number_of
 
 EFFECT_APPLY_AURA = 6
@@ -131,9 +132,9 @@ and 239 is spelled 591 on the newer Classic clients. No build carries both
 spellings, so a set covers the drift without a per-version branch.
 """
 
-MISC0 = "EffectMiscValue_0"
-MISC1 = "EffectMiscValue_1"
-AMOUNT = "EffectBasePoints"
+MISC0 = T.SpellEffect.EffectMiscValue[0]
+MISC1 = T.SpellEffect.EffectMiscValue[1]
+AMOUNT = T.SpellEffect.EffectBasePoints
 """The columns the selectors name."""
 
 _HANDLERS = load_local_enum("spell_effect_handlers")

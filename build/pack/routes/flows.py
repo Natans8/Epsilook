@@ -15,6 +15,7 @@ from operator import attrgetter, or_
 
 from ..drift import RETIRED_SPAWN_OBJECT_EFFECTS, SPAWN_OBJECT_SLOTS_UNTIL, SPELL_NAME_SOURCES
 from ..targets import NO_TARGET, VISUAL_REDIRECTS
+from . import catalogue as T
 from .anims import SPEED_UNIT
 from .areas import UI_MAP_TYPE_ZONE, AreaGates, GateRow
 from .colors import channel, rgb_of
@@ -165,66 +166,79 @@ class Routes(Declarations):
 
     factions = (
         flow("the faction a spell sets")
-        .read("FactionTemplate", c.ID, c.Faction, c.FactionGroup)
-        .narrow(c.ID, "effects.factions.named")
-        .join(c.Faction, "Faction", c.Name_lang)
-        .into(as_rows(FactionTemplateRow, c.ID, c.Faction, c.FactionGroup, word(c.Name_lang), sort=True))
+        .read(T.FactionTemplate, T.FactionTemplate.ID, T.FactionTemplate.Faction, T.FactionTemplate.FactionGroup)
+        .narrow(T.FactionTemplate.ID, "effects.factions.named")
+        .join(T.FactionTemplate.Faction, T.Faction, T.Faction.Name_lang)
+        .into(
+            as_rows(
+                FactionTemplateRow,
+                T.FactionTemplate.ID,
+                T.FactionTemplate.Faction,
+                T.FactionTemplate.FactionGroup,
+                word(T.Faction.Name_lang),
+                sort=True,
+            )
+        )
     )
     """The template each aura sets, resolved to the faction's name and group."""
 
     zone_music = (
         flow("the music set a screen effect swaps in")
-        .read("ZoneMusic", c.ID, c.SetName, c.Sounds_0, c.Sounds_1)
-        .into(as_records(c.ID, ZoneMusic, word(c.SetName), c.Sounds_0, c.Sounds_1))
+        .read(T.ZoneMusic, T.ZoneMusic.ID, T.ZoneMusic.SetName, T.ZoneMusic.Sounds[0], T.ZoneMusic.Sounds[1])
+        .into(
+            as_records(
+                T.ZoneMusic.ID, ZoneMusic, word(T.ZoneMusic.SetName), T.ZoneMusic.Sounds[0], T.ZoneMusic.Sounds[1]
+            )
+        )
     )
 
     ambiences = (
         flow("the ambience a screen effect swaps in")
-        .read("SoundAmbience", c.ID, c.AmbienceID_0, c.AmbienceID_1)
-        .into(as_records(c.ID, Ambience, c.AmbienceID_0, c.AmbienceID_1))
+        .read(T.SoundAmbience, T.SoundAmbience.ID, T.SoundAmbience.AmbienceID[0], T.SoundAmbience.AmbienceID[1])
+        .into(as_records(T.SoundAmbience.ID, Ambience, T.SoundAmbience.AmbienceID[0], T.SoundAmbience.AmbienceID[1]))
     )
 
     soundkit_files = (
         flow("the files a sound kit plays")
-        .read("SoundKitEntry", c.SoundKitID, c.FileDataID)
-        .where((c.SoundKitID != 0) & (c.FileDataID != 0))
-        .into(as_sets(c.SoundKitID, c.FileDataID))
+        .read(T.SoundKitEntry, T.SoundKitEntry.SoundKitID, T.SoundKitEntry.FileDataID)
+        .where((T.SoundKitEntry.SoundKitID != 0) & (T.SoundKitEntry.FileDataID != 0))
+        .into(as_sets(T.SoundKitEntry.SoundKitID, T.SoundKitEntry.FileDataID))
     )
 
     kit_types = (
         flow("what each reached sound kit is for")
-        .read("SoundKit", c.ID, c.SoundType)
-        .narrow(c.ID, "used_kits")
-        .narrow(c.SoundType, "sound_type_names", "the types the vendored enum names")
-        .into(as_map(c.ID, c.SoundType))
+        .read(T.SoundKit, T.SoundKit.ID, T.SoundKit.SoundType)
+        .narrow(T.SoundKit.ID, "used_kits")
+        .narrow(T.SoundKit.SoundType, "sound_type_names", "the types the vendored enum names")
+        .into(as_map(T.SoundKit.ID, T.SoundKit.SoundType))
     )
 
     kit_names = (
         flow("the names the pinned build gives the sound kits this pack reaches")
-        .read("SoundKitName", c.ID, c.Name)
-        .narrow(c.ID, "used_kits")
-        .map("named", ~c.Name.is_empty())
+        .read(T.SoundKitName, T.SoundKitName.ID, T.SoundKitName.Name)
+        .narrow(T.SoundKitName.ID, "used_kits")
+        .map("named", ~T.SoundKitName.Name.is_empty())
         .where(c.named == 1)
-        .into(as_rows(lambda kit, name: (kit, name), c.ID, word(c.Name), sort=True))
+        .into(as_rows(lambda kit, name: (kit, name), T.SoundKitName.ID, word(T.SoundKitName.Name), sort=True))
     )
     """Kits added after the pinned build have no name anywhere and stay unnamed."""
 
     animkit_anims = (
         flow("the animations a kit segments")
-        .read("AnimKitSegment", c.ParentAnimKitID, c.AnimID)
-        .where(c.ParentAnimKitID != 0)
-        .narrow(c.AnimID, "anim_ids")
-        .into(as_sets(c.ParentAnimKitID, c.AnimID))
+        .read(T.AnimKitSegment, T.AnimKitSegment.ParentAnimKitID, T.AnimKitSegment.AnimID)
+        .where(T.AnimKitSegment.ParentAnimKitID != 0)
+        .narrow(T.AnimKitSegment.AnimID, "anim_ids")
+        .into(as_sets(T.AnimKitSegment.ParentAnimKitID, T.AnimKitSegment.AnimID))
     )
 
     animkit_speeds = (
         flow("the pace a kit plays each animation at")
-        .read("AnimKitSegment", c.ParentAnimKitID, c.AnimID, c.Speed)
-        .where(c.ParentAnimKitID != 0)
+        .read(T.AnimKitSegment, T.AnimKitSegment.ParentAnimKitID, T.AnimKitSegment.AnimID, T.AnimKitSegment.Speed)
+        .where(T.AnimKitSegment.ParentAnimKitID != 0)
         .into(
             as_map(
-                (c.ParentAnimKitID, c.AnimID),
-                typed(c.Speed, lambda cell: round(number_of(cell) * SPEED_UNIT)),
+                (T.AnimKitSegment.ParentAnimKitID, T.AnimKitSegment.AnimID),
+                typed(T.AnimKitSegment.Speed, lambda cell: round(number_of(cell) * SPEED_UNIT)),
                 first=True,
             )
         )
@@ -234,79 +248,135 @@ class Routes(Declarations):
 
     animkit_bonesets = (
         flow("the body regions a kit's animation moves")
-        .read("AnimKitSegment", c.ParentAnimKitID, c.AnimID, c.AnimKitConfigID)
+        .read(
+            T.AnimKitSegment,
+            T.AnimKitSegment.ParentAnimKitID,
+            T.AnimKitSegment.AnimID,
+            T.AnimKitSegment.AnimKitConfigID,
+        )
         .join(
-            c.AnimKitConfigID,
-            "AnimKitConfigBoneSet",
-            c.AnimKitBoneSetID,
-            by="ParentAnimKitConfigID",
+            T.AnimKitSegment.AnimKitConfigID,
+            T.AnimKitConfigBoneSet,
+            T.AnimKitConfigBoneSet.AnimKitBoneSetID,
+            by=T.AnimKitConfigBoneSet.ParentAnimKitConfigID,
             inner=True,
             many=True,
         )
-        .join(c.AnimKitBoneSetID, "AnimKitBoneSet", c.Name, inner=True)
-        .where(~c.Name.is_empty() & (c.Name != "Full Body"))
-        .into(as_tree(c.ParentAnimKitID, c.AnimID, value=text(c.Name)))
+        .join(T.AnimKitConfigBoneSet.AnimKitBoneSetID, T.AnimKitBoneSet, T.AnimKitBoneSet.Name, inner=True)
+        .where(~T.AnimKitBoneSet.Name.is_empty() & (T.AnimKitBoneSet.Name != "Full Body"))
+        .into(as_tree(T.AnimKitSegment.ParentAnimKitID, T.AnimKitSegment.AnimID, value=text(T.AnimKitBoneSet.Name)))
     )
     """The default region, the whole body, is never shown because it distinguishes nothing."""
 
     anim_replacements = (
         flow("the animation swaps a replacement set makes")
-        .read("AnimReplacement", c.ParentAnimReplacementSetID, c.SrcAnimID, c.DstAnimID)
-        .where(c.ParentAnimReplacementSetID != 0)
-        .narrow(c.SrcAnimID, "anim_ids")
-        .narrow(c.DstAnimID, "anim_ids")
-        .into(as_sets(c.ParentAnimReplacementSetID, c.SrcAnimID, c.DstAnimID))
+        .read(
+            T.AnimReplacement,
+            T.AnimReplacement.ParentAnimReplacementSetID,
+            T.AnimReplacement.SrcAnimID,
+            T.AnimReplacement.DstAnimID,
+        )
+        .where(T.AnimReplacement.ParentAnimReplacementSetID != 0)
+        .narrow(T.AnimReplacement.SrcAnimID, "anim_ids")
+        .narrow(T.AnimReplacement.DstAnimID, "anim_ids")
+        .into(
+            as_sets(
+                T.AnimReplacement.ParentAnimReplacementSetID, T.AnimReplacement.SrcAnimID, T.AnimReplacement.DstAnimID
+            )
+        )
     )
 
     keybinds = (
         flow("the game functions a key override casts a spell from")
-        .read("SpellKeyboundOverride", c.ID, c.Function, c.Type, c.Data)
+        .read(
+            T.SpellKeyboundOverride,
+            T.SpellKeyboundOverride.ID,
+            T.SpellKeyboundOverride.Function,
+            T.SpellKeyboundOverride.Type,
+            T.SpellKeyboundOverride.Data,
+        )
         .into(
             as_records(
-                c.ID,
+                T.SpellKeyboundOverride.ID,
                 KeyboundOverride,
-                word(c.Function),
-                typed(c.Type, lambda cell: keybound_type_word(key_of(cell))),
-                c.Data,
+                word(T.SpellKeyboundOverride.Function),
+                typed(T.SpellKeyboundOverride.Type, lambda cell: keybound_type_word(key_of(cell))),
+                T.SpellKeyboundOverride.Data,
             )
         )
     )
 
     motions = (
         flow("the flight paths a missile can fly")
-        .read("SpellMissileMotion", c.ID, c.Name, c.MissileCount)
-        .where(~c.Name.is_empty())
-        .into(as_records(c.ID, MissileMotion, text(c.Name), c.MissileCount))
+        .read(
+            T.SpellMissileMotion, T.SpellMissileMotion.ID, T.SpellMissileMotion.Name, T.SpellMissileMotion.MissileCount
+        )
+        .where(~T.SpellMissileMotion.Name.is_empty())
+        .into(
+            as_records(
+                T.SpellMissileMotion.ID,
+                MissileMotion,
+                text(T.SpellMissileMotion.Name),
+                T.SpellMissileMotion.MissileCount,
+            )
+        )
     )
 
     forms = (
         flow("the shapeshift forms and the creatures they wear")
-        .read("SpellShapeshiftForm", c.ID, c.Name_lang, c.CreatureDisplayID[:])
+        .read(
+            T.SpellShapeshiftForm,
+            T.SpellShapeshiftForm.ID,
+            T.SpellShapeshiftForm.Name_lang,
+            T.SpellShapeshiftForm.CreatureDisplayID[:],
+        )
         .into(
             as_rows(
                 FormRow,
-                c.ID,
-                text(c.Name_lang),
-                typed(c.CreatureDisplayID[:], lambda cell: [d for d in map(to_int, values_of(cell)) if d > 0]),
+                T.SpellShapeshiftForm.ID,
+                text(T.SpellShapeshiftForm.Name_lang),
+                typed(
+                    T.SpellShapeshiftForm.CreatureDisplayID[:],
+                    lambda cell: [d for d in map(to_int, values_of(cell)) if d > 0],
+                ),
             )
         )
     ).then(ShapeshiftForms.assemble)
 
     objects = (
         flow("the gameobjects a spell spawns, named and modelled")
-        .read("gameobject_template", c.entry, c.name, c.displayId, c.type)
-        .join(c.displayId, "GameObjectDisplayInfo", c.FileDataID)
-        .into(as_rows(GameObjectRow, c.entry, word(c.name), c.type, c.FileDataID))
+        .read(
+            T.gameobject_template,
+            T.gameobject_template.entry,
+            T.gameobject_template.name,
+            T.gameobject_template.displayId,
+            T.gameobject_template.type,
+        )
+        .join(T.gameobject_template.displayId, T.GameObjectDisplayInfo, T.GameObjectDisplayInfo.FileDataID)
+        .into(
+            as_rows(
+                GameObjectRow,
+                T.gameobject_template.entry,
+                word(T.gameobject_template.name),
+                T.gameobject_template.type,
+                T.GameObjectDisplayInfo.FileDataID,
+            )
+        )
     ).then(GameObjectData.assemble)
 
     mounts = (
         flow("the displays a mount-granting spell puts you on")
-        .read("Mount", c.ID, c.Name_lang, c.SourceSpellID, c.Description_lang)
-        .narrow(c.SourceSpellID, "names.names")
-        .join(c.ID, "MountXDisplay", c.CreatureDisplayInfoID, by="MountID", many=True)
+        .read(T.Mount, T.Mount.ID, T.Mount.Name_lang, T.Mount.SourceSpellID, T.Mount.Description_lang)
+        .narrow(T.Mount.SourceSpellID, "names.names")
+        .join(T.Mount.ID, T.MountXDisplay, T.MountXDisplay.CreatureDisplayInfoID, by=T.MountXDisplay.MountID, many=True)
         .into(
             as_rows(
-                MountRow, c.ID, word(c.Name_lang), c.SourceSpellID, word(c.Description_lang), c.CreatureDisplayInfoID
+                MountRow,
+                T.Mount.ID,
+                word(T.Mount.Name_lang),
+                T.Mount.SourceSpellID,
+                word(T.Mount.Description_lang),
+                T.MountXDisplay.CreatureDisplayInfoID,
             )
         )
     ).then(MountData.assemble, creatures="creatures")
@@ -315,47 +385,72 @@ class Routes(Declarations):
 
     creature_names = (
         flow("what the server calls each creature")
-        .read("creature_template", c.entry, c.name)
-        .into(as_map(c.entry, word(c.name)))
+        .read(T.creature_template, T.creature_template.entry, T.creature_template.name)
+        .into(as_map(T.creature_template.entry, word(T.creature_template.name)))
     )
 
     creature_displays = first_available(
         flow("the displays a creature wears, by slot")
-        .read("creature_template_model", c.CreatureID, c.Idx, c.CreatureDisplayID)
-        .into(as_sets(c.CreatureID, c.Idx, c.CreatureDisplayID)),
+        .read(
+            T.creature_template_model,
+            T.creature_template_model.CreatureID,
+            T.creature_template_model.Idx,
+            T.creature_template_model.CreatureDisplayID,
+        )
+        .into(
+            as_sets(
+                T.creature_template_model.CreatureID,
+                T.creature_template_model.Idx,
+                T.creature_template_model.CreatureDisplayID,
+            )
+        ),
         flow("the same in the legacy shape, where the column is the slot")
-        .read("creature_template", c.entry, c.modelid1, c.modelid2, c.modelid3, c.modelid4)
-        .explode(c.modelid1, c.modelid2, c.modelid3, c.modelid4, into="display", slot="slot")
-        .into(as_sets(c.entry, c.slot, c.display)),
+        .read(
+            T.creature_template,
+            T.creature_template.entry,
+            T.creature_template.modelid1,
+            T.creature_template.modelid2,
+            T.creature_template.modelid3,
+            T.creature_template.modelid4,
+        )
+        .explode(
+            T.creature_template.modelid1,
+            T.creature_template.modelid2,
+            T.creature_template.modelid3,
+            T.creature_template.modelid4,
+            into="display",
+            slot="slot",
+        )
+        .into(as_sets(T.creature_template.entry, c.slot, c.display)),
     ).then(ordered)
     """Whichever shape the release has wins; a display named in two slots is two
     rows, since the first slot is the one the pill shows."""
 
     display_models = (
         flow("the model each creature display wears")
-        .read("CreatureDisplayInfo", c.ID, c.ModelID)
-        .into(as_map(c.ID, c.ModelID))
+        .read(T.CreatureDisplayInfo, T.CreatureDisplayInfo.ID, T.CreatureDisplayInfo.ModelID)
+        .into(as_map(T.CreatureDisplayInfo.ID, T.CreatureDisplayInfo.ModelID))
     )
 
     display_skins = (
         flow("the textures a display paints its model with")
-        .read("CreatureDisplayInfo", c.ID, c.TextureVariationFileDataID[:])
-        .into(as_map(c.ID, typed(c.TextureVariationFileDataID[:], ids_of)))
+        .read(T.CreatureDisplayInfo, T.CreatureDisplayInfo.ID, T.CreatureDisplayInfo.TextureVariationFileDataID[:])
+        .into(as_map(T.CreatureDisplayInfo.ID, typed(T.CreatureDisplayInfo.TextureVariationFileDataID[:], ids_of)))
     ).then(nonzero)
     """As many slots as the build has, in slot order; a display painting nothing
     is absent rather than empty."""
 
     creature_model_files = (
         flow("each creature model's file")
-        .read("CreatureModelData", c.ID, c.FileDataID)
-        .into(as_map(c.ID, c.FileDataID))
+        .read(T.CreatureModelData, T.CreatureModelData.ID, T.CreatureModelData.FileDataID)
+        .into(as_map(T.CreatureModelData.ID, T.CreatureModelData.FileDataID))
     )
 
     totem_displays = (
         flow("the displays a totem wears, one per caster race")
-        .read("spell_totem_model", c.SpellID, c.DisplayID, optional=True)
-        .where(c.DisplayID != 0)
-        .into(as_sets(c.SpellID, c.DisplayID))
+        .read(T.spell_totem_model, T.spell_totem_model.SpellID, T.spell_totem_model.DisplayID, optional=True)
+        .where(T.spell_totem_model.DisplayID != 0)
+        .into(as_sets(T.spell_totem_model.SpellID, T.spell_totem_model.DisplayID))
     ).then(ordered)
     """Two races sharing a model is one display, in display order, since no race
     travels with it."""
@@ -372,34 +467,46 @@ class Routes(Declarations):
 
     item_names = (
         flow("the items a visual holds up, by name and quality")
-        .read("ItemSearchName", c.ID, c.Display_lang, c.OverallQualityID)
-        .where(~c.Display_lang.is_empty())
-        .into(as_records(c.ID, ItemName, text(c.Display_lang), c.OverallQualityID))
+        .read(T.ItemSearchName, T.ItemSearchName.ID, T.ItemSearchName.Display_lang, T.ItemSearchName.OverallQualityID)
+        .where(~T.ItemSearchName.Display_lang.is_empty())
+        .into(
+            as_records(
+                T.ItemSearchName.ID, ItemName, text(T.ItemSearchName.Display_lang), T.ItemSearchName.OverallQualityID
+            )
+        )
     )
 
     model_files = (
         flow("the base file of each model resource")
-        .read("ModelFileData", c.FileDataID, c.ModelResourcesID)
-        .where((c.FileDataID != 0) & (c.ModelResourcesID != 0))
-        .into(as_map(c.ModelResourcesID, c.FileDataID, reduce=min))
+        .read(T.ModelFileData, T.ModelFileData.FileDataID, T.ModelFileData.ModelResourcesID)
+        .where((T.ModelFileData.FileDataID != 0) & (T.ModelFileData.ModelResourcesID != 0))
+        .into(as_map(T.ModelFileData.ModelResourcesID, T.ModelFileData.FileDataID, reduce=min))
     )
     """A model shipping with levels of detail names several files, and the lowest
     is the base model."""
 
     looks = (
         flow("each item's appearances, the base look first")
-        .read("ItemModifiedAppearance", c.ItemID, c.ItemAppearanceID)
-        .where(c.ItemID != 0)
-        .join(c.ItemAppearanceID, "ItemAppearance", c.ItemDisplayInfoID, c.DefaultIconFileDataID, inner=True)
+        .read(T.ItemModifiedAppearance, T.ItemModifiedAppearance.ItemID, T.ItemModifiedAppearance.ItemAppearanceID)
+        .where(T.ItemModifiedAppearance.ItemID != 0)
+        .join(
+            T.ItemModifiedAppearance.ItemAppearanceID,
+            T.ItemAppearance,
+            T.ItemAppearance.ItemDisplayInfoID,
+            T.ItemAppearance.DefaultIconFileDataID,
+            inner=True,
+        )
     )
 
-    item_icons = looks.where(c.DefaultIconFileDataID != 0).into(as_map(c.ItemID, c.DefaultIconFileDataID, first=True))
+    item_icons = looks.where(T.ItemAppearance.DefaultIconFileDataID != 0).into(
+        as_map(T.ItemModifiedAppearance.ItemID, T.ItemAppearance.DefaultIconFileDataID, first=True)
+    )
 
     item_models = (
-        looks.join(c.ItemDisplayInfoID, "ItemDisplayInfo", c.ModelResourcesID[:])
-        .explode(c.ModelResourcesID[:], into="resource")
+        looks.join(T.ItemAppearance.ItemDisplayInfoID, T.ItemDisplayInfo, T.ItemDisplayInfo.ModelResourcesID[:])
+        .explode(T.ItemDisplayInfo.ModelResourcesID[:], into="resource")
         .narrow(c.resource, "model_files")
-        .into(as_map(c.ItemID, c.resource, first=True))
+        .into(as_map(T.ItemModifiedAppearance.ItemID, c.resource, first=True))
     ).then(lambda held, files: {item: files[resource] for item, resource in held.items()}, files="model_files")
     """The first appearance whose display reaches a file, and its first slot that
     does: a paired item carries its second component in the second slot."""
@@ -410,15 +517,22 @@ class Routes(Declarations):
 
     effect_names = (
         flow("what each effect name reaches: a file, an item, a display or a weapon slot")
-        .read("SpellVisualEffectName", c.ID, c.ModelFileDataID, c.Type, c.GenericID, c.Scale)
+        .read(
+            T.SpellVisualEffectName,
+            T.SpellVisualEffectName.ID,
+            T.SpellVisualEffectName.ModelFileDataID,
+            T.SpellVisualEffectName.Type,
+            T.SpellVisualEffectName.GenericID,
+            T.SpellVisualEffectName.Scale,
+        )
         .into(
             as_records(
-                c.ID,
+                T.SpellVisualEffectName.ID,
                 EffectName,
-                c.ModelFileDataID,
-                c.Type,
-                c.GenericID,
-                typed(c.Scale, lambda cell: round(number_of(cell) * SCALE_UNIT)),
+                T.SpellVisualEffectName.ModelFileDataID,
+                T.SpellVisualEffectName.Type,
+                T.SpellVisualEffectName.GenericID,
+                typed(T.SpellVisualEffectName.Scale, lambda cell: round(number_of(cell) * SCALE_UNIT)),
             )
         )
     ).then(without_placeholders, named="named")
@@ -426,19 +540,19 @@ class Routes(Declarations):
     attachments = (
         flow("the models a kit hangs on a unit, and where")
         .read(
-            "SpellVisualKitModelAttach",
-            c.ParentSpellVisualKitID,
-            c.SpellVisualEffectNameID,
-            c.AttachmentID,
+            T.SpellVisualKitModelAttach,
+            T.SpellVisualKitModelAttach.ParentSpellVisualKitID,
+            T.SpellVisualKitModelAttach.SpellVisualEffectNameID,
+            T.SpellVisualKitModelAttach.AttachmentID,
             *PLACEMENT_COLUMNS,
         )
-        .where(c.ParentSpellVisualKitID != 0)
+        .where(T.SpellVisualKitModelAttach.ParentSpellVisualKitID != 0)
         .into(
             as_rows(
                 AttachRow.of,
-                c.ParentSpellVisualKitID,
-                c.SpellVisualEffectNameID,
-                c.AttachmentID,
+                T.SpellVisualKitModelAttach.ParentSpellVisualKitID,
+                T.SpellVisualKitModelAttach.SpellVisualEffectNameID,
+                T.SpellVisualKitModelAttach.AttachmentID,
                 *(text(column) for column in PLACEMENT_COLUMNS),
             )
         )
@@ -446,64 +560,90 @@ class Routes(Declarations):
 
     area_models = (
         flow("the ground models")
-        .read("SpellVisualKitAreaModel", c.ID, c.ModelFileDataID)
-        .into(as_map(c.ID, c.ModelFileDataID))
+        .read(T.SpellVisualKitAreaModel, T.SpellVisualKitAreaModel.ID, T.SpellVisualKitAreaModel.ModelFileDataID)
+        .into(as_map(T.SpellVisualKitAreaModel.ID, T.SpellVisualKitAreaModel.ModelFileDataID))
     )
 
     emissions = (
         flow("the ground model an emitter spawns copies of")
-        .read("SpellEffectEmission", c.ID, c.AreaModelID)
-        .join(c.AreaModelID, "SpellVisualKitAreaModel", c.ModelFileDataID, inner=True)
-        .where(c.ModelFileDataID != 0)
-        .into(as_map(c.ID, typed(c.ModelFileDataID, ground_model)))
+        .read(T.SpellEffectEmission, T.SpellEffectEmission.ID, T.SpellEffectEmission.AreaModelID)
+        .join(
+            T.SpellEffectEmission.AreaModelID,
+            T.SpellVisualKitAreaModel,
+            T.SpellVisualKitAreaModel.ModelFileDataID,
+            inner=True,
+        )
+        .where(T.SpellVisualKitAreaModel.ModelFileDataID != 0)
+        .into(as_map(T.SpellEffectEmission.ID, typed(T.SpellVisualKitAreaModel.ModelFileDataID, ground_model)))
     )
 
     barrages = (
         flow("the model a volley is made of, and where on the caster it spawns")
-        .read("BarrageEffect", c.ID, c.SpellVisualEffectNameID, c.AttachmentPoint)
-        .join(c.SpellVisualEffectNameID, "SpellVisualEffectName", c.ModelFileDataID, inner=True)
-        .where(c.ModelFileDataID != 0)
-        .into(as_records(c.ID, barrage_model, c.ModelFileDataID, c.AttachmentPoint))
+        .read(
+            T.BarrageEffect,
+            T.BarrageEffect.ID,
+            T.BarrageEffect.SpellVisualEffectNameID,
+            T.BarrageEffect.AttachmentPoint,
+        )
+        .join(
+            T.BarrageEffect.SpellVisualEffectNameID,
+            T.SpellVisualEffectName,
+            T.SpellVisualEffectName.ModelFileDataID,
+            inner=True,
+        )
+        .where(T.SpellVisualEffectName.ModelFileDataID != 0)
+        .into(
+            as_records(
+                T.BarrageEffect.ID,
+                barrage_model,
+                T.SpellVisualEffectName.ModelFileDataID,
+                T.BarrageEffect.AttachmentPoint,
+            )
+        )
     )
 
-    weapon_trails = flow("the trail models").read("WeaponTrail", c.ID, c.FileDataID).into(as_map(c.ID, c.FileDataID))
+    weapon_trails = (
+        flow("the trail models")
+        .read(T.WeaponTrail, T.WeaponTrail.ID, T.WeaponTrail.FileDataID)
+        .into(as_map(T.WeaponTrail.ID, T.WeaponTrail.FileDataID))
+    )
 
     missiles = (
         flow("the projectiles a visual launches, from its base set and its raid set")
         .read(
-            "SpellVisual",
-            c.ID,
-            c.SpellVisualMissileSetID,
-            c.RaidSpellVisualMissileSetID,
-            c.MissileAttachment,
-            c.MissileDestinationAttachment,
+            T.SpellVisual,
+            T.SpellVisual.ID,
+            T.SpellVisual.SpellVisualMissileSetID,
+            T.SpellVisual.RaidSpellVisualMissileSetID,
+            T.SpellVisual.MissileAttachment,
+            T.SpellVisual.MissileDestinationAttachment,
         )
-        .explode(c.SpellVisualMissileSetID, c.RaidSpellVisualMissileSetID, into="set")
+        .explode(T.SpellVisual.SpellVisualMissileSetID, T.SpellVisual.RaidSpellVisualMissileSetID, into="set")
         .join(
             c.set,
-            "SpellVisualMissile",
-            c.SpellVisualEffectNameID,
-            c.SoundEntriesID,
-            c.AnimKitID,
-            c.SpellMissileMotionID,
-            c.Attachment,
-            c.DestinationAttachment,
-            by="SpellVisualMissileSetID",
+            T.SpellVisualMissile,
+            T.SpellVisualMissile.SpellVisualEffectNameID,
+            T.SpellVisualMissile.SoundEntriesID,
+            T.SpellVisualMissile.AnimKitID,
+            T.SpellVisualMissile.SpellMissileMotionID,
+            T.SpellVisualMissile.Attachment,
+            T.SpellVisualMissile.DestinationAttachment,
+            by=T.SpellVisualMissile.SpellVisualMissileSetID,
             inner=True,
             many=True,
         )
         .into(
             as_rows(
                 MissileRow,
-                c.ID,
-                c.SpellVisualEffectNameID,
-                c.SoundEntriesID,
-                c.AnimKitID,
-                c.SpellMissileMotionID,
-                c.Attachment,
-                c.DestinationAttachment,
-                c.MissileAttachment,
-                c.MissileDestinationAttachment,
+                T.SpellVisual.ID,
+                T.SpellVisualMissile.SpellVisualEffectNameID,
+                T.SpellVisualMissile.SoundEntriesID,
+                T.SpellVisualMissile.AnimKitID,
+                T.SpellVisualMissile.SpellMissileMotionID,
+                T.SpellVisualMissile.Attachment,
+                T.SpellVisualMissile.DestinationAttachment,
+                T.SpellVisual.MissileAttachment,
+                T.SpellVisual.MissileDestinationAttachment,
             )
         )
     ).then(assemble_missiles, names="effect_names")
@@ -513,35 +653,35 @@ class Routes(Declarations):
     chains = (
         flow("what a beam segment draws with")
         .read(
-            "SpellChainEffects",
-            c.ID,
-            c.Red,
-            c.Green,
-            c.Blue,
-            c.SoundKitID,
-            c.ArcHeight,
-            c.MaxFlickerOnDuration,
-            c.JointOffsetRadius,
-            c.WaveHeight,
-            c.StartWidth,
-            c.TextureFileDataID[:],
-            c.SpellChainEffectID[:],
+            T.SpellChainEffects,
+            T.SpellChainEffects.ID,
+            T.SpellChainEffects.Red,
+            T.SpellChainEffects.Green,
+            T.SpellChainEffects.Blue,
+            T.SpellChainEffects.SoundKitID,
+            T.SpellChainEffects.ArcHeight,
+            T.SpellChainEffects.MaxFlickerOnDuration,
+            T.SpellChainEffects.JointOffsetRadius,
+            T.SpellChainEffects.WaveHeight,
+            T.SpellChainEffects.StartWidth,
+            T.SpellChainEffects.TextureFileDataID[:],
+            T.SpellChainEffects.SpellChainEffectID[:],
         )
         .into(
             as_records(
-                c.ID,
+                T.SpellChainEffects.ID,
                 ChainEffect,
-                c.Red,
-                c.Green,
-                c.Blue,
-                c.SoundKitID,
-                typed(c.TextureFileDataID[:], ids_of),
-                typed(c.SpellChainEffectID[:], ids_of),
-                typed(c.ArcHeight, positive),
-                typed(c.MaxFlickerOnDuration, positive),
-                typed(c.JointOffsetRadius, positive),
-                typed(c.WaveHeight, visible_wave),
-                typed(c.StartWidth, yards),
+                T.SpellChainEffects.Red,
+                T.SpellChainEffects.Green,
+                T.SpellChainEffects.Blue,
+                T.SpellChainEffects.SoundKitID,
+                typed(T.SpellChainEffects.TextureFileDataID[:], ids_of),
+                typed(T.SpellChainEffects.SpellChainEffectID[:], ids_of),
+                typed(T.SpellChainEffects.ArcHeight, positive),
+                typed(T.SpellChainEffects.MaxFlickerOnDuration, positive),
+                typed(T.SpellChainEffects.JointOffsetRadius, positive),
+                typed(T.SpellChainEffects.WaveHeight, visible_wave),
+                typed(T.SpellChainEffects.StartWidth, yards),
             )
         )
     )
@@ -550,27 +690,53 @@ class Routes(Declarations):
 
     beams = (
         flow("the chain a beam draws, and its two ends")
-        .read("BeamEffect", c.ID, c.BeamID, c.SourceAttachID, c.DestAttachID)
-        .into(as_records(c.ID, Beam, c.BeamID, c.SourceAttachID, c.DestAttachID))
+        .read(
+            T.BeamEffect, T.BeamEffect.ID, T.BeamEffect.BeamID, T.BeamEffect.SourceAttachID, T.BeamEffect.DestAttachID
+        )
+        .into(
+            as_records(
+                T.BeamEffect.ID, Beam, T.BeamEffect.BeamID, T.BeamEffect.SourceAttachID, T.BeamEffect.DestAttachID
+            )
+        )
     )
 
     dissolves = (
         flow("the dissolve materials")
-        .read("DissolveEffect", c.ID, c.TextureBlendSetID, c.Duration, c.AttachID)
-        .join(c.TextureBlendSetID, "TextureBlendSet", c.TextureFileDataID[:])
-        .into(as_records(c.ID, Dissolve, typed(c.Duration, seconds), typed(c.TextureFileDataID[:], ids_of), c.AttachID))
+        .read(
+            T.DissolveEffect,
+            T.DissolveEffect.ID,
+            T.DissolveEffect.TextureBlendSetID,
+            T.DissolveEffect.Duration,
+            T.DissolveEffect.AttachID,
+        )
+        .join(T.DissolveEffect.TextureBlendSetID, T.TextureBlendSet, T.TextureBlendSet.TextureFileDataID[:])
+        .into(
+            as_records(
+                T.DissolveEffect.ID,
+                Dissolve,
+                typed(T.DissolveEffect.Duration, seconds),
+                typed(T.TextureBlendSet.TextureFileDataID[:], ids_of),
+                T.DissolveEffect.AttachID,
+            )
+        )
     )
 
     glows = (
         flow("the colour an edge glow paints")
-        .read("EdgeGlowEffect", c.ID, c.GlowRed, c.GlowGreen, c.GlowBlue)
+        .read(
+            T.EdgeGlowEffect,
+            T.EdgeGlowEffect.ID,
+            T.EdgeGlowEffect.GlowRed,
+            T.EdgeGlowEffect.GlowGreen,
+            T.EdgeGlowEffect.GlowBlue,
+        )
         .into(
             as_records(
-                c.ID,
+                T.EdgeGlowEffect.ID,
                 lambda red, green, blue: (red << 16) | (green << 8) | blue,
-                typed(c.GlowRed, channel),
-                typed(c.GlowGreen, channel),
-                typed(c.GlowBlue, channel),
+                typed(T.EdgeGlowEffect.GlowRed, channel),
+                typed(T.EdgeGlowEffect.GlowGreen, channel),
+                typed(T.EdgeGlowEffect.GlowBlue, channel),
             )
         )
     )
@@ -579,80 +745,94 @@ class Routes(Declarations):
 
     glow_alphas = (
         flow("how opaque an edge glow is")
-        .read("EdgeGlowEffect", c.ID, c.GlowAlpha)
-        .into(as_map(c.ID, typed(c.GlowAlpha, channel)))
+        .read(T.EdgeGlowEffect, T.EdgeGlowEffect.ID, T.EdgeGlowEffect.GlowAlpha)
+        .into(as_map(T.EdgeGlowEffect.ID, typed(T.EdgeGlowEffect.GlowAlpha, channel)))
     )
 
     shadowies = (
         flow("the two colours of a ghost effect, and where it anchors")
-        .read("ShadowyEffect", c.ID, c.PrimaryColor, c.SecondaryColor, c.AttachPos)
-        .into(as_records(c.ID, Shadowy, typed(c.PrimaryColor, rgb_of), typed(c.SecondaryColor, rgb_of), c.AttachPos))
+        .read(
+            T.ShadowyEffect,
+            T.ShadowyEffect.ID,
+            T.ShadowyEffect.PrimaryColor,
+            T.ShadowyEffect.SecondaryColor,
+            T.ShadowyEffect.AttachPos,
+        )
+        .into(
+            as_records(
+                T.ShadowyEffect.ID,
+                Shadowy,
+                typed(T.ShadowyEffect.PrimaryColor, rgb_of),
+                typed(T.ShadowyEffect.SecondaryColor, rgb_of),
+                T.ShadowyEffect.AttachPos,
+            )
+        )
     )
 
     screens = (
         flow("what a screen effect does to the frame, the sky, the sound and the hour")
         .read(
-            "ScreenEffect",
-            c.ID,
-            c.Name,
-            c.Param_0,
-            c.Effect,
-            c.FullScreenEffectID,
-            c.LightParamsID,
-            c.LightParamsFadeIn,
-            c.LightParamsFadeOut,
-            c.SoundAmbienceID,
-            c.ZoneMusicID,
-            c.TimeOfDayOverride,
+            T.ScreenEffect,
+            T.ScreenEffect.ID,
+            T.ScreenEffect.Name,
+            T.ScreenEffect.Param[0],
+            T.ScreenEffect.Effect,
+            T.ScreenEffect.FullScreenEffectID,
+            T.ScreenEffect.LightParamsID,
+            T.ScreenEffect.LightParamsFadeIn,
+            T.ScreenEffect.LightParamsFadeOut,
+            T.ScreenEffect.SoundAmbienceID,
+            T.ScreenEffect.ZoneMusicID,
+            T.ScreenEffect.TimeOfDayOverride,
         )
         .join(
-            c.FullScreenEffectID,
-            "FullScreenEffect",
-            c.ColorMultiplyRed,
-            c.ColorMultiplyGreen,
-            c.ColorMultiplyBlue,
-            c.ColorAdditionRed,
-            c.ColorAdditionGreen,
-            c.ColorAdditionBlue,
-            c.OverlayTextureFileDataID,
-            c.TextureBlendSetID,
-            c.MaskOffsetY,
-            c.MaskSizeMultiplier,
-            c.MaskPower,
+            T.ScreenEffect.FullScreenEffectID,
+            T.FullScreenEffect,
+            T.FullScreenEffect.ColorMultiplyRed,
+            T.FullScreenEffect.ColorMultiplyGreen,
+            T.FullScreenEffect.ColorMultiplyBlue,
+            T.FullScreenEffect.ColorAdditionRed,
+            T.FullScreenEffect.ColorAdditionGreen,
+            T.FullScreenEffect.ColorAdditionBlue,
+            T.FullScreenEffect.OverlayTextureFileDataID,
+            T.FullScreenEffect.TextureBlendSetID,
+            T.FullScreenEffect.MaskOffsetY,
+            T.FullScreenEffect.MaskSizeMultiplier,
+            T.FullScreenEffect.MaskPower,
         )
-        .join(c.TextureBlendSetID, "TextureBlendSet", c.TextureFileDataID[:])
+        .join(T.FullScreenEffect.TextureBlendSetID, T.TextureBlendSet, T.TextureBlendSet.TextureFileDataID[:])
         .into(
             as_records(
-                c.ID,
+                T.ScreenEffect.ID,
                 ScreenRow.of,
-                text(c.Name),
-                c.Param_0,
-                c.Effect,
-                typed(c.ColorMultiplyRed, grade),
-                typed(c.ColorMultiplyGreen, grade),
-                typed(c.ColorMultiplyBlue, grade),
-                typed(c.ColorAdditionRed, grade),
-                typed(c.ColorAdditionGreen, grade),
-                typed(c.ColorAdditionBlue, grade),
-                c.OverlayTextureFileDataID,
-                typed(c.TextureFileDataID[:], ids_of),
-                typed(c.MaskOffsetY, thousandths),
-                typed(c.MaskSizeMultiplier, thousandths),
-                typed(c.MaskPower, thousandths),
-                c.LightParamsID,
-                c.LightParamsFadeIn,
-                c.LightParamsFadeOut,
-                c.SoundAmbienceID,
-                c.ZoneMusicID,
-                c.TimeOfDayOverride,
+                text(T.ScreenEffect.Name),
+                T.ScreenEffect.Param[0],
+                T.ScreenEffect.Effect,
+                typed(T.FullScreenEffect.ColorMultiplyRed, grade),
+                typed(T.FullScreenEffect.ColorMultiplyGreen, grade),
+                typed(T.FullScreenEffect.ColorMultiplyBlue, grade),
+                typed(T.FullScreenEffect.ColorAdditionRed, grade),
+                typed(T.FullScreenEffect.ColorAdditionGreen, grade),
+                typed(T.FullScreenEffect.ColorAdditionBlue, grade),
+                T.FullScreenEffect.OverlayTextureFileDataID,
+                typed(T.TextureBlendSet.TextureFileDataID[:], ids_of),
+                typed(T.FullScreenEffect.MaskOffsetY, thousandths),
+                typed(T.FullScreenEffect.MaskSizeMultiplier, thousandths),
+                typed(T.FullScreenEffect.MaskPower, thousandths),
+                T.ScreenEffect.LightParamsID,
+                T.ScreenEffect.LightParamsFadeIn,
+                T.ScreenEffect.LightParamsFadeOut,
+                T.ScreenEffect.SoundAmbienceID,
+                T.ScreenEffect.ZoneMusicID,
+                T.ScreenEffect.TimeOfDayOverride,
             )
         )
     )
 
     visual_screens = (
         flow("the kit's route into a screen effect")
-        .read("SpellVisualScreenEffect", c.ID, c.ScreenEffectID)
-        .into(as_map(c.ID, c.ScreenEffectID))
+        .read(T.SpellVisualScreenEffect, T.SpellVisualScreenEffect.ID, T.SpellVisualScreenEffect.ScreenEffectID)
+        .into(as_map(T.SpellVisualScreenEffect.ID, T.SpellVisualScreenEffect.ScreenEffectID))
     )
 
     fx = compose(FxPayloads)
@@ -660,51 +840,84 @@ class Routes(Declarations):
     # The character procedures: one table, many meanings, chosen by its Type.
 
     procedures = flow("the character procedures").read(
-        "SpellProceduralEffect", c.ID, c.Type, c.Value_0, c.Value_1, c.Value_2, c.Value_3
+        T.SpellProceduralEffect,
+        T.SpellProceduralEffect.ID,
+        T.SpellProceduralEffect.Type,
+        T.SpellProceduralEffect.Value[0],
+        T.SpellProceduralEffect.Value[1],
+        T.SpellProceduralEffect.Value[2],
+        T.SpellProceduralEffect.Value[3],
     )
 
-    proc_chains = procedures.where(c.Type.among(PROC_TYPES_CHAIN)).into(as_map(c.ID, c.Value_0))
+    proc_chains = procedures.where(T.SpellProceduralEffect.Type.among(PROC_TYPES_CHAIN)).into(
+        as_map(T.SpellProceduralEffect.ID, T.SpellProceduralEffect.Value[0])
+    )
 
-    proc_tints = procedures.where(c.Type.among((PROC_TYPE_TINT, PROC_TYPE_TINT_MAT))).into(
-        as_records(c.ID, tint, c.Type, c.Value_0, c.Value_3)
+    proc_tints = procedures.where(T.SpellProceduralEffect.Type.among((PROC_TYPE_TINT, PROC_TYPE_TINT_MAT))).into(
+        as_records(
+            T.SpellProceduralEffect.ID,
+            tint,
+            T.SpellProceduralEffect.Type,
+            T.SpellProceduralEffect.Value[0],
+            T.SpellProceduralEffect.Value[3],
+        )
     )
     """The payload column differs per Type, and a colourless tint folds in as black."""
 
-    proc_ghosts = procedures.where((c.Type == PROC_TYPE_GHOST_MAT) & (c.Value_3 != 0)).into(
-        as_map(c.ID, typed(c.Value_3, rgb_of))
-    )
+    proc_ghosts = procedures.where(
+        (T.SpellProceduralEffect.Type == PROC_TYPE_GHOST_MAT) & (T.SpellProceduralEffect.Value[3] != 0)
+    ).into(as_map(T.SpellProceduralEffect.ID, typed(T.SpellProceduralEffect.Value[3], rgb_of)))
     """A colourless ghost has nothing to show and is dropped."""
 
-    proc_desats = (procedures.where(c.Type == PROC_TYPE_DESATURATE).into(as_map(c.ID, typed(c.Value_2, percent)))).then(
-        nonzero
-    )
+    proc_desats = (
+        procedures.where(T.SpellProceduralEffect.Type == PROC_TYPE_DESATURATE).into(
+            as_map(T.SpellProceduralEffect.ID, typed(T.SpellProceduralEffect.Value[2], percent))
+        )
+    ).then(nonzero)
 
     proc_transps = (
-        procedures.where(c.Type == PROC_TYPE_TRANSPARENCY).into(as_map(c.ID, typed(c.Value_0, percent)))
+        procedures.where(T.SpellProceduralEffect.Type == PROC_TYPE_TRANSPARENCY).into(
+            as_map(T.SpellProceduralEffect.ID, typed(T.SpellProceduralEffect.Value[0], percent))
+        )
     ).then(nonzero)
     """A percentage of zero would render as a claim that something happened."""
 
-    proc_freezes = procedures.where(c.Type == PROC_TYPE_FREEZE).into(as_ids(c.ID))
+    proc_freezes = procedures.where(T.SpellProceduralEffect.Type == PROC_TYPE_FREEZE).into(
+        as_ids(T.SpellProceduralEffect.ID)
+    )
 
-    proc_camos = procedures.where(c.Type == PROC_TYPE_CAMO).into(as_ids(c.ID))
+    proc_camos = procedures.where(T.SpellProceduralEffect.Type == PROC_TYPE_CAMO).into(
+        as_ids(T.SpellProceduralEffect.ID)
+    )
 
     proc_ground = (
-        procedures.where(c.Type == PROC_TYPE_AREAMODEL)
-        .join(c.Value_0, "SpellVisualKitAreaModel", c.ModelFileDataID, inner=True)
-        .where(c.ModelFileDataID != 0)
-        .into(as_map(c.ID, typed(c.ModelFileDataID, ground_model)))
+        procedures.where(T.SpellProceduralEffect.Type == PROC_TYPE_AREAMODEL)
+        .join(
+            T.SpellProceduralEffect.Value[0],
+            T.SpellVisualKitAreaModel,
+            T.SpellVisualKitAreaModel.ModelFileDataID,
+            inner=True,
+        )
+        .where(T.SpellVisualKitAreaModel.ModelFileDataID != 0)
+        .into(as_map(T.SpellProceduralEffect.ID, typed(T.SpellVisualKitAreaModel.ModelFileDataID, ground_model)))
     )
 
     proc_trails = (
-        procedures.where(c.Type == PROC_TYPE_WEAPONTRAIL)
-        .join(c.Value_0, "WeaponTrail", c.FileDataID, inner=True)
-        .where(c.FileDataID != 0)
-        .into(as_map(c.ID, typed(c.FileDataID, trail_model)))
+        procedures.where(T.SpellProceduralEffect.Type == PROC_TYPE_WEAPONTRAIL)
+        .join(T.SpellProceduralEffect.Value[0], T.WeaponTrail, T.WeaponTrail.FileDataID, inner=True)
+        .where(T.WeaponTrail.FileDataID != 0)
+        .into(as_map(T.SpellProceduralEffect.ID, typed(T.WeaponTrail.FileDataID, trail_model)))
     )
 
     proc_anims = (
-        procedures.where(c.Type == PROC_TYPE_STANDWALK).into(
-            as_records(c.ID, standwalk, c.Value_0, c.Value_1, c.Value_2)
+        procedures.where(T.SpellProceduralEffect.Type == PROC_TYPE_STANDWALK).into(
+            as_records(
+                T.SpellProceduralEffect.ID,
+                standwalk,
+                T.SpellProceduralEffect.Value[0],
+                T.SpellProceduralEffect.Value[1],
+                T.SpellProceduralEffect.Value[2],
+            )
         )
     ).then(nonzero)
 
@@ -727,84 +940,116 @@ class Routes(Declarations):
 
     kit_effects = (
         flow("what a kit's effect rows reach, by type")
-        .read("SpellVisualKitEffect", c.ParentSpellVisualKitID, c.EffectType, c.Effect)
-        .where((c.ParentSpellVisualKitID != 0) & (c.Effect != 0))
+        .read(
+            T.SpellVisualKitEffect,
+            T.SpellVisualKitEffect.ParentSpellVisualKitID,
+            T.SpellVisualKitEffect.EffectType,
+            T.SpellVisualKitEffect.Effect,
+        )
+        .where((T.SpellVisualKitEffect.ParentSpellVisualKitID != 0) & (T.SpellVisualKitEffect.Effect != 0))
     )
 
-    kit_sounds = kit_effects.where(c.EffectType == EFFECT_TYPE_SOUND).into(as_sets(c.ParentSpellVisualKitID, c.Effect))
+    kit_sounds = kit_effects.where(T.SpellVisualKitEffect.EffectType == EFFECT_TYPE_SOUND).into(
+        as_sets(T.SpellVisualKitEffect.ParentSpellVisualKitID, T.SpellVisualKitEffect.Effect)
+    )
 
-    kit_anim_rows = kit_effects.where(c.EffectType == EFFECT_TYPE_ANIM).join(
-        c.Effect, "SpellVisualAnim", c.InitialAnimID, c.LoopAnimID, c.AnimKitID
+    kit_anim_rows = kit_effects.where(T.SpellVisualKitEffect.EffectType == EFFECT_TYPE_ANIM).join(
+        T.SpellVisualKitEffect.Effect,
+        T.SpellVisualAnim,
+        T.SpellVisualAnim.InitialAnimID,
+        T.SpellVisualAnim.LoopAnimID,
+        T.SpellVisualAnim.AnimKitID,
     )
 
     kit_visual_anims = (
-        kit_anim_rows.explode(c.InitialAnimID, c.LoopAnimID, into="anim")
+        kit_anim_rows.explode(T.SpellVisualAnim.InitialAnimID, T.SpellVisualAnim.LoopAnimID, into="anim")
         .where(c.anim > 0)
-        .into(as_sets(c.ParentSpellVisualKitID, c.anim))
+        .into(as_sets(T.SpellVisualKitEffect.ParentSpellVisualKitID, c.anim))
     )
     """Nought would be Stand and minus one is unset, so neither is played."""
 
-    kit_animkits = kit_anim_rows.where(c.AnimKitID != 0).into(as_sets(c.ParentSpellVisualKitID, c.AnimKitID))
+    kit_animkits = kit_anim_rows.where(T.SpellVisualAnim.AnimKitID != 0).into(
+        as_sets(T.SpellVisualKitEffect.ParentSpellVisualKitID, T.SpellVisualAnim.AnimKitID)
+    )
 
     kit_dissolves = (
-        kit_effects.where(c.EffectType == EFFECT_TYPE_DISSOLVE)
-        .narrow(c.Effect, "dissolves")
-        .into(as_sets(c.ParentSpellVisualKitID, c.Effect))
+        kit_effects.where(T.SpellVisualKitEffect.EffectType == EFFECT_TYPE_DISSOLVE)
+        .narrow(T.SpellVisualKitEffect.Effect, "dissolves")
+        .into(as_sets(T.SpellVisualKitEffect.ParentSpellVisualKitID, T.SpellVisualKitEffect.Effect))
     )
 
     kit_glows = (
-        kit_effects.where(c.EffectType == EFFECT_TYPE_EDGE_GLOW)
-        .narrow(c.Effect, "glows")
-        .into(as_sets(c.ParentSpellVisualKitID, c.Effect))
+        kit_effects.where(T.SpellVisualKitEffect.EffectType == EFFECT_TYPE_EDGE_GLOW)
+        .narrow(T.SpellVisualKitEffect.Effect, "glows")
+        .into(as_sets(T.SpellVisualKitEffect.ParentSpellVisualKitID, T.SpellVisualKitEffect.Effect))
     )
 
     kit_shadowies = (
-        kit_effects.where(c.EffectType == EFFECT_TYPE_SHADOWY)
-        .narrow(c.Effect, "shadowies")
-        .into(as_sets(c.ParentSpellVisualKitID, c.Effect))
+        kit_effects.where(T.SpellVisualKitEffect.EffectType == EFFECT_TYPE_SHADOWY)
+        .narrow(T.SpellVisualKitEffect.Effect, "shadowies")
+        .into(as_sets(T.SpellVisualKitEffect.ParentSpellVisualKitID, T.SpellVisualKitEffect.Effect))
     )
     """A row pointing at a payload this build lacks is dropped rather than an error."""
 
     kit_screens = (
-        kit_effects.where(c.EffectType == EFFECT_TYPE_SCREEN)
-        .join(c.Effect, "SpellVisualScreenEffect", c.ScreenEffectID, inner=True)
-        .narrow(c.ScreenEffectID, "screens")
-        .into(as_sets(c.ParentSpellVisualKitID, c.ScreenEffectID))
+        kit_effects.where(T.SpellVisualKitEffect.EffectType == EFFECT_TYPE_SCREEN)
+        .join(
+            T.SpellVisualKitEffect.Effect,
+            T.SpellVisualScreenEffect,
+            T.SpellVisualScreenEffect.ScreenEffectID,
+            inner=True,
+        )
+        .narrow(T.SpellVisualScreenEffect.ScreenEffectID, "screens")
+        .into(as_sets(T.SpellVisualKitEffect.ParentSpellVisualKitID, T.SpellVisualScreenEffect.ScreenEffectID))
     )
 
     kit_emissions = (
-        kit_effects.where(c.EffectType == EFFECT_TYPE_EMISSION)
-        .narrow(c.Effect, "emissions")
-        .into(as_sets(c.ParentSpellVisualKitID, c.Effect))
+        kit_effects.where(T.SpellVisualKitEffect.EffectType == EFFECT_TYPE_EMISSION)
+        .narrow(T.SpellVisualKitEffect.Effect, "emissions")
+        .into(as_sets(T.SpellVisualKitEffect.ParentSpellVisualKitID, T.SpellVisualKitEffect.Effect))
     )
 
     kit_barrages = (
-        kit_effects.where(c.EffectType == EFFECT_TYPE_BARRAGE)
-        .narrow(c.Effect, "barrages")
-        .into(as_sets(c.ParentSpellVisualKitID, c.Effect))
+        kit_effects.where(T.SpellVisualKitEffect.EffectType == EFFECT_TYPE_BARRAGE)
+        .narrow(T.SpellVisualKitEffect.Effect, "barrages")
+        .into(as_sets(T.SpellVisualKitEffect.ParentSpellVisualKitID, T.SpellVisualKitEffect.Effect))
     )
 
     kit_beams = (
-        kit_effects.where(c.EffectType == EFFECT_TYPE_BEAM)
-        .join(c.Effect, "BeamEffect", c.BeamID, c.SourceAttachID, c.DestAttachID, inner=True)
-        .expand(c.BeamID, "SpellChainEffects", {"SpellChainEffectID_*": 0}, into="chain", bits="hops")
+        kit_effects.where(T.SpellVisualKitEffect.EffectType == EFFECT_TYPE_BEAM)
+        .join(
+            T.SpellVisualKitEffect.Effect,
+            T.BeamEffect,
+            T.BeamEffect.BeamID,
+            T.BeamEffect.SourceAttachID,
+            T.BeamEffect.DestAttachID,
+            inner=True,
+        )
+        .expand(T.BeamEffect.BeamID, T.SpellChainEffects, {"SpellChainEffectID_*": 0}, into="chain", bits="hops")
         .narrow(c.chain, "chains")
-        .into(as_sets(c.ParentSpellVisualKitID, c.chain, c.SourceAttachID, c.DestAttachID))
+        .into(
+            as_sets(
+                T.SpellVisualKitEffect.ParentSpellVisualKitID,
+                c.chain,
+                T.BeamEffect.SourceAttachID,
+                T.BeamEffect.DestAttachID,
+            )
+        )
     )
     """A beam's chains and every chain those nest, each tagged with the beam's two
     ends: nested chains are segments of the same beam. The graph may cycle."""
 
-    kit_procedures = kit_effects.where(c.EffectType == EFFECT_TYPE_PROC).into(
-        as_sets(c.ParentSpellVisualKitID, c.Effect)
+    kit_procedures = kit_effects.where(T.SpellVisualKitEffect.EffectType == EFFECT_TYPE_PROC).into(
+        as_sets(T.SpellVisualKitEffect.ParentSpellVisualKitID, T.SpellVisualKitEffect.Effect)
     )
     """Dispatched a second time, by membership in the procedure route's buckets."""
 
     kit_proc_chains = (
-        kit_effects.where(c.EffectType == EFFECT_TYPE_PROC)
-        .lookup(c.Effect, "proc_chains", into="seed")
-        .expand(c.seed, "SpellChainEffects", {"SpellChainEffectID_*": 0}, into="chain", bits="hops")
+        kit_effects.where(T.SpellVisualKitEffect.EffectType == EFFECT_TYPE_PROC)
+        .lookup(T.SpellVisualKitEffect.Effect, "proc_chains", into="seed")
+        .expand(c.seed, T.SpellChainEffects, {"SpellChainEffectID_*": 0}, into="chain", bits="hops")
         .narrow(c.chain, "chains")
-        .into(as_sets(c.ParentSpellVisualKitID, c.chain))
+        .into(as_sets(T.SpellVisualKitEffect.ParentSpellVisualKitID, c.chain))
     )
     """A procedure-route chain has no beam row, so it carries no attachment pair."""
 
@@ -814,10 +1059,10 @@ class Routes(Declarations):
 
     spell_visuals = (
         flow("the visuals a spell reaches, its redirects followed")
-        .read("SpellXSpellVisual", c.SpellID, c.SpellVisualID)
-        .where((c.SpellID != 0) & (c.SpellVisualID != 0))
-        .expand(c.SpellVisualID, "SpellVisual", VISUAL_REDIRECTS, into="visual", bits="reached")
-        .into(as_nested(c.SpellID, c.visual, c.reached, reduce=or_))
+        .read(T.SpellXSpellVisual, T.SpellXSpellVisual.SpellID, T.SpellXSpellVisual.SpellVisualID)
+        .where((T.SpellXSpellVisual.SpellID != 0) & (T.SpellXSpellVisual.SpellVisualID != 0))
+        .expand(T.SpellXSpellVisual.SpellVisualID, T.SpellVisual, VISUAL_REDIRECTS, into="visual", bits="reached")
+        .into(as_nested(T.SpellXSpellVisual.SpellID, c.visual, c.reached, reduce=or_))
     )
     """A visual reached straight from the spell carries no extra bits; one reached
     through a redirect carries the bits of the columns the path went through, and
@@ -825,11 +1070,21 @@ class Routes(Declarations):
 
     visual_events = (
         flow("what a visual plays, when, and for whom")
-        .read("SpellVisualEvent", c.SpellVisualID, c.SpellVisualKitID, c.TargetType, c.StartEvent)
-        .where((c.SpellVisualID != 0) & (c.SpellVisualKitID != 0))
+        .read(
+            T.SpellVisualEvent,
+            T.SpellVisualEvent.SpellVisualID,
+            T.SpellVisualEvent.SpellVisualKitID,
+            T.SpellVisualEvent.TargetType,
+            T.SpellVisualEvent.StartEvent,
+        )
+        .where((T.SpellVisualEvent.SpellVisualID != 0) & (T.SpellVisualEvent.SpellVisualKitID != 0))
         .into(
             as_lists(
-                c.SpellVisualID, c.SpellVisualKitID, c.StartEvent, typed(c.TargetType, target_bit), record=KitEvent
+                T.SpellVisualEvent.SpellVisualID,
+                T.SpellVisualEvent.SpellVisualKitID,
+                T.SpellVisualEvent.StartEvent,
+                typed(T.SpellVisualEvent.TargetType, target_bit),
+                record=KitEvent,
             )
         )
     )
@@ -838,9 +1093,9 @@ class Routes(Declarations):
 
     visual_sounds = (
         flow("the sound a visual's own animation events play")
-        .read("SpellVisual", c.ID, c.AnimEventSoundID)
-        .where(c.AnimEventSoundID != 0)
-        .into(as_map(c.ID, c.AnimEventSoundID))
+        .read(T.SpellVisual, T.SpellVisual.ID, T.SpellVisual.AnimEventSoundID)
+        .where(T.SpellVisual.AnimEventSoundID != 0)
+        .into(as_map(T.SpellVisual.ID, T.SpellVisual.AnimEventSoundID))
     )
 
     graph = compose(VisualGraph)
@@ -849,15 +1104,18 @@ class Routes(Declarations):
 
     seats = (
         flow("each seat's attachment and what the rider and the vehicle animate")
-        .read("VehicleSeat", c.ID, c.AttachmentID, *SEAT_COLUMNS)
-        .into(as_records(c.ID, Seat.of, c.AttachmentID, *SEAT_COLUMNS))
+        .read(T.VehicleSeat, T.VehicleSeat.ID, T.VehicleSeat.AttachmentID, *SEAT_COLUMNS)
+        .into(as_records(T.VehicleSeat.ID, Seat.of, T.VehicleSeat.AttachmentID, *SEAT_COLUMNS))
     )
 
     vehicles = (
         flow("each vehicle's seats, by slot")
-        .read("Vehicle", c.ID, c.SeatID[:])
+        .read(T.Vehicle, T.Vehicle.ID, T.Vehicle.SeatID[:])
         .into(
-            as_map(c.ID, typed(c.SeatID[:], lambda cell: [seat for seat in map(key_of, values_of(cell)) if seat > 0]))
+            as_map(
+                T.Vehicle.ID,
+                typed(T.Vehicle.SeatID[:], lambda cell: [seat for seat in map(key_of, values_of(cell)) if seat > 0]),
+            )
         )
     ).then(VehicleSeats.assemble, seats="seats")
     """Empty slots are dropped, so the list length is the seat count, and a seat
@@ -875,24 +1133,24 @@ class Routes(Declarations):
 
     spell_subtexts = (
         flow("the parenthetical rank or variant under a spell's name")
-        .read("Spell", c.ID, c.NameSubtext_lang)
-        .where(~c.NameSubtext_lang.is_empty())
-        .into(as_map(c.ID, text(c.NameSubtext_lang)))
+        .read(T.Spell, T.Spell.ID, T.Spell.NameSubtext_lang)
+        .where(~T.Spell.NameSubtext_lang.is_empty())
+        .into(as_map(T.Spell.ID, text(T.Spell.NameSubtext_lang)))
     )
 
     alt_names = (
         flow("the names a spell can rename its target to")
-        .read("SpellOverrideName", c.ID, c.OverrideName_lang)
-        .into(as_map(c.ID, text(c.OverrideName_lang)))
+        .read(T.SpellOverrideName, T.SpellOverrideName.ID, T.SpellOverrideName.OverrideName_lang)
+        .into(as_map(T.SpellOverrideName.ID, text(T.SpellOverrideName.OverrideName_lang)))
     ).then(override_names, by_spell="effects.altnames")
 
     spell_icons = (
         flow("each spell's icon, from the row that has one")
-        .read("SpellMisc", c.SpellID, c.DifficultyID, c.SpellIconFileDataID)
-        .narrow(c.SpellID, "names.names")
-        .where(c.SpellIconFileDataID != 0)
-        .prefer(c.SpellID, base=BASE)
-        .into(as_map(c.SpellID, c.SpellIconFileDataID))
+        .read(T.SpellMisc, T.SpellMisc.SpellID, T.SpellMisc.DifficultyID, T.SpellMisc.SpellIconFileDataID)
+        .narrow(T.SpellMisc.SpellID, "names.names")
+        .where(T.SpellMisc.SpellIconFileDataID != 0)
+        .prefer(T.SpellMisc.SpellID, base=BASE)
+        .into(as_map(T.SpellMisc.SpellID, T.SpellMisc.SpellIconFileDataID))
     )
     """An icon of zero never displaces one, so the icon is read apart from the
     rest of the row, base row first among the rows that have one."""
@@ -900,47 +1158,54 @@ class Routes(Declarations):
     props = (
         flow("what SpellMisc says about a spell")
         .read(
-            "SpellMisc",
-            c.SpellID,
-            c.DifficultyID,
-            c.SchoolMask,
-            c.CastingTimeIndex,
-            c.DurationIndex,
-            c.RangeIndex,
-            c.Speed,
-            c.LaunchDelay,
-            c.Attributes[:],
+            T.SpellMisc,
+            T.SpellMisc.SpellID,
+            T.SpellMisc.DifficultyID,
+            T.SpellMisc.SchoolMask,
+            T.SpellMisc.CastingTimeIndex,
+            T.SpellMisc.DurationIndex,
+            T.SpellMisc.RangeIndex,
+            T.SpellMisc.Speed,
+            T.SpellMisc.LaunchDelay,
+            T.SpellMisc.Attributes[:],
         )
-        .narrow(c.SpellID, "names.names")
-        .prefer(c.SpellID, base=BASE)
+        .narrow(T.SpellMisc.SpellID, "names.names")
+        .prefer(T.SpellMisc.SpellID, base=BASE)
         .into(
             as_rows(
                 PropertiesRow,
-                c.SpellID,
-                c.SchoolMask,
-                c.CastingTimeIndex,
-                c.DurationIndex,
-                c.RangeIndex,
-                real(c.Speed),
-                real(c.LaunchDelay),
-                typed(c.Attributes[:], lambda cell: tuple(to_int(value) for value in values_of(cell))),
+                T.SpellMisc.SpellID,
+                T.SpellMisc.SchoolMask,
+                T.SpellMisc.CastingTimeIndex,
+                T.SpellMisc.DurationIndex,
+                T.SpellMisc.RangeIndex,
+                real(T.SpellMisc.Speed),
+                real(T.SpellMisc.LaunchDelay),
+                typed(T.SpellMisc.Attributes[:], lambda cell: tuple(to_int(value) for value in values_of(cell))),
             )
         )
     ).then(SpellProperties.assemble, icons="spell_icons")
 
     reach = (
         flow("how far a spell reaches")
-        .read("SpellMisc", c.SpellID, c.DifficultyID, c.RangeIndex)
-        .narrow(c.SpellID, "names.names")
-        .prefer(c.SpellID, base=BASE)
-        .join(c.RangeIndex, "SpellRange", c.RangeMax_0, c.RangeMin_0, c.Flags, inner=True)
+        .read(T.SpellMisc, T.SpellMisc.SpellID, T.SpellMisc.DifficultyID, T.SpellMisc.RangeIndex)
+        .narrow(T.SpellMisc.SpellID, "names.names")
+        .prefer(T.SpellMisc.SpellID, base=BASE)
+        .join(
+            T.SpellMisc.RangeIndex,
+            T.SpellRange,
+            T.SpellRange.RangeMax[0],
+            T.SpellRange.RangeMin[0],
+            T.SpellRange.Flags,
+            inner=True,
+        )
         .into(
             as_rows(
                 Reach,
-                c.SpellID,
-                typed(c.RangeMax_0, lambda cell: to_float(as_text(cell), YARD_DIGITS)),
-                typed(c.RangeMin_0, lambda cell: to_float(as_text(cell), YARD_DIGITS)),
-                typed(c.Flags, lambda cell: key_of(cell) & REACH_FLAGS),
+                T.SpellMisc.SpellID,
+                typed(T.SpellRange.RangeMax[0], lambda cell: to_float(as_text(cell), YARD_DIGITS)),
+                typed(T.SpellRange.RangeMin[0], lambda cell: to_float(as_text(cell), YARD_DIGITS)),
+                typed(T.SpellRange.Flags, lambda cell: key_of(cell) & REACH_FLAGS),
                 sort=attrgetter("spell"),
             )
         )
@@ -950,28 +1215,44 @@ class Routes(Declarations):
 
     channel_breaks = (
         flow("the channels that movement cancels")
-        .read("SpellInterrupts", c.SpellID, c.DifficultyID, c.ChannelInterruptFlags[:], optional=True)
-        .narrow(c.SpellID, "names.names")
-        .prefer(c.SpellID, base=BASE)
-        .where(c.ChannelInterruptFlags[:].bit(MOVING_BIT))
-        .into(as_ids(c.SpellID))
+        .read(
+            T.SpellInterrupts,
+            T.SpellInterrupts.SpellID,
+            T.SpellInterrupts.DifficultyID,
+            T.SpellInterrupts.ChannelInterruptFlags[:],
+            optional=True,
+        )
+        .narrow(T.SpellInterrupts.SpellID, "names.names")
+        .prefer(T.SpellInterrupts.SpellID, base=BASE)
+        .where(T.SpellInterrupts.ChannelInterruptFlags[:].bit(MOVING_BIT))
+        .into(as_ids(T.SpellInterrupts.SpellID))
     )
     """The channel column, so the channel enum rather than the cast one."""
 
     delivery = (
         flow("how a spell is delivered: a cast time, a channel, or both")
-        .read("SpellMisc", c.SpellID, c.DifficultyID, c.CastingTimeIndex, c.DurationIndex, c.Attributes[:])
-        .narrow(c.SpellID, "names.names")
-        .prefer(c.SpellID, base=BASE)
-        .join(c.CastingTimeIndex, "SpellCastTimes", c.Base)
-        .join(c.DurationIndex, "SpellDuration", c.Duration)
-        .map("channelled", c.Attributes[:].bit(CHANNEL_BITS[0]) | c.Attributes[:].bit(CHANNEL_BITS[1]))
+        .read(
+            T.SpellMisc,
+            T.SpellMisc.SpellID,
+            T.SpellMisc.DifficultyID,
+            T.SpellMisc.CastingTimeIndex,
+            T.SpellMisc.DurationIndex,
+            T.SpellMisc.Attributes[:],
+        )
+        .narrow(T.SpellMisc.SpellID, "names.names")
+        .prefer(T.SpellMisc.SpellID, base=BASE)
+        .join(T.SpellMisc.CastingTimeIndex, T.SpellCastTimes, T.SpellCastTimes.Base)
+        .join(T.SpellMisc.DurationIndex, T.SpellDuration, T.SpellDuration.Duration)
+        .map(
+            "channelled",
+            T.SpellMisc.Attributes[:].bit(CHANNEL_BITS[0]) | T.SpellMisc.Attributes[:].bit(CHANNEL_BITS[1]),
+        )
         .into(
             as_rows(
                 DeliveryRow,
-                c.SpellID,
-                c.Base,
-                typed(c.Duration, lambda cell: None if cell == "" else key_of(cell)),
+                T.SpellMisc.SpellID,
+                T.SpellCastTimes.Base,
+                typed(T.SpellDuration.Duration, lambda cell: None if cell == "" else key_of(cell)),
                 typed(c.channelled, lambda cell: cell == "1"),
             )
         )
@@ -979,10 +1260,16 @@ class Routes(Declarations):
 
     aura_interrupts = (
         flow("what removes a spell's aura")
-        .read("SpellInterrupts", c.SpellID, c.DifficultyID, c.AuraInterruptFlags[:], optional=True)
-        .narrow(c.SpellID, "names.names")
-        .prefer(c.SpellID, base=BASE)
-        .into(as_map(c.SpellID, typed(c.AuraInterruptFlags[:], interrupt_bits)))
+        .read(
+            T.SpellInterrupts,
+            T.SpellInterrupts.SpellID,
+            T.SpellInterrupts.DifficultyID,
+            T.SpellInterrupts.AuraInterruptFlags[:],
+            optional=True,
+        )
+        .narrow(T.SpellInterrupts.SpellID, "names.names")
+        .prefer(T.SpellInterrupts.SpellID, base=BASE)
+        .into(as_map(T.SpellInterrupts.SpellID, typed(T.SpellInterrupts.AuraInterruptFlags[:], interrupt_bits)))
     ).then(nonzero)
     """A spell carrying only housekeeping bits is absent rather than empty."""
 
@@ -993,149 +1280,163 @@ class Routes(Declarations):
 
     summon_controls = (
         flow("how a summoned creature is controlled")
-        .read("SummonProperties", c.ID, c.Control)
-        .into(as_map(c.ID, c.Control))
+        .read(T.SummonProperties, T.SummonProperties.ID, T.SummonProperties.Control)
+        .into(as_map(T.SummonProperties.ID, T.SummonProperties.Control))
     )
 
     effect_rows = (
         flow("a spell's effects, and who each is aimed at")
         .read(
-            "SpellEffect",
-            c.SpellID,
-            c.Effect,
-            c.EffectAura,
-            c.EffectMiscValue_0,
-            c.EffectMiscValue_1,
-            c.ImplicitTarget_0,
-            c.ImplicitTarget_1,
-            c.EffectBasePoints,
-            c.EffectBasePointsF,
-            c.EffectTriggerSpell,
-            c.EffectIndex,
-            c.EffectAuraPeriod,
-            c.EffectChainTargets,
-            c.EffectAttributes,
+            T.SpellEffect,
+            T.SpellEffect.SpellID,
+            T.SpellEffect.Effect,
+            T.SpellEffect.EffectAura,
+            T.SpellEffect.EffectMiscValue[0],
+            T.SpellEffect.EffectMiscValue[1],
+            T.SpellEffect.ImplicitTarget[0],
+            T.SpellEffect.ImplicitTarget[1],
+            T.SpellEffect.EffectBasePoints,
+            T.SpellEffect.EffectBasePointsF,
+            T.SpellEffect.EffectTriggerSpell,
+            T.SpellEffect.EffectIndex,
+            T.SpellEffect.EffectAuraPeriod,
+            T.SpellEffect.EffectChainTargets,
+            T.SpellEffect.EffectAttributes,
         )
-        .narrow(c.SpellID, "names.names")
-        .lookup(c.ImplicitTarget_0, "target_bits", into="bit_a", default=NO_TARGET)
-        .lookup(c.ImplicitTarget_1, "target_bits", into="bit_b", default=NO_TARGET)
+        .narrow(T.SpellEffect.SpellID, "names.names")
+        .lookup(T.SpellEffect.ImplicitTarget[0], "target_bits", into="bit_a", default=NO_TARGET)
+        .lookup(T.SpellEffect.ImplicitTarget[1], "target_bits", into="bit_b", default=NO_TARGET)
         .map("mask", bits_of(c.bit_a, c.bit_b))
-        .map("amount", coalesce(c.EffectBasePoints, c.EffectBasePointsF, digits=1))
+        .map("amount", coalesce(T.SpellEffect.EffectBasePoints, T.SpellEffect.EffectBasePointsF, digits=1))
     )
     """The mask is the union of the row's two implicit targets; an implicit target
     the build does not name contributes nothing. The amount is whichever of the two
     spellings this build exports."""
 
-    masked = as_masked(c.SpellID, MISC0, c.mask)
+    masked = as_masked(T.SpellEffect.SpellID, MISC0, c.mask)
     """Where a payload of one reference lands: the ids per spell, each pair masked."""
 
     effects = effect_rows.split(
         SpellEffectRows,
-        morphs=flow("morphs").when("EffectAura", AURA_TRANSFORM, [reference(MISC0, "creature_template")]).into(masked),
-        forms=flow("forms").when("EffectAura", AURA_SHAPESHIFT, [reference(MISC0, "SpellShapeshiftForm")]).into(masked),
-        vehicles=flow("vehicles").when("EffectAura", AURA_SET_VEHICLE_ID, [reference(MISC0, "Vehicle")]).into(masked),
+        morphs=flow("morphs")
+        .when(T.SpellEffect.EffectAura, AURA_TRANSFORM, [reference(MISC0, T.creature_template)])
+        .into(masked),
+        forms=flow("forms")
+        .when(T.SpellEffect.EffectAura, AURA_SHAPESHIFT, [reference(MISC0, T.SpellShapeshiftForm)])
+        .into(masked),
+        vehicles=flow("vehicles")
+        .when(T.SpellEffect.EffectAura, AURA_SET_VEHICLE_ID, [reference(MISC0, T.Vehicle)])
+        .into(masked),
         invis=flow("invis")
-        .when("EffectAura", AURA_MOD_INVISIBILITY, [vocabulary(MISC0, "channels", zero_is_a_value=True)])
+        .when(T.SpellEffect.EffectAura, AURA_MOD_INVISIBILITY, [vocabulary(MISC0, "channels", zero_is_a_value=True)])
         .into(masked),
         detect=flow("detect")
-        .when("EffectAura", AURA_MOD_INVISIBILITY_DETECT, [vocabulary(MISC0, "channels", zero_is_a_value=True)])
+        .when(
+            T.SpellEffect.EffectAura,
+            AURA_MOD_INVISIBILITY_DETECT,
+            [vocabulary(MISC0, "channels", zero_is_a_value=True)],
+        )
         .into(masked),
         screens=flow("screens")
-        .when("EffectAura", AURA_SCREEN_EFFECT, [reference(MISC0, "ScreenEffect")])
+        .when(T.SpellEffect.EffectAura, AURA_SCREEN_EFFECT, [reference(MISC0, T.ScreenEffect)])
         .narrow(MISC0, "screens")
         .into(masked),
         keybinds=flow("keybinds")
-        .when("EffectAura", AURA_KEYBOUND_OVERRIDE, [reference(MISC0, "SpellKeyboundOverride")])
+        .when(T.SpellEffect.EffectAura, AURA_KEYBOUND_OVERRIDE, [reference(MISC0, T.SpellKeyboundOverride)])
         .narrow(MISC0, "keybinds")
         .into(masked),
         altnames=flow("altnames")
-        .when("EffectAura", AURA_OVERRIDE_NAME, [reference(MISC0, "SpellOverrideName")])
-        .into(as_sets(c.SpellID, MISC0)),
+        .when(T.SpellEffect.EffectAura, AURA_OVERRIDE_NAME, [reference(MISC0, T.SpellOverrideName)])
+        .into(as_sets(T.SpellEffect.SpellID, MISC0)),
         anim_sets=flow("anim sets")
-        .when("EffectAura", AURA_ANIM_REPLACEMENT_SET, [reference(MISC0, "AnimReplacementSet")])
+        .when(T.SpellEffect.EffectAura, AURA_ANIM_REPLACEMENT_SET, [reference(MISC0, "AnimReplacementSet")])
         .into(masked),
         factions=flow("factions")
-        .when("EffectAura", AURA_MOD_FACTION, [reference(MISC0, "FactionTemplate")])
+        .when(T.SpellEffect.EffectAura, AURA_MOD_FACTION, [reference(MISC0, T.FactionTemplate)])
         .into(masked),
         objects=flow("objects")
         .any_of(
-            when("Effect", sorted(EFFECT_SPAWN_OBJECT), [reference(MISC0, "gameobject_template")]),
+            when(T.SpellEffect.Effect, sorted(EFFECT_SPAWN_OBJECT), [reference(MISC0, T.gameobject_template)]),
             when(
-                "Effect",
+                T.SpellEffect.Effect,
                 sorted(RETIRED_SPAWN_OBJECT_EFFECTS),
-                [reference(MISC0, "gameobject_template")],
+                [reference(MISC0, T.gameobject_template)],
                 until=SPAWN_OBJECT_SLOTS_UNTIL,
             ),
         )
         .into(masked),
         summons=flow("summons")
         .when(
-            "Effect",
+            T.SpellEffect.Effect,
             EFFECT_SUMMON,
-            [reference(MISC0, "creature_template"), reference(MISC1, "SummonProperties", zero_is_a_value=True)],
+            [reference(MISC0, T.creature_template), reference(MISC1, T.SummonProperties, zero_is_a_value=True)],
         )
         .lookup(MISC1, "summon_controls", into="control", default=0)
-        .into(as_sets(c.SpellID, MISC0, c.control)),
+        .into(as_sets(T.SpellEffect.SpellID, MISC0, c.control)),
         summon_targets=flow("summon targets")
         .when(
-            "Effect",
+            T.SpellEffect.Effect,
             EFFECT_SUMMON,
-            [reference(MISC0, "creature_template"), reference(MISC1, "SummonProperties", zero_is_a_value=True)],
+            [reference(MISC0, T.creature_template), reference(MISC1, T.SummonProperties, zero_is_a_value=True)],
         )
-        .into(as_map((c.SpellID, MISC0), c.mask, reduce=or_)),
+        .into(as_map((T.SpellEffect.SpellID, MISC0), c.mask, reduce=or_)),
         sounds=flow("sounds")
-        .when("Effect", sorted(EFFECT_PLAYS_SOUND), [reference(MISC0, "SoundKit")])
-        .into(as_map((c.SpellID, MISC0), c.mask, reduce=or_)),
+        .when(T.SpellEffect.Effect, sorted(EFFECT_PLAYS_SOUND), [reference(MISC0, T.SoundKit)])
+        .into(as_map((T.SpellEffect.SpellID, MISC0), c.mask, reduce=or_)),
         speeds=flow("speeds")
-        .when("EffectAura", sorted(SPEED_AURAS), [amount(AMOUNT)])
+        .when(T.SpellEffect.EffectAura, sorted(SPEED_AURAS), [amount(AMOUNT)])
         .where(c.amount != 0)
-        .lookup(c.EffectAura, SPEED_AURAS, into="movement")
-        .into(as_sets(c.SpellID, text(c.movement), real(c.amount))),
+        .lookup(T.SpellEffect.EffectAura, SPEED_AURAS, into="movement")
+        .into(as_sets(T.SpellEffect.SpellID, text(c.movement), real(c.amount))),
         speed_targets=flow("speed targets")
-        .when("EffectAura", sorted(SPEED_AURAS), [amount(AMOUNT)])
+        .when(T.SpellEffect.EffectAura, sorted(SPEED_AURAS), [amount(AMOUNT)])
         .where(c.amount != 0)
-        .lookup(c.EffectAura, SPEED_AURAS, into="movement")
-        .into(as_map((c.SpellID, text(c.movement), real(c.amount)), c.mask, reduce=or_)),
+        .lookup(T.SpellEffect.EffectAura, SPEED_AURAS, into="movement")
+        .into(as_map((T.SpellEffect.SpellID, text(c.movement), real(c.amount)), c.mask, reduce=or_)),
         scales=flow("scales")
-        .when("EffectAura", sorted(SCALE_AURAS), [amount(AMOUNT)])
+        .when(T.SpellEffect.EffectAura, sorted(SCALE_AURAS), [amount(AMOUNT)])
         .where(c.amount != 0)
-        .into(as_sets(c.SpellID, real(c.amount))),
+        .into(as_sets(T.SpellEffect.SpellID, real(c.amount))),
         scale_targets=flow("scale targets")
-        .when("EffectAura", sorted(SCALE_AURAS), [amount(AMOUNT)])
+        .when(T.SpellEffect.EffectAura, sorted(SCALE_AURAS), [amount(AMOUNT)])
         .where(c.amount != 0)
-        .into(as_map((c.SpellID, real(c.amount)), c.mask, reduce=or_)),
+        .into(as_map((T.SpellEffect.SpellID, real(c.amount)), c.mask, reduce=or_)),
         links=flow("links")
-        .where((c.EffectTriggerSpell != 0) & (c.EffectTriggerSpell != c.SpellID))
-        .narrow(c.EffectTriggerSpell, "names.names")
-        .into(as_ids(c.SpellID, c.EffectTriggerSpell, c.Effect, c.EffectAura)),
+        .where((T.SpellEffect.EffectTriggerSpell != 0) & (T.SpellEffect.EffectTriggerSpell != T.SpellEffect.SpellID))
+        .narrow(T.SpellEffect.EffectTriggerSpell, "names.names")
+        .into(
+            as_ids(
+                T.SpellEffect.SpellID, T.SpellEffect.EffectTriggerSpell, T.SpellEffect.Effect, T.SpellEffect.EffectAura
+            )
+        ),
         link_targets=flow("link targets")
-        .where((c.EffectTriggerSpell != 0) & (c.EffectTriggerSpell != c.SpellID))
-        .narrow(c.EffectTriggerSpell, "names.names")
-        .into(as_map((c.SpellID, c.EffectTriggerSpell), c.mask, reduce=or_)),
-        cast_target_bits=flow("cast targets").into(as_map(c.SpellID, c.mask, reduce=or_)),
+        .where((T.SpellEffect.EffectTriggerSpell != 0) & (T.SpellEffect.EffectTriggerSpell != T.SpellEffect.SpellID))
+        .narrow(T.SpellEffect.EffectTriggerSpell, "names.names")
+        .into(as_map((T.SpellEffect.SpellID, T.SpellEffect.EffectTriggerSpell), c.mask, reduce=or_)),
+        cast_target_bits=flow("cast targets").into(as_map(T.SpellEffect.SpellID, c.mask, reduce=or_)),
         aura_target_bits=flow("aura targets")
-        .where(c.Effect == EFFECT_APPLY_AURA)
-        .into(as_map(c.SpellID, c.mask, reduce=or_)),
+        .where(T.SpellEffect.Effect == EFFECT_APPLY_AURA)
+        .into(as_map(T.SpellEffect.SpellID, c.mask, reduce=or_)),
         mechanics=landing(
             (
                 flow("mechanics")
-                .where((c.Effect != 0) | (c.EffectAura != 0))
+                .where((T.SpellEffect.Effect != 0) | (T.SpellEffect.EffectAura != 0))
                 .into(
                     as_rows(
                         EffectRow,
-                        c.SpellID,
-                        c.Effect,
-                        c.EffectAura,
-                        c.ImplicitTarget_0,
-                        c.ImplicitTarget_1,
+                        T.SpellEffect.SpellID,
+                        T.SpellEffect.Effect,
+                        T.SpellEffect.EffectAura,
+                        T.SpellEffect.ImplicitTarget[0],
+                        T.SpellEffect.ImplicitTarget[1],
                         MISC0,
                         MISC1,
                         flag(c.consumed_Effect),
                         flag(c.consumed_EffectAura),
-                        c.EffectIndex,
-                        c.EffectAuraPeriod,
-                        c.EffectChainTargets,
-                        c.EffectAttributes,
+                        T.SpellEffect.EffectIndex,
+                        T.SpellEffect.EffectAuraPeriod,
+                        T.SpellEffect.EffectChainTargets,
+                        T.SpellEffect.EffectAttributes,
                     )
                 )
             ).then(set)
@@ -1157,58 +1458,83 @@ class Routes(Declarations):
     effect_values = (
         flow("the numbers a template asks of each effect")
         .read(
-            "SpellEffect",
-            c.SpellID,
-            c.DifficultyID,
-            c.EffectIndex,
-            c.EffectBasePoints,
-            c.EffectBasePointsF,
-            c.EffectAuraPeriod,
-            c.EffectRadiusIndex_0,
-            c.EffectChainTargets,
-            c.EffectMiscValue_0,
-            c.Variance,
-            c.ScalingClass,
-            c.Coefficient,
+            T.SpellEffect,
+            T.SpellEffect.SpellID,
+            T.SpellEffect.DifficultyID,
+            T.SpellEffect.EffectIndex,
+            T.SpellEffect.EffectBasePoints,
+            T.SpellEffect.EffectBasePointsF,
+            T.SpellEffect.EffectAuraPeriod,
+            T.SpellEffect.EffectRadiusIndex[0],
+            T.SpellEffect.EffectChainTargets,
+            T.SpellEffect.EffectMiscValue[0],
+            T.SpellEffect.Variance,
+            T.SpellEffect.ScalingClass,
+            T.SpellEffect.Coefficient,
             revised=False,
         )
         .where(BASE)
-        .join(c.SpellID, "SpellScaling", c.MinScalingLevel, c.MaxScalingLevel, by="SpellID", revised=False)
-        .join(c.EffectRadiusIndex_0, "SpellRadius", c.Radius, revised=False)
-        .map("amount", coalesce(c.EffectBasePoints, c.EffectBasePointsF, digits=1))
-        .map("spread", coalesce(c.Variance, digits=1))
-        .map("reached", coalesce(c.Radius, digits=1))
+        .join(
+            T.SpellEffect.SpellID,
+            T.SpellScaling,
+            T.SpellScaling.MinScalingLevel,
+            T.SpellScaling.MaxScalingLevel,
+            by=T.SpellScaling.SpellID,
+            revised=False,
+        )
+        .join(T.SpellEffect.EffectRadiusIndex[0], T.SpellRadius, T.SpellRadius.Radius, revised=False)
+        .map("amount", coalesce(T.SpellEffect.EffectBasePoints, T.SpellEffect.EffectBasePointsF, digits=1))
+        .map("spread", coalesce(T.SpellEffect.Variance, digits=1))
+        .map("reached", coalesce(T.SpellRadius.Radius, digits=1))
         .split(
             EffectValues,
             points=(
                 flow("points").into(
                     as_rows(
                         PointRow,
-                        c.SpellID,
-                        typed(c.EffectIndex, effect_number),
+                        T.SpellEffect.SpellID,
+                        typed(T.SpellEffect.EffectIndex, effect_number),
                         real(c.amount),
-                        c.ScalingClass,
-                        typed(c.Coefficient, tenth),
-                        c.MinScalingLevel,
-                        c.MaxScalingLevel,
+                        T.SpellEffect.ScalingClass,
+                        typed(T.SpellEffect.Coefficient, tenth),
+                        T.SpellScaling.MinScalingLevel,
+                        T.SpellScaling.MaxScalingLevel,
                     )
                 )
             ).then(resolve_points, level="level", scaling="scaling"),
             variance=flow("variance")
             .where(c.spread != 0)
-            .into(as_nested(c.SpellID, typed(c.EffectIndex, effect_number), real(c.spread))),
+            .into(as_nested(T.SpellEffect.SpellID, typed(T.SpellEffect.EffectIndex, effect_number), real(c.spread))),
             period=flow("period")
-            .where(c.EffectAuraPeriod != 0)
-            .into(as_nested(c.SpellID, typed(c.EffectIndex, effect_number), c.EffectAuraPeriod)),
+            .where(T.SpellEffect.EffectAuraPeriod != 0)
+            .into(
+                as_nested(
+                    T.SpellEffect.SpellID,
+                    typed(T.SpellEffect.EffectIndex, effect_number),
+                    T.SpellEffect.EffectAuraPeriod,
+                )
+            ),
             radius=flow("radius")
             .where(c.reached != 0)
-            .into(as_nested(c.SpellID, typed(c.EffectIndex, effect_number), real(c.reached))),
+            .into(as_nested(T.SpellEffect.SpellID, typed(T.SpellEffect.EffectIndex, effect_number), real(c.reached))),
             chain_targets=flow("chain targets")
-            .where(c.EffectChainTargets != 0)
-            .into(as_nested(c.SpellID, typed(c.EffectIndex, effect_number), c.EffectChainTargets)),
+            .where(T.SpellEffect.EffectChainTargets != 0)
+            .into(
+                as_nested(
+                    T.SpellEffect.SpellID,
+                    typed(T.SpellEffect.EffectIndex, effect_number),
+                    T.SpellEffect.EffectChainTargets,
+                )
+            ),
             misc_value=flow("misc value")
-            .where(c.EffectMiscValue_0 != 0)
-            .into(as_nested(c.SpellID, typed(c.EffectIndex, effect_number), c.EffectMiscValue_0)),
+            .where(T.SpellEffect.EffectMiscValue[0] != 0)
+            .into(
+                as_nested(
+                    T.SpellEffect.SpellID,
+                    typed(T.SpellEffect.EffectIndex, effect_number),
+                    T.SpellEffect.EffectMiscValue[0],
+                )
+            ),
         )
     )
     """Base difficulty only, and a zero is left out rather than recorded, so the
@@ -1216,45 +1542,68 @@ class Routes(Declarations):
 
     spell_durations = (
         flow("how long a spell lasts")
-        .read("SpellMisc", c.SpellID, c.DifficultyID, c.DurationIndex, revised=False)
+        .read(T.SpellMisc, T.SpellMisc.SpellID, T.SpellMisc.DifficultyID, T.SpellMisc.DurationIndex, revised=False)
         .where(BASE)
-        .join(c.DurationIndex, "SpellDuration", c.Duration, inner=True, revised=False)
-        .into(as_map(c.SpellID, c.Duration))
+        .join(T.SpellMisc.DurationIndex, T.SpellDuration, T.SpellDuration.Duration, inner=True, revised=False)
+        .into(as_map(T.SpellMisc.SpellID, T.SpellDuration.Duration))
     )
 
     spell_ranges = (
         flow("how far a spell's description says it reaches")
-        .read("SpellMisc", c.SpellID, c.DifficultyID, c.RangeIndex, revised=False)
+        .read(T.SpellMisc, T.SpellMisc.SpellID, T.SpellMisc.DifficultyID, T.SpellMisc.RangeIndex, revised=False)
         .where(BASE)
-        .join(c.RangeIndex, "SpellRange", c.RangeMax_0, inner=True, revised=False)
-        .map("distance", coalesce(c.RangeMax_0, digits=1))
+        .join(T.SpellMisc.RangeIndex, T.SpellRange, T.SpellRange.RangeMax[0], inner=True, revised=False)
+        .map("distance", coalesce(T.SpellRange.RangeMax[0], digits=1))
         .where(c.distance != 0)
-        .into(as_map(c.SpellID, real(c.distance)))
+        .into(as_map(T.SpellMisc.SpellID, real(c.distance)))
     )
 
     aura_caps = (
         flow("what an aura's options cap")
         .read(
-            "SpellAuraOptions", c.SpellID, c.DifficultyID, c.CumulativeAura, c.ProcCharges, c.ProcChance, revised=False
+            T.SpellAuraOptions,
+            T.SpellAuraOptions.SpellID,
+            T.SpellAuraOptions.DifficultyID,
+            T.SpellAuraOptions.CumulativeAura,
+            T.SpellAuraOptions.ProcCharges,
+            T.SpellAuraOptions.ProcChance,
+            revised=False,
         )
         .where(BASE)
     )
 
-    spell_stack_caps = aura_caps.where(c.CumulativeAura != 0).into(as_map(c.SpellID, c.CumulativeAura))
+    spell_stack_caps = aura_caps.where(T.SpellAuraOptions.CumulativeAura != 0).into(
+        as_map(T.SpellAuraOptions.SpellID, T.SpellAuraOptions.CumulativeAura)
+    )
 
-    spell_charges = aura_caps.where(c.ProcCharges != 0).into(as_map(c.SpellID, c.ProcCharges))
+    spell_charges = aura_caps.where(T.SpellAuraOptions.ProcCharges != 0).into(
+        as_map(T.SpellAuraOptions.SpellID, T.SpellAuraOptions.ProcCharges)
+    )
 
-    spell_proc_chances = aura_caps.where(c.ProcChance != 0).into(as_map(c.SpellID, c.ProcChance))
+    spell_proc_chances = aura_caps.where(T.SpellAuraOptions.ProcChance != 0).into(
+        as_map(T.SpellAuraOptions.SpellID, T.SpellAuraOptions.ProcChance)
+    )
 
     target_caps = (
         flow("what a spell's targeting caps")
-        .read("SpellTargetRestrictions", c.SpellID, c.DifficultyID, c.MaxTargets, c.MaxTargetLevel, revised=False)
+        .read(
+            T.SpellTargetRestrictions,
+            T.SpellTargetRestrictions.SpellID,
+            T.SpellTargetRestrictions.DifficultyID,
+            T.SpellTargetRestrictions.MaxTargets,
+            T.SpellTargetRestrictions.MaxTargetLevel,
+            revised=False,
+        )
         .where(BASE)
     )
 
-    spell_target_caps = target_caps.where(c.MaxTargets != 0).into(as_map(c.SpellID, c.MaxTargets))
+    spell_target_caps = target_caps.where(T.SpellTargetRestrictions.MaxTargets != 0).into(
+        as_map(T.SpellTargetRestrictions.SpellID, T.SpellTargetRestrictions.MaxTargets)
+    )
 
-    spell_target_levels = target_caps.where(c.MaxTargetLevel != 0).into(as_map(c.SpellID, c.MaxTargetLevel))
+    spell_target_levels = target_caps.where(T.SpellTargetRestrictions.MaxTargetLevel != 0).into(
+        as_map(T.SpellTargetRestrictions.SpellID, T.SpellTargetRestrictions.MaxTargetLevel)
+    )
 
     values = compose(
         DescriptionValues,
@@ -1279,38 +1628,64 @@ class Routes(Declarations):
 
     spell_descriptions = (
         flow("what the tooltip says the cast does")
-        .read("Spell", c.ID, c.Description_lang)
-        .where(~c.Description_lang.is_empty())
-        .into(as_map(c.ID, text(c.Description_lang)))
+        .read(T.Spell, T.Spell.ID, T.Spell.Description_lang)
+        .where(~T.Spell.Description_lang.is_empty())
+        .into(as_map(T.Spell.ID, text(T.Spell.Description_lang)))
     )
     """Unfiltered against the spell list: a template routinely redirects to a
     spell that has no name row of its own."""
 
     spell_aura_texts = (
         flow("what the buff says while it is on you")
-        .read("Spell", c.ID, c.AuraDescription_lang)
-        .where(~c.AuraDescription_lang.is_empty())
-        .into(as_map(c.ID, text(c.AuraDescription_lang)))
+        .read(T.Spell, T.Spell.ID, T.Spell.AuraDescription_lang)
+        .where(~T.Spell.AuraDescription_lang.is_empty())
+        .into(as_map(T.Spell.ID, text(T.Spell.AuraDescription_lang)))
     )
 
     spell_variables = (
         flow("the named variable bodies a description may interpolate")
-        .read("SpellXDescriptionVariables", c.SpellID, c.SpellDescriptionVariablesID)
-        .join(c.SpellDescriptionVariablesID, "SpellDescriptionVariables", c.Variables, inner=True)
-        .into(as_map(c.SpellID, typed(c.Variables, assignments)))
+        .read(
+            T.SpellXDescriptionVariables,
+            T.SpellXDescriptionVariables.SpellID,
+            T.SpellXDescriptionVariables.SpellDescriptionVariablesID,
+        )
+        .join(
+            T.SpellXDescriptionVariables.SpellDescriptionVariablesID,
+            T.SpellDescriptionVariables,
+            T.SpellDescriptionVariables.Variables,
+            inner=True,
+        )
+        .into(as_map(T.SpellXDescriptionVariables.SpellID, typed(T.SpellDescriptionVariables.Variables, assignments)))
     ).then(nonzero)
 
     # Where a spell may be cast.
 
-    area_parents = flow("each area's parent").read("AreaTable", c.ID, c.ParentAreaID).into(as_map(c.ID, c.ParentAreaID))
+    area_parents = (
+        flow("each area's parent")
+        .read(T.AreaTable, T.AreaTable.ID, T.AreaTable.ParentAreaID)
+        .into(as_map(T.AreaTable.ID, T.AreaTable.ParentAreaID))
+    )
 
     areas = (
         flow("where a spell may be cast")
-        .read("SpellCastingRequirements", c.SpellID, c.RequiredAreasID)
-        .where(c.RequiredAreasID != 0)
-        .join(c.RequiredAreasID, "AreaGroupMember", c.AreaID, by="AreaGroupID", inner=True, many=True)
-        .join(c.AreaID, "AreaTable", c.AreaName_lang, inner=True)
-        .into(as_rows(GateRow, c.SpellID, c.AreaID, text(c.AreaName_lang)))
+        .read(
+            T.SpellCastingRequirements, T.SpellCastingRequirements.SpellID, T.SpellCastingRequirements.RequiredAreasID
+        )
+        .where(T.SpellCastingRequirements.RequiredAreasID != 0)
+        .join(
+            T.SpellCastingRequirements.RequiredAreasID,
+            T.AreaGroupMember,
+            T.AreaGroupMember.AreaID,
+            by=T.AreaGroupMember.AreaGroupID,
+            inner=True,
+            many=True,
+        )
+        .join(T.AreaGroupMember.AreaID, T.AreaTable, T.AreaTable.AreaName_lang, inner=True)
+        .into(
+            as_rows(
+                GateRow, T.SpellCastingRequirements.SpellID, T.AreaGroupMember.AreaID, text(T.AreaTable.AreaName_lang)
+            )
+        )
     ).then(AreaGates.assemble, parents="area_parents", maps="zone_maps")
     """A group naming an area the build has no row for is skipped rather than
     shipped nameless."""
@@ -1318,11 +1693,11 @@ class Routes(Declarations):
 
 zone_maps = (
     flow("each area's zone map, where one names the same place the area does")
-    .read("UiMapAssignment", c.AreaID, c.UiMapID)
-    .join(c.UiMapID, "UiMap", c.Name_lang, c.Type, inner=True)
-    .join(c.AreaID, "AreaTable", c.AreaName_lang, inner=True)
-    .where((c.Type == UI_MAP_TYPE_ZONE) & (c.Name_lang == c.AreaName_lang))
-    .into(as_map(c.AreaID, c.UiMapID, reduce=min))
+    .read(T.UiMapAssignment, T.UiMapAssignment.AreaID, T.UiMapAssignment.UiMapID)
+    .join(T.UiMapAssignment.UiMapID, T.UiMap, T.UiMap.Name_lang, T.UiMap.Type, inner=True)
+    .join(T.UiMapAssignment.AreaID, T.AreaTable, T.AreaTable.AreaName_lang, inner=True)
+    .where((T.UiMap.Type == UI_MAP_TYPE_ZONE) & (T.UiMap.Name_lang == T.AreaTable.AreaName_lang))
+    .into(as_map(T.UiMapAssignment.AreaID, T.UiMapAssignment.UiMapID, reduce=min))
 )
 """A given rather than a field: read once in the build's own language and
 shared by every other, because the match is between two translated names

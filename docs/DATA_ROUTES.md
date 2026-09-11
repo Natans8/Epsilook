@@ -27,7 +27,7 @@ flowchart TD
     content-addressed modules, then indexed, queried and rendered in the browser. Hotlinks
     are the only thing fetched afterwards, and only on hover or click.
     }
-    PIN["pinned<br/>a released client cannot change<br/><br/>64 client tables, this build<br/>sound-kit names, one older build<br/>the scaling game table"]
+    PIN["pinned<br/>a released client cannot change<br/><br/>75 client tables, this build<br/>sound-kit names, one older build<br/>the scaling game table"]
     VOL["volatile<br/>corrected upstream<br/><br/>the animation name list<br/>three enum definitions"]
     REV["revalidated<br/>it grows, so it is asked<br/><br/>the community listfile"]
     TRK["tracked<br/>already in the checkout<br/><br/>the asset-name supplement<br/>the expansion ladder"]

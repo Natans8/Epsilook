@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from abc import ABC, abstractmethod
 from typing import Any, Protocol
 from ..tables import Tables
-from .expressions import Column, Expr, Needs, Row, Rows, Schema, column_name
+from .expressions import Column, Expr, Needs, Row, Rows, Schema, Table, column_name, table_name
 from .steps import (
     AnyOf,
     Expand,
@@ -67,23 +67,31 @@ class Flow:
         """Whether the flow starts with no read: the steps of a branch, or none."""
         return not (self.steps and isinstance(self.steps[0], Read))
 
-    def read(self, table: str, *columns: str | Column, optional: bool = False, revised: bool = True) -> Flow:
+    def read(
+        self, table: str | type[Table], *columns: str | Column, optional: bool = False, revised: bool = True
+    ) -> Flow:
         """Start from one table's rows, by the columns named."""
-        return self | Read(table, tuple(column_name(name) for name in columns), optional, revised)
+        return self | Read(table_name(table), tuple(column_name(name) for name in columns), optional, revised)
 
     def join(
         self,
         key: str | Column,
-        table: str,
+        table: str | type[Table],
         *columns: str | Column,
-        by: str = "ID",
+        by: str | Column = "ID",
         inner: bool = False,
         many: bool = False,
         revised: bool = True,
     ) -> Flow:
         """Hop through a key into another table, taking the columns named."""
         return self | Join(
-            column_name(key), table, tuple(column_name(name) for name in columns), by, inner, many, revised
+            column_name(key),
+            table_name(table),
+            tuple(column_name(name) for name in columns),
+            column_name(by),
+            inner,
+            many,
+            revised,
         )
 
     def explode(self, *columns: str | Column, into: str, slot: str = "") -> Flow:
@@ -98,10 +106,17 @@ class Flow:
         return self | Lookup(column_name(column), field, into, default)
 
     def expand(
-        self, key: str | Column, table: str, edges: Mapping[str, int], *, into: str, bits: str, revised: bool = True
+        self,
+        key: str | Column,
+        table: str | type[Table],
+        edges: Mapping[str, int],
+        *,
+        into: str,
+        bits: str,
+        revised: bool = True,
     ) -> Flow:
         """Every row the key reaches through the table's own references, with the bits the path took."""
-        return self | Expand(column_name(key), table, dict(edges), into, bits, revised=revised)
+        return self | Expand(column_name(key), table_name(table), dict(edges), into, bits, revised=revised)
 
     def prefer(self, key: str | Column, *, base: Expr) -> Flow:
         """One row per key, the base row standing for it."""
@@ -111,7 +126,7 @@ class Flow:
         """A computed column, appended."""
         return self | Map(into, expr)
 
-    def when(self, on: str, values: int | Sequence[int], slots: Sequence[Slot], until: str = "") -> Flow:
+    def when(self, on: str | Column, values: int | Sequence[int], slots: Sequence[Slot], until: str = "") -> Flow:
         """Keep the rows a selector chooses, and say what their columns then mean."""
         return self | when(on, values, slots, until)
 

@@ -51,6 +51,8 @@ TABLES = [
     # Aura 312's (Src -> Dst AnimationData) swaps, keyed by
     # ParentAnimReplacementSetID.
     "AnimReplacement",
+    # The kit itself, read for its SoundType; the entries beneath it are the files.
+    "SoundKit",
     "SoundKitEntry",
     "SpellEffect",
     "SummonProperties",
