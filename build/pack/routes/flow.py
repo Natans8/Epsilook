@@ -1818,10 +1818,16 @@ class AsIds:
 
 
 def as_text(cell: Cell) -> str:
-    """A cell as its text."""
+    """A cell as its text, its line ends as newlines.
+
+    A client table stores prose with carriage returns where an export writes
+    newlines, and the addon's Lua rewrites a carriage return inside a long
+    string, which would move every offset after it. One spelling of a line
+    break here keeps the two sources the same text.
+    """
     if isinstance(cell, tuple):
         raise TypeError("an array column is not one text")
-    return cell
+    return cell.replace("\r\n", "\n").replace("\r", "\n")
 
 
 def as_map(

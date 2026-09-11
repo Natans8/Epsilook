@@ -144,7 +144,7 @@
   "locales": {
     "enUS": {
       "names": {"file": "data/modules/names-18ad3328baa9.json.gz", "bytes": 1708240},
-      "text": {"file": "data/modules/text-79b3e1ec39e1.json.gz", "bytes": 3078964}
+      "text": {"file": "data/modules/text-2031d23a226d.json.gz", "bytes": 3078962}
     }
   },
   "absentSections": []
