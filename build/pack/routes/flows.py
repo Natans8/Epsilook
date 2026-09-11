@@ -12,9 +12,10 @@ in its own module.
 
 from __future__ import annotations
 
-from operator import attrgetter
+from operator import attrgetter, or_
 
 from ..drift import SPELL_NAME_SOURCES
+from ..targets import VISUAL_REDIRECTS
 from .anims import SPEED_UNIT
 from .areas import UI_MAP_TYPE_ZONE, AreaGates, GateRow
 from .colors import channel, rgb_of
@@ -24,7 +25,9 @@ from .delivery import CHANNEL_BITS, MOVING_BIT, DeliveryRow, assemble_delivery
 from .factions import FactionTemplateRow
 from .flow import (
     as_ids,
+    as_lists,
     as_map,
+    as_nested,
     as_records,
     as_rows,
     as_sets,
@@ -114,6 +117,7 @@ from .sounds import Ambience, ZoneMusic
 from .spells import PropertiesRow, SpellProperties
 from .text import assignments
 from .vehicles import SEAT_COLUMNS, Seat, VehicleSeats
+from .visuals import KitEvent, VisualGraph, target_bit
 
 BASE = c.DifficultyID == BASE_DIFFICULTY
 """The row a player sees, which stands for the spell wherever a table keeps a
@@ -822,6 +826,41 @@ kit_proc_chains = declare(
 """A procedure-route chain has no beam row, so it carries no attachment pair."""
 
 kits = declare("kits", compose(KitEffects.assemble))
+
+
+# The spine: spell to visual to kit, each hop carrying who the content plays for.
+
+spell_visuals = declare(
+    "spell_visuals",
+    flow("the visuals a spell reaches, its redirects followed")
+    .read("SpellXSpellVisual", c.SpellID, c.SpellVisualID)
+    .where((c.SpellID != 0) & (c.SpellVisualID != 0))
+    .expand(c.SpellVisualID, "SpellVisual", VISUAL_REDIRECTS, into="visual", bits="reached")
+    >> as_nested(c.SpellID, c.visual, c.reached, reduce=or_),
+)
+"""A visual reached straight from the spell carries no extra bits; one reached
+through a redirect carries the bits of the columns the path went through, and
+a visual reached two ways carries both. The graph may cycle."""
+
+visual_events = declare(
+    "visual_events",
+    flow("what a visual plays, when, and for whom")
+    .read("SpellVisualEvent", c.SpellVisualID, c.SpellVisualKitID, c.TargetType, c.StartEvent)
+    .where((c.SpellVisualID != 0) & (c.SpellVisualKitID != 0))
+    >> as_lists(c.SpellVisualID, c.SpellVisualKitID, c.StartEvent, typed(c.TargetType, target_bit), record=KitEvent),
+)
+"""Distinct, in table order, and kept per event rather than folded per kit:
+the phase is what the pack ships."""
+
+visual_sounds = declare(
+    "visual_sounds",
+    flow("the sound a visual's own animation events play")
+    .read("SpellVisual", c.ID, c.AnimEventSoundID)
+    .where(c.AnimEventSoundID != 0)
+    >> as_map(c.ID, c.AnimEventSoundID),
+)
+
+graph = declare("graph", compose(VisualGraph))
 
 
 # The vehicles.

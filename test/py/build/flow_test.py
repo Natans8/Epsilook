@@ -13,7 +13,9 @@ from pack.routes.flow import (
     When,
     amount,
     as_ids,
+    as_lists,
     as_map,
+    as_nested,
     as_rows,
     as_sets,
     c,
@@ -191,6 +193,21 @@ def test_among_is_membership_by_id(tables: BuildTables) -> None:
     chained = flow("chained").read("SpellProceduralEffect", "ID", "Type").where(c.Type.among((0, 26)))
     rows = list(chained.rows(tables(SpellProceduralEffect="ID,Type\n1,0\n2,26.0\n3,1\n")))
     assert [row[0] for row in rows] == ["1", "2"]
+
+
+def test_a_list_keeps_the_order_met_and_a_nested_map_combines_two_paths(tables: BuildTables) -> None:
+    """The shapes the spine lands in: events in table order, each once, and a
+    visual's mask unioned where two paths reach it."""
+    events = flow("events").read("SpellVisualEvent", "SpellVisualID", "SpellVisualKitID", "TargetType")
+    source = tables(SpellVisualEvent="SpellVisualID,SpellVisualKitID,TargetType\n10,901,2\n10,900,1\n10,901,2\n")
+    assert (events >> as_lists(c.SpellVisualID, c.SpellVisualKitID, c.TargetType)).run(source) == {
+        10: [(901, 2), (900, 1)]
+    }
+    reached = flow("reached").read("Reached", "SpellID", "Visual", "Bits")
+    source = tables(Reached="SpellID,Visual,Bits\n100,20,1\n100,20,2\n100,21,0\n")
+    assert (reached >> as_nested(c.SpellID, c.Visual, c.Bits, reduce=lambda a, b: a | b)).run(source) == {
+        100: {20: 3, 21: 0}
+    }
 
 
 class Bundle(NamedTuple):

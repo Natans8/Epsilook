@@ -1293,6 +1293,54 @@ class AsRecords[T]:
 
 
 @dataclass(frozen=True)
+class AsLists[T]:
+    """Key to the values under it in the order met, each once: what a set
+    loses, where the source's order is the fact a reader wants back."""
+
+    key: str
+    value: tuple[Typed, ...]
+    record: Callable[..., T] | None = None
+    """What several columns become, where not a tuple."""
+
+    def collect(self, rows: Rows, schema: Schema) -> dict[int, list[T]]:
+        """The lists."""
+        key_at = schema.at(self.key)
+        readers = [(schema.at(picked.column), picked.read) for picked in self.value]
+        held: dict[int, dict[T, None]] = {}
+        for row in rows:
+            values = tuple(read(row[at]) for at, read in readers)
+            if self.record is not None:
+                found = self.record(*values)
+            else:
+                found = values[0] if len(values) == 1 else values  # type: ignore[assignment]
+            held.setdefault(key_of(row[key_at]), {})[found] = None
+        return {key: list(found) for key, found in held.items()}
+
+
+@dataclass(frozen=True)
+class AsNested[T]:
+    """Key under key to one value: a spell's visuals, each with its mask."""
+
+    outer: str
+    inner: str
+    value: str
+    read: Callable[[Cell], T]
+    reduce: Callable[[T, T], T] | None = None
+    """How two values under one pair combine; otherwise the last stands."""
+
+    def collect(self, rows: Rows, schema: Schema) -> dict[int, dict[int, T]]:
+        """The nested maps."""
+        outer_at, inner_at, at = schema.at(self.outer), schema.at(self.inner), schema.at(self.value)
+        out: dict[int, dict[int, T]] = {}
+        for row in rows:
+            inner = out.setdefault(key_of(row[outer_at]), {})
+            key = key_of(row[inner_at])
+            found = self.read(row[at])
+            inner[key] = self.reduce(inner[key], found) if self.reduce is not None and key in inner else found
+        return out
+
+
+@dataclass(frozen=True)
 class AsTree:
     """Key under key to the sorted values beneath: kit to animation to regions."""
 
@@ -1448,6 +1496,19 @@ def nonzero[K, V](found: Mapping[K, V]) -> dict[K, V]:
 def ordered[K, V](found: Mapping[K, Iterable[V]]) -> dict[K, list[V]]:
     """Each entry's values sorted, where a source's order is not a fact."""
     return {key: sorted(values) for key, values in found.items()}  # type: ignore[type-var]
+
+
+def as_lists(key: str | Column, *value: Picked, record: Callable[..., Any] | None = None) -> AsLists[Any]:
+    """Land as key to its values in the order met, each once; several columns make a tuple, or the record named."""
+    return AsLists(column_name(key), tuple(_typed(picked) for picked in value), record)
+
+
+def as_nested(
+    outer: str | Column, inner: str | Column, value: Picked, *, reduce: Callable[[Any, Any], Any] | None = None
+) -> AsNested[Any]:
+    """Land as key under key to one value, an id unless typed."""
+    picked = _typed(value)
+    return AsNested(column_name(outer), column_name(inner), picked.column, picked.read, reduce)
 
 
 def as_tree(*keys: str | Column, value: Picked) -> AsTree:

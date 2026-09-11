@@ -45,7 +45,7 @@ from .spells import SpellProperties
 from .text import SpellText
 from .values import DescriptionValues, read_spell_values
 from .vehicles import VehicleSeats
-from .visuals import KitEvent, VisualGraph, phase_words, read_visual_graph
+from .visuals import KitEvent, VisualGraph, phase_words
 
 del _registry  # imported for the adapters it registers
 
@@ -80,7 +80,6 @@ __all__ = [
     "read_spell_attributes",
     "read_spell_effect_rows",
     "read_spell_values",
-    "read_visual_graph",
     "resolve_paths",
     "Route",
     "ROUTES",

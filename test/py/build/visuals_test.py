@@ -2,64 +2,56 @@
 
 from __future__ import annotations
 
-from pack.routes.visuals import KitEvent, VisualGraph, expand_redirects, phase_words, read_visual_graph
-from pack.targets import NO_TARGET, TARGET_CASTER, TARGET_MISSILE_DEST, TARGET_TARGET
-from support import BuildTables
+from pack.routes.visuals import KitEvent, VisualGraph, phase_words
+from pack.targets import NO_TARGET, TARGET_CASTER, TARGET_TARGET
+from support import BuildTables, resolve
 
 SPELL_X_SPELL_VISUAL = """\
 ID,SpellID,SpellVisualID
 1,100,10
 2,100,11
 3,101,12
+4,102,30
+5,102,31
+6,103,40
 """
 
 # Visual 10 redirects to 20 for the caster and 21 for a hostile target; 20
-# redirects on again; 12 names ITSELF, which is a no-op the data really carries.
+# redirects on again; 12 names ITSELF, which is a no-op the data really
+# carries. Spell 102 reaches 31 directly and again through 30's caster column;
+# 40 and 41 name each other.
 SPELL_VISUAL = """\
 ID,AnimEventSoundID,CasterSpellVisualID,HostileSpellVisualID,LowViolenceSpellVisualID,ReducedUnexpectedCameraMovementSpellVisualID
 10,700,20,21,0,0
 11,0,0,0,0,0
 12,0,12,0,0,0
-20,0,22,0,0,0
+20,0,0,0,0,22
 21,0,0,0,0,0
 22,0,0,0,0,0
+30,0,31,0,0,0
+31,0,0,0,0,0
+40,0,41,0,0,0
+41,0,0,40,0,0
 """
 
 SPELL_VISUAL_EVENT = """\
 SpellVisualID,SpellVisualKitID,TargetType,StartEvent
 10,900,1,6
 10,900,2,6
+10,900,1,6
 10,901,1,7
+0,902,1,7
 """
 
 
 def graph(tables: BuildTables) -> VisualGraph:
-    return read_visual_graph(
-        tables(SpellXSpellVisual=SPELL_X_SPELL_VISUAL, SpellVisual=SPELL_VISUAL, SpellVisualEvent=SPELL_VISUAL_EVENT)
+    found = resolve(
+        "graph",
+        tables(SpellXSpellVisual=SPELL_X_SPELL_VISUAL, SpellVisual=SPELL_VISUAL, SpellVisualEvent=SPELL_VISUAL_EVENT),
     )
-
-
-def test_a_seed_visual_carries_no_extra_bits() -> None:
-    """Its rows are already masked by their own event."""
-    assert expand_redirects({10}, {}) == {10: NO_TARGET}
-
-
-def test_a_redirect_carries_the_bit_of_the_column_it_came_through() -> None:
-    reached = expand_redirects({10}, {10: [(20, TARGET_CASTER), (21, TARGET_TARGET)]})
-    assert reached == {10: NO_TARGET, 20: TARGET_CASTER, 21: TARGET_TARGET}
-
-
-def test_a_redirect_reached_through_a_redirect_carries_both() -> None:
-    """Chains longer than one hop are real."""
-    reached = expand_redirects({10}, {10: [(20, TARGET_CASTER)], 20: [(22, TARGET_MISSILE_DEST)]})
-    assert reached[22] == TARGET_CASTER | TARGET_MISSILE_DEST
-
-
-def test_a_cycle_terminates_at_the_fixpoint() -> None:
-    """Both visuals carry both bits, since each really is reachable through the
-    other's column. The loop stops because a mask only ever gains bits."""
-    reached = expand_redirects({1}, {1: [(2, TARGET_CASTER)], 2: [(1, TARGET_TARGET)]})
-    assert reached == {1: TARGET_CASTER | TARGET_TARGET, 2: TARGET_CASTER | TARGET_TARGET}
+    if not isinstance(found, VisualGraph):
+        raise TypeError("the graph field is the visual graph")
+    return found
 
 
 def test_a_visual_naming_itself_is_dropped(tables: BuildTables) -> None:
@@ -68,6 +60,9 @@ def test_a_visual_naming_itself_is_dropped(tables: BuildTables) -> None:
 
 
 def test_a_spell_reaches_every_visual_its_visuals_redirect_to(tables: BuildTables) -> None:
+    """A seed carries no extra bits, a redirect the bit of its column, and a
+    redirect reached through a redirect both: chains longer than one hop are
+    real, and a column carrying no bit adds none."""
     assert graph(tables).spell_visuals[100] == {
         10: NO_TARGET,
         11: NO_TARGET,
@@ -77,14 +72,31 @@ def test_a_spell_reaches_every_visual_its_visuals_redirect_to(tables: BuildTable
     }
 
 
+def test_a_visual_reached_two_ways_carries_both_paths_bits(tables: BuildTables) -> None:
+    """Direct and through a caster redirect: the masks union rather than the
+    last path standing."""
+    assert graph(tables).spell_visuals[102] == {30: NO_TARGET, 31: TARGET_CASTER}
+
+
+def test_a_cycle_terminates_at_the_fixpoint(tables: BuildTables) -> None:
+    """Both visuals carry both bits, since each really is reachable through the
+    other's column. The expansion stops because a mask only ever gains bits."""
+    assert graph(tables).spell_visuals[103] == {
+        40: TARGET_CASTER | TARGET_TARGET,
+        41: TARGET_CASTER | TARGET_TARGET,
+    }
+
+
 def test_the_kit_edge_keeps_one_entry_per_event(tables: BuildTables) -> None:
     """A kit playing for two audiences at one phase is two events, each with
-    its own bit, and the phase rides on each rather than being folded."""
+    its own bit, and the phase rides on each rather than being folded; a row
+    repeated in the source is one event, and a row naming no visual none."""
     assert graph(tables).visual_events[10] == [
         KitEvent(900, 6, TARGET_CASTER),
         KitEvent(900, 6, TARGET_TARGET),
         KitEvent(901, 7, TARGET_CASTER),
     ]
+    assert 0 not in graph(tables).visual_events
 
 
 def test_a_visual_carries_its_own_animation_sound(tables: BuildTables) -> None:
