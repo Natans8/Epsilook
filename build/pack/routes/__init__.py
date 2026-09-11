@@ -11,22 +11,21 @@ from . import registry as _registry
 from .areas import Area, AreaGates
 from .assets import resolve_paths
 from .attributes import attribute_bit, read_spell_attributes
-from .creatures import CreatureModels, read_creature_models
+from .creatures import CreatureModels
 from .delivery import Delivery
 from .effects import EffectRow, MaskedIds, SpellEffectRows, implicit_target_bits, read_spell_effect_rows
 from . import flows as _flows
 from .factions import FactionTemplateRow
-from .fx import ChainEffect, FxPayloads, ScreenRow, expand_chain, read_fx_payloads
+from .fx import ChainEffect, FxPayloads, ScreenRow
 from .gameobjects import GameObjectData
 from .interrupts import interrupt_words
-from .items import ItemModels, read_item_models
+from .items import ItemModels
 from .keybinds import KeyboundOverride
-from .kits import KitEffects, read_kit_effects
-from .missiles import Missile, MissileMotion, VisualMissiles, read_missiles
-from .models import ModelSources, read_model_sources
+from .kits import KitEffects
+from .missiles import Missile, MissileMotion, VisualMissiles
 from .mounts import MountData
 from .names import SpellNames
-from .procedures import ProcEffects, read_proc_effects
+from .procedures import ProcEffects
 from .reach import Reach
 from .route import ROUTES, Route, route
 from .shapeshifts import ShapeshiftForms
@@ -45,7 +44,7 @@ from .sounds import Ambience, ZoneMusic
 from .spells import SpellProperties
 from .text import SpellText
 from .values import DescriptionValues, read_spell_values
-from .vehicles import VehicleSeats, read_vehicle_seats
+from .vehicles import VehicleSeats
 from .visuals import KitEvent, VisualGraph, phase_words, read_visual_graph
 
 del _registry  # imported for the adapters it registers
@@ -61,7 +60,6 @@ __all__ = [
     "Delivery",
     "DescriptionValues",
     "EffectRow",
-    "expand_chain",
     "FactionTemplateRow",
     "flat_ramp",
     "FxPayloads",
@@ -74,23 +72,14 @@ __all__ = [
     "MaskedIds",
     "Missile",
     "MissileMotion",
-    "ModelSources",
     "MountData",
     "ProcEffects",
     "RAMP_COLORS",
     "Reach",
-    "read_creature_models",
-    "read_fx_payloads",
-    "read_item_models",
-    "read_kit_effects",
-    "read_missiles",
-    "read_model_sources",
-    "read_proc_effects",
     "read_skies",
     "read_spell_attributes",
     "read_spell_effect_rows",
     "read_spell_values",
-    "read_vehicle_seats",
     "read_visual_graph",
     "resolve_paths",
     "Route",

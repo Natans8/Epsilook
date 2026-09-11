@@ -15,6 +15,7 @@ from pack.routes import (
     ScreenRow,
     SpellEffectRows,
 )
+from pack.routes.fx import Dissolve
 from pack.routes.models import MODEL_CAT_DISPLAY, MODEL_CAT_ITEM, SCALE_UNIT, UNPLACED, AttachModel
 from pack.phases import PHASE_CAST
 from pack.targets import NO_TARGET
@@ -85,7 +86,9 @@ def test_a_chains_textures_are_followed() -> None:
 
 
 def test_a_dissolves_textures_are_followed() -> None:
-    found = collect(visuals=visuals(dissolves={100: {5: NO_TARGET}}), fx=FxPayloads(dissolves={5: (1.0, (703,), 0)}))
+    found = collect(
+        visuals=visuals(dissolves={100: {5: NO_TARGET}}), fx=FxPayloads(dissolves={5: Dissolve(1.0, (703,), 0)})
+    )
     assert found.assets == {703}
 
 
@@ -152,7 +155,7 @@ def test_an_items_inventory_icon_joins_the_same_pass() -> None:
     """An item pill shows the icon the game shows in the bag."""
     found = collect(
         visuals=visuals(models={100: {AttachModel(500, MODEL_CAT_ITEM, 0, 0, 77, 0, UNPLACED, SCALE_UNIT): NO_TARGET}}),
-        items=ItemModels(icon_fid={77: 951}),
+        items=ItemModels(icons={77: 951}),
     )
     assert found.icons == {951}
     assert found.assets == {500}

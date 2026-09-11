@@ -17,7 +17,8 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from pack.tables import CsvTables
+from pack.pipeline import GIVEN, Derivations
+from pack.tables import CsvTables, Tables
 
 ROOT = Path(__file__).resolve().parents[2]
 """The repository root.
@@ -75,3 +76,22 @@ class Network:
             first, last = wanted.removeprefix("bytes=").split("-")
             body = body[int(first) : int(last) + 1]
         return io.BytesIO(body)
+
+
+VERSION = "9.2.7.45745"
+"""The build a route test runs as, where a plan reads the version at all."""
+
+
+def resolve(name: str, tables: Tables, **known: object) -> object:
+    """One declared field, produced through the registry over these tables.
+
+    The same resolver the build runs, so a field composed of other fields is
+    tested as it is declared rather than reassembled by hand. `known` holds
+    a given by its name, or a field already produced, so a test hands over
+    the neighbour a route reads instead of building that neighbour's tables.
+    """
+    given = {name: None for name in GIVEN} | {"tables": tables, "version": VERSION, "zone_maps": {}}
+    given |= {name: value for name, value in known.items() if name in GIVEN}
+    derive = Derivations(given)
+    derive.held.update({name: value for name, value in known.items() if name not in GIVEN})
+    return derive.resolve(name)

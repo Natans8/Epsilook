@@ -27,6 +27,7 @@ rows and is not a step.
 
 from __future__ import annotations
 
+import inspect
 from collections.abc import Callable, Container, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from enum import Enum
@@ -104,6 +105,10 @@ class Column:
         """Whether the text is empty."""
         return Compare(self.name, "==", "")
 
+    def among(self, values: Iterable[int]) -> Compare:
+        """Whether the id this column holds is one of the values."""
+        return Compare(self.name, "in", frozenset(values))
+
     def __getitem__(self, span: slice) -> Column:
         """The array column ``Name_*``: every ``Name_N`` the build has, read as one cell.
 
@@ -172,6 +177,12 @@ class Compare:
         """The comparison on one row: numerically for a number, as text otherwise,
         and as text against another column."""
         cell = row[schema.at(self.column)]
+        if self.op == "in":
+            values = self.value
+            if not isinstance(values, frozenset):
+                raise TypeError("membership is tested against the values `among` was given")
+            # The narrowing above is the check pylint cannot follow through `object`.
+            return key_of(cell) in values  # pylint: disable=unsupported-membership-test
         if isinstance(self.value, Column):
             other = row[schema.at(self.value.name)]
             if self.op == "==":
@@ -389,6 +400,39 @@ def _array_columns(tables: Tables, table: str, base: str) -> list[str]:
     return [base] if base in header else []
 
 
+def _flattened(tables: Tables, table: str, columns: Sequence[str]) -> tuple[list[str], list[int]]:
+    """The provider's own column names behind the ones asked for, an array
+    column standing for every ``Name_N`` the build has, with each column's width."""
+    arrays = {name: _array_columns(tables, table, name[:-2]) for name in columns if name.endswith("_*")}
+    flat = [name for column in columns for name in arrays.get(column, [column])]
+    widths = [len(arrays.get(column, [column])) for column in columns]
+    return flat, widths
+
+
+def _read(tables: Tables, table: str, columns: Sequence[str]) -> Rows:
+    """The table's rows by the columns named, an array column read whole into one cell."""
+    if not any(name.endswith("_*") for name in columns):
+        return tables.rows(table, columns)
+    flat, widths = _flattened(tables, table, columns)
+    return _gathered(tables.rows(table, flat), widths)
+
+
+def _gathered(rows: Iterator[tuple[str, ...]], widths: Sequence[int]) -> Rows:
+    """Rows with each array's columns folded back into one cell."""
+    for row in rows:
+        out: list[Cell] = []
+        at = 0
+        for width in widths:
+            out.append(row[at] if width == 1 else tuple(row[at : at + width]))
+            at += width
+        yield tuple(out)
+
+
+def _blank(columns: Sequence[str]) -> Row:
+    """The cells a missed join fills in: empty text, or an empty array."""
+    return tuple(() if name.endswith("_*") else "" for name in columns)
+
+
 @dataclass(frozen=True)
 class Read:
     """The origin: the rows of one table, by the columns named.
@@ -418,65 +462,25 @@ class Read:
         del incoming  # an origin follows nothing
         return Schema(self.columns)
 
+    def held(self, tables: Tables, needs: Needs) -> Tables | None:
+        """The source the table is read from, or None where the build lacks it."""
+        if self.source == "tables":
+            return tables
+        source: Tables | None = needs.get(self.source)
+        return source
+
+    def available(self, tables: Tables, needs: Needs) -> bool:
+        """Whether this build has the table, in the source it is read from."""
+        held = self.held(tables, needs)
+        return held is not None and held.available(self.table)
+
     def rows(self, incoming: Rows, incoming_schema: Schema, tables: Tables, version: str, needs: Needs) -> Rows:
         """Read the table."""
         del incoming, incoming_schema, version
-        if self.source != "tables":
-            held = needs.get(self.source)
-            if held is None:
-                return iter(())
-            tables = held
-        if self.optional and not tables.available(self.table):
+        held = self.held(tables, needs)
+        if held is None or (self.optional and not held.available(self.table)):
             return iter(())
-        arrays = {name: _array_columns(tables, self.table, name[:-2]) for name in self.columns if name.endswith("_*")}
-        if not arrays:
-            return tables.rows(self.table, self.columns)
-        flat = [name for column in self.columns for name in arrays.get(column, [column])]
-        widths = [len(arrays.get(column, [column])) for column in self.columns]
-        return self._gathered(tables.rows(self.table, flat), widths)
-
-    @staticmethod
-    def _gathered(rows: Iterator[tuple[str, ...]], widths: list[int]) -> Rows:
-        """Rows with each array's columns folded back into one cell."""
-        for row in rows:
-            out: list[Cell] = []
-            at = 0
-            for width in widths:
-                out.append(row[at] if width == 1 else tuple(row[at : at + width]))
-                at += width
-            yield tuple(out)
-
-
-@dataclass(frozen=True)
-class FirstOf:
-    """The origin for a fact whose table differs between builds.
-
-    The first alternative this build has wins. Every alternative names its
-    columns in the same order, and the flow carries them under the first
-    alternative's names, so a step after this one is written once whichever
-    table answered.
-    """
-
-    alternatives: tuple[Read, ...]
-
-    def __post_init__(self) -> None:
-        widths = {len(alternative.columns) for alternative in self.alternatives}
-        if len(widths) != 1:
-            raise ValueError("every alternative names the same number of columns, in the same order")
-
-    def schema(self, incoming: Schema) -> Schema:
-        """The first alternative's names."""
-        del incoming
-        return Schema(self.alternatives[0].columns)
-
-    def chosen(self, tables: Tables) -> Read | None:
-        """Which alternative this build reads, or None where it has none."""
-        return next((alternative for alternative in self.alternatives if tables.available(alternative.table)), None)
-
-    def rows(self, incoming: Rows, incoming_schema: Schema, tables: Tables, version: str, needs: Needs) -> Rows:
-        """Read whichever alternative the build has; nothing where it has none."""
-        chosen = self.chosen(tables)
-        return iter(()) if chosen is None else chosen.rows(incoming, incoming_schema, tables, version, needs)
+        return _read(held, self.table, self.columns)
 
 
 @dataclass(frozen=True)
@@ -518,14 +522,14 @@ class Join:
         """
         del version, needs
         index: dict[int, list[Row]] = {}
-        for source in tables.rows(self.table, [self.by, *self.columns]):
+        for source in _read(tables, self.table, [self.by, *self.columns]):
             key = key_of(source[0])
             if self.many:
                 index.setdefault(key, []).append(source[1:])
             else:
                 index[key] = [source[1:]]
         at = incoming_schema.at(self.key)
-        blank: Row = ("",) * len(self.columns)
+        blank = _blank(self.columns)
         for row in incoming:
             found = index.get(key_of(row[at]))
             if found is None:
@@ -549,11 +553,16 @@ class Explode:
     columns: tuple[str, ...]
     into: str
 
+    slot: str = ""
+    """A column for the position a value came from, counted over every value
+    fanned, where the position means something: the legacy creature table
+    keeps a display's slot as which column it sits in."""
+
     def schema(self, incoming: Schema) -> Schema:
         """The incoming columns less the fanned ones, then the one they became."""
         for name in self.columns:
             incoming.at(name)
-        return incoming.without(*self.columns).with_columns(self.into)
+        return incoming.without(*self.columns).with_columns(self.into, *((self.slot,) if self.slot else ()))
 
     def rows(self, incoming: Rows, incoming_schema: Schema, tables: Tables, version: str, needs: Needs) -> Rows:
         """One row per non-empty value among the fanned columns."""
@@ -562,12 +571,14 @@ class Explode:
         kept = [at for at, name in enumerate(incoming_schema.columns) if name not in self.columns]
         for row in incoming:
             base = tuple(row[at] for at in kept)
+            position = 0
             for at in fanned:
                 cell = row[at]
                 values = cell if isinstance(cell, tuple) else (cell,)
                 for value in values:
                     if key_of(value):
-                        yield (*base, value)
+                        yield (*base, value, *((str(position),) if self.slot else ()))
+                    position += 1
 
 
 @dataclass(frozen=True)
@@ -589,7 +600,8 @@ class Expand:
     """The self-referencing table, keyed by ``by``."""
 
     edges: Mapping[str, int]
-    """Per column of the table naming another row, the bit that hop carries."""
+    """Per column of the table naming another row, the bit that hop carries;
+    an array column ``Name_*`` is every ``Name_N`` the build has, one bit."""
 
     into: str
     bits: str
@@ -620,14 +632,11 @@ class Expand:
         """One row per id each seed reaches; the edges are read per run, as a join's index is."""
         del version, needs
         hops: dict[int, list[tuple[int, int]]] = {}
-        columns = list(self.edges)
+        columns, widths = _flattened(tables, self.table, list(self.edges))
+        bits = [bit for bit, width in zip(self.edges.values(), widths) for _each in range(width)]
         for source in tables.rows(self.table, [self.by, *columns]):
             node = key_of(source[0])
-            found = [
-                (target, bit)
-                for target, bit in zip(map(key_of, source[1:]), self.edges.values())
-                if target and target != node
-            ]
+            found = [(target, bit) for target, bit in zip(map(key_of, source[1:]), bits) if target and target != node]
             if found:
                 hops[node] = found
         at = incoming_schema.at(self.key)
@@ -852,6 +861,37 @@ class Narrow:
         return (row for row in incoming if key_of(row[at]) in roster)
 
 
+@dataclass(frozen=True)
+class Lookup:
+    """A join through a field rather than a table: the rows whose column the
+    field holds, each carrying the field's value under a new name.
+
+    What a flow reaches through another route's answer: a kit's procedure
+    row is a chain id only once the procedure route has said which rows are
+    chains, and the id lives in that field. The value is carried as text,
+    the way every cell is, so the field's values are ids.
+    """
+
+    column: str
+    field: str
+    into: str
+
+    def schema(self, incoming: Schema) -> Schema:
+        """The incoming columns, then the value found."""
+        incoming.at(self.column)
+        return incoming.with_columns(self.into)
+
+    def rows(self, incoming: Rows, incoming_schema: Schema, tables: Tables, version: str, needs: Needs) -> Rows:
+        """The rows the field answers, with its answer appended."""
+        del tables, version
+        held: Mapping[int, int] = needs[self.field]
+        at = incoming_schema.at(self.column)
+        for row in incoming:
+            found = held.get(key_of(row[at]))
+            if found is not None:
+                yield (*row, str(found))
+
+
 # The flow.
 
 
@@ -877,10 +917,6 @@ class Flow:
         """Start from one table's rows, by the columns named."""
         return self | Read(table, tuple(column_name(name) for name in columns), optional, source)
 
-    def first_of(self, *alternatives: Read) -> Flow:
-        """Start from whichever of several tables this build has."""
-        return self | FirstOf(alternatives)
-
     def join(
         self,
         key: str | Column,
@@ -893,9 +929,13 @@ class Flow:
         """Hop through a key into another table, taking the columns named."""
         return self | Join(column_name(key), table, tuple(column_name(name) for name in columns), by, inner, many)
 
-    def explode(self, *columns: str | Column, into: str) -> Flow:
-        """One row per value among the columns named, under one name."""
-        return self | Explode(tuple(column_name(name) for name in columns), into)
+    def explode(self, *columns: str | Column, into: str, slot: str = "") -> Flow:
+        """One row per value among the columns named, under one name, and its position where asked."""
+        return self | Explode(tuple(column_name(name) for name in columns), into, slot)
+
+    def lookup(self, column: str | Column, field: str, *, into: str) -> Flow:
+        """Hop through a field: keep the rows it answers, carrying its answer."""
+        return self | Lookup(column_name(column), field, into)
 
     def expand(self, key: str | Column, table: str, edges: Mapping[str, int], *, into: str, bits: str) -> Flow:
         """Every row the key reaches through the table's own references, with the bits the path took."""
@@ -932,7 +972,7 @@ class Flow:
             KeyError: a step names a column the flow does not carry there.
             ValueError: the flow has no origin, or a step repeats a name.
         """
-        if not self.steps or not isinstance(self.steps[0], (Read, FirstOf)):
+        if not self.steps or not isinstance(self.steps[0], Read):
             raise ValueError(f"flow {self.name!r} must start by reading a table")
         current = Schema(())
         for step in self.steps:
@@ -970,17 +1010,15 @@ class Flow:
         rosters = {
             step.roster for step in self.of_kind(Narrow) if isinstance(step, Narrow) and isinstance(step.roster, str)
         }
+        fields = {step.field for step in self.of_kind(Lookup) if isinstance(step, Lookup)}
         sources = {step.source for step in self.of_kind(Read) if isinstance(step, Read) and step.source != "tables"}
-        for step in self.of_kind(FirstOf):
-            if isinstance(step, FirstOf):
-                sources |= {alternative.source for alternative in step.alternatives if alternative.source != "tables"}
-        return frozenset(rosters | sources)
+        return frozenset(rosters | fields | sources)
 
     @property
-    def origin(self) -> Read | FirstOf:
-        """The table the flow starts from, or the alternatives it picks between."""
+    def origin(self) -> Read:
+        """The table the flow starts from."""
         first = self.steps[0]
-        if not isinstance(first, (Read, FirstOf)):
+        if not isinstance(first, Read):
             raise ValueError(f"flow {self.name!r} must start by reading a table")
         return first
 
@@ -991,8 +1029,6 @@ class Flow:
         for step in self.steps:
             if isinstance(step, Read):
                 named.append(step.table)
-            elif isinstance(step, FirstOf):
-                named.extend(alternative.table for alternative in step.alternatives)
             elif isinstance(step, (Join, Expand)):
                 named.append(step.table)
         return list(dict.fromkeys(named))
@@ -1023,29 +1059,25 @@ class Terminal[T](Protocol):
         raise NotImplementedError
 
 
-class Runnable[T](Protocol):
-    """What the registry runs for a field: a plan, or a plan with a step after it."""
+class Runnable[T]:
+    """What the registry runs for a field: a plan, a plan with a step after
+    it, the first of several plans this build can run, or a record composed
+    of other fields. Each says what it needs, whether the build has what it
+    reads, and runs."""
 
     @property
-    def flow(self) -> Flow:
-        """The flow underneath, for its needs and its tables."""
+    def needs(self) -> frozenset[str]:
+        """The field paths this names, for the wiring to resolve first."""
         raise NotImplementedError
+
+    def available(self, tables: Tables, needs: Needs) -> bool:
+        """Whether this build has the table it starts from."""
+        del tables, needs
+        return True
 
     def run(self, tables: Tables, version: str = "", needs: Needs | None = None) -> T:
         """The shape, from one build's tables."""
         raise NotImplementedError
-
-
-@dataclass(frozen=True)
-class Plan[T]:
-    """A flow with its terminal: the whole of a route, runnable."""
-
-    flow: Flow
-    terminal: Terminal[T]
-
-    def run(self, tables: Tables, version: str = "", needs: Needs | None = None) -> T:
-        """The shape, from one build's tables."""
-        return self.terminal.collect(self.flow.rows(tables, version, needs), self.flow.schema())
 
     def then[U](self, assemble: Callable[..., U], **wants: str) -> Then[U]:
         """A step after the collection: a function of the shape, and of any
@@ -1054,23 +1086,43 @@ class Plan[T]:
 
 
 @dataclass(frozen=True)
-class Then[U]:
+class Plan[T](Runnable[T]):
+    """A flow with its terminal: the whole of a route, runnable."""
+
+    flow: Flow
+    terminal: Terminal[T]
+
+    @property
+    def needs(self) -> frozenset[str]:
+        """The flow's needs."""
+        return self.flow.needs
+
+    def available(self, tables: Tables, needs: Needs) -> bool:
+        """Whether the build has the flow's origin table."""
+        return self.flow.origin.available(tables, needs)
+
+    def run(self, tables: Tables, version: str = "", needs: Needs | None = None) -> T:
+        """The shape, from one build's tables."""
+        return self.terminal.collect(self.flow.rows(tables, version, needs), self.flow.schema())
+
+
+@dataclass(frozen=True)
+class Then[U](Runnable[U]):
     """A plan whose result a function reshapes, with further fields by name."""
 
-    plan: Plan[Any]
+    plan: Runnable[Any]
     assemble: Callable[..., U]
     wants: Mapping[str, str]
     """Per parameter of `assemble` after the first, the field path it takes."""
 
     @property
-    def flow(self) -> Flow:
-        """The plan's flow."""
-        return self.plan.flow
-
-    @property
     def needs(self) -> frozenset[str]:
-        """The flow's needs and the fields the step wants."""
-        return self.flow.needs | frozenset(self.wants.values())
+        """The plan's needs and the fields the step wants."""
+        return self.plan.needs | frozenset(self.wants.values())
+
+    def available(self, tables: Tables, needs: Needs) -> bool:
+        """Whether the plan underneath can run."""
+        return self.plan.available(tables, needs)
 
     def run(self, tables: Tables, version: str = "", needs: Needs | None = None) -> U:
         """The reshaped result."""
@@ -1078,6 +1130,81 @@ class Then[U]:
         return self.assemble(
             self.plan.run(tables, version, held), **{name: held[path] for name, path in self.wants.items()}
         )
+
+
+@dataclass(frozen=True)
+class Alternatives[T](Runnable[T]):
+    """The first of several plans whose table this build has: one fact whose
+    table, or whose shape, differs between builds, each spelling its own plan.
+
+    A build with none of them runs the first, which reads nothing where its
+    table is declared absent and fails where the absence is undeclared, as
+    any read does.
+    """
+
+    plans: tuple[Runnable[T], ...]
+
+    @property
+    def needs(self) -> frozenset[str]:
+        """Every plan's needs, since which runs is not known until the build is."""
+        return frozenset().union(*(plan.needs for plan in self.plans))
+
+    def available(self, tables: Tables, needs: Needs) -> bool:
+        """Whether any of the plans can run."""
+        return any(plan.available(tables, needs) for plan in self.plans)
+
+    def chosen(self, tables: Tables, needs: Needs) -> Runnable[T]:
+        """The plan this build runs."""
+        return next((plan for plan in self.plans if plan.available(tables, needs)), self.plans[0])
+
+    def run(self, tables: Tables, version: str = "", needs: Needs | None = None) -> T:
+        """The chosen plan's result."""
+        held = needs or {}
+        return self.chosen(tables, held).run(tables, version, held)
+
+
+@dataclass(frozen=True)
+class Composed[T](Runnable[T]):
+    """A field built from other fields alone: a record whose every part is a
+    field of its own, or a function merging several."""
+
+    build: Callable[..., T]
+    sources: Mapping[str, str]
+    """Per parameter of `build`, the field path it takes."""
+
+    @property
+    def needs(self) -> frozenset[str]:
+        """The fields it is built from."""
+        return frozenset(self.sources.values())
+
+    def run(self, tables: Tables, version: str = "", needs: Needs | None = None) -> T:
+        """The record, from the fields."""
+        del tables, version
+        held = needs or {}
+        return self.build(**{name: held[path] for name, path in self.sources.items()})
+
+
+def first_available[T](*plans: Runnable[T]) -> Alternatives[T]:
+    """The first of the plans whose table this build has."""
+    return Alternatives(plans)
+
+
+def compose[T](build: Callable[..., T], **sources: str) -> Composed[T]:
+    """A field composed of other fields: every parameter of ``build`` is one,
+    named for itself unless mapped.
+
+    A record composes from its own field names, so a dataclass whose fields
+    are the declared fields needs no mapping at all; a merge function names
+    its inputs for the fields it merges.
+
+    Raises:
+        ValueError: a mapping names a parameter ``build`` does not take.
+    """
+    parameters = inspect.signature(build).parameters
+    unknown = sorted(set(sources) - set(parameters))
+    if unknown:
+        raise ValueError(f"{', '.join(unknown)} is not a parameter of {getattr(build, '__name__', build)}")
+    return Composed(build, {name: sources.get(name, name) for name in parameters})
 
 
 def _picker(schema: Schema, columns: Sequence[str | Column]) -> Callable[[Row], tuple[int, ...]]:
@@ -1305,6 +1432,22 @@ def typed(named: str | Column, read: Callable[[Cell], object]) -> Typed:
 def values_of(cell: Cell) -> tuple[str, ...]:
     """A cell as the texts it holds: an array's every text, a scalar's one."""
     return cell if isinstance(cell, tuple) else (cell,)
+
+
+def ids_of(cell: Cell) -> tuple[int, ...]:
+    """The ids an array cell holds, nought dropped, a repeat dropped, slot order kept."""
+    return tuple(dict.fromkeys(held for held in map(key_of, values_of(cell)) if held))
+
+
+def nonzero[K, V](found: Mapping[K, V]) -> dict[K, V]:
+    """The entries whose value is something: a colour of nought, an empty
+    tuple and an empty text are absences a map should not carry."""
+    return {key: value for key, value in found.items() if value}
+
+
+def ordered[K, V](found: Mapping[K, Iterable[V]]) -> dict[K, list[V]]:
+    """Each entry's values sorted, where a source's order is not a fact."""
+    return {key: sorted(values) for key, values in found.items()}  # type: ignore[type-var]
 
 
 def as_tree(*keys: str | Column, value: Picked) -> AsTree:

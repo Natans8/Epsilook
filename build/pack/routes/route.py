@@ -132,12 +132,6 @@ def _plan_for(field: str, version: str) -> Any:
     return chosen
 
 
-def _needs_of(plan: Any) -> frozenset[str]:
-    """What a runnable names: its flow's needs, and a post-step's wants."""
-    named = getattr(plan, "needs", None)
-    return named if isinstance(named, frozenset) else plan.flow.needs
-
-
 def declare[T](field: str, plan: Runnable[T], *, phase: str = "", since: str = "") -> Runnable[T]:
     """Register a plan as what fills `field`.
 
@@ -158,7 +152,7 @@ def declare[T](field: str, plan: Runnable[T], *, phase: str = "", since: str = "
     plans = DECLARED.setdefault(field, [])
     plans.append((since, plan))
     plans.sort(key=lambda held: tuple(int(part) for part in held[0].split(".")) if held[0] else ())
-    paths = sorted({path for _since, held in plans for path in _needs_of(held)})
+    paths = sorted({path for _since, held in plans for path in held.needs})
     # A need's path is not a parameter name, so each is keyed by position and
     # mapped back when the plan runs.
     keys = {f"need{at}": path for at, path in enumerate(paths)}

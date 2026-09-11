@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from pack.routes.items import ItemModels, read_item_models
-from support import BuildTables
+from pack.routes.items import ItemModels
+from support import BuildTables, resolve
 
 # Item 10 is named; item 11 is one of the unnamed props.
 ITEM_SEARCH_NAME = """\
@@ -46,55 +46,57 @@ ItemID,ItemAppearanceID
 
 
 def items(tables: BuildTables) -> ItemModels:
-    return read_item_models(
+    found = resolve(
+        "items",
         tables(
             ItemSearchName=ITEM_SEARCH_NAME,
             ModelFileData=MODEL_FILE_DATA,
             ItemDisplayInfo=ITEM_DISPLAY_INFO,
             ItemAppearance=ITEM_APPEARANCE,
             ItemModifiedAppearance=ITEM_MODIFIED_APPEARANCE,
-        )
+        ),
     )
+    if not isinstance(found, ItemModels):
+        raise TypeError("the items field is the item record")
+    return found
 
 
 def test_the_first_appearance_wins(tables: BuildTables) -> None:
     """The base look rather than a transmog recolour: appearances arrive in
     source order."""
-    assert items(tables).model_fid[10] == 8099
-    assert items(tables).icon_fid[10] == 9000
+    assert items(tables).models[10] == 8099
+    assert items(tables).icons[10] == 9000
 
 
 def test_the_lowest_file_of_a_resources_id_is_the_base_model(tables: BuildTables) -> None:
     """A model shipping with levels of detail names several files, out of
     order."""
-    assert items(tables).model_fid[10] == 8099
+    assert items(tables).models[10] == 8099
 
 
 def test_the_second_model_slot_is_reached_when_the_first_is_unset(tables: BuildTables) -> None:
     """A paired item carries its second component in slot 1."""
-    assert items(tables).model_fid[11] == 8200
+    assert items(tables).models[11] == 8200
 
 
 def test_an_unnamed_item_still_resolves(tables: BuildTables) -> None:
     """Internal props that exist purely to be held in a spell visual."""
     resolved = items(tables)
-    assert 11 not in resolved.name
+    assert 11 not in resolved.names
     assert resolved.resolved(11)
 
 
 def test_an_empty_display_name_is_not_a_name(tables: BuildTables) -> None:
     """The column exists on every row; only a non-empty one is a name."""
-    resolved = items(tables)
-    assert 12 not in resolved.name
-    assert 12 not in resolved.quality
+    assert 12 not in items(tables).names
 
 
 def test_an_item_reaching_no_model_is_unresolved(tables: BuildTables) -> None:
     """The icon comes off the appearance and does not need the model hop."""
     resolved = items(tables)
     assert not resolved.resolved(13)
-    assert resolved.icon_fid[13] == 9002
+    assert resolved.icons[13] == 9002
 
 
 def test_quality_rides_with_the_name(tables: BuildTables) -> None:
-    assert items(tables).quality[10] == 4
+    assert items(tables).names[10].quality == 4

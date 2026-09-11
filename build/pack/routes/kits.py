@@ -1,25 +1,22 @@
 """The kit dispatch: where a visual kit's effect rows become payloads.
 
 One `SpellVisualKitEffect` row says "this kit plays effect E of type T", and
-the type decides which of ten tables E is an id in. A procedure reference is
-dispatched twice: the second dispatch is a membership test against the buckets
-the procedure route filled. A row pointing at a payload this build lacks is
-dropped rather than treated as an error.
+the type decides which of ten tables E is an id in. Each type is one
+declaration over that read, and this module holds the bundle they merge into.
+A procedure reference is dispatched twice: the second dispatch is a membership
+test against the buckets the procedure route filled. A row pointing at a
+payload this build lacks is dropped rather than treated as an error.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable, Container, Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 
 from ..sources import enum_id_where, load_local_enum
-from ..tables import Tables
-from .attachments import NO_ATTACHMENT, NO_MOTION
-from .columns import to_int
-from .fx import ChainEffect, FxPayloads, expand_chain
-from .models import MODEL_CAT_AREA, MODEL_CAT_BARRAGE, SCALE_UNIT, UNPLACED, AttachModel, ModelSources
+from .attachments import NO_ATTACHMENT
+from .models import AttachModel, KitAttachments
 from .procedures import ProcEffects
-from .route import route
 
 _KIT_EFFECT_TYPES = load_local_enum("spell_visual_kit_effect_types")
 EFFECT_TYPE_PROC = enum_id_where(_KIT_EFFECT_TYPES, "proc")
@@ -33,8 +30,9 @@ EFFECT_TYPE_BEAM = enum_id_where(_KIT_EFFECT_TYPES, "beam")
 EFFECT_TYPE_BARRAGE = enum_id_where(_KIT_EFFECT_TYPES, "barrage")
 EFFECT_TYPE_SCREEN = enum_id_where(_KIT_EFFECT_TYPES, "screen")
 
-# (chain, source attachment, destination attachment)
 ChainDraw = tuple[int, int, int]
+"""A chain a kit draws, with the source and destination attachments of the
+beam it hangs from; a chain reached through a procedure hangs from nothing."""
 
 
 @dataclass
@@ -66,128 +64,84 @@ class KitEffects:
     freezes: set[int] = field(default_factory=set)
     camos: set[int] = field(default_factory=set)
 
+    @classmethod
+    def assemble(  # noqa: PLR0913  -- one parameter per declaration it merges
+        cls,
+        attachments: KitAttachments,
+        kit_sounds: Mapping[int, set[int]],
+        kit_animkits: Mapping[int, set[int]],
+        kit_visual_anims: Mapping[int, set[int]],
+        kit_dissolves: Mapping[int, set[int]],
+        kit_glows: Mapping[int, set[int]],
+        kit_shadowies: Mapping[int, set[int]],
+        kit_screens: Mapping[int, set[int]],
+        kit_emissions: Mapping[int, set[int]],
+        kit_barrages: Mapping[int, set[int]],
+        kit_beams: Mapping[int, set[ChainDraw]],
+        kit_procedures: Mapping[int, set[int]],
+        kit_proc_chains: Mapping[int, set[int]],
+        emissions: Mapping[int, AttachModel],
+        barrages: Mapping[int, AttachModel],
+        procs: ProcEffects,
+    ) -> KitEffects:
+        """Merge every per-type declaration into the buckets the walk reads.
 
-@dataclass(frozen=True)
-class RosteredPayload:
-    """An effect type whose payload is kept only if its table has the row.
-
-    Three of the ten types differ in nothing but which table answers and which
-    bucket receives, so they are declared rather than written out. The rest do
-    something structurally different and stay in the walk.
-    """
-
-    known: Callable[[FxPayloads], Container[int]]
-    """Where to ask whether this build carries the row."""
-
-    into: Callable[[KitEffects], dict[int, set[int]]]
-    """Which bucket receives it."""
-
-
-ROSTERED_PAYLOADS: dict[int, RosteredPayload] = {
-    EFFECT_TYPE_DISSOLVE: RosteredPayload(lambda fx: fx.dissolves, lambda kits: kits.dissolves),
-    EFFECT_TYPE_EDGE_GLOW: RosteredPayload(lambda fx: fx.glows, lambda kits: kits.glows),
-    EFFECT_TYPE_SHADOWY: RosteredPayload(lambda fx: fx.shadowies, lambda kits: kits.shadowies),
-}
-"""Effect type to the payload it keeps, for the types that only look one up."""
-
-
-def add_chains(
-    chains: Mapping[int, ChainEffect], chain_id: int, source: int, destination: int, into: set[ChainDraw]
-) -> None:
-    """Add a chain and every chain it nests, tagged with an attachment pair.
-
-    Nested chains inherit the parent beam's attachments: they are segments of
-    the same beam.
-    """
-    expanded: set[int] = set()
-    expand_chain(chains, chain_id, expanded)
-    into.update((chain, source, destination) for chain in expanded)
-
-
-@route("kits")
-def read_kit_effects(tables: Tables, models: ModelSources, procs: ProcEffects, fx: FxPayloads) -> KitEffects:
-    """Dispatch every kit effect row into the bucket its type chose."""
-    kits = KitEffects(
-        models={kit: set(rows) for kit, rows in models.attach_models.items()},
-        # The attached models seed the same buckets this walk fills; the walk
-        # unions rather than replaces.
-        animkits={kit: set(rows) for kit, rows in models.attach_animkits.items()},
-        visual_anims={kit: set(rows) for kit, rows in models.attach_anims.items()},
-    )
-
-    # An animation effect points at a row carrying both an anim kit and up to
-    # two animations the kit plays directly on the unit. 0 and -1 both mean
-    # unset here: 0 would be Stand.
-    visual_anims: dict[int, tuple[int, int, int]] = {}
-    for row_id, initial, loop, animkit in tables.rows(
-        "SpellVisualAnim", ["ID", "InitialAnimID", "LoopAnimID", "AnimKitID"]
-    ):
-        visual_anims[to_int(row_id)] = (to_int(initial), to_int(loop), to_int(animkit))
-
-    for kit_id, type_id, effect_id in tables.rows(
-        "SpellVisualKitEffect", ["ParentSpellVisualKitID", "EffectType", "Effect"]
-    ):
-        kit, effect_type, effect = to_int(kit_id), to_int(type_id), to_int(effect_id)
-        if not (kit and effect):
-            continue
-        if effect_type == EFFECT_TYPE_SOUND:
-            kits.soundkits.setdefault(kit, set()).add(effect)
-        elif effect_type == EFFECT_TYPE_ANIM:
-            first, second, kit_anim = visual_anims.get(effect, (0, 0, 0))
-            if kit_anim:
-                kits.animkits.setdefault(kit, set()).add(kit_anim)
-            played = {anim for anim in (first, second) if anim > 0}
-            if played:
-                kits.visual_anims.setdefault(kit, set()).update(played)
-        elif effect_type == EFFECT_TYPE_PROC:
-            _add_procedure(kits, kit, effect, procs, fx)
-        elif effect_type == EFFECT_TYPE_BEAM:
-            chain, source, destination = fx.beam_chain.get(effect, (0, NO_ATTACHMENT, NO_ATTACHMENT))
-            add_chains(fx.chains, chain, source, destination, kits.chains.setdefault(kit, set()))
-        elif (rostered := ROSTERED_PAYLOADS.get(effect_type)) is not None:
-            if effect in rostered.known(fx):
-                rostered.into(kits).setdefault(kit, set()).add(effect)
-        elif effect_type == EFFECT_TYPE_EMISSION:
-            file = models.emission_fid.get(effect, 0)
-            if file:
-                kits.models.setdefault(kit, set()).add(
-                    AttachModel(file, MODEL_CAT_AREA, NO_ATTACHMENT, NO_ATTACHMENT, 0, NO_MOTION, UNPLACED, SCALE_UNIT)
-                )
-        elif effect_type == EFFECT_TYPE_BARRAGE:
-            file = models.barrage_fid.get(effect, 0)
-            if file:
-                attach = models.barrage_attach.get(effect, NO_ATTACHMENT)
-                kits.models.setdefault(kit, set()).add(
-                    AttachModel(file, MODEL_CAT_BARRAGE, attach, NO_ATTACHMENT, 0, NO_MOTION, UNPLACED, SCALE_UNIT)
-                )
-        elif effect_type == EFFECT_TYPE_SCREEN:
-            screen = fx.svse_screen.get(effect, 0)
-            if screen in fx.screens:
-                kits.screens.setdefault(kit, set()).add(screen)
-    return kits
+        The attached models seed the model, animation and anim-kit buckets and
+        the effect rows union into them; a procedure lands in every bucket the
+        procedure route sorted it into, which is the second dispatch.
+        """
+        kits = cls(
+            models=union(
+                attachments.models,
+                resolved(kit_emissions, emissions),
+                resolved(kit_barrages, barrages),
+                resolved(kit_procedures, procs.ground),
+                resolved(kit_procedures, procs.trails),
+            ),
+            soundkits=union(kit_sounds),
+            animkits=union(attachments.animkits, kit_animkits),
+            visual_anims=union(attachments.anims, kit_visual_anims),
+            chains=union(
+                kit_beams,
+                {
+                    kit: {(chain, NO_ATTACHMENT, NO_ATTACHMENT) for chain in chains}
+                    for kit, chains in kit_proc_chains.items()
+                },
+            ),
+            dissolves=union(kit_dissolves),
+            glows=union(kit_glows),
+            shadowies=union(kit_shadowies),
+            screens=union(kit_screens),
+            ghost_mats=members(kit_procedures, procs.ghost_mats),
+            tints=members(kit_procedures, procs.tints),
+            desats=members(kit_procedures, procs.desats),
+            transps=members(kit_procedures, procs.transps),
+            freezes={kit for kit, procedures in kit_procedures.items() if procedures & procs.freezes},
+            camos={kit for kit, procedures in kit_procedures.items() if procedures & procs.camos},
+        )
+        for kit, procedures in kit_procedures.items():
+            for procedure in procedures:
+                if pairs := procs.anims.get(procedure):
+                    kits.anims.setdefault(kit, set()).update(pairs)
+        return kits
 
 
-def _add_procedure(kits: KitEffects, kit: int, procedure: int, procs: ProcEffects, fx: FxPayloads) -> None:
-    """Route one procedure reference to whichever buckets it landed in.
+def union[T](*buckets: Mapping[int, Iterable[T]]) -> dict[int, set[T]]:
+    """Several kit-keyed buckets as one, each kit's sets unioned."""
+    merged: dict[int, set[T]] = {}
+    for bucket in buckets:
+        for kit, held in bucket.items():
+            merged.setdefault(kit, set()).update(held)
+    return merged
 
-    A procedure-route chain has no beam row, so it carries no attachment pair.
-    """
-    chain = procs.chain.get(procedure, 0)
-    if chain:
-        add_chains(fx.chains, chain, NO_ATTACHMENT, NO_ATTACHMENT, kits.chains.setdefault(kit, set()))
-    for bucket, into in (
-        (procs.tints, kits.tints),
-        (procs.ghost_mats, kits.ghost_mats),
-        (procs.desats, kits.desats),
-        (procs.transps, kits.transps),
-    ):
-        if procedure in bucket:
-            into.setdefault(kit, set()).add(procedure)
-    if procedure in procs.freezes:
-        kits.freezes.add(kit)
-    if procedure in procs.camos:
-        kits.camos.add(kit)
-    if procedure in procs.models:
-        kits.models.setdefault(kit, set()).add(procs.models[procedure])
-    if procedure in procs.anims:
-        kits.anims.setdefault(kit, set()).update(procs.anims[procedure])
+
+def resolved[T](bucket: Mapping[int, Iterable[int]], through: Mapping[int, T]) -> dict[int, set[T]]:
+    """Each kit's ids mapped through a payload table, the ids it lacks dropped."""
+    found = {kit: {through[held] for held in ids if held in through} for kit, ids in bucket.items()}
+    return {kit: payloads for kit, payloads in found.items() if payloads}
+
+
+def members(bucket: Mapping[int, Iterable[int]], of: Mapping[int, object]) -> dict[int, set[int]]:
+    """Each kit's ids that a payload table holds: the second dispatch is a membership test."""
+    found = {kit: {held for held in ids if held in of} for kit, ids in bucket.items()}
+    return {kit: ids for kit, ids in found.items() if ids}

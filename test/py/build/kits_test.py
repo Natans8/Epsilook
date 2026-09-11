@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from pack.routes import flows
 from pack.routes.attachments import NO_ATTACHMENT, NO_MOTION
-from pack.routes.fx import ChainEffect, FxPayloads, ScreenRow
-from pack.routes.kits import KitEffects, read_kit_effects
+from pack.routes.fx import ChainEffect, ScreenRow, Shadowy
+from pack.routes.kits import KitEffects
 from pack.routes.models import (
     MODEL_CAT_AREA,
     MODEL_CAT_BARRAGE,
@@ -12,13 +13,15 @@ from pack.routes.models import (
     SCALE_UNIT,
     UNPLACED,
     AttachModel,
-    ModelSources,
+    KitAttachments,
+    barrage_model,
+    ground_model,
+    trail_model,
 )
 from pack.routes.procedures import ProcEffects
-from pack.routes import flows
 from pack.routes.sounds import sound_type_names
 from pack.sources import load_local_enum
-from support import BuildTables
+from support import BuildTables, resolve
 
 SPELL_VISUAL_ANIM = """\
 ID,InitialAnimID,LoopAnimID,AnimKitID
@@ -45,50 +48,74 @@ ParentSpellVisualKitID,EffectType,Effect
 11,17,30
 12,19,40
 13,19,41
+15,13,81
 0,5,300
 14,5,0
 """
 
-MODELS = ModelSources(
-    attach_models={1: {AttachModel(8000, 0, 5, NO_ATTACHMENT, 0, NO_MOTION, UNPLACED, SCALE_UNIT)}},
-    attach_anims={1: {17}},
-    attach_animkits={1: {42}},
-    emission_fid={20: 8300},
-    barrage_fid={30: 8400},
-    barrage_attach={30: 3},
+# Beam 80 draws chain 70, which nests 71; beam 81 draws chain 72, which nests
+# 73, which nests 72 again.
+BEAM_EFFECT = """\
+ID,BeamID,SourceAttachID,DestAttachID
+80,70,1,2
+81,72,3,4
+"""
+
+SPELL_CHAIN_EFFECTS = """\
+ID,SpellChainEffectID_0,SpellChainEffectID_1
+70,71,0
+71,0,0
+72,73,0
+73,72,0
+"""
+
+SPELL_VISUAL_SCREEN_EFFECT = """\
+ID,ScreenEffectID,ScreenEffectTypeID
+40,90,0
+41,99,0
+"""
+
+ATTACHMENTS = KitAttachments(
+    models={1: {AttachModel(8000, 0, 5, NO_ATTACHMENT, 0, NO_MOTION, UNPLACED, SCALE_UNIT)}},
+    anims={1: {17}},
+    animkits={1: {42}},
 )
 
 PROCS = ProcEffects(
-    chain={10: 70},
+    chains={10: 70},
     tints={11: 0xFF0000},
     freezes={12},
-    models={13: AttachModel(8500, MODEL_CAT_TRAIL, NO_ATTACHMENT, NO_ATTACHMENT, 0, NO_MOTION, UNPLACED, SCALE_UNIT)},
+    trails={13: trail_model("8500")},
     anims={13: ((0, 12),)},
 )
 
-FX = FxPayloads(
-    chains={70: ChainEffect(0, 0, 0, 0, (), (71,)), 71: ChainEffect(0, 0, 0, 0, (), ())},
-    beam_chain={80: (70, 1, 2)},
-    dissolves={400: (1.0, (), -1)},
-    glows={500: 0xFF0000},
-    shadowies={600: (0, 0, -1)},
-    screens={90: ScreenRow(name="Shaman - Hex")},
-    svse_screen={40: 90, 41: 99},
-)
-
-SOUND_KIT_ENTRY = """\
-SoundKitID,FileDataID
-300,9000
-300,9001
-0,9002
-301,0
-"""
+CHAINS = {chain: ChainEffect(0, 0, 0, 0, (), ()) for chain in (70, 71, 72, 73)}
 
 
 def kits(tables: BuildTables) -> KitEffects:
-    return read_kit_effects(
-        tables(SpellVisualAnim=SPELL_VISUAL_ANIM, SpellVisualKitEffect=SPELL_VISUAL_KIT_EFFECT), MODELS, PROCS, FX
+    found = resolve(
+        "kits",
+        tables(
+            SpellVisualAnim=SPELL_VISUAL_ANIM,
+            SpellVisualKitEffect=SPELL_VISUAL_KIT_EFFECT,
+            BeamEffect=BEAM_EFFECT,
+            SpellChainEffects=SPELL_CHAIN_EFFECTS,
+            SpellVisualScreenEffect=SPELL_VISUAL_SCREEN_EFFECT,
+        ),
+        attachments=ATTACHMENTS,
+        procs=PROCS,
+        proc_chains=PROCS.chains,
+        emissions={20: ground_model("8300")},
+        barrages={30: barrage_model(8400, 3)},
+        chains=CHAINS,
+        dissolves={400: (1.0, (), -1)},
+        glows={500: 0xFF0000},
+        shadowies={600: Shadowy(0, 0, -1)},
+        screens={90: ScreenRow(name="Shaman - Hex")},
     )
+    if not isinstance(found, KitEffects):
+        raise TypeError("the kits field is the kit record")
+    return found
 
 
 def test_the_attached_models_seed_the_buckets_the_walk_fills(tables: BuildTables) -> None:
@@ -126,6 +153,11 @@ def test_a_beam_passes_its_ends_down_to_the_chains_it_nests(tables: BuildTables)
     assert kits(tables).chains[6] == {(70, 1, 2), (71, 1, 2)}
 
 
+def test_a_chain_cycle_terminates(tables: BuildTables) -> None:
+    """Two chains nesting each other are reached once each."""
+    assert kits(tables).chains[15] == {(72, 3, 4), (73, 3, 4)}
+
+
 def test_a_row_pointing_at_a_payload_this_build_lacks_is_dropped(tables: BuildTables) -> None:
     """Not an error: an older build legitimately lacks the table."""
     resolved = kits(tables)
@@ -148,6 +180,15 @@ def test_a_kit_or_effect_of_zero_is_skipped(tables: BuildTables) -> None:
     resolved = kits(tables)
     assert 0 not in resolved.soundkits
     assert 14 not in resolved.soundkits
+
+
+SOUND_KIT_ENTRY = """\
+SoundKitID,FileDataID
+300,9000
+300,9001
+0,9002
+301,0
+"""
 
 
 def test_a_sound_kit_keeps_every_file_it_plays(tables: BuildTables) -> None:

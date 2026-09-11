@@ -7,14 +7,12 @@ sometimes a launch sound and an anim kit.
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from typing import NamedTuple
 
-from ..tables import Tables
 from .attachments import DEFAULT_MISSILE_SOURCE
-from .columns import to_int
-from .models import ModelSources, file_for_effect_name
-from .route import route
+from .models import EffectName, file_for_effect_name
 
 
 class Missile(NamedTuple):
@@ -26,16 +24,12 @@ class Missile(NamedTuple):
 
     file: int
     """The projectile's model."""
-
     motion: int
     """The flight path it follows."""
-
     source: int
     """Where on the caster it launches from."""
-
     destination: int
     """Where on the target it arrives."""
-
     effect: int = 0
     """The `SpellVisualEffectName` row it was reached through, or zero.
 
@@ -50,10 +44,8 @@ class VisualMissiles:
 
     models: set[Missile] = field(default_factory=set)
     """The projectiles, each with its flight path and its two attach points."""
-
     soundkits: set[int] = field(default_factory=set)
     """The sounds a launch plays."""
-
     animkits: set[int] = field(default_factory=set)
     """The anim kits a launch plays."""
 
@@ -67,7 +59,6 @@ class MissileMotion:
 
     name: str
     """The arc's name, as the client spells it."""
-
     projectiles: int
     """How many projectiles the path is written for.
 
@@ -77,74 +68,49 @@ class MissileMotion:
     """
 
 
-@route("missiles")
-def read_missiles(tables: Tables, models: ModelSources) -> dict[int, VisualMissiles]:
-    """Read each visual's projectiles, attachments resolved.
+class MissileRow(NamedTuple):
+    """One `SpellVisualMissile` row joined to the visual that reaches its set.
+
+    The motion rides the same row as the model, so a set naming several
+    motions is several rows here; the visual's two attachments ride along
+    to fill in what the row leaves unset.
+    """
+
+    visual: int
+    name: int
+    """The `SpellVisualEffectName` the projectile's model comes through."""
+    sound: int
+    animkit: int
+    motion: int
+    source: int
+    destination: int
+    visual_source: int
+    visual_destination: int
+
+
+def assemble_missiles(rows: Iterable[MissileRow], names: Mapping[int, EffectName]) -> dict[int, VisualMissiles]:
+    """Each visual's projectiles, attachments resolved.
 
     The row's attachments win over its visual's, which fills in what the row
-    leaves unset. The precedence was settled in game.
+    leaves unset. The precedence was settled in game. A weapon type with no
+    file resolves to the caster's own weapon, thrown as the projectile.
     """
-    visual_columns = [
-        "ID",
-        "SpellVisualMissileSetID",
-        "RaidSpellVisualMissileSetID",
-        "MissileAttachment",
-        "MissileDestinationAttachment",
-    ]
-    visuals: dict[int, tuple[int, int, int, int]] = {}
-    for visual_id, *values in tables.rows("SpellVisual", visual_columns):
-        first, raid, source, destination = (to_int(value) for value in values)
-        visuals[to_int(visual_id)] = (first, raid, source, destination)
-
-    # The motion rides the same row as the model, so a (set, effect name) pair
-    # naming several motions becomes several rows.
-    sets: dict[int, VisualMissiles] = {}
-    for row in tables.rows(
-        "SpellVisualMissile",
-        [
-            "SpellVisualMissileSetID",
-            "SpellVisualEffectNameID",
-            "SoundEntriesID",
-            "AnimKitID",
-            "SpellMissileMotionID",
-            "Attachment",
-            "DestinationAttachment",
-        ],
-    ):
-        set_id, name_id, sound, animkit, motion, source, destination = (to_int(value) for value in row)
-        if not set_id:
-            continue
-        into = sets.setdefault(set_id, VisualMissiles())
-        # A weapon type with no file resolves to the caster's own weapon,
-        # thrown as the projectile.
-        if file := file_for_effect_name(models, name_id):
-            into.models.add(Missile(file, motion, source, destination, name_id))
-        if sound:
-            into.soundkits.add(sound)
-        if animkit:
-            into.animkits.add(animkit)
-
     missiles: dict[int, VisualMissiles] = {}
-    for visual, (first, raid, visual_source, visual_destination) in visuals.items():
-        merged = VisualMissiles()
-        for set_id in (first, raid):
-            found = sets.get(set_id)
-            if found is None:
-                continue
-            merged.models.update(
+    for row in rows:
+        into = missiles.setdefault(row.visual, VisualMissiles())
+        if file := file_for_effect_name(names, row.name):
+            source = row.source if row.source >= 0 else row.visual_source
+            into.models.add(
                 Missile(
-                    shot.file,
-                    shot.motion,
-                    shot.source
-                    if shot.source >= 0
-                    else (visual_source if visual_source >= 0 else DEFAULT_MISSILE_SOURCE),
-                    shot.destination if shot.destination >= 0 else visual_destination,
-                    shot.effect,
+                    file,
+                    row.motion,
+                    source if source >= 0 else DEFAULT_MISSILE_SOURCE,
+                    row.destination if row.destination >= 0 else row.visual_destination,
+                    row.name,
                 )
-                for shot in found.models
             )
-            merged.soundkits.update(found.soundkits)
-            merged.animkits.update(found.animkits)
-        if merged:
-            missiles[visual] = merged
-    return missiles
+        if row.sound:
+            into.soundkits.add(row.sound)
+        if row.animkit:
+            into.animkits.add(row.animkit)
+    return {visual: found for visual, found in missiles.items() if found}

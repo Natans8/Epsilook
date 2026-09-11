@@ -118,7 +118,7 @@ def collect_references(
                 found.assets.add(model.file)
             # An item pill shows the icon the game shows in the bag.
             if model.category == MODEL_CAT_ITEM and model.ref:
-                found.icons.add(items.icon_fid.get(model.ref, 0))
+                found.icons.add(items.icons.get(model.ref, 0))
             if model.category == MODEL_CAT_DISPLAY:
                 found.displays.add(model.ref)
     for sounds in visuals.sounds.values():

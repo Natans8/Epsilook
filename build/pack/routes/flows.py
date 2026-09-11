@@ -17,11 +17,12 @@ from operator import attrgetter
 from ..drift import SPELL_NAME_SOURCES
 from .anims import SPEED_UNIT
 from .areas import UI_MAP_TYPE_ZONE, AreaGates, GateRow
+from .colors import channel, rgb_of
 from .columns import BASE_DIFFICULTY, to_float, to_int
+from .creatures import CreatureModels
 from .delivery import CHANNEL_BITS, MOVING_BIT, DeliveryRow, assemble_delivery
 from .factions import FactionTemplateRow
 from .flow import (
-    Read,
     as_ids,
     as_map,
     as_records,
@@ -30,27 +31,89 @@ from .flow import (
     as_text,
     as_tree,
     c,
+    compose,
+    first_available,
     flow,
+    ids_of,
     key_of,
+    nonzero,
     number_of,
+    ordered,
     real,
     text,
     typed,
     values_of,
     word,
 )
+from .fx import (
+    Beam,
+    ChainEffect,
+    Dissolve,
+    FxPayloads,
+    ScreenRow,
+    Shadowy,
+    grade,
+    positive,
+    seconds,
+    thousandths,
+    visible_wave,
+    yards,
+)
 from .gameobjects import GameObjectData, GameObjectRow
 from .interrupts import interrupt_bits
+from .items import ItemModels, ItemName
 from .keybinds import KeyboundOverride, keybound_type_word
-from .missiles import MissileMotion
+from .kits import (
+    EFFECT_TYPE_ANIM,
+    EFFECT_TYPE_BARRAGE,
+    EFFECT_TYPE_BEAM,
+    EFFECT_TYPE_DISSOLVE,
+    EFFECT_TYPE_EDGE_GLOW,
+    EFFECT_TYPE_EMISSION,
+    EFFECT_TYPE_PROC,
+    EFFECT_TYPE_SCREEN,
+    EFFECT_TYPE_SHADOWY,
+    EFFECT_TYPE_SOUND,
+    KitEffects,
+)
+from .missiles import MissileMotion, MissileRow, assemble_missiles
+from .models import (
+    PLACEMENT_COLUMNS,
+    SCALE_UNIT,
+    AttachRow,
+    EffectName,
+    KitAttachments,
+    barrage_model,
+    ground_model,
+    trail_model,
+    without_placeholders,
+)
 from .mounts import MountData, MountRow
 from .names import SpellNames, override_names
+from .procedures import (
+    PROC_TYPE_AREAMODEL,
+    PROC_TYPE_CAMO,
+    PROC_TYPE_DESATURATE,
+    PROC_TYPE_FREEZE,
+    PROC_TYPE_GHOST_MAT,
+    PROC_TYPE_STANDWALK,
+    PROC_TYPE_TINT,
+    PROC_TYPE_TINT_MAT,
+    PROC_TYPE_TRANSPARENCY,
+    PROC_TYPE_WEAPONTRAIL,
+    PROC_TYPES_CHAIN,
+    ProcEffects,
+    percent,
+    standwalk,
+    tint,
+)
 from .reach import REACH_FLAGS, YARD_DIGITS, Reach
 from .route import declare
 from .shapeshifts import FormRow, ShapeshiftForms
 from .sounds import Ambience, ZoneMusic
 from .spells import PropertiesRow, SpellProperties
 from .text import assignments
+from .vehicles import SEAT_COLUMNS, Seat, VehicleSeats
 
 BASE = c.DifficultyID == BASE_DIFFICULTY
 """The row a player sees, which stands for the spell wherever a table keeps a
@@ -211,13 +274,586 @@ mounts = declare(
 )
 
 
+# The creature chain, and the items: what a display and an item resolve to.
+
+creature_names = declare(
+    "creature_names",
+    flow("what the server calls each creature").read("creature_template", c.entry, c.name, source="world")
+    >> as_map(c.entry, word(c.name)),
+)
+
+creature_displays = declare(
+    "creature_displays",
+    first_available(
+        flow("the displays a creature wears, by slot").read(
+            "creature_template_model", c.CreatureID, c.Idx, c.CreatureDisplayID, source="world"
+        )
+        >> as_sets(c.CreatureID, c.Idx, c.CreatureDisplayID),
+        flow("the same in the legacy shape, where the column is the slot")
+        .read("creature_template", c.entry, c.modelid1, c.modelid2, c.modelid3, c.modelid4, source="world")
+        .explode(c.modelid1, c.modelid2, c.modelid3, c.modelid4, into="display", slot="slot")
+        >> as_sets(c.entry, c.slot, c.display),
+    ).then(ordered),
+)
+"""Whichever shape the release has wins; a display named in two slots is two
+rows, since the first slot is the one the pill shows."""
+
+display_models = declare(
+    "display_models",
+    flow("the model each creature display wears").read("CreatureDisplayInfo", c.ID, c.ModelID)
+    >> as_map(c.ID, c.ModelID),
+)
+
+display_skins = declare(
+    "display_skins",
+    (
+        flow("the textures a display paints its model with").read(
+            "CreatureDisplayInfo", c.ID, c.TextureVariationFileDataID[:]
+        )
+        >> as_map(c.ID, typed(c.TextureVariationFileDataID[:], ids_of))
+    ).then(nonzero),
+)
+"""As many slots as the build has, in slot order; a display painting nothing
+is absent rather than empty."""
+
+creature_model_files = declare(
+    "creature_model_files",
+    flow("each creature model's file").read("CreatureModelData", c.ID, c.FileDataID) >> as_map(c.ID, c.FileDataID),
+)
+
+totem_displays = declare(
+    "totem_displays",
+    (
+        flow("the displays a totem wears, one per caster race")
+        .read("spell_totem_model", c.SpellID, c.DisplayID, source="world", optional=True)
+        .where(c.DisplayID != 0)
+        >> as_sets(c.SpellID, c.DisplayID)
+    ).then(ordered),
+)
+"""Two races sharing a model is one display, in display order, since no race
+travels with it."""
+
+creatures = declare(
+    "creatures",
+    compose(
+        CreatureModels,
+        names="creature_names",
+        displays="creature_displays",
+        display_model="display_models",
+        model_fid="creature_model_files",
+        totem_displays="totem_displays",
+        display_skins="display_skins",
+    ),
+)
+
+item_names = declare(
+    "item_names",
+    flow("the items a visual holds up, by name and quality")
+    .read("ItemSearchName", c.ID, c.Display_lang, c.OverallQualityID)
+    .where(~c.Display_lang.is_empty())
+    >> as_records(c.ID, ItemName, text(c.Display_lang), c.OverallQualityID),
+)
+
+model_files = declare(
+    "model_files",
+    flow("the base file of each model resource")
+    .read("ModelFileData", c.FileDataID, c.ModelResourcesID)
+    .where((c.FileDataID != 0) & (c.ModelResourcesID != 0))
+    >> as_map(c.ModelResourcesID, c.FileDataID, reduce=min),
+)
+"""A model shipping with levels of detail names several files, and the lowest
+is the base model."""
+
+looks = (
+    flow("each item's appearances, the base look first")
+    .read("ItemModifiedAppearance", c.ItemID, c.ItemAppearanceID)
+    .where(c.ItemID != 0)
+    .join(c.ItemAppearanceID, "ItemAppearance", c.ItemDisplayInfoID, c.DefaultIconFileDataID, inner=True)
+)
+
+item_icons = declare(
+    "item_icons", looks.where(c.DefaultIconFileDataID != 0) >> as_map(c.ItemID, c.DefaultIconFileDataID, first=True)
+)
+
+item_models = declare(
+    "item_models",
+    (
+        looks.join(c.ItemDisplayInfoID, "ItemDisplayInfo", c.ModelResourcesID[:])
+        .explode(c.ModelResourcesID[:], into="resource")
+        .narrow(c.resource, "model_files")
+        >> as_map(c.ItemID, c.resource, first=True)
+    ).then(lambda held, files: {item: files[resource] for item, resource in held.items()}, files="model_files"),
+)
+"""The first appearance whose display reaches a file, and its first slot that
+does: a paired item carries its second component in the second slot."""
+
+items = declare("items", compose(ItemModels, names="item_names", icons="item_icons", models="item_models"))
+
+
+# The models: every table that ends in a model file.
+
+effect_names = declare(
+    "effect_names",
+    (
+        flow("what each effect name reaches: a file, an item, a display or a weapon slot").read(
+            "SpellVisualEffectName", c.ID, c.ModelFileDataID, c.Type, c.GenericID, c.Scale
+        )
+        >> as_records(
+            c.ID,
+            EffectName,
+            c.ModelFileDataID,
+            c.Type,
+            c.GenericID,
+            typed(c.Scale, lambda cell: round(number_of(cell) * SCALE_UNIT)),
+        )
+    ).then(without_placeholders, named="named"),
+)
+
+attachments = declare(
+    "attachments",
+    (
+        flow("the models a kit hangs on a unit, and where")
+        .read(
+            "SpellVisualKitModelAttach",
+            c.ParentSpellVisualKitID,
+            c.SpellVisualEffectNameID,
+            c.AttachmentID,
+            *PLACEMENT_COLUMNS,
+        )
+        .where(c.ParentSpellVisualKitID != 0)
+        >> as_rows(
+            AttachRow.of,
+            c.ParentSpellVisualKitID,
+            c.SpellVisualEffectNameID,
+            c.AttachmentID,
+            *(text(column) for column in PLACEMENT_COLUMNS),
+        )
+    ).then(KitAttachments.assemble, names="effect_names", creatures="creatures", items="items"),
+)
+
+area_models = declare(
+    "area_models",
+    flow("the ground models").read("SpellVisualKitAreaModel", c.ID, c.ModelFileDataID)
+    >> as_map(c.ID, c.ModelFileDataID),
+)
+
+emissions = declare(
+    "emissions",
+    flow("the ground model an emitter spawns copies of")
+    .read("SpellEffectEmission", c.ID, c.AreaModelID)
+    .join(c.AreaModelID, "SpellVisualKitAreaModel", c.ModelFileDataID, inner=True)
+    .where(c.ModelFileDataID != 0)
+    >> as_map(c.ID, typed(c.ModelFileDataID, ground_model)),
+)
+
+barrages = declare(
+    "barrages",
+    flow("the model a volley is made of, and where on the caster it spawns")
+    .read("BarrageEffect", c.ID, c.SpellVisualEffectNameID, c.AttachmentPoint)
+    .join(c.SpellVisualEffectNameID, "SpellVisualEffectName", c.ModelFileDataID, inner=True)
+    .where(c.ModelFileDataID != 0)
+    >> as_records(c.ID, barrage_model, c.ModelFileDataID, c.AttachmentPoint),
+)
+
+weapon_trails = declare(
+    "weapon_trails", flow("the trail models").read("WeaponTrail", c.ID, c.FileDataID) >> as_map(c.ID, c.FileDataID)
+)
+
+missiles = declare(
+    "missiles",
+    (
+        flow("the projectiles a visual launches, from its base set and its raid set")
+        .read(
+            "SpellVisual",
+            c.ID,
+            c.SpellVisualMissileSetID,
+            c.RaidSpellVisualMissileSetID,
+            c.MissileAttachment,
+            c.MissileDestinationAttachment,
+        )
+        .explode(c.SpellVisualMissileSetID, c.RaidSpellVisualMissileSetID, into="set")
+        .join(
+            c.set,
+            "SpellVisualMissile",
+            c.SpellVisualEffectNameID,
+            c.SoundEntriesID,
+            c.AnimKitID,
+            c.SpellMissileMotionID,
+            c.Attachment,
+            c.DestinationAttachment,
+            by="SpellVisualMissileSetID",
+            inner=True,
+            many=True,
+        )
+        >> as_rows(
+            MissileRow,
+            c.ID,
+            c.SpellVisualEffectNameID,
+            c.SoundEntriesID,
+            c.AnimKitID,
+            c.SpellMissileMotionID,
+            c.Attachment,
+            c.DestinationAttachment,
+            c.MissileAttachment,
+            c.MissileDestinationAttachment,
+        )
+    ).then(assemble_missiles, names="effect_names"),
+)
+
+
+# The fx payloads: six unrelated tables a kit reaches by effect type.
+
+chains = declare(
+    "chains",
+    flow("what a beam segment draws with").read(
+        "SpellChainEffects",
+        c.ID,
+        c.Red,
+        c.Green,
+        c.Blue,
+        c.SoundKitID,
+        c.ArcHeight,
+        c.MaxFlickerOnDuration,
+        c.JointOffsetRadius,
+        c.WaveHeight,
+        c.StartWidth,
+        c.TextureFileDataID[:],
+        c.SpellChainEffectID[:],
+    )
+    >> as_records(
+        c.ID,
+        ChainEffect,
+        c.Red,
+        c.Green,
+        c.Blue,
+        c.SoundKitID,
+        typed(c.TextureFileDataID[:], ids_of),
+        typed(c.SpellChainEffectID[:], ids_of),
+        typed(c.ArcHeight, positive),
+        typed(c.MaxFlickerOnDuration, positive),
+        typed(c.JointOffsetRadius, positive),
+        typed(c.WaveHeight, visible_wave),
+        typed(c.StartWidth, yards),
+    ),
+)
+"""Chains nest: a composite chain names up to eleven others. The flicker and
+wave columns are tuning read as traits, and the geometry is dropped."""
+
+beams = declare(
+    "beams",
+    flow("the chain a beam draws, and its two ends").read(
+        "BeamEffect", c.ID, c.BeamID, c.SourceAttachID, c.DestAttachID
+    )
+    >> as_records(c.ID, Beam, c.BeamID, c.SourceAttachID, c.DestAttachID),
+)
+
+dissolves = declare(
+    "dissolves",
+    flow("the dissolve materials")
+    .read("DissolveEffect", c.ID, c.TextureBlendSetID, c.Duration, c.AttachID)
+    .join(c.TextureBlendSetID, "TextureBlendSet", c.TextureFileDataID[:])
+    >> as_records(c.ID, Dissolve, typed(c.Duration, seconds), typed(c.TextureFileDataID[:], ids_of), c.AttachID),
+)
+
+glows = declare(
+    "glows",
+    flow("the colour an edge glow paints").read("EdgeGlowEffect", c.ID, c.GlowRed, c.GlowGreen, c.GlowBlue)
+    >> as_records(
+        c.ID,
+        lambda red, green, blue: (red << 16) | (green << 8) | blue,
+        typed(c.GlowRed, channel),
+        typed(c.GlowGreen, channel),
+        typed(c.GlowBlue, channel),
+    ),
+)
+"""The colour is the whole visible payload; the multiplier, fade and fresnel
+columns are tuning."""
+
+glow_alphas = declare(
+    "glow_alphas",
+    flow("how opaque an edge glow is").read("EdgeGlowEffect", c.ID, c.GlowAlpha)
+    >> as_map(c.ID, typed(c.GlowAlpha, channel)),
+)
+
+shadowies = declare(
+    "shadowies",
+    flow("the two colours of a ghost effect, and where it anchors").read(
+        "ShadowyEffect", c.ID, c.PrimaryColor, c.SecondaryColor, c.AttachPos
+    )
+    >> as_records(c.ID, Shadowy, typed(c.PrimaryColor, rgb_of), typed(c.SecondaryColor, rgb_of), c.AttachPos),
+)
+
+screens = declare(
+    "screens",
+    flow("what a screen effect does to the frame, the sky, the sound and the hour")
+    .read(
+        "ScreenEffect",
+        c.ID,
+        c.Name,
+        c.Param_0,
+        c.Effect,
+        c.FullScreenEffectID,
+        c.LightParamsID,
+        c.LightParamsFadeIn,
+        c.LightParamsFadeOut,
+        c.SoundAmbienceID,
+        c.ZoneMusicID,
+        c.TimeOfDayOverride,
+    )
+    .join(
+        c.FullScreenEffectID,
+        "FullScreenEffect",
+        c.ColorMultiplyRed,
+        c.ColorMultiplyGreen,
+        c.ColorMultiplyBlue,
+        c.ColorAdditionRed,
+        c.ColorAdditionGreen,
+        c.ColorAdditionBlue,
+        c.OverlayTextureFileDataID,
+        c.TextureBlendSetID,
+        c.MaskOffsetY,
+        c.MaskSizeMultiplier,
+        c.MaskPower,
+    )
+    .join(c.TextureBlendSetID, "TextureBlendSet", c.TextureFileDataID[:])
+    >> as_records(
+        c.ID,
+        ScreenRow.of,
+        text(c.Name),
+        c.Param_0,
+        c.Effect,
+        typed(c.ColorMultiplyRed, grade),
+        typed(c.ColorMultiplyGreen, grade),
+        typed(c.ColorMultiplyBlue, grade),
+        typed(c.ColorAdditionRed, grade),
+        typed(c.ColorAdditionGreen, grade),
+        typed(c.ColorAdditionBlue, grade),
+        c.OverlayTextureFileDataID,
+        typed(c.TextureFileDataID[:], ids_of),
+        typed(c.MaskOffsetY, thousandths),
+        typed(c.MaskSizeMultiplier, thousandths),
+        typed(c.MaskPower, thousandths),
+        c.LightParamsID,
+        c.LightParamsFadeIn,
+        c.LightParamsFadeOut,
+        c.SoundAmbienceID,
+        c.ZoneMusicID,
+        c.TimeOfDayOverride,
+    ),
+)
+
+visual_screens = declare(
+    "visual_screens",
+    flow("the kit's route into a screen effect").read("SpellVisualScreenEffect", c.ID, c.ScreenEffectID)
+    >> as_map(c.ID, c.ScreenEffectID),
+)
+
+fx = declare("fx", compose(FxPayloads))
+
+
+# The character procedures: one table, many meanings, chosen by its Type.
+
+procedures = flow("the character procedures").read(
+    "SpellProceduralEffect", c.ID, c.Type, c.Value_0, c.Value_1, c.Value_2, c.Value_3
+)
+
+proc_chains = declare("proc_chains", procedures.where(c.Type.among(PROC_TYPES_CHAIN)) >> as_map(c.ID, c.Value_0))
+
+proc_tints = declare(
+    "proc_tints",
+    procedures.where(c.Type.among((PROC_TYPE_TINT, PROC_TYPE_TINT_MAT)))
+    >> as_records(c.ID, tint, c.Type, c.Value_0, c.Value_3),
+)
+"""The payload column differs per Type, and a colourless tint folds in as black."""
+
+proc_ghosts = declare(
+    "proc_ghosts",
+    procedures.where((c.Type == PROC_TYPE_GHOST_MAT) & (c.Value_3 != 0)) >> as_map(c.ID, typed(c.Value_3, rgb_of)),
+)
+"""A colourless ghost has nothing to show and is dropped."""
+
+proc_desats = declare(
+    "proc_desats",
+    (procedures.where(c.Type == PROC_TYPE_DESATURATE) >> as_map(c.ID, typed(c.Value_2, percent))).then(nonzero),
+)
+
+proc_transps = declare(
+    "proc_transps",
+    (procedures.where(c.Type == PROC_TYPE_TRANSPARENCY) >> as_map(c.ID, typed(c.Value_0, percent))).then(nonzero),
+)
+"""A percentage of zero would render as a claim that something happened."""
+
+proc_freezes = declare("proc_freezes", procedures.where(c.Type == PROC_TYPE_FREEZE) >> as_ids(c.ID))
+
+proc_camos = declare("proc_camos", procedures.where(c.Type == PROC_TYPE_CAMO) >> as_ids(c.ID))
+
+proc_ground = declare(
+    "proc_ground",
+    procedures.where(c.Type == PROC_TYPE_AREAMODEL)
+    .join(c.Value_0, "SpellVisualKitAreaModel", c.ModelFileDataID, inner=True)
+    .where(c.ModelFileDataID != 0)
+    >> as_map(c.ID, typed(c.ModelFileDataID, ground_model)),
+)
+
+proc_trails = declare(
+    "proc_trails",
+    procedures.where(c.Type == PROC_TYPE_WEAPONTRAIL)
+    .join(c.Value_0, "WeaponTrail", c.FileDataID, inner=True)
+    .where(c.FileDataID != 0)
+    >> as_map(c.ID, typed(c.FileDataID, trail_model)),
+)
+
+proc_anims = declare(
+    "proc_anims",
+    (
+        procedures.where(c.Type == PROC_TYPE_STANDWALK) >> as_records(c.ID, standwalk, c.Value_0, c.Value_1, c.Value_2)
+    ).then(nonzero),
+)
+
+procs = declare(
+    "procs",
+    compose(
+        ProcEffects,
+        chains="proc_chains",
+        tints="proc_tints",
+        ghost_mats="proc_ghosts",
+        desats="proc_desats",
+        transps="proc_transps",
+        freezes="proc_freezes",
+        camos="proc_camos",
+        ground="proc_ground",
+        trails="proc_trails",
+        anims="proc_anims",
+    ),
+)
+
+
+# The kit dispatch: one row says which effect of which type a kit plays, and
+# the type decides which table the effect is an id in.
+
+kit_effects = (
+    flow("what a kit's effect rows reach, by type")
+    .read("SpellVisualKitEffect", c.ParentSpellVisualKitID, c.EffectType, c.Effect)
+    .where((c.ParentSpellVisualKitID != 0) & (c.Effect != 0))
+)
+
+kit_sounds = declare(
+    "kit_sounds", kit_effects.where(c.EffectType == EFFECT_TYPE_SOUND) >> as_sets(c.ParentSpellVisualKitID, c.Effect)
+)
+
+kit_anim_rows = kit_effects.where(c.EffectType == EFFECT_TYPE_ANIM).join(
+    c.Effect, "SpellVisualAnim", c.InitialAnimID, c.LoopAnimID, c.AnimKitID
+)
+
+kit_visual_anims = declare(
+    "kit_visual_anims",
+    kit_anim_rows.explode(c.InitialAnimID, c.LoopAnimID, into="anim").where(c.anim > 0)
+    >> as_sets(c.ParentSpellVisualKitID, c.anim),
+)
+"""Nought would be Stand and minus one is unset, so neither is played."""
+
+kit_animkits = declare(
+    "kit_animkits", kit_anim_rows.where(c.AnimKitID != 0) >> as_sets(c.ParentSpellVisualKitID, c.AnimKitID)
+)
+
+kit_dissolves = declare(
+    "kit_dissolves",
+    kit_effects.where(c.EffectType == EFFECT_TYPE_DISSOLVE).narrow(c.Effect, "dissolves")
+    >> as_sets(c.ParentSpellVisualKitID, c.Effect),
+)
+
+kit_glows = declare(
+    "kit_glows",
+    kit_effects.where(c.EffectType == EFFECT_TYPE_EDGE_GLOW).narrow(c.Effect, "glows")
+    >> as_sets(c.ParentSpellVisualKitID, c.Effect),
+)
+
+kit_shadowies = declare(
+    "kit_shadowies",
+    kit_effects.where(c.EffectType == EFFECT_TYPE_SHADOWY).narrow(c.Effect, "shadowies")
+    >> as_sets(c.ParentSpellVisualKitID, c.Effect),
+)
+"""A row pointing at a payload this build lacks is dropped rather than an error."""
+
+kit_screens = declare(
+    "kit_screens",
+    kit_effects.where(c.EffectType == EFFECT_TYPE_SCREEN)
+    .join(c.Effect, "SpellVisualScreenEffect", c.ScreenEffectID, inner=True)
+    .narrow(c.ScreenEffectID, "screens")
+    >> as_sets(c.ParentSpellVisualKitID, c.ScreenEffectID),
+)
+
+kit_emissions = declare(
+    "kit_emissions",
+    kit_effects.where(c.EffectType == EFFECT_TYPE_EMISSION).narrow(c.Effect, "emissions")
+    >> as_sets(c.ParentSpellVisualKitID, c.Effect),
+)
+
+kit_barrages = declare(
+    "kit_barrages",
+    kit_effects.where(c.EffectType == EFFECT_TYPE_BARRAGE).narrow(c.Effect, "barrages")
+    >> as_sets(c.ParentSpellVisualKitID, c.Effect),
+)
+
+kit_beams = declare(
+    "kit_beams",
+    kit_effects.where(c.EffectType == EFFECT_TYPE_BEAM)
+    .join(c.Effect, "BeamEffect", c.BeamID, c.SourceAttachID, c.DestAttachID, inner=True)
+    .expand(c.BeamID, "SpellChainEffects", {"SpellChainEffectID_*": 0}, into="chain", bits="hops")
+    .narrow(c.chain, "chains")
+    >> as_sets(c.ParentSpellVisualKitID, c.chain, c.SourceAttachID, c.DestAttachID),
+)
+"""A beam's chains and every chain those nest, each tagged with the beam's two
+ends: nested chains are segments of the same beam. The graph may cycle."""
+
+kit_procedures = declare(
+    "kit_procedures", kit_effects.where(c.EffectType == EFFECT_TYPE_PROC) >> as_sets(c.ParentSpellVisualKitID, c.Effect)
+)
+"""Dispatched a second time, by membership in the procedure route's buckets."""
+
+kit_proc_chains = declare(
+    "kit_proc_chains",
+    kit_effects.where(c.EffectType == EFFECT_TYPE_PROC)
+    .lookup(c.Effect, "proc_chains", into="seed")
+    .expand(c.seed, "SpellChainEffects", {"SpellChainEffectID_*": 0}, into="chain", bits="hops")
+    .narrow(c.chain, "chains")
+    >> as_sets(c.ParentSpellVisualKitID, c.chain),
+)
+"""A procedure-route chain has no beam row, so it carries no attachment pair."""
+
+kits = declare("kits", compose(KitEffects.assemble))
+
+
+# The vehicles.
+
+seats = declare(
+    "seats",
+    flow("each seat's attachment and what the rider and the vehicle animate").read(
+        "VehicleSeat", c.ID, c.AttachmentID, *SEAT_COLUMNS
+    )
+    >> as_records(c.ID, Seat.of, c.AttachmentID, *SEAT_COLUMNS),
+)
+
+vehicles = declare(
+    "vehicles",
+    (
+        flow("each vehicle's seats, by slot").read("Vehicle", c.ID, c.SeatID[:])
+        >> as_map(c.ID, typed(c.SeatID[:], lambda cell: [seat for seat in map(key_of, values_of(cell)) if seat > 0]))
+    ).then(VehicleSeats.assemble, seats="seats"),
+)
+"""Empty slots are dropped, so the list length is the seat count, and a seat
+the build has no row for keeps its slot and loses its name."""
+
+
 # The spell itself.
 
 names = declare(
     "names",
-    (
-        flow("the spell list").first_of(*(Read(table, tuple(columns)) for table, columns in SPELL_NAME_SOURCES))
-        >> as_map(c.ID, text(c.Name_lang))
+    first_available(
+        *(
+            flow("the spell list").read(table, *columns) >> as_map(c.ID, text(c.Name_lang))
+            for table, columns in SPELL_NAME_SOURCES
+        )
     ).then(SpellNames.assemble, subtexts="spell_subtexts"),
 )
 """Membership is the spell list: every route downstream filters against it."""
@@ -342,7 +978,7 @@ aura_interrupts = declare(
         .narrow(c.SpellID, "names.names")
         .prefer(c.SpellID, base=BASE)
         >> as_map(c.SpellID, typed(c.AuraInterruptFlags[:], interrupt_bits))
-    ).then(lambda found: {spell: bits for spell, bits in found.items() if bits}),
+    ).then(nonzero),
 )
 """A spell carrying only housekeeping bits is absent rather than empty."""
 
@@ -373,7 +1009,7 @@ spell_variables = declare(
         .read("SpellXDescriptionVariables", c.SpellID, c.SpellDescriptionVariablesID)
         .join(c.SpellDescriptionVariablesID, "SpellDescriptionVariables", c.Variables, inner=True)
         >> as_map(c.SpellID, typed(c.Variables, assignments))
-    ).then(lambda bodies: {spell: body for spell, body in bodies.items() if body}),
+    ).then(nonzero),
 )
 
 # Where a spell may be cast.

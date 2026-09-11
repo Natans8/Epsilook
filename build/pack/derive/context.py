@@ -20,7 +20,6 @@ from ..routes import (
     KeyboundOverride,
     KitEffects,
     MissileMotion,
-    ModelSources,
     MountData,
     ProcEffects,
     Reach,
@@ -116,7 +115,6 @@ class DeriveContext:
     """The skybox roster: the domes, the presets that pick them, and the places
     and conditions each preset is drawn under."""
 
-    models: ModelSources = field(default_factory=ModelSources)
     procs: ProcEffects = field(default_factory=ProcEffects)
     fx: FxPayloads = field(default_factory=FxPayloads)
     kits: KitEffects = field(default_factory=KitEffects)

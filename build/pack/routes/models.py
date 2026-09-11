@@ -8,18 +8,17 @@ row's `ref` is in, so a display id and an item id can share one field.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from math import degrees
 from typing import NamedTuple
 
 from ..sources import enum_id_where, load_local_enum
-from ..tables import Tables
 from .attachments import NO_ATTACHMENT, NO_MOTION
 from .columns import to_float, to_int
 from .creatures import CreatureModels
+from .flow import Cell, key_of
 from .items import ItemModels
-from .route import route
 
 MODEL_CAT_ATTACH = 0
 MODEL_CAT_MISSILE = 1
@@ -277,68 +276,21 @@ def read_placement(values: Sequence[str]) -> Placement:
     )
 
 
-@dataclass
-class ModelSources:
-    """Every model-bearing table, keyed by its own row id.
+class EffectName(NamedTuple):
+    """`SpellVisualEffectName` as the columns every model route reads from it.
 
-    Attach models are resolved per kit because their table names the kit; the
-    rest are resolved when the kit walk or a procedural row reaches them.
+    The Type says how to reach the model: a file, an item id, a creature
+    display id, or a weapon slot.
     """
 
-    effect_name_fid: dict[int, int] = field(default_factory=dict)
-    """SpellVisualEffectName.ID -> model file id."""
-
-    effect_name_type: dict[int, int] = field(default_factory=dict)
-    """SpellVisualEffectName.ID -> Type: how to reach the model at all."""
-
-    effect_name_built: dict[int, int] = field(default_factory=dict)
-    """SpellVisualEffectName.ID -> the size the model itself is."""
-
-    area_model_fid: dict[int, int] = field(default_factory=dict)
-    """SpellVisualKitAreaModel.ID -> model file id."""
-
-    emission_fid: dict[int, int] = field(default_factory=dict)
-    """SpellEffectEmission.ID -> the area model it spawns copies of."""
-
-    barrage_fid: dict[int, int] = field(default_factory=dict)
-    """BarrageEffect.ID -> the model the volley is made of."""
-
-    barrage_attach: dict[int, int] = field(default_factory=dict)
-    """BarrageEffect.ID -> where on the caster the volley spawns."""
-
-    weapontrail_fid: dict[int, int] = field(default_factory=dict)
-    """WeaponTrail.ID -> the trail model."""
-
-    attach_models: dict[int, set[AttachModel]] = field(default_factory=dict)
-    """Kit -> the models it attaches to a unit.
-
-    The attachment is part of the key, so the same model at two points stays
-    two rows. Routes with a single attach point put it in `source`; `ref` is
-    the entity the model came from and the category says which id space that is
-    in; `motion` belongs to missiles alone.
-    """
-
-    attach_anims: dict[int, set[int]] = field(default_factory=dict)
-    """Kit -> the animations the attached model plays."""
-
-    attach_animkits: dict[int, set[int]] = field(default_factory=dict)
-    """Kit -> the anim kits the attached model plays."""
-
-
-class EffectNames(NamedTuple):
-    """`SpellVisualEffectName` as the columns every model route reads from it."""
-
-    fid: dict[int, int]
-    """Effect name -> the model file it names, or 0."""
-
-    types: dict[int, int]
-    """Effect name -> its Type, which says how to reach the model at all."""
-
-    generic: dict[int, int]
-    """Effect name -> the item or creature display its Type points at."""
-
-    built: dict[int, int]
-    """Effect name -> the size the model itself is, in `SCALE_UNIT`s.
+    file: int
+    """The model file it names, or 0."""
+    type: int
+    """How to reach the model at all."""
+    generic: int
+    """The item or creature display its Type points at."""
+    built: int
+    """The size the model itself is, in `SCALE_UNIT`s.
 
     Apart from the scale an attachment asks for, and not folded into it: this
     is what the model is drawn at before anything places it, and how the two
@@ -348,154 +300,139 @@ class EffectNames(NamedTuple):
     """
 
 
-def read_effect_names(tables: Tables, named: Callable[[set[int]], set[int]]) -> EffectNames:
-    """`SpellVisualEffectName` as the columns the model routes read.
+def ground_model(cell: Cell) -> AttachModel:
+    """A resolved area-model file as the ground model a kit or a procedure puts on screen."""
+    return AttachModel(key_of(cell), MODEL_CAT_AREA, NO_ATTACHMENT, NO_ATTACHMENT, 0, NO_MOTION, UNPLACED, SCALE_UNIT)
 
-    The Type says how to reach the model: a file, an item id, a creature
-    display id, or a weapon slot. `named` narrows file ids to those naming a
-    real asset, and is asked once in bulk. An unnamed file id on a weapon row
-    is the Classic placeholder and is rewritten to 0 here, so every route
-    downstream takes its existing no-file branch; only weapon rows are touched.
+
+def trail_model(cell: Cell) -> AttachModel:
+    """A resolved trail file as the weapon trail a procedure draws."""
+    return AttachModel(key_of(cell), MODEL_CAT_TRAIL, NO_ATTACHMENT, NO_ATTACHMENT, 0, NO_MOTION, UNPLACED, SCALE_UNIT)
+
+
+def barrage_model(file: int, attachment: int) -> AttachModel:
+    """A barrage as the model it volleys copies of, spawned where on the
+    caster its row says. The count and cone columns describe the spread and
+    nothing renders them."""
+    return AttachModel(file, MODEL_CAT_BARRAGE, attachment, NO_ATTACHMENT, 0, NO_MOTION, UNPLACED, SCALE_UNIT)
+
+
+def without_placeholders(
+    names: Mapping[int, EffectName], named: Callable[[set[int]], set[int]]
+) -> dict[int, EffectName]:
+    """The effect names with the Classic placeholder file dropped to nought.
+
+    `named` narrows file ids to those naming a real asset, and is asked once
+    in bulk. An unnamed file id on a weapon row is the placeholder, and is
+    rewritten to 0 so every route downstream takes its existing no-file
+    branch; only weapon rows are touched.
     """
-    fid: dict[int, int] = {}
-    types: dict[int, int] = {}
-    generic: dict[int, int] = {}
-    built: dict[int, int] = {}
-    for name_id, model_fid, type_id, generic_id, scale in tables.rows(
-        "SpellVisualEffectName", ["ID", "ModelFileDataID", "Type", "GenericID", "Scale"]
-    ):
-        identifier = to_int(name_id)
-        fid[identifier] = to_int(model_fid)
-        types[identifier] = to_int(type_id)
-        generic[identifier] = to_int(generic_id)
-        built[identifier] = _fixed(scale, SCALE_UNIT)
-
-    weapon_files = {file for name_id, file in fid.items() if file and types.get(name_id, 0) in EFFECT_NAME_TYPE_WEAPON}
+    weapon_files = {name.file for name in names.values() if name.file and name.type in EFFECT_NAME_TYPE_WEAPON}
     placeholders = weapon_files - named(weapon_files) if weapon_files else set()
-    if placeholders:
-        for effect_name, file in list(fid.items()):
-            if file in placeholders and types.get(effect_name, 0) in EFFECT_NAME_TYPE_WEAPON:
-                fid[effect_name] = 0
-    return EffectNames(fid=fid, types=types, generic=generic, built=built)
+    return {
+        name_id: name._replace(file=0) if name.file in placeholders and name.type in EFFECT_NAME_TYPE_WEAPON else name
+        for name_id, name in names.items()
+    }
 
 
-def file_for_effect_name(models: ModelSources, name_id: int) -> int:
+def file_for_effect_name(names: Mapping[int, EffectName], name_id: int) -> int:
     """The model file an effect-name row resolves to, or 0 if it reaches none.
 
     A row with no file may still name a weapon SLOT, which resolves to the
     sentinel standing in for the caster's own weapon. Both the attached-model
     route and the missile route need that fallback, so it lives here rather
     than being decided twice.
-
-    Args:
-        models: the read effect-name columns.
-        name_id: the `SpellVisualEffectName` row to resolve.
-
-    Returns:
-        A file id, a weapon sentinel, or 0.
     """
-    if file := models.effect_name_fid.get(name_id, 0):
-        return file
-    return EFFECT_NAME_TYPE_WEAPON.get(models.effect_name_type.get(name_id, 0), 0)
+    name = names.get(name_id)
+    if name is None:
+        return 0
+    return name.file or EFFECT_NAME_TYPE_WEAPON.get(name.type, 0)
 
 
-@route("models")
-def read_model_sources(
-    tables: Tables, creatures: CreatureModels, items: ItemModels, named: Callable[[set[int]], set[int]]
-) -> ModelSources:
-    """Read every table that ends in a model file.
+class AttachRow(NamedTuple):
+    """One `SpellVisualKitModelAttach` row: which kit, through which effect
+    name, at which attachment, placed how."""
 
-    `named` narrows a set of file ids to the ones that name a real asset.
+    kit: int
+    name: int
+    attachment: int
+    placement: Placement
+
+    @classmethod
+    def of(cls, kit: int, name: int, attachment: int, *placed: str) -> AttachRow:
+        """A row from its three ids and its `PLACEMENT_COLUMNS`, in that order."""
+        return cls(kit, name, attachment, read_placement(placed))
+
+
+@dataclass
+class KitAttachments:
+    """What the attach table gives each kit: models, and the animations they play."""
+
+    models: dict[int, set[AttachModel]] = field(default_factory=dict)
+    """Kit -> the models it attaches to a unit.
+
+    The attachment is part of the key, so the same model at two points stays
+    two rows. `ref` is the entity the model came from and the category says
+    which id space that is in; `motion` belongs to missiles alone.
     """
-    names = read_effect_names(tables, named)
-    fid, generic = names.fid, names.generic
-    models = ModelSources(effect_name_fid=fid, effect_name_type=names.types, effect_name_built=names.built)
 
-    attach_models: dict[int, set[AttachModel]] = {}
-    attach_anims: dict[int, set[int]] = {}
-    attach_animkits: dict[int, set[int]] = {}
-    for kit_id, name_id, attach, *placed in tables.rows(
-        "SpellVisualKitModelAttach",
-        ["ParentSpellVisualKitID", "SpellVisualEffectNameID", "AttachmentID", *PLACEMENT_COLUMNS],
-    ):
-        kit = to_int(kit_id)
-        if not kit:
-            continue
-        placement = read_placement(placed)
-        row = _attached_model(to_int(name_id), to_int(attach), placement, models, creatures, items, generic)
-        if row is not None:
-            attach_models.setdefault(kit, set()).add(row)
-        # The animations reach the anim column as well, which answers what a
-        # spell plays rather than which of its models plays it. Both are wanted,
-        # so the row carries them and these buckets keep them too. They are
-        # indexed even when the model did not resolve, because the spell still
-        # plays them.
-        played = {value for value in (placement.arrives, placement.held, placement.goes) if value}
-        if played:
-            attach_anims.setdefault(kit, set()).update(played)
-        if placement.animkit:
-            attach_animkits.setdefault(kit, set()).add(placement.animkit)
-    models.attach_models = attach_models
-    models.attach_anims = attach_anims
-    models.attach_animkits = attach_animkits
+    anims: dict[int, set[int]] = field(default_factory=dict)
+    """Kit -> the animations the attached model plays.
 
-    # The area model carries its file directly, with no effect-name hop, and is
-    # reached two ways: a kit's emission effect, and a procedural row.
-    for area_id, model_fid in tables.rows("SpellVisualKitAreaModel", ["ID", "ModelFileDataID"]):
-        models.area_model_fid[to_int(area_id)] = to_int(model_fid)
-    for emission_id, area_id in tables.rows("SpellEffectEmission", ["ID", "AreaModelID"]):
-        models.emission_fid[to_int(emission_id)] = models.area_model_fid.get(to_int(area_id), 0)
+    Indexed even when the model did not resolve, because the spell still
+    plays them: they answer what a spell plays rather than which of its
+    models plays it.
+    """
 
-    # A barrage is a volley of copies of one model; the count and cone columns
-    # describe the spread and nothing renders them.
-    for barrage_id, name_id, attach in tables.rows(
-        "BarrageEffect", ["ID", "SpellVisualEffectNameID", "AttachmentPoint"]
-    ):
-        models.barrage_fid[to_int(barrage_id)] = fid.get(to_int(name_id), 0)
-        models.barrage_attach[to_int(barrage_id)] = to_int(attach)
+    animkits: dict[int, set[int]] = field(default_factory=dict)
+    """Kit -> the anim kits the attached model plays."""
 
-    for trail_id, trail_fid in tables.rows("WeaponTrail", ["ID", "FileDataID"]):
-        models.weapontrail_fid[to_int(trail_id)] = to_int(trail_fid)
-    return models
+    @classmethod
+    def assemble(
+        cls, rows: Iterable[AttachRow], names: Mapping[int, EffectName], creatures: CreatureModels, items: ItemModels
+    ) -> KitAttachments:
+        """Resolve each row's model through its effect name's Type."""
+        found = cls()
+        for row in rows:
+            if (model := attached_model(row, names, creatures, items)) is not None:
+                found.models.setdefault(row.kit, set()).add(model)
+            placed = row.placement
+            if played := {value for value in (placed.arrives, placed.held, placed.goes) if value}:
+                found.anims.setdefault(row.kit, set()).update(played)
+            if placed.animkit:
+                found.animkits.setdefault(row.kit, set()).add(placed.animkit)
+        return found
 
 
-def _attached_model(
-    name_id: int,
-    attach: int,
-    placement: Placement,
-    models: ModelSources,
-    creatures: CreatureModels,
-    items: ItemModels,
-    generic: dict[int, int],
+def attached_model(
+    row: AttachRow, names: Mapping[int, EffectName], creatures: CreatureModels, items: ItemModels
 ) -> AttachModel | None:
-    """One `SpellVisualKitModelAttach` row as a model, or None if it reached none.
+    """One attach row as a model, or None if it reached none.
 
     The effect-name's Type picks between four sources of the file id. The
     placement rides whichever it picks, because it is a property of the row and
     not of the table the file came from.
     """
-    name_type = models.effect_name_type.get(name_id, 0)
-    built = models.effect_name_built.get(name_id, SCALE_UNIT)
-    if name_type == EFFECT_NAME_TYPE_DISPLAY:
+    name = names.get(row.name, EffectName(0, 0, 0, SCALE_UNIT))
+    if name.type == EFFECT_NAME_TYPE_DISPLAY:
         # Resolving a creature display is pure client data, so it works on the
         # builds with no server dump.
-        display = generic.get(name_id, 0)
-        file = creatures.fid_for_display(display)
-        return (
-            AttachModel(file, MODEL_CAT_DISPLAY, attach, NO_ATTACHMENT, display, NO_MOTION, placement, built, name_id)
-            if file
-            else None
-        )
-    if name_type == EFFECT_NAME_TYPE_ITEM:
+        file = creatures.fid_for_display(name.generic)
+        category, ref = MODEL_CAT_DISPLAY, name.generic
+    elif name.type == EFFECT_NAME_TYPE_ITEM:
         # The row keeps the item as its ref even when the item has no name.
-        item = generic.get(name_id, 0)
-        file = items.model_fid.get(item, 0)
-        return (
-            AttachModel(file, MODEL_CAT_ITEM, attach, NO_ATTACHMENT, item, NO_MOTION, placement, built, name_id)
-            if file
-            else None
-        )
-    file = file_for_effect_name(models, name_id)
-    if file:
-        return AttachModel(file, MODEL_CAT_ATTACH, attach, NO_ATTACHMENT, 0, NO_MOTION, placement, built, name_id)
-    return None
+        file = items.models.get(name.generic, 0)
+        category, ref = MODEL_CAT_ITEM, name.generic
+    else:
+        file = file_for_effect_name(names, row.name)
+        category, ref = MODEL_CAT_ATTACH, 0
+    if not file:
+        return None
+    return AttachModel(
+        file, category, row.attachment, NO_ATTACHMENT, ref, NO_MOTION, row.placement, name.built, row.name
+    )
+
+
+def built_size(text: str) -> int:
+    """An effect name's own scale column, in `SCALE_UNIT`s."""
+    return _fixed(text, SCALE_UNIT)

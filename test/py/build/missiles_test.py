@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from pack.routes.attachments import DEFAULT_MISSILE_SOURCE
 from pack.routes import flows
-from pack.routes.missiles import Missile, MissileMotion, VisualMissiles, read_missiles
-from pack.routes.models import WEAPON_FID_RANGED, ModelSources
-from support import BuildTables
+from pack.routes.attachments import DEFAULT_MISSILE_SOURCE
+from pack.routes.missiles import Missile, MissileMotion, VisualMissiles
+from pack.routes.models import SCALE_UNIT, WEAPON_FID_RANGED, EffectName
+from support import BuildTables, resolve
 
 # Visual 10 declares both attach points and names a base set and a raid set.
 # Visual 11 declares neither. Visual 12 has no missile set at all.
@@ -36,11 +36,15 @@ ID,Name,MissileCount
 9,,3
 """
 
-MODELS = ModelSources(effect_name_fid={1: 8000, 2: 0}, effect_name_type={1: 0, 2: 5})
+NAMES = {1: EffectName(8000, 0, 0, SCALE_UNIT), 2: EffectName(0, 5, 0, SCALE_UNIT)}
 
 
 def missiles(tables: BuildTables) -> dict[int, VisualMissiles]:
-    return read_missiles(tables(SpellVisual=SPELL_VISUAL, SpellVisualMissile=SPELL_VISUAL_MISSILE), MODELS)
+    found = resolve(
+        "missiles", tables(SpellVisual=SPELL_VISUAL, SpellVisualMissile=SPELL_VISUAL_MISSILE), effect_names=NAMES
+    )
+    assert isinstance(found, dict)
+    return found
 
 
 def test_the_row_wins_where_it_says_anything(tables: BuildTables) -> None:

@@ -24,11 +24,12 @@ def items(reads: Reads) -> SectionColumns:
     pill, and its icon still reads.
     """
     used = reads.rows.items
-    _names, icons = build_item_icons(used, reads.items.icon_fid, reads.paths)
+    _names, icons = build_item_icons(used, reads.items.icons, reads.paths)
+    named = reads.items.names
     return {
         "ids": list(used),
-        "names": [reads.items.name.get(item, "") for item in used],
-        "qualities": [reads.items.quality.get(item, NO_QUALITY) for item in used],
+        "names": [named[item].name if item in named else "" for item in used],
+        "qualities": [named[item].quality if item in named else NO_QUALITY for item in used],
         "icons": icons,
     }
 
@@ -75,7 +76,7 @@ ITEM_ICON_NAMES = register(
         name="itemIconNames",
         doc="Each distinct item icon name, which items index into.",
         module="core",
-        produce=lambda reads: {"names": build_item_icons(reads.rows.items, reads.items.icon_fid, reads.paths)[0]},
+        produce=lambda reads: {"names": build_item_icons(reads.rows.items, reads.items.icons, reads.paths)[0]},
         columns=("names",),
         layout=Layout.BARE,
         reads=("rows", "items", "paths"),

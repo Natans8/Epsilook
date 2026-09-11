@@ -16,13 +16,13 @@ from pack.routes.models import (
     WEAPON_FID_MAIN,
     WEAPON_FID_OFF,
     AttachModel,
-    ModelSources,
+    KitAttachments,
     Placement,
-    read_effect_names,
-    read_model_sources,
+    barrage_model,
+    ground_model,
 )
-from support import BuildTables
 from pack.sources.gobs import read_gob_displays
+from support import BuildTables, resolve
 
 # Type 0 names a file, 1 an item, 2 a creature display, 3/4 a weapon slot.
 # Name 5 is a weapon row whose file id names nothing -- the Classic placeholder.
@@ -86,7 +86,7 @@ ID,FileDataID
 """
 
 CREATURES = CreatureModels(display_model={50: 900}, model_fid={900: 8100})
-ITEMS = ItemModels(model_fid={700: 8200})
+ITEMS = ItemModels(models={700: 8200})
 
 
 def all_named(files: set[int]) -> set[int]:
@@ -99,32 +99,36 @@ def none_named(files: set[int]) -> set[int]:
     return {file for file in files if file != 6666}
 
 
-def sources(tables: BuildTables, named: Callable[[set[int]], set[int]] = none_named) -> ModelSources:
-    return read_model_sources(
-        tables(
-            SpellVisualEffectName=SPELL_VISUAL_EFFECT_NAME,
-            SpellVisualKitModelAttach=SPELL_VISUAL_KIT_MODEL_ATTACH,
-            SpellVisualKitAreaModel=SPELL_VISUAL_KIT_AREA_MODEL,
-            SpellEffectEmission=SPELL_EFFECT_EMISSION,
-            BarrageEffect=BARRAGE_EFFECT,
-            WeaponTrail=WEAPON_TRAIL,
-        ),
-        CREATURES,
-        ITEMS,
-        named,
+def attachments(tables: BuildTables, named: Callable[[set[int]], set[int]] = none_named) -> KitAttachments:
+    found = resolve(
+        "attachments",
+        tables(SpellVisualEffectName=SPELL_VISUAL_EFFECT_NAME, SpellVisualKitModelAttach=SPELL_VISUAL_KIT_MODEL_ATTACH),
+        named=named,
+        creatures=CREATURES,
+        items=ITEMS,
     )
+    if not isinstance(found, KitAttachments):
+        raise TypeError("the attachments field is the kit attachment record")
+    return found
+
+
+def file_of(tables: BuildTables, text: str, named: Callable[[set[int]], set[int]]) -> dict[int, int]:
+    """Each effect name's file, once the placeholder rule has run."""
+    names = resolve("effect_names", tables(SpellVisualEffectName=text), named=named)
+    assert isinstance(names, dict)
+    return {name_id: name.file for name_id, name in names.items()}
 
 
 def test_a_plain_row_attaches_its_own_file(tables: BuildTables) -> None:
     assert (
         AttachModel(8000, MODEL_CAT_ATTACH, 5, NO_ATTACHMENT, 0, NO_MOTION, PLACED, BUILT_HALF, 1)
-        in sources(tables).attach_models[900]
+        in attachments(tables).models[900]
     )
 
 
 def test_the_attachment_is_part_of_the_key(tables: BuildTables) -> None:
     """The same model at two points stays two rows."""
-    assert sources(tables).attach_models[900] == {
+    assert attachments(tables).models[900] == {
         AttachModel(8000, MODEL_CAT_ATTACH, 5, NO_ATTACHMENT, 0, NO_MOTION, PLACED, BUILT_HALF, 1),
         AttachModel(8000, MODEL_CAT_ATTACH, 11, NO_ATTACHMENT, 0, NO_MOTION, WORN, BUILT_HALF, 1),
     }
@@ -132,20 +136,20 @@ def test_the_attachment_is_part_of_the_key(tables: BuildTables) -> None:
 
 def test_an_item_row_carries_the_item_as_its_ref(tables: BuildTables) -> None:
     """The category says which id space the ref is in."""
-    assert sources(tables).attach_models[901] == {
+    assert attachments(tables).models[901] == {
         AttachModel(8200, MODEL_CAT_ITEM, 5, NO_ATTACHMENT, 700, NO_MOTION, UNPLACED, SCALE_UNIT, 2)
     }
 
 
 def test_a_display_row_resolves_through_the_creature_chain(tables: BuildTables) -> None:
     """Pure client data, so it works without a server dump."""
-    assert sources(tables).attach_models[902] == {
+    assert attachments(tables).models[902] == {
         AttachModel(8100, MODEL_CAT_DISPLAY, 5, NO_ATTACHMENT, 50, NO_MOTION, UNPLACED, SCALE_UNIT, 3)
     }
 
 
 def test_a_weapon_row_with_no_file_becomes_its_slot_sentinel(tables: BuildTables) -> None:
-    assert sources(tables).attach_models[903] == {
+    assert attachments(tables).models[903] == {
         AttachModel(WEAPON_FID_MAIN, MODEL_CAT_ATTACH, 5, NO_ATTACHMENT, 0, NO_MOTION, UNPLACED, SCALE_UNIT, 4)
     }
 
@@ -153,34 +157,32 @@ def test_a_weapon_row_with_no_file_becomes_its_slot_sentinel(tables: BuildTables
 def test_an_unnamed_weapon_file_is_dropped_to_its_sentinel(tables: BuildTables) -> None:
     """The Classic placeholder: a file id on a weapon row naming no real
     asset."""
-    assert sources(tables).attach_models[904] == {
+    assert attachments(tables).models[904] == {
         AttachModel(WEAPON_FID_OFF, MODEL_CAT_ATTACH, 5, NO_ATTACHMENT, 0, NO_MOTION, UNPLACED, SCALE_UNIT, 5)
     }
 
 
 def test_a_named_file_on_a_weapon_row_is_left_alone(tables: BuildTables) -> None:
     """The drop is about files that name nothing, not about weapon rows."""
-    fid = read_effect_names(tables(SpellVisualEffectName=SPELL_VISUAL_EFFECT_NAME), all_named).fid
-    assert fid[5] == 6666
+    assert file_of(tables, SPELL_VISUAL_EFFECT_NAME, all_named)[5] == 6666
 
 
 def test_a_plain_row_sharing_the_placeholder_file_keeps_its_model(tables: BuildTables) -> None:
     """Only weapon rows are touched."""
-    text = SPELL_VISUAL_EFFECT_NAME + "7,6666,0,0,1\n"
-    fid = read_effect_names(tables(SpellVisualEffectName=text), none_named).fid
-    assert fid[5] == 0
-    assert fid[7] == 6666
+    files = file_of(tables, SPELL_VISUAL_EFFECT_NAME + "7,6666,0,0,1\n", none_named)
+    assert files[5] == 0
+    assert files[7] == 6666
 
 
 def test_a_kit_of_zero_is_skipped(tables: BuildTables) -> None:
-    assert 0 not in sources(tables).attach_models
+    assert 0 not in attachments(tables).models
 
 
 def test_the_attached_models_animations_are_indexed(tables: BuildTables) -> None:
     """Ordinary animation ids the kit plays, so they land even when the model
     did not resolve. Stand and unset are both skipped."""
-    assert sources(tables).attach_anims == {900: {17}}
-    assert sources(tables).attach_animkits == {900: {42}}
+    assert attachments(tables).anims == {900: {17}}
+    assert attachments(tables).animkits == {900: {42}}
 
 
 def test_an_unwritten_scale_is_native_size(tables: BuildTables) -> None:
@@ -188,7 +190,7 @@ def test_an_unwritten_scale_is_native_size(tables: BuildTables) -> None:
     as one: it would draw every attached model at nothing, which looks like a
     rendering fault rather than a decoding one.
     """
-    worn = next(row.placement for row in sources(tables).attach_models[900] if row.source == 11)
+    worn = next(row.placement for row in attachments(tables).models[900] if row.source == 11)
     assert worn.scale == SCALE_UNIT
 
 
@@ -198,23 +200,28 @@ def test_a_model_carries_the_size_it_was_built_at(tables: BuildTables) -> None:
     data holds. Kit 900's second row asks for no scale at all and its model is
     half size anyway -- reading the attachment's alone calls that unscaled.
     """
-    worn = next(row for row in sources(tables).attach_models[900] if row.source == 11)
+    worn = next(row for row in attachments(tables).models[900] if row.source == 11)
     assert worn.placement.scale == SCALE_UNIT, "the attachment asks for nothing"
     assert worn.built == BUILT_HALF, "and the model is half size regardless"
 
 
 def test_an_emission_resolves_to_its_area_model(tables: BuildTables) -> None:
-    assert sources(tables).emission_fid == {300: 8300, 301: 0}
+    """An emitter naming an area model this build lacks reaches no model and
+    is absent, since a file of nought draws nothing."""
+    found = resolve(
+        "emissions",
+        tables(SpellEffectEmission=SPELL_EFFECT_EMISSION, SpellVisualKitAreaModel=SPELL_VISUAL_KIT_AREA_MODEL),
+    )
+    assert found == {300: ground_model("8300")}
 
 
 def test_a_barrage_resolves_through_the_effect_name(tables: BuildTables) -> None:
-    resolved = sources(tables)
-    assert resolved.barrage_fid == {400: 8000, 401: 0}
-    assert resolved.barrage_attach == {400: 3, 401: -1}
+    found = resolve("barrages", tables(BarrageEffect=BARRAGE_EFFECT, SpellVisualEffectName=SPELL_VISUAL_EFFECT_NAME))
+    assert found == {400: barrage_model(8000, 3)}
 
 
 def test_a_weapon_trail_carries_its_file_directly(tables: BuildTables) -> None:
-    assert sources(tables).weapontrail_fid == {500: 8400}
+    assert resolve("weapon_trails", tables(WeaponTrail=WEAPON_TRAIL)) == {500: 8400}
 
 
 # The gameobject-display route: a vendored table from a private server's own

@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-from pack.routes.attachments import NO_ATTACHMENT, NO_MOTION
-from pack.routes.models import MODEL_CAT_AREA, MODEL_CAT_TRAIL, SCALE_UNIT, UNPLACED, AttachModel, ModelSources
-from pack.routes.procedures import ProcEffects, read_proc_effects
-from support import BuildTables
+from pack.routes.models import barrage_model, ground_model, trail_model
+from pack.routes.procedures import ProcEffects
+from support import BuildTables, resolve
 
 # One row per handler, plus the say-nothing cases each handler drops.
 SPELL_PROCEDURAL_EFFECT = """\
@@ -31,16 +30,27 @@ ID,Type,Value_0,Value_1,Value_2,Value_3
 19,1,4294901760,0,0,0
 """
 
-MODELS = ModelSources(area_model_fid={200: 8300}, weapontrail_fid={500: 8400})
+SPELL_VISUAL_KIT_AREA_MODEL = "ID,ModelFileDataID\n200,8300\n"
+WEAPON_TRAIL = "ID,FileDataID\n500,8400\n"
 
 
 def procs(tables: BuildTables) -> ProcEffects:
-    return read_proc_effects(tables(SpellProceduralEffect=SPELL_PROCEDURAL_EFFECT), MODELS)
+    found = resolve(
+        "procs",
+        tables(
+            SpellProceduralEffect=SPELL_PROCEDURAL_EFFECT,
+            SpellVisualKitAreaModel=SPELL_VISUAL_KIT_AREA_MODEL,
+            WeaponTrail=WEAPON_TRAIL,
+        ),
+    )
+    if not isinstance(found, ProcEffects):
+        raise TypeError("the procs field is the procedure record")
+    return found
 
 
 def test_every_chain_type_reaches_one_bucket(tables: BuildTables) -> None:
     """Three Types mean chain, and one of them spells its value as a float."""
-    assert procs(tables).chain == {1: 55, 2: 56}
+    assert procs(tables).chains == {1: 55, 2: 56}
 
 
 def test_a_tint_keeps_three_bytes(tables: BuildTables) -> None:
@@ -89,15 +99,14 @@ def test_the_valueless_types_are_membership(tables: BuildTables) -> None:
 
 
 def test_a_model_procedure_resolves_through_its_own_table(tables: BuildTables) -> None:
-    """Two Types reach two tables and land in one bucket, tagged by category."""
-    assert procs(tables).models == {
-        14: AttachModel(8300, MODEL_CAT_AREA, NO_ATTACHMENT, NO_ATTACHMENT, 0, NO_MOTION, UNPLACED, SCALE_UNIT),
-        16: AttachModel(8400, MODEL_CAT_TRAIL, NO_ATTACHMENT, NO_ATTACHMENT, 0, NO_MOTION, UNPLACED, SCALE_UNIT),
-    }
+    """Two Types reach two tables, each tagged by its category."""
+    resolved = procs(tables)
+    assert resolved.ground == {14: ground_model("8300")}
+    assert resolved.trails == {16: trail_model("8400")}
 
 
 def test_a_model_that_does_not_resolve_is_dropped(tables: BuildTables) -> None:
-    assert 15 not in procs(tables).models
+    assert 15 not in procs(tables).ground
 
 
 def test_an_animation_pairs_with_the_slot_it_replaces(tables: BuildTables) -> None:
@@ -108,3 +117,11 @@ def test_an_animation_pairs_with_the_slot_it_replaces(tables: BuildTables) -> No
 
 def test_an_animation_row_replacing_nothing_is_dropped(tables: BuildTables) -> None:
     assert 18 not in procs(tables).anims
+
+
+def test_the_three_model_readers_agree_on_everything_but_the_category() -> None:
+    """A ground model, a trail and a barrage differ in category and in where
+    they attach; a swapped reader would put a volley on the ground."""
+    ground, trail, volley = ground_model("1"), trail_model("1"), barrage_model(1, 3)
+    assert len({ground.category, trail.category, volley.category}) == 3
+    assert (ground.source, trail.source, volley.source) == (-1, -1, 3)

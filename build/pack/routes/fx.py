@@ -1,9 +1,9 @@
 """The payload tables behind the effects a kit plays.
 
-Six unrelated tables a kit reaches by effect type. Each reader names the columns
-it takes, keeping the visible core and dropping the renderer tuning: tuning is
-a column that changes how a thing is drawn, and geometry that changes where it
-is drawn is content.
+Six unrelated tables a kit reaches by effect type. Each declaration names the
+columns it takes, keeping the visible core and dropping the renderer tuning:
+tuning is a column that changes how a thing is drawn, and geometry that
+changes where it is drawn is content.
 """
 
 from __future__ import annotations
@@ -12,10 +12,9 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import NamedTuple
 
-from ..tables import Tables, array_columns
-from .colors import RGB_MASK, pack_rgb, to_channel
-from .columns import to_float, to_int
-from .route import route
+from .colors import RGB_MASK, channel, pack_rgb
+from .columns import to_float
+from .flow import Cell, as_text, number_of
 
 SCREEN_EFFECT_FOG = 3
 """The screen effect whose parameter carries a fog tint rather than a grade."""
@@ -34,9 +33,7 @@ one: a non-zero test would call two thirds of them wavy, and at this height
 the word sits level with its siblings.
 """
 
-# (offsetY, size multiplier, power)
 Vignette = tuple[float, float, float]
-# ((file id, role), ...)
 Textures = tuple[tuple[int, int], ...]
 
 
@@ -70,284 +67,189 @@ class ChainEffect(NamedTuple):
     """How wide the beam starts, in yards."""
 
 
+class Beam(NamedTuple):
+    """One BeamEffect row: the chain it draws, and the two ends it attaches at.
+
+    The pair rides with the chain rather than with either end, and the chains
+    the drawn one nests inherit it: they are segments of the same beam.
+    """
+
+    chain: int
+    source: int
+    destination: int
+
+
+class Dissolve(NamedTuple):
+    """One DissolveEffect row: how long, painted with what, anchored where.
+
+    The geometry columns are renderer tuning; the attachment is not. -1 here
+    means the whole body rather than unset, so it is kept.
+    """
+
+    duration: float
+    textures: tuple[int, ...]
+    attachment: int
+
+
+class Shadowy(NamedTuple):
+    """One ShadowyEffect row: two packed colours and where it anchors.
+
+    Stored as signed ARGB, so the alpha byte is masked off; the attachment
+    reads like the dissolve's.
+    """
+
+    primary: int
+    secondary: int
+    attachment: int
+
+
 @dataclass
 class ScreenRow:
     """One screen effect: what it does to the whole frame while its aura holds.
 
     A colour of -1 means the row carries none, which is not the same as black.
+
+    A row is a bundle rather than one thing: the paint it puts on the frame,
+    the light preset it applies, the sound it swaps to and the hour it pins
+    are four independent payloads, and most rows carry only some of them.
+    They are read together because they share a row, and separated by the
+    sections that ship them.
     """
 
     name: str = ""
     """The row's own internal name."""
-
     fog: int = -1
     """The packed fog tint, for the rows that are fog."""
-
     fog_alpha: int = -1
     """How opaque the fog is, 0..255."""
-
     mul: int = -1
     """The grade colour the frame is multiplied by."""
-
     add: int = -1
     """The grade colour added to the frame."""
-
     mask: Vignette = (0.0, 0.0, 0.0)
     """The radial vignette shaping where the grade applies. A size of 0 means
     the row has no full-screen effect to shape."""
-
     textures: Textures = ()
     """The textures it draws, each with the role it plays."""
-
     sky: int = 0
     """The `LightParams` preset it applies, or zero for a row that applies none.
 
     Independent of everything above it: a row may carry a preset and no paint at
     all, which is a sky change wearing a screen effect's id.
     """
-
     sky_fade: tuple[int, int] = (0, 0)
     """How long the preset takes to fade in and back out, in milliseconds."""
-
     ambience: int = 0
     """The `SoundAmbience` it swaps the surroundings to, or zero for none."""
-
     music: int = 0
     """The `ZoneMusic` it plays over the top, or zero for none."""
-
     time_of_day: int = -1
     """The minute of the day it pins the sky to, or -1 to leave the clock alone."""
+
+    @classmethod
+    def of(  # noqa: PLR0913  -- one parameter per column of the two rows it is read from
+        cls,
+        name: str,
+        parameter: int,
+        effect: int,
+        mul_red: int | None,
+        mul_green: int | None,
+        mul_blue: int | None,
+        add_red: int | None,
+        add_green: int | None,
+        add_blue: int | None,
+        overlay: int,
+        blended: tuple[int, ...],
+        offset: float,
+        size: float,
+        power: float,
+        sky: int,
+        fade_in: int,
+        fade_out: int,
+        ambience: int,
+        music: int,
+        hour: int,
+    ) -> ScreenRow:
+        """A screen row from its own columns and its full-screen row's, in order.
+
+        The fog parameter is AARRGGBB, not the RRGGBBXX the wiki claims. The
+        vignette is content, not tuning: it decides where the grade lands, so
+        an area effect is a coloured rim around a clear centre. A screen with
+        no full-screen row reads its grade columns as nothing, and carries no
+        grade rather than a black one.
+        """
+        is_fog = effect == SCREEN_EFFECT_FOG
+        graded = None not in (mul_red, mul_green, mul_blue, add_red, add_green, add_blue)
+        roles: dict[int, int] = {}
+        if overlay:
+            roles[overlay] = TEX_OVERLAY
+        for file in blended:
+            roles.setdefault(file, TEX_MASK)
+        return cls(
+            name=name,
+            fog=(parameter & RGB_MASK) if is_fog else -1,
+            fog_alpha=((parameter & 0xFFFFFFFF) >> ARGB_ALPHA_SHIFT) & 0xFF if is_fog else -1,
+            mul=pack_rgb(mul_red or 0, mul_green or 0, mul_blue or 0) if graded else -1,
+            add=pack_rgb(add_red or 0, add_green or 0, add_blue or 0) if graded else -1,
+            mask=(offset, size, power),
+            textures=tuple(roles.items()),
+            sky=sky,
+            sky_fade=(fade_in, fade_out),
+            ambience=ambience,
+            music=music,
+            time_of_day=hour,
+        )
 
 
 @dataclass
 class FxPayloads:
     """Every fx payload table, keyed by its own row id."""
 
-    chains: dict[int, ChainEffect] = field(default_factory=dict)
+    chains: Mapping[int, ChainEffect] = field(default_factory=dict)
     """Chain -> what it draws."""
-
-    beam_chain: dict[int, tuple[int, int, int]] = field(default_factory=dict)
-    """Beam -> (the chain it draws, source attachment, destination attachment)."""
-
-    dissolves: dict[int, tuple[float, tuple[int, ...], int]] = field(default_factory=dict)
-    """Dissolve -> (duration, textures, attachment)."""
-
-    glows: dict[int, int] = field(default_factory=dict)
+    beams: Mapping[int, Beam] = field(default_factory=dict)
+    """Beam -> the chain it draws and its two attachments."""
+    dissolves: Mapping[int, Dissolve] = field(default_factory=dict)
+    glows: Mapping[int, int] = field(default_factory=dict)
     """Edge glow -> its packed colour, which is the whole visible payload."""
-
-    glow_alphas: dict[int, int] = field(default_factory=dict)
+    glow_alphas: Mapping[int, int] = field(default_factory=dict)
     """Edge glow -> its alpha, a real 0..255 spread rather than a flag."""
-
-    shadowies: dict[int, tuple[int, int, int]] = field(default_factory=dict)
-    """Ghost effect -> (primary colour, secondary colour, attachment)."""
-
-    screens: dict[int, ScreenRow] = field(default_factory=dict)
+    shadowies: Mapping[int, Shadowy] = field(default_factory=dict)
+    screens: Mapping[int, ScreenRow] = field(default_factory=dict)
     """Screen effect -> its payload."""
-
-    svse_screen: dict[int, int] = field(default_factory=dict)
-    """The kit's route into a screen effect."""
-
-
-def read_blend_sets(tables: Tables) -> dict[int, tuple[int, ...]]:
-    """Blend set -> its textures, deduplicated and in slot order."""
-    columns = array_columns(tables, "TextureBlendSet", "TextureFileDataID", 3)
-    return {
-        to_int(row[0]): tuple(dict.fromkeys(file for file in (to_int(value) for value in row[1:]) if file))
-        for row in tables.rows("TextureBlendSet", ["ID", *columns])
-    }
+    visual_screens: Mapping[int, int] = field(default_factory=dict)
+    """The kit's route into a screen effect: `SpellVisualScreenEffect` -> `ScreenEffect`."""
 
 
-def read_full_screen_effects(
-    tables: Tables, blend_sets: dict[int, tuple[int, ...]]
-) -> dict[int, tuple[int, int, Vignette, Textures]]:
-    """Full-screen effect -> (multiply, add, vignette, textures).
-
-    The vignette is content, not tuning: it decides where the grade lands, so
-    an area effect is a coloured rim around a clear centre.
-    """
-    rows: dict[int, tuple[int, int, Vignette, Textures]] = {}
-    for row in tables.rows(
-        "FullScreenEffect",
-        [
-            "ID",
-            "ColorMultiplyRed",
-            "ColorMultiplyGreen",
-            "ColorMultiplyBlue",
-            "ColorAdditionRed",
-            "ColorAdditionGreen",
-            "ColorAdditionBlue",
-            "OverlayTextureFileDataID",
-            "TextureBlendSetID",
-            "MaskOffsetY",
-            "MaskSizeMultiplier",
-            "MaskPower",
-        ],
-    ):
-        overlay = to_int(row[7])
-        # A file carrying both roles keeps the overlay one: painting finished
-        # art as a mask would tint art that has its own colours.
-        roles: dict[int, int] = {}
-        if overlay:
-            roles[overlay] = TEX_OVERLAY
-        for file in blend_sets.get(to_int(row[8]), ()):
-            roles.setdefault(file, TEX_MASK)
-        offset, size, power = (to_float(value, 3) for value in row[9:12])
-        rows[to_int(row[0])] = (
-            pack_rgb(*(to_channel(value) for value in row[1:4])),
-            pack_rgb(*(to_channel(value) for value in row[4:7])),
-            (offset, size, power),
-            tuple(roles.items()),
-        )
-    return rows
+# The readers a cell goes through on its way into these records.
 
 
-def read_screens(tables: Tables, full_screen: dict[int, tuple[int, int, Vignette, Textures]]) -> dict[int, ScreenRow]:
-    """Screen effect -> its payload, the full-screen half folded in.
-
-    The fog parameter is AARRGGBB, not the RRGGBBXX the wiki claims.
-
-    A row is a bundle rather than one thing: the paint it puts on the frame, the
-    light preset it applies, the sound it swaps to and the hour it pins are four
-    independent payloads, and most rows carry only some of them. They are read
-    together because they share a row, and separated by the sections that ship
-    them.
-    """
-    screens: dict[int, ScreenRow] = {}
-    for (
-        screen_id,
-        name,
-        parameter,
-        effect,
-        full_screen_id,
-        preset,
-        fade_in,
-        fade_out,
-        ambience,
-        music,
-        hour,
-    ) in tables.rows(
-        "ScreenEffect",
-        [
-            "ID",
-            "Name",
-            "Param_0",
-            "Effect",
-            "FullScreenEffectID",
-            "LightParamsID",
-            "LightParamsFadeIn",
-            "LightParamsFadeOut",
-            "SoundAmbienceID",
-            "ZoneMusicID",
-            "TimeOfDayOverride",
-        ],
-    ):
-        is_fog = to_int(effect) == SCREEN_EFFECT_FOG
-        packed = to_int(parameter)
-        multiply, add, mask, textures = full_screen.get(to_int(full_screen_id), (-1, -1, (0.0, 0.0, 0.0), ()))
-        screens[to_int(screen_id)] = ScreenRow(
-            name=name,
-            fog=(packed & RGB_MASK) if is_fog else -1,
-            fog_alpha=((packed & 0xFFFFFFFF) >> ARGB_ALPHA_SHIFT) & 0xFF if is_fog else -1,
-            mul=multiply,
-            add=add,
-            mask=mask,
-            textures=textures,
-            sky=to_int(preset),
-            sky_fade=(to_int(fade_in), to_int(fade_out)),
-            ambience=to_int(ambience),
-            music=to_int(music),
-            time_of_day=to_int(hour),
-        )
-    return screens
+def grade(cell: Cell) -> int | None:
+    """A full-screen colour column as a channel byte, or None where the screen
+    has no full-screen row and the join left the column empty."""
+    return None if cell == "" else channel(cell)
 
 
-@route("fx")
-def read_fx_payloads(tables: Tables) -> FxPayloads:
-    """Read every fx payload table."""
-    blend_sets = read_blend_sets(tables)
-    payloads = FxPayloads()
-
-    # The geometry columns are renderer tuning; the attachment is not. -1 here
-    # means the whole body rather than unset, so it is kept.
-    for dissolve_id, blend_set_id, duration, attach in tables.rows(
-        "DissolveEffect", ["ID", "TextureBlendSetID", "Duration", "AttachID"]
-    ):
-        payloads.dissolves[to_int(dissolve_id)] = (
-            to_float(duration, 2) if duration else 0,
-            blend_sets.get(to_int(blend_set_id), ()),
-            to_int(attach),
-        )
-
-    payloads.screens = read_screens(tables, read_full_screen_effects(tables, blend_sets))
-    for row_id, screen_id, _type_id in tables.rows(
-        "SpellVisualScreenEffect", ["ID", "ScreenEffectID", "ScreenEffectTypeID"]
-    ):
-        payloads.svse_screen[to_int(row_id)] = to_int(screen_id)
-
-    # The colour is the whole visible payload; the multiplier, fade and fresnel
-    # columns are tuning. The alpha is a real spread rather than a flag.
-    for glow_id, red, green, blue, alpha in tables.rows(
-        "EdgeGlowEffect", ["ID", "GlowRed", "GlowGreen", "GlowBlue", "GlowAlpha"]
-    ):
-        payloads.glows[to_int(glow_id)] = pack_rgb(to_channel(red), to_channel(green), to_channel(blue))
-        payloads.glow_alphas[to_int(glow_id)] = to_channel(alpha)
-
-    # Two packed colours stored as signed ARGB, so the alpha byte is masked off.
-    # The attachment reads like the dissolve's.
-    for effect_id, primary, secondary, attach in tables.rows(
-        "ShadowyEffect", ["ID", "PrimaryColor", "SecondaryColor", "AttachPos"]
-    ):
-        payloads.shadowies[to_int(effect_id)] = (
-            to_int(primary) & RGB_MASK,
-            to_int(secondary) & RGB_MASK,
-            to_int(attach),
-        )
-
-    # Chains nest: a composite chain names up to eleven others. The flicker and
-    # wave columns are tuning.
-    textures = array_columns(tables, "SpellChainEffects", "TextureFileDataID", 3)
-    nested = array_columns(tables, "SpellChainEffects", "SpellChainEffectID", 11)
-    character = ["ArcHeight", "MaxFlickerOnDuration", "JointOffsetRadius", "WaveHeight", "StartWidth"]
-    for row in tables.rows(
-        "SpellChainEffects", ["ID", "Red", "Green", "Blue", "SoundKitID", *character, *textures, *nested]
-    ):
-        drawn = 5 + len(character)
-        first = drawn + len(textures)
-        chain_red, chain_green, chain_blue, sound = (to_int(value) for value in row[1:5])
-        arc, flicker, joint, wave, width = (to_float(value) for value in row[5:drawn])
-        payloads.chains[to_int(row[0])] = ChainEffect(
-            chain_red,
-            chain_green,
-            chain_blue,
-            sound,
-            tuple(dict.fromkeys(file for file in (to_int(value) for value in row[drawn:first]) if file)),
-            tuple(chain for chain in (to_int(value) for value in row[first:]) if chain),
-            arcing=arc > 0,
-            flickering=flicker > 0,
-            jagged=joint > 0,
-            wavy=wave >= WAVE_VISIBLE,
-            width=round(width, 2),
-        )
-
-    # A beam attaches at both ends, so the pair rides with the chain it draws
-    # rather than with either end.
-    for beam_id, chain_id, source, destination in tables.rows(
-        "BeamEffect", ["ID", "BeamID", "SourceAttachID", "DestAttachID"]
-    ):
-        payloads.beam_chain[to_int(beam_id)] = (to_int(chain_id), to_int(source), to_int(destination))
-    return payloads
+def seconds(cell: Cell) -> float:
+    """A duration column to a hundredth of a second, nought where it is empty."""
+    return to_float(as_text(cell), 2) if cell else 0
 
 
-def expand_chain(chains: Mapping[int, ChainEffect], chain_id: int, into: set[int]) -> None:
-    """Add a chain and every chain it nests to `into`.
+def positive(cell: Cell) -> bool:
+    """Whether a tuning column is set at all, which is what makes it a trait."""
+    return number_of(cell) > 0
 
-    A worklist, not a recursion: the graph may contain a cycle. Membership in
-    `into` is both the cycle stop and the visited set.
-    """
-    queue = [chain_id]
-    while queue:
-        current = queue.pop()
-        if current in into or current not in chains:
-            continue
-        into.add(current)
-        queue.extend(chains[current].nested)
+
+def visible_wave(cell: Cell) -> bool:
+    """Whether a wave height clears the threshold below which nobody sees it."""
+    return number_of(cell) >= WAVE_VISIBLE
+
+
+def yards(cell: Cell) -> float:
+    """A width column to a hundredth of a yard."""
+    return round(number_of(cell), 2)
+
+
+def thousandths(cell: Cell) -> float:
+    """A vignette column to a thousandth."""
+    return to_float(as_text(cell), 3)

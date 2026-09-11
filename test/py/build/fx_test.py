@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from pack.routes.fx import TEX_MASK, TEX_OVERLAY, FxPayloads, expand_chain, read_blend_sets, read_fx_payloads
-from support import BuildTables
+from pack.routes.fx import TEX_MASK, TEX_OVERLAY, FxPayloads
+from support import BuildTables, resolve
 
 TEXTURE_BLEND_SET = """\
 ID,TextureFileDataID_0,TextureFileDataID_1,TextureFileDataID_2
@@ -67,7 +67,8 @@ ID,BeamID,SourceAttachID,DestAttachID
 
 
 def payloads(tables: BuildTables) -> FxPayloads:
-    return read_fx_payloads(
+    found = resolve(
+        "fx",
         tables(
             TextureBlendSet=TEXTURE_BLEND_SET,
             DissolveEffect=DISSOLVE_EFFECT,
@@ -78,31 +79,34 @@ def payloads(tables: BuildTables) -> FxPayloads:
             ShadowyEffect=SHADOWY_EFFECT,
             SpellChainEffects=SPELL_CHAIN_EFFECTS,
             BeamEffect=BEAM_EFFECT,
-        )
+        ),
     )
-
-
-def test_a_blend_set_keeps_slot_order_and_drops_repeats(tables: BuildTables) -> None:
-    """The order is what the renderer layers them in."""
-    assert read_blend_sets(tables(TextureBlendSet=TEXTURE_BLEND_SET)) == {1: (100, 101), 2: (200,)}
-
-
-def test_a_build_predating_the_blend_set_table_reads_nothing(tables: BuildTables) -> None:
-    """Asking what shape an array field takes must not decide whether the
-    build survives."""
-    assert read_blend_sets(tables()) == {}
+    if not isinstance(found, FxPayloads):
+        raise TypeError("the fx field is the payload bundle")
+    return found
 
 
 def test_a_build_predating_the_fx_tables_yields_no_payloads(tables: BuildTables) -> None:
     """All of them are declared optional, so the categories switch off."""
-    payloads = read_fx_payloads(tables(SpellChainEffects=SPELL_CHAIN_EFFECTS, BeamEffect=BEAM_EFFECT))
-    assert payloads.dissolves == {}
-    assert payloads.glows == {}
-    assert payloads.screens == {}
+    found = resolve("fx", tables(SpellChainEffects=SPELL_CHAIN_EFFECTS, BeamEffect=BEAM_EFFECT))
+    assert isinstance(found, FxPayloads)
+    assert found.dissolves == {}
+    assert found.glows == {}
+    assert found.screens == {}
 
 
 def test_a_dissolve_carries_its_blend_sets_textures(tables: BuildTables) -> None:
+    """In slot order and with the repeat dropped, since the order is what the
+    renderer layers them in."""
     assert payloads(tables).dissolves[10] == (1.5, (100, 101), 5)
+
+
+def test_a_dissolve_whose_blend_set_this_build_lacks_paints_nothing(tables: BuildTables) -> None:
+    """Asking what shape the array field takes must not decide whether the
+    build survives."""
+    found = resolve("dissolves", tables(DissolveEffect=DISSOLVE_EFFECT))
+    assert isinstance(found, dict)
+    assert found[10].textures == ()
 
 
 def test_an_unanchored_dissolve_keeps_its_minus_one(tables: BuildTables) -> None:
@@ -169,20 +173,7 @@ def test_a_chain_keeps_its_colour_sound_and_textures(tables: BuildTables) -> Non
 
 def test_a_beam_carries_both_of_its_ends(tables: BuildTables) -> None:
     """The pair rides with the chain it draws rather than with either end."""
-    assert payloads(tables).beam_chain[80] == (70, 1, 2)
-
-
-def test_expanding_a_chain_reaches_what_it_nests(tables: BuildTables) -> None:
-    reached: set[int] = set()
-    expand_chain(payloads(tables).chains, 70, reached)
-    assert reached == {70, 71}
-
-
-def test_a_chain_cycle_terminates(tables: BuildTables) -> None:
-    """Guarded on membership rather than depth."""
-    reached: set[int] = set()
-    expand_chain(payloads(tables).chains, 72, reached)
-    assert reached == {72, 73}
+    assert payloads(tables).beams[80] == (70, 1, 2)
 
 
 def test_a_screen_carries_the_sky_and_sound_it_swaps_in(tables: BuildTables) -> None:

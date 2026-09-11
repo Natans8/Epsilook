@@ -10,7 +10,6 @@ import pytest
 
 from pack.routes.flow import (
     Join,
-    Read,
     When,
     amount,
     as_ids,
@@ -18,6 +17,8 @@ from pack.routes.flow import (
     as_rows,
     as_sets,
     c,
+    compose,
+    first_available,
     flow,
     reference,
     text,
@@ -146,17 +147,68 @@ def test_a_retired_selector_holds_only_before_the_patch_that_reused_it(tables: B
     assert list(spawns.rows(tables(SpellEffect=SPELL_EFFECT), "9.2.7.45745")) == []
 
 
-def test_the_first_available_table_answers(tables: BuildTables) -> None:
-    names = flow("names").first_of(Read("SpellName", ("ID", "Name_lang")), Read("Spell", ("ID", "Name_lang")))
-    assert names.schema().columns == ("ID", "Name_lang")
+def test_the_first_plan_whose_table_the_build_has_answers(tables: BuildTables) -> None:
+    """One fact, two spellings: each alternative is its own plan, so the
+    tables need not line up column for column."""
+    names = first_available(
+        flow("modern").read("SpellName", "ID", "Name_lang") >> as_map(c.ID, text(c.Name_lang)),
+        flow("legacy").read("Spell", "ID", "Name_lang") >> as_map(c.ID, text(c.Name_lang)),
+    )
     old = tables(Spell="ID,Name_lang\n1,Frostbolt\n", absent={"SpellName": "split out later"})
-    assert list(names.rows(old)) == [("1", "Frostbolt")]
-    assert names.tables == ["SpellName", "Spell"]
+    assert names.run(old) == {1: "Frostbolt"}
+    assert names.needs == frozenset()
 
 
-def test_an_alternative_must_line_up_positionally() -> None:
-    with pytest.raises(ValueError, match="same number of columns"):
-        flow("bad").first_of(Read("SpellName", ("ID", "Name_lang")), Read("Spell", ("ID",)))
+def test_an_explode_may_carry_the_slot_a_value_came_from(tables: BuildTables) -> None:
+    """Position counts every value fanned, a nought included, so a skipped
+    column is a skipped slot rather than a shifted one."""
+    slots = (
+        flow("slots")
+        .read("creature_template", "entry", "m1", "m2", "m3")
+        .explode("m1", "m2", "m3", into="display", slot="slot")
+    )
+    rows = list(slots.rows(tables(creature_template="entry,m1,m2,m3\n300,50,0,51\n")))
+    assert rows == [("300", "50", "0"), ("300", "51", "2")]
+
+
+def test_a_lookup_is_a_join_through_a_field(tables: BuildTables) -> None:
+    """The rows the field answers, carrying its answer; the rest are dropped."""
+    seeds = (
+        flow("seeds")
+        .read("SpellVisualKitEffect", "ParentSpellVisualKitID", "Effect")
+        .lookup(c.Effect, "proc_chains", into="chain")
+    )
+    rows = list(
+        seeds.rows(
+            tables(SpellVisualKitEffect="ParentSpellVisualKitID,Effect\n1,10\n2,11\n"), needs={"proc_chains": {10: 70}}
+        )
+    )
+    assert rows == [("1", "10", "70")]
+    assert seeds.needs == frozenset({"proc_chains"})
+
+
+def test_among_is_membership_by_id(tables: BuildTables) -> None:
+    chained = flow("chained").read("SpellProceduralEffect", "ID", "Type").where(c.Type.among((0, 26)))
+    rows = list(chained.rows(tables(SpellProceduralEffect="ID,Type\n1,0\n2,26.0\n3,1\n")))
+    assert [row[0] for row in rows] == ["1", "2"]
+
+
+class Bundle(NamedTuple):
+    """Two fields as one record."""
+
+    names: dict[int, str]
+    icons: dict[int, int]
+
+
+def test_a_composed_field_is_built_from_other_fields_alone(tables: BuildTables) -> None:
+    """Every parameter is a field, named for itself unless mapped."""
+    bundle = compose(Bundle, names="spell_names")
+    assert bundle.needs == frozenset({"spell_names", "icons"})
+    assert bundle.run(tables(), needs={"spell_names": {1: "Frostbolt"}, "icons": {1: 9}}) == Bundle(
+        {1: "Frostbolt"}, {1: 9}
+    )
+    with pytest.raises(ValueError, match="not a parameter"):
+        compose(Bundle, colours="x")
 
 
 def test_where_and_narrow_keep_what_they_say(tables: BuildTables) -> None:

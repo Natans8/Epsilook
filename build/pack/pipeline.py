@@ -33,6 +33,7 @@ from .derive import (
     CONTEXT_FIELDS,
     DEFAULT_LOCALE,
     LOCALES,
+    SPOKEN_FIELDS,
     DeriveContext,
     Locale,
     Spoken,
@@ -49,15 +50,13 @@ from .progress import log, phase, step, timed
 from .routes import (
     ROUTES,
     Route,
+    SpellEffectRows,
     implicit_target_bits,
-    read_creature_models,
-    read_item_models,
     read_spell_values,
     resolve_paths,
     route,
 )
 from .routes import flows
-from .routes.text import SpellText, read_encounter_notes
 from .routes.values import DescriptionValues
 from .sources import (
     ExpansionLadder,
@@ -242,35 +241,46 @@ class Derivations:
             before any build runs rather than as an empty field in a pack.
     """
 
-    def __init__(
-        self,
-        providers: Providers,
-        build: Build,
-        ladder: ExpansionLadder,
-        values: DescriptionValues,
-        zone_maps: Mapping[int, int],
-    ) -> None:
-        """Hold what every route reads from, and produce nothing yet."""
-        # Any: a given is whatever the wiring holds and a field is whatever its
-        # route produced; the context's own fields type each on the way in.
-        self.given: dict[str, Any] = {
-            "tables": providers.tables,
-            "world": providers.world,
-            "pinned": providers.pinned,
-            "listfile": providers.listfile,
-            "named": providers.named,
-            "version": build.version,
-            "ladder": ladder,
-            "values": values,
-            "zone_maps": zone_maps,
-        }
-        if set(self.given) != set(GIVEN):
-            raise ValueError(f"the given inputs are {sorted(self.given)}, not the declared {sorted(GIVEN)}")
+    def __init__(self, given: Mapping[str, Any]) -> None:
+        """Hold what every route reads from, and produce nothing yet.
+
+        Args:
+            given: every input in `GIVEN`, by name. Any: a given is whatever
+                the wiring holds; the context's own fields type each on the
+                way in.
+        """
+        if set(given) != set(GIVEN):
+            raise ValueError(f"the given inputs are {sorted(given)}, not the declared {sorted(GIVEN)}")
+        self.given: dict[str, Any] = dict(given)
         self.routes: dict[str, Route] = {registered.field: registered for registered in ROUTES}
         self.held: dict[str, Any] = {}
         missing = sorted(DERIVED_FIELDS - set(self.routes))
         if missing:
             raise ValueError(f"no route fills {', '.join(missing)}")
+
+    @classmethod
+    def wired(
+        cls,
+        providers: Providers,
+        build: Build,
+        ladder: ExpansionLadder,
+        values: DescriptionValues,
+        zone_maps: Mapping[int, int],
+    ) -> Derivations:
+        """The resolver over one build's providers."""
+        return cls(
+            {
+                "tables": providers.tables,
+                "world": providers.world,
+                "pinned": providers.pinned,
+                "listfile": providers.listfile,
+                "named": providers.named,
+                "version": build.version,
+                "ladder": ladder,
+                "values": values,
+                "zone_maps": zone_maps,
+            }
+        )
 
     def resolve(self, name: str) -> Any:
         """One field, produced once and remembered, or a given as it is."""
@@ -343,7 +353,7 @@ def read_all(
     and a map id is a map id. Reading them once is what lets a second language
     cost the nine routes that do change rather than all of them.
     """
-    derive = Derivations(providers, build, ladder, values, zone_maps)
+    derive = Derivations.wired(providers, build, ladder, values, zone_maps)
     asked = DERIVED_FIELDS if wanted is None else DERIVED_FIELDS & set(wanted)
     log(f"Deriving {len(asked)} of {len(DERIVED_FIELDS)} context fields ...")
     return DeriveContext(build=build, **{name: derive.resolve(name) for name in sorted(asked)})
@@ -353,71 +363,45 @@ def read_spoken(
     providers: Providers,
     locale: Locale,
     *,
-    altnames: Mapping[int, set[int]],
-    faction_templates: Container[int],
+    build: Build,
+    ladder: ExpansionLadder,
+    effects: SpellEffectRows,
     zone_maps: Mapping[int, int],
     values: DescriptionValues,
 ) -> Spoken:
     """Read everything the language changes, and nothing else.
 
-    The second half of `read_all`, and a much smaller one: nine routes carry
-    every word the game translates, and the rest of the build says the same
-    thing whoever is reading it. So a language is these routes over
-    locale-qualified tables, and the ids, the graph walk and the listfile
-    resolution are the build's own, read once.
+    The second half of `read_all`, and a much smaller one: the routes that
+    carry every word the game translates, and the rest of the build says the
+    same thing in every language. The same resolver runs them, over this
+    language's tables, seeded with what the build already read and no language
+    changes.
 
     Args:
-        providers: the sources wired for this language.
-        locale: which language, and the wording the cooker contributes to it.
-        altnames: which override names each spell can take, from the build's
-            own effect rows. Which names -- the text of them is what localizes,
-            and that is read here.
-        faction_templates: which faction templates the auras set, from the
-            same rows; the faction's name is what localizes.
-        zone_maps: each area's map, as the build's own read resolved it. It is
-            an id, and it comes from comparing two translated names, so a
-            language deriving its own would sometimes open a different map for
-            the same place.
+        providers: the sources, with this language's tables in place of the
+            build's own.
+        locale: the language being read.
+        build: the build being packed.
+        ladder: the expansion ladder.
+        effects: the build's own effect rows, which every language shares:
+            the override names and the faction templates they reach are read
+            off them rather than read again.
+        zone_maps: area to zone map, read once for the build. A map id is not
+            a word but it is read through one, and it comes from comparing two
+            translated names, so a language deriving its own would sometimes
+            open a different map for the same place.
         values: the numbers a description asks for, read once for the build.
 
     Returns:
         The slice of the derive context this language replaces.
     """
-    tables, world = providers.tables, providers.world
-
+    spoken = Derivations.wired(providers, build, ladder, values, zone_maps)
+    spoken.held["effects"] = effects
     with step(f"read {locale.code} names", f"Reading the tables the game writes in {locale.code} ..."):
-        names = flows.names.run(tables, needs={"spell_subtexts": flows.spell_subtexts.run(tables)})
-        creatures = read_creature_models(tables, world)
-        items = read_item_models(tables)
-        mounts = flows.mounts.run(tables, needs={"names.names": names.names, "creatures": creatures})
-        objects = flows.objects.run(tables, needs={"world": world})
-        forms = flows.forms.run(tables)
-        areas = flows.areas.run(tables, needs={"area_parents": flows.area_parents.run(tables), "zone_maps": zone_maps})
-        factions = flows.factions.run(tables, needs={"effects.factions.named": faction_templates})
-        alt_names = flows.alt_names.run(tables, needs={"effects.altnames": altnames})
-        templates = SpellText(
-            flows.spell_descriptions.run(tables),
-            flows.spell_aura_texts.run(tables),
-            flows.spell_variables.run(tables),
-            read_encounter_notes(tables),
-        )
-
+        said = {name: spoken.resolve(name) for name in sorted(SPOKEN_FIELDS - {"prose"})}
     with phase(f"cook {locale.code} descriptions"):
-        prose = cook_text(templates, values, names, locale.text)
-
-    return Spoken(
-        names=names,
-        alt_names=alt_names,
-        templates=templates,
-        creatures=creatures,
-        items=items,
-        mounts=mounts,
-        objects=objects,
-        forms=forms,
-        areas=areas,
-        factions=factions,
-        prose=prose,
-    )
+        prose = cook_text(said["templates"], values, said["names"], locale.text)
+    return Spoken(**said, prose=prose)
 
 
 def unavailable_tables(build: Build, world: Tables | None) -> frozenset[str]:
@@ -715,10 +699,11 @@ def packed(
         said = read_spoken(
             spoken_providers,
             locale,
-            values=values,
-            altnames=context.effects.altnames,
-            faction_templates=context.effects.factions.distinct(),
+            build=build,
+            ladder=ladder,
+            effects=context.effects,
             zone_maps=zone_maps,
+            values=values,
         )
         produced[code] = produce_spoken(context.spoken_in(said), columns, policy)
         log(f"  {code}: {len(produced[code])} sections of language")
