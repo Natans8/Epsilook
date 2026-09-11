@@ -170,10 +170,25 @@ def test_a_creature_resolves_to_its_displays_in_slot_order(engine: LuaRuntime) -
     assert unwrap(method(api, b"GetDisplaySkins")(api, 0)) == {}
 
 
+def part_index(api: LuaTable, spell_id: int, axis: bytes, kind: str) -> int:
+    """The one-based index of the spell's first part of one kind on an axis.
+
+    A spell's parts arrive in the order the pack ships them, and a kit's rows
+    come before the aura's, so a test that wants the morph asks for it by kind
+    rather than by a position that moves when a row is added ahead of it.
+    """
+    count = cast(int, unwrap(method(api, b"GetNumParts")(api, spell_id, axis)))
+    for n in range(1, count + 1):
+        part = cast(dict[str, object], unwrap(method(api, b"GetPartDataByIndex")(api, spell_id, axis, n)))
+        if part["kind"] == kind:
+            return n
+    raise AssertionError(f"spell {spell_id} has no {kind} part on {axis.decode()}")
+
+
 def test_a_part_names_its_displays_through_a_creature_or_outright(engine: LuaRuntime) -> None:
     api = lua_table(engine, b"Epsilook")
     # A morph stores the creature, and names every display it wears with its model.
-    morph = method(api, b"GetPartDataByIndex")(api, 118, b"fx", 1)
+    morph = method(api, b"GetPartDataByIndex")(api, 118, b"fx", part_index(api, 118, b"fx", "morph"))
     named = [cast(dict[str, object], display) for display in as_list(method(api, b"GetPartDisplays")(api, morph))]
     assert [display["id"] for display in named] == [856, 857]
     assert all("file" in display for display in named)
@@ -211,7 +226,7 @@ def tooltip_lines(engine: LuaRuntime, spell_id: int, axis: bytes, n: int) -> lis
 def test_a_creatures_tooltip_reads_down_to_what_it_looks_like(engine: LuaRuntime) -> None:
     """The creature and its id, then each display it wears with the model
     file and the textures painted over it; the kind's meaning under the title."""
-    lines = tooltip_lines(engine, 118, b"fx", 1)
+    lines = tooltip_lines(engine, 118, b"fx", part_index(lua_table(engine, b"Epsilook"), 118, b"fx", "morph"))
     assert lines[0] == "morph"
     assert lines[1].startswith("a morph aura")
     assert "creature Polymorphed Sheep - 16372" in lines
