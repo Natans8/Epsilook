@@ -1,7 +1,7 @@
 {
   "pack": "1.15.9.69109",
   "meta": {
-    "format": 63,
+    "format": 64,
     "version": "1.15.9.69109",
     "label": "Vanilla Classic 1.15.9",
     "built": "2026-09-11",
@@ -16,8 +16,47 @@
       "skyPlaces": ["ZoneLight"],
       "spellText": ["JournalEncounterSection", "SpellScaling"]
     },
-    "counts": {"animKitAnims": 233, "animKitAnimBoneset": 20, "animEmotes": 1730, "icons": 1673, "files": 2072, "gobModels": 967, "morphs": 272, "creatureDisplays": 0, "displaySkins": 24, "shapeshiftDisplays": 12, "summons": 1021, "factionNames": 8, "objects": 0, "expansion.vanilla": 15124, "expansion.tbc": 4526, "expansion.wotlk": 20, "expansion.cata": 4, "expansion.mop": 0, "expansion.wod": 1, "expansion.legion": 2, "expansion.bfa": 1, "expansion.shadowlands": 0, "expansion.dragonflight": 2, "expansion.tww": 5, "expansion.midnight": 0, "expansion.unknown": 11564, "fxChains": 65, "dissolves": 4, "glows": 1, "ghostMats": 0, "tints": 162, "spellAttrs.actionsduringchannel": 13, "spellAttrs.auraisdebuff": 901, "spellAttrs.preventsanim": 127, "spellAttrs.tracktargetinchannel": 193, "spellAttrs.unbreakablechannel": 15, "spellDelivery": 7725, "delivery.casttime": 7273, "delivery.channelled": 518, "delivery.both": 66, "delivery.breaksOnMove": 382, "delivery.instant": 23524, "spellRanges": 14160, "range.bands": 36, "range.unlimited": 1956, "range.minimum": 287, "range.melee": 1201, "range.weapon": 6, "range.self": 17089, "areas": 163, "linkKinds": 19, "implicitTargets": 85, "selectors": 64, "missileMotions": 37, "items": 18, "namedItems": 10, "spellModels": 46988, "spellDisplayModels": 23, "spellItemModels": 48, "spellWeaponModels": 0, "spellMissileMotions": 278, "spellMounts": 0, "spellSounds": 43119, "spellAnimKits": 778, "spellVisualAnims": 27814, "spellReplaceAnims": 160, "spellPassengerAnims": 0, "spellFx": 371, "spellDissolves": 7, "spellScreens": 55, "spellGlows": 1, "spellShadowies": 0, "spellGhostMats": 0, "spellTints": 1205, "spellDesaturates": 1, "spellTransparencies": 273, "spellFreezes": 74, "spellCamos": 0, "spellMorphs": 330, "spellShapeshifts": 43, "spellScales": 193, "spellSummons": 1225, "spellObjects": 0, "spellMechanics": 40088, "spellLinks": 7257, "spellAreas": 810, "spellInvis": 58, "invisChannels": 9, "spellDetects": 46, "spellVehicles": 0, "spellSpeeds": 772, "spellKeybinds": 0, "screens": 36, "screens.sky": 29, "screens.music": 7, "screens.ambience": 16, "screens.hour": 3, "zoneMusic": 4, "ambiences": 11, "skyboxes": 6, "skySpells": 16, "soundKitNames": 440, "soundTypes": 32, "spells": 31249, "spellFlavours": 0, "spellDescriptions": 17577, "descriptionTexts": 14134, "spellEncounterNotes": 0, "spellAuraTexts": 6540, "auraTexts": 4000, "encounterTexts": 0, "vehicles": 0, "vehicleSeats": 0, "spellVehicleAnims": 0, "spellVehicleAnimKits": 0},
+    "counts": {"animKitAnims": 233, "animKitAnimBoneset": 20, "animEmotes": 1730, "icons": 1673, "files": 2072, "gobModels": 967, "morphs": 272, "creatureDisplays": 0, "displaySkins": 24, "shapeshiftDisplays": 12, "summons": 1021, "factionNames": 8, "objects": 0, "expansion.vanilla": 15124, "expansion.tbc": 4526, "expansion.wotlk": 20, "expansion.cata": 4, "expansion.mop": 0, "expansion.wod": 1, "expansion.legion": 2, "expansion.bfa": 1, "expansion.shadowlands": 0, "expansion.dragonflight": 2, "expansion.tww": 5, "expansion.midnight": 0, "expansion.unknown": 11564, "fxChains": 65, "dissolves": 4, "glows": 1, "ghostMats": 0, "tints": 162, "spellAttrs.actionsduringchannel": 13, "spellAttrs.auraisdebuff": 901, "spellAttrs.preventsanim": 127, "spellAttrs.tracktargetinchannel": 193, "spellAttrs.unbreakablechannel": 15, "spellTimeline": 1344, "timeline.velocity": 1318, "timeline.delay": 26, "timeline.launch": 1, "spellDelivery": 7725, "delivery.casttime": 7273, "delivery.channelled": 518, "delivery.both": 66, "delivery.breaksOnMove": 382, "delivery.instant": 23524, "spellRanges": 14160, "range.bands": 36, "range.unlimited": 1956, "range.minimum": 287, "range.melee": 1201, "range.weapon": 6, "range.self": 17089, "areas": 163, "linkKinds": 19, "implicitTargets": 85, "selectors": 64, "missileMotions": 37, "items": 18, "namedItems": 10, "spellModels": 46988, "spellDisplayModels": 23, "spellItemModels": 48, "spellWeaponModels": 0, "spellMissileMotions": 278, "spellMounts": 0, "spellSounds": 43119, "spellAnimKits": 778, "spellVisualAnims": 27814, "spellReplaceAnims": 160, "spellPassengerAnims": 0, "spellFx": 371, "spellDissolves": 7, "spellScreens": 55, "spellGlows": 1, "spellShadowies": 0, "spellGhostMats": 0, "spellTints": 1205, "spellDesaturates": 1, "spellTransparencies": 273, "spellFreezes": 74, "spellCamos": 0, "spellMorphs": 330, "spellShapeshifts": 43, "spellScales": 193, "spellSummons": 1225, "spellObjects": 0, "spellMechanics": 40098, "spellLinks": 7257, "spellAreas": 810, "spellInvis": 58, "invisChannels": 9, "spellDetects": 46, "spellVehicles": 0, "spellSpeeds": 772, "spellKeybinds": 0, "screens": 36, "screens.sky": 29, "screens.music": 7, "screens.ambience": 16, "screens.hour": 3, "zoneMusic": 4, "ambiences": 11, "skyboxes": 6, "skySpells": 16, "soundKitNames": 440, "soundTypes": 32, "spells": 31249, "spellFlavours": 0, "spellDescriptions": 17577, "descriptionTexts": 14134, "spellEncounterNotes": 0, "spellAuraTexts": 6540, "auraTexts": 4000, "encounterTexts": 0, "vehicles": 0, "vehicleSeats": 0, "spellVehicleAnims": 0, "spellVehicleAnimKits": 0},
     "domains": {
+      "timeline.velocity": {"n": 1318, "min": 1.0, "max": 200.0, "distinct": 39, "mean": 26.0586, "median": 24.0, "p1": 5.0, "p99": 60.0, "clipped": true, "step": 0.2, "mode": 20.0, "modeShare": 0.1859, "signed": false, "sentinels": 0, "ui": "range", "unit": "yd/s"},
+      "timeline.delay": {
+        "n": 26,
+        "min": 1000,
+        "max": 4500,
+        "distinct": 7,
+        "mean": 2923.0769,
+        "median": 3000,
+        "p1": 1000,
+        "p99": 4500,
+        "clipped": false,
+        "step": 500,
+        "mode": 4000,
+        "modeShare": 0.3077,
+        "signed": false,
+        "sentinels": 0,
+        "ui": "picker",
+        "values": [1000, 1500, 2000, 2500, 3000, 4000, 4500],
+        "unit": "ms"
+      },
+      "timeline.launch": {
+        "n": 1,
+        "min": 500,
+        "max": 500,
+        "distinct": 1,
+        "mean": 500.0,
+        "median": 500,
+        "p1": 500,
+        "p99": 500,
+        "clipped": false,
+        "step": 0,
+        "mode": 500,
+        "modeShare": 1.0,
+        "signed": false,
+        "sentinels": 0,
+        "ui": "picker",
+        "values": [500],
+        "unit": "ms"
+      },
       "casttime": {"n": 7273, "min": 100, "max": 300000, "distinct": 44, "mean": 8655.3307, "median": 3000, "p1": 250, "p99": 60000, "clipped": true, "step": 20, "mode": 3000, "modeShare": 0.4191, "signed": false, "sentinels": 0, "ui": "range", "unit": "ms"},
       "channel": {"n": 385, "min": 600, "max": 3600000, "distinct": 29, "mean": 59334.026, "median": 9000, "p1": 1500, "p99": 1800000, "clipped": true, "step": 400, "mode": 10000, "modeShare": 0.1662, "signed": false, "sentinels": 114, "ui": "range", "unit": "ms"},
       "range": {
@@ -138,14 +177,14 @@
         "min": 1,
         "max": 30,
         "distinct": 23,
-        "mean": 1.283,
+        "mean": 1.2833,
         "median": 1,
         "p1": 1,
         "p99": 4,
         "clipped": true,
         "step": 1,
         "mode": 1,
-        "modeShare": 0.7988,
+        "modeShare": 0.7986,
         "signed": false,
         "sentinels": 0,
         "ui": "picker",
@@ -169,12 +208,31 @@
         "ui": "picker",
         "values": [0, 1, 2, 4, 5, 7, 10, 18, 28]
       },
-      "speed": {"n": 772, "min": -151.0, "max": 500.0, "distinct": 82, "mean": 12.899, "median": 4.0, "p1": -86.0, "p99": 199.0, "clipped": true, "step": 1.0, "mode": -51.0, "modeShare": 0.1891, "signed": true, "sentinels": 0, "ui": "range", "unit": "%"}
+      "speed": {"n": 772, "min": -151.0, "max": 500.0, "distinct": 82, "mean": 12.899, "median": 4.0, "p1": -86.0, "p99": 199.0, "clipped": true, "step": 1.0, "mode": -51.0, "modeShare": 0.1891, "signed": true, "sentinels": 0, "ui": "range", "unit": "%"},
+      "hops": {
+        "n": 40098,
+        "min": 0,
+        "max": 1000,
+        "distinct": 16,
+        "mean": 0.1568,
+        "median": 0,
+        "p1": 0,
+        "p99": 0,
+        "clipped": true,
+        "step": 1,
+        "mode": 0,
+        "modeShare": 0.9941,
+        "signed": false,
+        "sentinels": 0,
+        "ui": "picker",
+        "values": [0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 15, 40, 50, 60, 80, 1000]
+      },
+      "every": {"n": 19750, "min": 0, "max": 7200000, "distinct": 48, "mean": 1863.0734, "median": 0, "p1": 0, "p99": 10000, "clipped": true, "step": 50, "mode": 0, "modeShare": 0.8803, "signed": false, "sentinels": 0, "ui": "range", "unit": "ms"}
     }
   },
   "modules": {
-    "core": {"file": "data/modules/core-0b21ceae13d2.json.gz", "bytes": 627753},
-    "universal": {"file": "data/modules/universal-7ad4be41a265.json.gz", "bytes": 26255},
+    "core": {"file": "data/modules/core-7ea43f966a79.json.gz", "bytes": 637816},
+    "universal": {"file": "data/modules/universal-4ec1d5418ec8.json.gz", "bytes": 26262},
     "sky": {"file": "data/modules/sky-9904875a27f8.json.gz", "bytes": 1566}
   },
   "locales": {
