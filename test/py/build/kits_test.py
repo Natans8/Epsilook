@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pack.routes import flows
+from pack.routes.flows import Routes
 from pack.routes.attachments import NO_ATTACHMENT, NO_MOTION
 from pack.routes.fx import ChainEffect, ScreenRow, Shadowy
 from pack.routes.kits import KitEffects
@@ -193,7 +193,7 @@ SoundKitID,FileDataID
 
 def test_a_sound_kit_keeps_every_file_it_plays(tables: BuildTables) -> None:
     """The client picks between variations, so all of them are the kit's."""
-    assert flows.soundkit_files.run(tables(SoundKitEntry=SOUND_KIT_ENTRY)) == {300: {9000, 9001}}
+    assert Routes.soundkit_files.run(tables(SoundKitEntry=SOUND_KIT_ENTRY)) == {300: {9000, 9001}}
 
 
 SOUND_KIT = """ID,SoundType
@@ -208,7 +208,7 @@ def test_a_kit_carries_what_it_is_for(tables: BuildTables) -> None:
     """The type is the kit's, read once per kit; a value the enum does not name
     is left out rather than shipped as a number nobody can read, and a kit the
     pack never reaches is not read at all."""
-    types = flows.kit_types.run(
+    types = Routes.kit_types.run(
         tables(SoundKit=SOUND_KIT), needs={"used_kits": {300, 301, 302}, "sound_type_names": sound_type_names()}
     )
     # 302 carries the one undocumented value, and 303 is a kit nothing reaches.

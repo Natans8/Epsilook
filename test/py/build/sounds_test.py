@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pack.routes import flows
+from pack.routes.flows import Routes
 from pack.routes.sounds import Ambience, ZoneMusic
 from support import BuildTables
 
@@ -21,18 +21,18 @@ ID,Flags,SoundFilterID,FlavorSoundFilterID,AmbienceID_0,AmbienceID_1,AmbienceSta
 
 
 def test_a_music_set_is_its_name_and_its_day_and_night_kits(tables: BuildTables) -> None:
-    assert flows.zone_music.run(tables(ZoneMusic=ZONE_MUSIC))[2] == ZoneMusic("Zone-EvilForest", 2524, 2534)
+    assert Routes.zone_music.run(tables(ZoneMusic=ZONE_MUSIC))[2] == ZoneMusic("Zone-EvilForest", 2524, 2534)
 
 
 def test_a_music_set_may_lack_one_of_its_kits(tables: BuildTables) -> None:
     """Nought is the absence, and the name is stripped like every other name."""
-    assert flows.zone_music.run(tables(ZoneMusic=ZONE_MUSIC))[3] == ZoneMusic("Trimmed", 0, 9)
+    assert Routes.zone_music.run(tables(ZoneMusic=ZONE_MUSIC))[3] == ZoneMusic("Trimmed", 0, 9)
 
 
 def test_an_ambience_is_its_two_loops_and_nothing_else(tables: BuildTables) -> None:
     """The start, stop and wind kits are transitions and weather rather than
     the sound of the place, so they are not read."""
-    assert flows.ambiences.run(tables(SoundAmbience=SOUND_AMBIENCE)) == {
+    assert Routes.ambiences.run(tables(SoundAmbience=SOUND_AMBIENCE)) == {
         21: Ambience(4162, 4162),
         22: Ambience(4163, 4204),
     }

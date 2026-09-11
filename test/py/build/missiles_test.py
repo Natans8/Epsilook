@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pack.routes import flows
+from pack.routes.flows import Routes
 from pack.routes.attachments import DEFAULT_MISSILE_SOURCE
 from pack.routes.missiles import Missile, MissileMotion, VisualMissiles
 from pack.routes.models import SCALE_UNIT, WEAPON_FID_RANGED, EffectName
@@ -104,7 +104,7 @@ def test_a_missile_row_belonging_to_no_set_is_skipped(tables: BuildTables) -> No
 
 def test_a_motion_with_no_name_is_not_a_motion(tables: BuildTables) -> None:
     """A motion the table cannot name is not carried."""
-    assert flows.motions.run(tables(SpellMissileMotion=SPELL_MISSILE_MOTION)) == {
+    assert Routes.motions.run(tables(SpellMissileMotion=SPELL_MISSILE_MOTION)) == {
         7: MissileMotion("Arc", 1),
         8: MissileMotion("Straight", 7),
     }
@@ -112,5 +112,5 @@ def test_a_motion_with_no_name_is_not_a_motion(tables: BuildTables) -> None:
 
 def test_a_motion_carries_the_projectile_count_it_is_written_for(tables: BuildTables) -> None:
     """The count rides the motion, so a row naming it needs no copy of its own."""
-    motions = flows.motions.run(tables(SpellMissileMotion=SPELL_MISSILE_MOTION))
+    motions = Routes.motions.run(tables(SpellMissileMotion=SPELL_MISSILE_MOTION))
     assert motions[8].projectiles == 7

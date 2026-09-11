@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pack.drift import TDB_OPTIONAL_COLUMNS, TDB_OPTIONAL_TABLES
 from pack.routes.creatures import CreatureModels
-from pack.routes import flows
+from pack.routes.flows import Routes
 from support import BuildTables
 
 SPELL_KEYBOUND_OVERRIDE = """\
@@ -50,22 +50,22 @@ ID,Name_lang,CreatureDisplayID_0,CreatureDisplayID_1,CreatureDisplayID_2,Creatur
 
 
 def test_the_ordinary_press_gets_no_word(tables: BuildTables) -> None:
-    overrides = flows.keybinds.run(tables(SpellKeyboundOverride=SPELL_KEYBOUND_OVERRIDE))
+    overrides = Routes.keybinds.run(tables(SpellKeyboundOverride=SPELL_KEYBOUND_OVERRIDE))
     assert overrides[2].when == ""
     assert overrides[1].when == "mid-air"
 
 
 def test_an_unknown_type_names_its_number(tables: BuildTables) -> None:
-    assert flows.keybinds.run(tables(SpellKeyboundOverride=SPELL_KEYBOUND_OVERRIDE))[3].when == "type 7"
+    assert Routes.keybinds.run(tables(SpellKeyboundOverride=SPELL_KEYBOUND_OVERRIDE))[3].when == "type 7"
 
 
 def test_an_override_keeps_a_spell_this_build_does_not_ship(tables: BuildTables) -> None:
-    assert flows.keybinds.run(tables(SpellKeyboundOverride=SPELL_KEYBOUND_OVERRIDE))[3].spell == 999
+    assert Routes.keybinds.run(tables(SpellKeyboundOverride=SPELL_KEYBOUND_OVERRIDE))[3].spell == 999
 
 
 def test_a_mount_reaches_every_display_it_wears(tables: BuildTables) -> None:
     """Faction and gender variants, so several per mount."""
-    mounts = flows.mounts.run(
+    mounts = Routes.mounts.run(
         tables(Mount=MOUNT, MountXDisplay=MOUNT_X_DISPLAY),
         needs={"names.names": {100: "Summon Ram", 101: "Summon Nothing"}, "creatures": CREATURES},
     )
@@ -74,7 +74,7 @@ def test_a_mount_reaches_every_display_it_wears(tables: BuildTables) -> None:
 
 def test_a_mount_whose_spell_this_build_lacks_is_skipped(tables: BuildTables) -> None:
     """The spell list decides a build's population."""
-    mounts = flows.mounts.run(
+    mounts = Routes.mounts.run(
         tables(Mount=MOUNT, MountXDisplay=MOUNT_X_DISPLAY),
         needs={"names.names": {100: "Summon Ram", 101: "Summon Nothing"}, "creatures": CREATURES},
     )
@@ -83,7 +83,7 @@ def test_a_mount_whose_spell_this_build_lacks_is_skipped(tables: BuildTables) ->
 
 def test_a_mount_display_resolves_without_a_server_dump(tables: BuildTables) -> None:
     """Both halves are client data."""
-    mounts = flows.mounts.run(
+    mounts = Routes.mounts.run(
         tables(Mount=MOUNT, MountXDisplay=MOUNT_X_DISPLAY),
         needs={"names.names": {100: "Summon Ram", 101: "Summon Nothing"}, "creatures": CREATURES},
     )
@@ -93,7 +93,7 @@ def test_a_mount_display_resolves_without_a_server_dump(tables: BuildTables) -> 
 
 
 def test_an_object_resolves_its_model_through_its_display(tables: BuildTables) -> None:
-    objects = flows.objects.run(
+    objects = Routes.objects.run(
         tables(GameObjectDisplayInfo=GAME_OBJECT_DISPLAY_INFO),
         needs={
             "world": tables(
@@ -108,34 +108,34 @@ def test_an_object_resolves_its_model_through_its_display(tables: BuildTables) -
 
 def test_without_a_server_dump_an_object_has_nothing(tables: BuildTables) -> None:
     """The display id the model needs is itself server-side."""
-    objects = flows.objects.run(tables(GameObjectDisplayInfo=GAME_OBJECT_DISPLAY_INFO), needs={"world": None})
+    objects = Routes.objects.run(tables(GameObjectDisplayInfo=GAME_OBJECT_DISPLAY_INFO), needs={"world": None})
     assert (objects.name, objects.fid, objects.type) == ({}, {}, {})
 
 
 def test_a_form_with_no_creature_keeps_its_name(tables: BuildTables) -> None:
     """Most forms are this: they change what a character can do, not how it
     looks."""
-    forms = flows.forms.run(tables(SpellShapeshiftForm=SPELL_SHAPESHIFT_FORM))
+    forms = Routes.forms.run(tables(SpellShapeshiftForm=SPELL_SHAPESHIFT_FORM))
     assert forms.names[2] == "Shadowform"
     assert forms.displays[2] == []
 
 
 def test_a_form_keeps_its_displays_in_slot_order(tables: BuildTables) -> None:
-    forms = flows.forms.run(tables(SpellShapeshiftForm=SPELL_SHAPESHIFT_FORM))
+    forms = Routes.forms.run(tables(SpellShapeshiftForm=SPELL_SHAPESHIFT_FORM))
     assert forms.displays[3] == [50, 51]
 
 
 def test_a_build_predating_the_form_table_ships_no_forms(tables: BuildTables) -> None:
     """Reading the header to learn the array's shape must not turn a declared
     absence into a failed build."""
-    forms = flows.forms.run(tables())
+    forms = Routes.forms.run(tables())
     assert (forms.names, forms.displays) == ({}, {})
 
 
 def test_a_form_display_array_may_have_collapsed_to_a_scalar(tables: BuildTables) -> None:
     """The header states which spelling a build uses, so one reader serves
     both."""
-    forms = flows.forms.run(
+    forms = Routes.forms.run(
         tables(
             SpellShapeshiftForm="""\
 ID,Name_lang,CreatureDisplayID
@@ -149,7 +149,7 @@ ID,Name_lang,CreatureDisplayID
 
 def test_a_mounts_flavour_text_rides_its_granting_spell(tables: BuildTables) -> None:
     """Prose about the mount, keyed by the spell that grants it and trimmed."""
-    mounts = flows.mounts.run(
+    mounts = Routes.mounts.run(
         tables(Mount=MOUNT, MountXDisplay=MOUNT_X_DISPLAY),
         needs={"names.names": {100: "Summon Ram", 101: "Summon Nothing"}, "creatures": CREATURES},
     )

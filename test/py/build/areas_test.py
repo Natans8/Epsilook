@@ -6,6 +6,7 @@ and each one alone opens the wrong map for a real spell.
 
 from __future__ import annotations
 
+from pack.routes.flows import Routes
 from pack.routes import flows
 from pack.routes.areas import AreaGates
 from pack.tables import Tables
@@ -38,8 +39,8 @@ def gated(source: Tables) -> AreaGates:
     Kept together here because the split exists for the language axis, and a
     test of what a gate IS should not have to know about that.
     """
-    return flows.areas.run(
-        source, needs={"area_parents": flows.area_parents.run(source), "zone_maps": flows.zone_maps.run(source)}
+    return Routes.areas.run(
+        source, needs={"area_parents": Routes.area_parents.run(source), "zone_maps": flows.zone_maps.run(source)}
     )
 
 

@@ -7,7 +7,7 @@ flag bits survive as a fact about the reach.
 
 from __future__ import annotations
 
-from pack.routes import flows
+from pack.routes.flows import Routes
 from pack.routes.reach import MELEE, UNLIMITED, WEAPON, Reach
 from support import BuildTables
 
@@ -36,7 +36,7 @@ BANDS = (
 def reach_of(tables: BuildTables, bands: dict[int, int]) -> list[Reach]:
     """The reach rows of a build holding just these spells, each naming a band."""
     misc = "SpellID,DifficultyID,RangeIndex\n" + "".join(f"{spell},0,{band}\n" for spell, band in bands.items())
-    return flows.reach.run(
+    return Routes.reach.run(
         tables(SpellRange=BANDS, SpellMisc=misc), needs={"names.names": {spell: "" for spell in bands}}
     )
 
@@ -86,7 +86,7 @@ def test_a_weapon_band_says_the_reach_is_the_weapon_s(tables: BuildTables) -> No
 def test_only_the_two_declared_bits_of_the_flag_column_survive(tables: BuildTables) -> None:
     """Anything else the column carries is dropped rather than passed on under
     a name nothing can give it."""
-    rows = flows.reach.run(
+    rows = Routes.reach.run(
         tables(
             SpellRange="ID,Flags,RangeMin_0,RangeMin_1,RangeMax_0,RangeMax_1\n7,255,0,0,10,10\n",
             SpellMisc="SpellID,DifficultyID,RangeIndex\n100,0,7\n",

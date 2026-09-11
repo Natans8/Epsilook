@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pack.routes import flows
+from pack.routes.flows import Routes
 from pack.routes.anims import read_anim_emotes
 from support import BuildTables
 
@@ -47,13 +47,13 @@ ParentAnimReplacementSetID,SrcAnimID,DstAnimID
 
 
 def test_an_anim_past_the_name_list_is_dropped(tables: BuildTables) -> None:
-    assert flows.animkit_anims.run(
+    assert Routes.animkit_anims.run(
         tables(AnimKitSegment=ANIM_KIT_SEGMENT), needs={"anim_ids": range(len(ANIM_NAMES))}
     ) == {1: {2, 3}, 2: {4}}
 
 
 def test_the_default_region_is_never_shown(tables: BuildTables) -> None:
-    bonesets = flows.animkit_bonesets.run(
+    bonesets = Routes.animkit_bonesets.run(
         tables(
             AnimKitSegment=ANIM_KIT_SEGMENT,
             AnimKitBoneSet=ANIM_KIT_BONE_SET,
@@ -66,7 +66,7 @@ def test_the_default_region_is_never_shown(tables: BuildTables) -> None:
 def test_a_region_belongs_to_its_own_animation(tables: BuildTables) -> None:
     """Animation 2 is reached through two configs and keeps both regions;
     animation 3's config names only the default."""
-    bonesets = flows.animkit_bonesets.run(
+    bonesets = Routes.animkit_bonesets.run(
         tables(
             AnimKitSegment=ANIM_KIT_SEGMENT,
             AnimKitBoneSet=ANIM_KIT_BONE_SET,
@@ -79,7 +79,7 @@ def test_a_region_belongs_to_its_own_animation(tables: BuildTables) -> None:
 def test_the_regions_do_not_consult_the_name_list(tables: BuildTables) -> None:
     """A region is keyed by the animation it rides on, so an entry for an
     animation that never ships is never looked up."""
-    bonesets = flows.animkit_bonesets.run(
+    bonesets = Routes.animkit_bonesets.run(
         tables(
             AnimKitSegment=ANIM_KIT_SEGMENT,
             AnimKitBoneSet=ANIM_KIT_BONE_SET,
@@ -91,7 +91,7 @@ def test_the_regions_do_not_consult_the_name_list(tables: BuildTables) -> None:
 
 def test_a_nameless_boneset_names_no_region(tables: BuildTables) -> None:
     """Boneset 103 has no name, so config 52 contributes only its named half."""
-    bonesets = flows.animkit_bonesets.run(
+    bonesets = Routes.animkit_bonesets.run(
         tables(
             AnimKitSegment=ANIM_KIT_SEGMENT,
             AnimKitBoneSet=ANIM_KIT_BONE_SET,
@@ -102,7 +102,7 @@ def test_a_nameless_boneset_names_no_region(tables: BuildTables) -> None:
 
 
 def test_a_swap_needs_both_ends_named(tables: BuildTables) -> None:
-    assert flows.anim_replacements.run(
+    assert Routes.anim_replacements.run(
         tables(AnimReplacement=ANIM_REPLACEMENT), needs={"anim_ids": range(len(ANIM_NAMES))}
     ) == {7: {(0, 2), (3, 4)}}
 
@@ -151,7 +151,7 @@ def test_emotes_past_the_animation_table_are_dropped() -> None:
 def test_a_kits_pace_is_kept_per_animation_in_thousandths(tables: BuildTables) -> None:
     """Backwards, held and hurried are all real paces, and the first segment
     of an animation a kit plays twice is the one that speaks for it."""
-    speeds = flows.animkit_speeds.run(tables(AnimKitSegment=ANIM_KIT_SEGMENT))
+    speeds = Routes.animkit_speeds.run(tables(AnimKitSegment=ANIM_KIT_SEGMENT))
     assert speeds[(1, 2)] == -1000
     assert speeds[(1, 3)] == 1000
     assert speeds[(2, 4)] == 500

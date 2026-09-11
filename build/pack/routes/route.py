@@ -11,11 +11,12 @@ A route's body is whatever fills the field: a flow over tables, a reader that
 takes a table and a bundle, or a derivation over other fields. The record does
 not care which, and that is the point.
 
-The record is written as a decorator on the function, and a parameter is a
-need whose source is its own name unless the decorator says otherwise. So a
-reader whose parameters are named for the fields and givens it reads declares
-nothing beyond the field it fills, and only a parameter named for something
-else maps its source.
+The record is written two ways. A computation is a decorated function, and a
+parameter is a need whose source is its own name unless the decorator says
+otherwise, so a reader whose parameters are named for the fields and givens it
+reads declares nothing beyond the field it fills. A route that is a plan is an
+attribute of a `Declarations` class body, named once by the attribute, its
+needs read off the plan itself.
 """
 
 from __future__ import annotations
@@ -24,11 +25,12 @@ import dataclasses
 import inspect
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import TYPE_CHECKING, Any, ClassVar, TypeVar
+
+from .plan import Runnable
 
 if TYPE_CHECKING:
     from ..tables import Tables
-    from .flow import Runnable
 
 Produce = Callable[..., object]
 """What fills a field, called with the inputs the record names, by keyword.
@@ -110,57 +112,39 @@ def route(field: str, *, phase: str = "", **sources: str) -> Callable[[Filler], 
     return register
 
 
-DECLARED: dict[str, list[tuple[str, Any]]] = {}
-"""Per declared field, its plans by the version each holds from, in order.
+class Declarations:
+    """A class body of plans, each one the field its name says.
 
-Any: a plan's result type is the field's, and the field types it on the way
-into the context; the registry only picks which plan runs.
-"""
-
-
-def _plan_for(field: str, version: str) -> Any:
-    """The plan a build runs for a field: the last one declared for a version
-    at or before this build's."""
-    from .flow import before  # noqa: PLC0415  -- the flow imports this module's decorator
-
-    chosen = None
-    for since, plan in DECLARED[field]:
-        if not since or not before(version, since):
-            chosen = plan
-    if chosen is None:
-        raise ValueError(f"{field}: no plan holds on {version}")
-    return chosen
-
-
-def declare[P: Runnable[Any]](field: str, plan: P, *, phase: str = "", since: str = "") -> P:
-    """Register a plan as what fills `field`.
-
-    The plan's needs are read off the plan itself, so a flow narrowing on a
-    path names its dependency once. A second declaration of the same field
-    with `since` is the version override: the plan a build at or past that
-    version runs instead, the same field, the same place.
-
-    Args:
-        field: the context field the plan's result lands in.
-        plan: the flow and its terminal.
-        phase: the name the build times it under; empty means `read <field>`.
-        since: the dotted version this plan holds from; empty means always.
-
-    Returns:
-        The plan, so the declaration can be held by a name too.
+    The attribute's name is the field, so a declaration is written once:
+    ``motions = flow(...) >> as_records(...)`` under ``class Routes(Declarations)``
+    registers ``motions`` as what fills it, its needs read off the plan. Only a
+    plan registers; a constant, a bare flow another plan builds on, or a
+    terminal shared by several is a helper the body holds and no field.
     """
-    plans = DECLARED.setdefault(field, [])
-    plans.append((since, plan))
-    plans.sort(key=lambda held: tuple(int(part) for part in held[0].split(".")) if held[0] else ())
-    paths = sorted({path for _since, held in plans for path in held.needs})
-    # A need's path is not a parameter name, so each is keyed by position and
-    # mapped back when the plan runs.
-    keys = {f"need{at}": path for at, path in enumerate(paths)}
+
+    fields: ClassVar[Mapping[str, Runnable[Any]]] = {}
+    """The plans by field, in declaration order."""
+
+    def __init_subclass__(cls) -> None:
+        super().__init_subclass__()
+        held = {
+            name: value for name, value in vars(cls).items() if isinstance(value, Runnable) and not name.startswith("_")
+        }
+        cls.fields = held
+        for field, plan in held.items():
+            _register(field, plan)
+
+
+def _register(field: str, plan: Runnable[Any]) -> None:
+    """The plan as the route filling `field`, replacing any earlier one.
+
+    A need's path is not a parameter name, so each is keyed by position and
+    mapped back when the plan runs.
+    """
+    keys = {f"need{at}": path for at, path in enumerate(sorted(plan.needs))}
 
     def produce(tables: Tables, version: str, **found: Any) -> Any:
-        needs = {keys[key]: value for key, value in found.items()}
-        return _plan_for(field, version).run(tables, version, needs)
+        return plan.run(tables, version, {keys[key]: value for key, value in found.items()})
 
     ROUTES[:] = [registered for registered in ROUTES if registered.field != field]
-    ROUTES.append(Route(field, produce, {"tables": "tables", "version": "version", **keys}, phase))
-    return plan
+    ROUTES.append(Route(field, produce, {"tables": "tables", "version": "version", **keys}))

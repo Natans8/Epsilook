@@ -7,7 +7,7 @@ or drops one that is.
 
 from __future__ import annotations
 
-from pack.routes import flows
+from pack.routes.flows import Routes
 from pack.routes.effects import (
     AURA_ANIM_REPLACEMENT_SET,
     AURA_KEYBOUND_OVERRIDE,
@@ -386,7 +386,7 @@ def test_an_implicit_target_the_build_does_not_name_contributes_nothing(tables: 
 
 def selectors_of(name: str) -> list[When]:
     """The selectors one branch of the effects split declares, in order."""
-    branch = flows.effects.branches[name]
+    branch = Routes.effects.branches[name]
     plan = branch.plan if isinstance(branch, Then) else branch
     assert isinstance(plan, Plan)
     found: list[When] = []
@@ -407,7 +407,7 @@ def test_every_payload_is_declared_not_branched() -> None:
     a `_targets` branch over the same selector), and a selector's slots are
     references or an amount, never both.
     """
-    selectors = flows.effects.selectors
+    selectors = Routes.effects.selectors
     assert selectors
     for chosen in selectors:
         assert chosen.on in ("EffectAura", "Effect"), "a payload selects on the aura or the effect column"
@@ -416,7 +416,7 @@ def test_every_payload_is_declared_not_branched() -> None:
     for column in ("EffectAura", "Effect"):
         claimed = [
             value
-            for name in flows.effects.branches
+            for name in Routes.effects.branches
             if not name.endswith("_targets")
             for chosen in selectors_of(name)
             if chosen.on == column
@@ -437,7 +437,7 @@ def test_the_rosters_are_needs_the_wiring_resolves() -> None:
     """A roster name with nothing behind it would keep every row silently; as
     a need of the declaration it is a field the resolver produces or refuses,
     never a parameter a caller forgets."""
-    assert {"screens", "keybinds", "names.names", "target_bits", "summon_controls"} <= flows.effects.needs
+    assert {"screens", "keybinds", "names.names", "target_bits", "summon_controls"} <= Routes.effects.needs
 
 
 def test_a_reused_effect_id_spawns_an_object_only_on_the_older_build(tables: BuildTables) -> None:

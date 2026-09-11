@@ -6,7 +6,7 @@ survive. The rest pins the two sentinels and the optional table.
 
 from __future__ import annotations
 
-from pack.routes import flows
+from pack.routes.flows import Routes
 from pack.routes.delivery import BREAKS_ON_MOVE, CHANNELLED, Delivery
 from support import BuildTables
 
@@ -43,8 +43,8 @@ def deliver(
     else:
         source = tables(**held, SpellInterrupts=interrupts)
     names = {spell: "" for spell in spells}
-    breaks = flows.channel_breaks.run(source, needs={"names.names": names})
-    return flows.delivery.run(source, needs={"names.names": names, "channel_breaks": breaks})
+    breaks = Routes.channel_breaks.run(source, needs={"names.names": names})
+    return Routes.delivery.run(source, needs={"names.names": names, "channel_breaks": breaks})
 
 
 def test_a_cast_and_a_channel_both_survive_on_one_spell(tables: BuildTables) -> None:
