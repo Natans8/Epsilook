@@ -2650,6 +2650,12 @@ def check_toolchain(rep: Report) -> None:
     run_tool(rep, "pytest addon", ["uv", "run", "pytest", ADDON_TESTS], "addon/test/*_test.py, under lupa")
     check_browser_matrix(rep)
     check_mermaid(rep)
+    run_tool(
+        rep,
+        "routes",
+        ["uv", "run", "python", "tools/routes.py", "--check"],
+        "docs/DATA_ROUTES.md carries the route table the registry prints",
+    )
 
 
 # ---------------------------------------------------------------------- main

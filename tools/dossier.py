@@ -8,6 +8,7 @@
     python tools/dossier.py 3562 1953 --diff     # two spells, side by side
     python tools/dossier.py 116 --version 1.15   # any cached pack, not just the default
     python tools/dossier.py --packs              # which packs this database carries
+    python tools/dossier.py --routes             # every declared route, off the build's own registry
 
 WHY IT EXISTS
     Answering "what IS this spell" means eight ad-hoc queries across SpellMisc,
@@ -1620,7 +1621,15 @@ def main() -> None:
     ap.add_argument("--full", action="store_true", help="do not truncate the lists")
     ap.add_argument("--list", action="store_true", dest="list_only", help="list the name matches and stop")
     ap.add_argument("--packs", action="store_true", help="list the cached packs and stop")
+    ap.add_argument("--routes", action="store_true", help="print the declared routes off the registry and stop")
     args = ap.parse_args()
+    if args.routes:
+        # The build's own declarations, printed rather than restated here, so
+        # a route added there is one this tool cannot fail to know about.
+        from routes import rows, table  # pylint: disable=import-outside-toplevel
+
+        print(table(list(rows())))
+        return
 
     if args.packs:
         every = packs()
@@ -1644,7 +1653,7 @@ def main() -> None:
         return
 
     if not args.spell:
-        ap.error("give a spell id or a name (or --packs)")
+        ap.error("give a spell id or a name (or --packs, --routes)")
 
     d = Dossier(select_pack(args.version))
 

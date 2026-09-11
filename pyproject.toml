@@ -135,7 +135,7 @@ module = [
     "addon", "arcanum", "builddb", "bump", "check", "docker_smoke", "dossier",
     "epsilon_names", "epsilon_storage", "epsilon_tables", "epsilon_walks",
     "expansions", "listfile", "mermaid", "packdb", "packfile", "packs",
-    "rebuild", "repo", "spellings", "supplement", "verify_live",
+    "rebuild", "repo", "routes", "spellings", "supplement", "verify_live",
 ]
 check_untyped_defs = false
 disallow_any_generics = false
