@@ -201,7 +201,7 @@ class Routes(Declarations):
 
     kit_names = (
         flow("the names the pinned build gives the sound kits this pack reaches")
-        .read("SoundKitName", c.ID, c.Name, source="pinned")
+        .read("SoundKitName", c.ID, c.Name)
         .narrow(c.ID, "used_kits")
         .map("named", ~c.Name.is_empty())
         .where(c.named == 1)
@@ -294,7 +294,7 @@ class Routes(Declarations):
 
     objects = (
         flow("the gameobjects a spell spawns, named and modelled")
-        .read("gameobject_template", c.entry, c.name, c.displayId, c.type, source="world")
+        .read("gameobject_template", c.entry, c.name, c.displayId, c.type)
         .join(c.displayId, "GameObjectDisplayInfo", c.FileDataID)
         .into(as_rows(GameObjectRow, c.entry, word(c.name), c.type, c.FileDataID))
     ).then(GameObjectData.assemble)
@@ -315,16 +315,16 @@ class Routes(Declarations):
 
     creature_names = (
         flow("what the server calls each creature")
-        .read("creature_template", c.entry, c.name, source="world")
+        .read("creature_template", c.entry, c.name)
         .into(as_map(c.entry, word(c.name)))
     )
 
     creature_displays = first_available(
         flow("the displays a creature wears, by slot")
-        .read("creature_template_model", c.CreatureID, c.Idx, c.CreatureDisplayID, source="world")
+        .read("creature_template_model", c.CreatureID, c.Idx, c.CreatureDisplayID)
         .into(as_sets(c.CreatureID, c.Idx, c.CreatureDisplayID)),
         flow("the same in the legacy shape, where the column is the slot")
-        .read("creature_template", c.entry, c.modelid1, c.modelid2, c.modelid3, c.modelid4, source="world")
+        .read("creature_template", c.entry, c.modelid1, c.modelid2, c.modelid3, c.modelid4)
         .explode(c.modelid1, c.modelid2, c.modelid3, c.modelid4, into="display", slot="slot")
         .into(as_sets(c.entry, c.slot, c.display)),
     ).then(ordered)
@@ -353,7 +353,7 @@ class Routes(Declarations):
 
     totem_displays = (
         flow("the displays a totem wears, one per caster race")
-        .read("spell_totem_model", c.SpellID, c.DisplayID, source="world", optional=True)
+        .read("spell_totem_model", c.SpellID, c.DisplayID, optional=True)
         .where(c.DisplayID != 0)
         .into(as_sets(c.SpellID, c.DisplayID))
     ).then(ordered)
@@ -1170,11 +1170,11 @@ class Routes(Declarations):
             c.Variance,
             c.ScalingClass,
             c.Coefficient,
-            source="base",
+            revised=False,
         )
         .where(BASE)
-        .join(c.SpellID, "SpellScaling", c.MinScalingLevel, c.MaxScalingLevel, by="SpellID", source="base")
-        .join(c.EffectRadiusIndex_0, "SpellRadius", c.Radius, source="base")
+        .join(c.SpellID, "SpellScaling", c.MinScalingLevel, c.MaxScalingLevel, by="SpellID", revised=False)
+        .join(c.EffectRadiusIndex_0, "SpellRadius", c.Radius, revised=False)
         .map("amount", coalesce(c.EffectBasePoints, c.EffectBasePointsF, digits=1))
         .map("spread", coalesce(c.Variance, digits=1))
         .map("reached", coalesce(c.Radius, digits=1))
@@ -1216,17 +1216,17 @@ class Routes(Declarations):
 
     spell_durations = (
         flow("how long a spell lasts")
-        .read("SpellMisc", c.SpellID, c.DifficultyID, c.DurationIndex, source="base")
+        .read("SpellMisc", c.SpellID, c.DifficultyID, c.DurationIndex, revised=False)
         .where(BASE)
-        .join(c.DurationIndex, "SpellDuration", c.Duration, inner=True, source="base")
+        .join(c.DurationIndex, "SpellDuration", c.Duration, inner=True, revised=False)
         .into(as_map(c.SpellID, c.Duration))
     )
 
     spell_ranges = (
         flow("how far a spell's description says it reaches")
-        .read("SpellMisc", c.SpellID, c.DifficultyID, c.RangeIndex, source="base")
+        .read("SpellMisc", c.SpellID, c.DifficultyID, c.RangeIndex, revised=False)
         .where(BASE)
-        .join(c.RangeIndex, "SpellRange", c.RangeMax_0, inner=True, source="base")
+        .join(c.RangeIndex, "SpellRange", c.RangeMax_0, inner=True, revised=False)
         .map("distance", coalesce(c.RangeMax_0, digits=1))
         .where(c.distance != 0)
         .into(as_map(c.SpellID, real(c.distance)))
@@ -1235,7 +1235,7 @@ class Routes(Declarations):
     aura_caps = (
         flow("what an aura's options cap")
         .read(
-            "SpellAuraOptions", c.SpellID, c.DifficultyID, c.CumulativeAura, c.ProcCharges, c.ProcChance, source="base"
+            "SpellAuraOptions", c.SpellID, c.DifficultyID, c.CumulativeAura, c.ProcCharges, c.ProcChance, revised=False
         )
         .where(BASE)
     )
@@ -1248,7 +1248,7 @@ class Routes(Declarations):
 
     target_caps = (
         flow("what a spell's targeting caps")
-        .read("SpellTargetRestrictions", c.SpellID, c.DifficultyID, c.MaxTargets, c.MaxTargetLevel, source="base")
+        .read("SpellTargetRestrictions", c.SpellID, c.DifficultyID, c.MaxTargets, c.MaxTargetLevel, revised=False)
         .where(BASE)
     )
 

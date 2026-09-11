@@ -17,6 +17,7 @@ from .locales import locale_overlays, translated_exports
 from .overlay import OverlaidTables, Overlay
 from .provider import Provider, Tables
 from .sql_tables import SqlTables
+from .union import UnionTables
 
 __all__ = [
     "CsvTables",
@@ -26,6 +27,7 @@ __all__ = [
     "Provider",
     "SqlTables",
     "Tables",
+    "UnionTables",
     "array_columns",
     "hotfix_overlays",
     "locale_overlays",

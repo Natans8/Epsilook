@@ -16,9 +16,12 @@ from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import cast
 
+from pack.drift import TDB_OPTIONAL_TABLES
 from pack.pipeline import GIVEN, Derivations
-from pack.tables import CsvTables, Tables
+from pack.sources.tdb import TDB_TABLES
+from pack.tables import CsvTables, Tables, UnionTables
 
 ROOT = Path(__file__).resolve().parents[2]
 """The repository root.
@@ -82,6 +85,14 @@ VERSION = "9.2.7.45745"
 """The build a route test runs as, where a plan reads the version at all."""
 
 
+def union(tables: Tables, world: Tables | None = None, pinned: Tables | None = None) -> UnionTables:
+    """The build's tables as a route sees them: the client's, the dump's and
+    the pinned build's as one, with the dump's tables declared absent where
+    the test hands none over, as a build without a dump declares them."""
+    absent = frozenset() if world is not None else frozenset(TDB_TABLES["world"]) | frozenset(TDB_OPTIONAL_TABLES)
+    return UnionTables(tuple(held for held in (tables, world, pinned) if held is not None), absent)
+
+
 def resolve(name: str, tables: Tables, **known: object) -> object:
     """One declared field, produced through the registry over these tables.
 
@@ -89,8 +100,16 @@ def resolve(name: str, tables: Tables, **known: object) -> object:
     tested as it is declared rather than reassembled by hand. `known` holds
     a given by its name, or a field already produced, so a test hands over
     the neighbour a route reads instead of building that neighbour's tables.
+    A `world` or `pinned` entry is a further source, joined into the one the
+    routes read.
     """
-    given = {name: None for name in GIVEN} | {"tables": tables, "version": VERSION, "zone_maps": {}}
+    world = cast(Tables | None, known.pop("world", None))
+    pinned = cast(Tables | None, known.pop("pinned", None))
+    given = {name: None for name in GIVEN} | {
+        "tables": union(tables, world, pinned),
+        "version": VERSION,
+        "zone_maps": {},
+    }
     given |= {name: value for name, value in known.items() if name in GIVEN}
     derive = Derivations(given)
     derive.held.update({name: value for name, value in known.items() if name not in GIVEN})

@@ -67,9 +67,9 @@ class Flow:
         """Whether the flow starts with no read: the steps of a branch, or none."""
         return not (self.steps and isinstance(self.steps[0], Read))
 
-    def read(self, table: str, *columns: str | Column, optional: bool = False, source: str = "tables") -> Flow:
+    def read(self, table: str, *columns: str | Column, optional: bool = False, revised: bool = True) -> Flow:
         """Start from one table's rows, by the columns named."""
-        return self | Read(table, tuple(column_name(name) for name in columns), optional, source)
+        return self | Read(table, tuple(column_name(name) for name in columns), optional, revised)
 
     def join(
         self,
@@ -79,11 +79,11 @@ class Flow:
         by: str = "ID",
         inner: bool = False,
         many: bool = False,
-        source: str = "tables",
+        revised: bool = True,
     ) -> Flow:
         """Hop through a key into another table, taking the columns named."""
         return self | Join(
-            column_name(key), table, tuple(column_name(name) for name in columns), by, inner, many, source
+            column_name(key), table, tuple(column_name(name) for name in columns), by, inner, many, revised
         )
 
     def explode(self, *columns: str | Column, into: str, slot: str = "") -> Flow:
@@ -98,10 +98,10 @@ class Flow:
         return self | Lookup(column_name(column), field, into, default)
 
     def expand(
-        self, key: str | Column, table: str, edges: Mapping[str, int], *, into: str, bits: str, source: str = "tables"
+        self, key: str | Column, table: str, edges: Mapping[str, int], *, into: str, bits: str, revised: bool = True
     ) -> Flow:
         """Every row the key reaches through the table's own references, with the bits the path took."""
-        return self | Expand(column_name(key), table, dict(edges), into, bits, source=source)
+        return self | Expand(column_name(key), table, dict(edges), into, bits, revised=revised)
 
     def prefer(self, key: str | Column, *, base: Expr) -> Flow:
         """One row per key, the base row standing for it."""
@@ -193,17 +193,20 @@ class Flow:
     @property
     def needs(self) -> frozenset[str]:
         """The field paths the flow names, for the wiring to resolve: the
-        rosters it narrows on and the sources other than the build's tables."""
+        rosters it narrows on, the fields it looks up, and the unrevised tables
+        where a step reads them."""
         rosters = {
             step.roster for step in self.of_kind(Narrow) if isinstance(step, Narrow) and isinstance(step.roster, str)
         }
         fields = {
             step.field for step in self.of_kind(Lookup) if isinstance(step, Lookup) and isinstance(step.field, str)
         }
-        sources = {
-            step.source for step in self.steps if isinstance(step, (Read, Join, Expand)) and step.source != "tables"
-        }
-        return frozenset(rosters | fields | sources)
+        layers = (
+            {"base"}
+            if any(isinstance(step, (Read, Join, Expand)) and not step.revised for step in self.steps)
+            else set()
+        )
+        return frozenset(rosters | fields | layers)
 
     @property
     def origin(self) -> Read:

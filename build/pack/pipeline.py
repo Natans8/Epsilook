@@ -83,6 +83,7 @@ from .tables import (
     locale_overlays,
     supplement_overlay,
     translated_exports,
+    UnionTables,
 )
 
 PROVIDERS: dict[str, Provider] = {"csv": CsvTables, "sql": SqlTables}
@@ -152,6 +153,16 @@ class Providers:
             # reading `SpellEffect` cannot tell whether a row was revised, and
             # that is the point.
             self.tables = OverlaidTables(base=client, overlays=hotfix_overlays(build), source=world)
+        # Below acquisition a table is a table: a route names one and never
+        # where it lives. The dump's tables are declared absent on a build
+        # that ships no dump, so a read of one yields nothing rather than
+        # asking the client for a table it never had.
+        absent = (
+            frozenset() if self.world is not None else frozenset(TDB_TABLES["world"]) | frozenset(TDB_OPTIONAL_TABLES)
+        )
+        self.tables = UnionTables(
+            tuple(held for held in (self.tables, self.world, self.pinned) if held is not None), absent
+        )
         # The community list names what Blizzard ships; the supplement names
         # what a private client added, and the two never claim the same id --
         # the overlay admits nothing below the floor a client allocates its own
@@ -221,7 +232,7 @@ fills and the one a caller always supplies.
 """
 
 
-GIVEN = ("tables", "base", "world", "pinned", "listfile", "named", "version", "ladder", "scaling", "level", "zone_maps")
+GIVEN = ("tables", "base", "listfile", "named", "version", "ladder", "scaling", "level", "zone_maps")
 """What the wiring supplies rather than produces, by the name a route asks for it."""
 
 
@@ -276,8 +287,6 @@ class Derivations:
             {
                 "tables": providers.tables,
                 "base": providers.base,
-                "world": providers.world,
-                "pinned": providers.pinned,
                 "listfile": providers.listfile,
                 "named": providers.named,
                 "version": build.version,

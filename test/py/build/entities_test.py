@@ -5,7 +5,7 @@ from __future__ import annotations
 from pack.drift import TDB_OPTIONAL_COLUMNS, TDB_OPTIONAL_TABLES
 from pack.routes.creatures import CreatureModels
 from pack.routes.flows import Routes
-from support import BuildTables
+from support import BuildTables, union
 
 SPELL_KEYBOUND_OVERRIDE = """\
 ID,Function,Type,Data
@@ -94,12 +94,10 @@ def test_a_mount_display_resolves_without_a_server_dump(tables: BuildTables) -> 
 
 def test_an_object_resolves_its_model_through_its_display(tables: BuildTables) -> None:
     objects = Routes.objects.run(
-        tables(GameObjectDisplayInfo=GAME_OBJECT_DISPLAY_INFO),
-        needs={
-            "world": tables(
-                absent=TDB_OPTIONAL_TABLES, defaults=TDB_OPTIONAL_COLUMNS, gameobject_template=GAMEOBJECT_TEMPLATE
-            )
-        },
+        union(
+            tables(GameObjectDisplayInfo=GAME_OBJECT_DISPLAY_INFO),
+            tables(absent=TDB_OPTIONAL_TABLES, defaults=TDB_OPTIONAL_COLUMNS, gameobject_template=GAMEOBJECT_TEMPLATE),
+        )
     )
     assert objects.name[200] == "Campfire"
     assert objects.fid == {200: 8100, 201: 0}
@@ -108,7 +106,7 @@ def test_an_object_resolves_its_model_through_its_display(tables: BuildTables) -
 
 def test_without_a_server_dump_an_object_has_nothing(tables: BuildTables) -> None:
     """The display id the model needs is itself server-side."""
-    objects = Routes.objects.run(tables(GameObjectDisplayInfo=GAME_OBJECT_DISPLAY_INFO), needs={"world": None})
+    objects = Routes.objects.run(union(tables(GameObjectDisplayInfo=GAME_OBJECT_DISPLAY_INFO)))
     assert (objects.name, objects.fid, objects.type) == ({}, {}, {})
 
 

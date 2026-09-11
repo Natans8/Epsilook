@@ -89,13 +89,13 @@ def _blank(columns: Sequence[str]) -> Row:
     return tuple(() if name.endswith("_*") else "" for name in columns)
 
 
-def _held(source: str, tables: Tables, needs: Needs) -> Tables | None:
-    """The tables a step reads from: the build's own, or another source the
-    wiring holds, such as the pinned build, the server dump or the client's
-    unrevised tables; None where the build lacks that source."""
-    if source == "tables":
+def _layer(revised: bool, tables: Tables, needs: Needs) -> Tables | None:
+    """The tables a step reads from: the build's, revisions applied, or the
+    client's unrevised ones, which the wiring holds under `base`; None where
+    the build lacks them. Where a table lives is the union's business."""
+    if revised:
         return tables
-    found: Tables | None = needs.get(source)
+    found: Tables | None = needs.get("base")
     return found
 
 
@@ -118,10 +118,9 @@ class Read:
     columns: tuple[str, ...]
     optional: bool = False
 
-    source: str = "tables"
-    """Which given the table is read from: the build's own tables, or another
-    source the wiring holds, such as the pinned build or the server dump. A
-    source the build lacks reads as no rows."""
+    revised: bool = True
+    """Whether the hotfix revisions apply. A number a description prints reads
+    the client's own, unrevised, which the wiring holds under `base`."""
 
     def schema(self, incoming: Schema) -> Schema:
         """The columns read, as the flow's first schema."""
@@ -130,13 +129,13 @@ class Read:
 
     def available(self, tables: Tables, needs: Needs) -> bool:
         """Whether this build has the table, in the source it is read from."""
-        held = _held(self.source, tables, needs)
+        held = _layer(self.revised, tables, needs)
         return held is not None and held.available(self.table)
 
     def rows(self, incoming: Rows, incoming_schema: Schema, tables: Tables, version: str, needs: Needs) -> Rows:
         """Read the table."""
         del incoming, incoming_schema, version
-        held = _held(self.source, tables, needs)
+        held = _layer(self.revised, tables, needs)
         if held is None or (self.optional and not held.available(self.table)):
             return iter(())
         return _read(held, self.table, self.columns)
@@ -167,8 +166,9 @@ class Join:
     """Whether the key finds several rows there, each of which becomes a row
     here; otherwise the last row per key stands, as a source's revisions do."""
 
-    source: str = "tables"
-    """Which given the joined table is read from, as a read names it."""
+    revised: bool = True
+    """Whether the hotfix revisions apply. A number a description prints reads
+    the client's own, unrevised, which the wiring holds under `base`."""
 
     def schema(self, incoming: Schema) -> Schema:
         """The incoming columns, then the joined ones."""
@@ -184,7 +184,7 @@ class Join:
         """
         del version
         index: dict[int, list[Row]] = {}
-        held = _held(self.source, tables, needs)
+        held = _layer(self.revised, tables, needs)
         for source in _read(held, self.table, [self.by, *self.columns]) if held is not None else ():
             key = key_of(source[0])
             if self.many:
@@ -270,8 +270,9 @@ class Expand:
     bits: str
     by: str = "ID"
 
-    source: str = "tables"
-    """Which given the table is read from, as a read names it."""
+    revised: bool = True
+    """Whether the hotfix revisions apply. A number a description prints reads
+    the client's own, unrevised, which the wiring holds under `base`."""
 
     def schema(self, incoming: Schema) -> Schema:
         """The incoming columns, then the reached id and its bits."""
@@ -298,7 +299,7 @@ class Expand:
         """One row per id each seed reaches; the edges are read per run, as a join's index is."""
         del version
         hops: dict[int, list[tuple[int, int]]] = {}
-        held = _held(self.source, tables, needs)
+        held = _layer(self.revised, tables, needs)
         if held is None:
             return
         columns, widths = _flattened(held, self.table, list(self.edges))

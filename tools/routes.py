@@ -62,9 +62,9 @@ def tables_of(held: Runnable[object]) -> list[str]:
     for flow in flows_of(held):
         for step in flow.steps:
             if isinstance(step, Read):
-                named.append(step.table if step.source == "tables" else f"{step.table} ({step.source})")
+                named.append(step.table if step.revised else f"{step.table} (unrevised)")
             elif isinstance(step, (Join, Expand)):
-                named.append(step.table if step.source == "tables" else f"{step.table} ({step.source})")
+                named.append(step.table if step.revised else f"{step.table} (unrevised)")
     return list(dict.fromkeys(named))
 
 
@@ -77,7 +77,7 @@ def fields_of(held: Runnable[object]) -> list[str]:
                 named.add(step.roster)
             elif isinstance(step, Lookup) and isinstance(step.field, str):
                 named.add(step.field)
-    return sorted(path for path in named if path not in ("tables", "base", "world", "pinned"))
+    return sorted(path for path in named if path not in ("tables", "base"))
 
 
 def described(held: Runnable[object]) -> str:
