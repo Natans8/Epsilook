@@ -116,7 +116,7 @@ class Declarations:
     """A class body of plans, each one the field its name says.
 
     The attribute's name is the field, so a declaration is written once:
-    ``motions = flow(...) >> as_records(...)`` under ``class Routes(Declarations)``
+    ``motions = flow(...).into(as_records(...))`` under ``class Routes(Declarations)``
     registers ``motions`` as what fills it, its needs read off the plan. Only a
     plan registers; a constant, a bare flow another plan builds on, or a
     terminal shared by several is a helper the body holds and no field.

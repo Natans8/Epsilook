@@ -127,8 +127,13 @@ class Flow:
         """Keep the rows whose column names something the roster holds."""
         return self | Narrow(column_name(column), roster, doc)
 
-    def __rshift__[T](self, terminal: Terminal[T]) -> Plan[T]:
-        """Land the rows in a shape: ``flow >> as_map(...)`` is the whole route."""
+    def into[T](self, terminal: Terminal[T]) -> Plan[T]:
+        """Land the rows in a shape: ``flow.into(as_map(...))`` is the whole route.
+
+        A method rather than an operator so a plan is one call chain from its
+        read to its landing, which is what the formatter lays out one step
+        per line.
+        """
         return Plan(self, terminal)
 
     def split[T](self, record: Callable[..., T], **branches: Plan[Any] | Then[Any] | Landing) -> Split[T]:

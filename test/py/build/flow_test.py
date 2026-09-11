@@ -160,8 +160,8 @@ def test_the_first_plan_whose_table_the_build_has_answers(tables: BuildTables) -
     """One fact, two spellings: each alternative is its own plan, so the
     tables need not line up column for column."""
     names = first_available(
-        flow("modern").read("SpellName", "ID", "Name_lang") >> as_map(c.ID, text(c.Name_lang)),
-        flow("legacy").read("Spell", "ID", "Name_lang") >> as_map(c.ID, text(c.Name_lang)),
+        flow("modern").read("SpellName", "ID", "Name_lang").into(as_map(c.ID, text(c.Name_lang))),
+        flow("legacy").read("Spell", "ID", "Name_lang").into(as_map(c.ID, text(c.Name_lang))),
     )
     old = tables(Spell="ID,Name_lang\n1,Frostbolt\n", absent={"SpellName": "split out later"})
     assert names.run(old) == {1: "Frostbolt"}
@@ -207,12 +207,12 @@ def test_a_list_keeps_the_order_met_and_a_nested_map_combines_two_paths(tables: 
     visual's mask unioned where two paths reach it."""
     events = flow("events").read("SpellVisualEvent", "SpellVisualID", "SpellVisualKitID", "TargetType")
     source = tables(SpellVisualEvent="SpellVisualID,SpellVisualKitID,TargetType\n10,901,2\n10,900,1\n10,901,2\n")
-    assert (events >> as_lists(c.SpellVisualID, c.SpellVisualKitID, c.TargetType)).run(source) == {
+    assert (events.into(as_lists(c.SpellVisualID, c.SpellVisualKitID, c.TargetType))).run(source) == {
         10: [(901, 2), (900, 1)]
     }
     reached = flow("reached").read("Reached", "SpellID", "Visual", "Bits")
     source = tables(Reached="SpellID,Visual,Bits\n100,20,1\n100,20,2\n100,21,0\n")
-    assert (reached >> as_nested(c.SpellID, c.Visual, c.Bits, reduce=lambda a, b: a | b)).run(source) == {
+    assert (reached.into(as_nested(c.SpellID, c.Visual, c.Bits, reduce=lambda a, b: a | b))).run(source) == {
         100: {20: 3, 21: 0}
     }
 
@@ -249,13 +249,16 @@ def test_a_split_lands_one_read_in_many_shapes(tables: BuildTables) -> None:
         .map("mask", bits_of(c.bit_a, c.bit_b))
         .split(
             Landed,
-            morphs=flow("morphs").when("EffectAura", 56, [reference("EffectMiscValue_0", "creature_template")])
-            >> as_sets(c.SpellID, c.EffectMiscValue_0),
-            summons=flow("summons").when("Effect", 28, [reference("EffectMiscValue_0", "creature_template")])
-            >> as_sets(c.SpellID, c.EffectMiscValue_0),
+            morphs=flow("morphs")
+            .when("EffectAura", 56, [reference("EffectMiscValue_0", "creature_template")])
+            .into(as_sets(c.SpellID, c.EffectMiscValue_0)),
+            summons=flow("summons")
+            .when("Effect", 28, [reference("EffectMiscValue_0", "creature_template")])
+            .into(as_sets(c.SpellID, c.EffectMiscValue_0)),
             rows=landing(
-                flow("rows")
-                >> as_rows(lambda *v: v, c.Effect, c.mask, flag(c.consumed_Effect), flag(c.consumed_EffectAura))
+                flow("rows").into(
+                    as_rows(lambda *v: v, c.Effect, c.mask, flag(c.consumed_Effect), flag(c.consumed_EffectAura))
+                )
             ),
         )
     )
@@ -269,7 +272,7 @@ def test_a_split_lands_one_read_in_many_shapes(tables: BuildTables) -> None:
 def test_a_split_checks_its_branches_against_the_trunk_when_written() -> None:
     trunk = flow("effects").read("SpellEffect", "SpellID", "Effect")
     with pytest.raises(KeyError, match="no column 'EffectAura'"):
-        trunk.split(dict, morphs=flow("morphs").where(c.EffectAura == 56) >> as_ids(c.SpellID))
+        trunk.split(dict, morphs=flow("morphs").where(c.EffectAura == 56).into(as_ids(c.SpellID)))
     with pytest.raises(ValueError, match="cannot join"):
         flow("bad").join(c.SpellID, "Spell", c.Name_lang)
 
@@ -278,10 +281,15 @@ def test_any_of_selects_on_one_column_and_honours_each_retirement(tables: BuildT
     """The stable values and the retired ones are two selections landing in
     one place, and the retired one holds only before the patch that reused it."""
     source = tables(SpellEffect=EFFECTS + "100,50,0,7000,1,0\n100,105,0,7001,1,0\n")
-    objects = flow("objects").read("SpellEffect", "SpellID", "Effect", "EffectMiscValue_0").any_of(
-        when("Effect", 50, [reference("EffectMiscValue_0", "gameobject_template")]),
-        when("Effect", 105, [reference("EffectMiscValue_0", "gameobject_template")], until="4.0"),
-    ) >> as_sets(c.SpellID, c.EffectMiscValue_0)
+    objects = (
+        flow("objects")
+        .read("SpellEffect", "SpellID", "Effect", "EffectMiscValue_0")
+        .any_of(
+            when("Effect", 50, [reference("EffectMiscValue_0", "gameobject_template")]),
+            when("Effect", 105, [reference("EffectMiscValue_0", "gameobject_template")], until="4.0"),
+        )
+        .into(as_sets(c.SpellID, c.EffectMiscValue_0))
+    )
     assert objects.run(source, "3.4.3.58936") == {100: {7000, 7001}}
     assert objects.run(source, "9.2.7.45745") == {100: {7000}}
     with pytest.raises(ValueError, match="one column"):
@@ -291,9 +299,12 @@ def test_any_of_selects_on_one_column_and_honours_each_retirement(tables: BuildT
 def test_coalesce_takes_the_first_spelling_that_says_something(tables: BuildTables) -> None:
     """An amount a build exports twice, one spelling left at nought; rounded
     where the spellings carry conversion noise."""
-    amounts = flow("amounts").read("SpellEffect", "SpellID", "EffectBasePoints", "EffectBasePointsF").map(
-        "amount", coalesce(c.EffectBasePoints, c.EffectBasePointsF, digits=1)
-    ) >> as_map(c.SpellID, real(c.amount))
+    amounts = (
+        flow("amounts")
+        .read("SpellEffect", "SpellID", "EffectBasePoints", "EffectBasePointsF")
+        .map("amount", coalesce(c.EffectBasePoints, c.EffectBasePointsF, digits=1))
+        .into(as_map(c.SpellID, real(c.amount)))
+    )
     source = tables(SpellEffect="SpellID,EffectBasePoints,EffectBasePointsF\n1,0,12.34\n2,50,\n3,,\n")
     assert amounts.run(source) == {1: 12.3, 2: 50.0, 3: 0.0}
 
@@ -302,8 +313,8 @@ def test_a_lookup_may_keep_a_row_the_field_does_not_answer(tables: BuildTables) 
     """With a default the row carries it; without one the row is dropped."""
     seats = flow("seats").read("Vehicle", "ID", "SeatID_0")
     source = tables(Vehicle="ID,SeatID_0\n1,10\n2,11\n")
-    kept = seats.lookup(c.SeatID_0, {10: 5}, into="attachment", default=-1) >> as_map(c.ID, c.attachment)
-    dropped = seats.lookup(c.SeatID_0, {10: 5}, into="attachment") >> as_map(c.ID, c.attachment)
+    kept = seats.lookup(c.SeatID_0, {10: 5}, into="attachment", default=-1).into(as_map(c.ID, c.attachment))
+    dropped = seats.lookup(c.SeatID_0, {10: 5}, into="attachment").into(as_map(c.ID, c.attachment))
     assert kept.run(source) == {1: 5, 2: -1}
     assert dropped.run(source) == {1: 5}
 
@@ -388,9 +399,12 @@ def test_a_condition_is_an_expression_that_prints_as_itself() -> None:
 def test_prefer_keeps_the_base_row_wherever_it_comes(tables: BuildTables) -> None:
     """The mythic copy arrives first and must not stand for the spell; a key
     with no base row keeps its first."""
-    props = flow("props").read("SpellMisc", c.SpellID, c.DifficultyID, c.Attributes[:]).prefer(
-        c.SpellID, base=c.DifficultyID == 0
-    ) >> as_map(c.SpellID, text(c.DifficultyID))
+    props = (
+        flow("props")
+        .read("SpellMisc", c.SpellID, c.DifficultyID, c.Attributes[:])
+        .prefer(c.SpellID, base=c.DifficultyID == 0)
+        .into(as_map(c.SpellID, text(c.DifficultyID)))
+    )
     assert props.run(tables(SpellMisc=SPELL_MISC)) == {100: "0", 200: "0", 300: "0"}
     first = flow("first").read("SpellMisc", c.SpellID, c.DifficultyID).prefer(c.SpellID, base=c.DifficultyID == 99)
     assert list(first.rows(tables(SpellMisc=SPELL_MISC)))[0] == ("100", "23")
@@ -399,22 +413,31 @@ def test_prefer_keeps_the_base_row_wherever_it_comes(tables: BuildTables) -> Non
 def test_an_array_column_reads_whole_and_a_bit_addresses_the_words(tables: BuildTables) -> None:
     """Every Attributes_N the build has, as one cell, and bit 34 is the third
     bit of the second word; the mythic copy's bits do not count."""
-    words = flow("words").read("SpellMisc", c.SpellID, c.DifficultyID, c.Attributes[:]).prefer(
-        c.SpellID, base=c.DifficultyID == 0
-    ).where(c.Attributes[:].bit(0) | c.Attributes[:].bit(34)) >> as_ids(c.SpellID)
+    words = (
+        flow("words")
+        .read("SpellMisc", c.SpellID, c.DifficultyID, c.Attributes[:])
+        .prefer(c.SpellID, base=c.DifficultyID == 0)
+        .where(c.Attributes[:].bit(0) | c.Attributes[:].bit(34))
+        .into(as_ids(c.SpellID))
+    )
     assert words.run(tables(SpellMisc=SPELL_MISC)) == {100}
 
 
 def test_expand_walks_the_redirects_and_stops_on_the_cycle(tables: BuildTables) -> None:
     """Two visuals naming each other terminate, and the bits of the path
     union onto the reached row."""
-    reach = flow("reach").read("SpellXSpellVisual", c.SpellID, c.SpellVisualID).expand(
-        c.SpellVisualID,
-        "SpellVisual",
-        {"CasterSpellVisualID": 1, "HostileSpellVisualID": 2},
-        into="visual",
-        bits="bits",
-    ) >> as_sets(c.SpellID, text("visual"))
+    reach = (
+        flow("reach")
+        .read("SpellXSpellVisual", c.SpellID, c.SpellVisualID)
+        .expand(
+            c.SpellVisualID,
+            "SpellVisual",
+            {"CasterSpellVisualID": 1, "HostileSpellVisualID": 2},
+            into="visual",
+            bits="bits",
+        )
+        .into(as_sets(c.SpellID, text("visual")))
+    )
     got = reach.run(tables(SpellXSpellVisual=X_VISUAL, SpellVisual=SPELL_VISUAL))
     assert got == {1: {"10", "20", "21"}}
     rows = list(reach.flow.rows(tables(SpellXSpellVisual=X_VISUAL, SpellVisual=SPELL_VISUAL)))
@@ -426,8 +449,11 @@ def test_a_terminal_lands_the_rows_as_a_record_and_a_narrow_names_its_need(table
         kit: int
         file: int
 
-    kits = flow("kits").read("SoundKitEntry", c.SoundKitID, c.FileDataID).narrow(c.SoundKitID, "used_kits") >> as_rows(
-        Kit, c.SoundKitID, c.FileDataID
+    kits = (
+        flow("kits")
+        .read("SoundKitEntry", c.SoundKitID, c.FileDataID)
+        .narrow(c.SoundKitID, "used_kits")
+        .into(as_rows(Kit, c.SoundKitID, c.FileDataID))
     )
     assert kits.flow.needs == {"used_kits"}
     assert kits.run(tables(SoundKitEntry=SOUND_KIT_ENTRY), needs={"used_kits": {79829}}) == [
