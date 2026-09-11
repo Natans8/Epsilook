@@ -47,7 +47,7 @@ from .values import DescriptionValues
 from .vehicles import VehicleSeats
 from .visuals import KitEvent, VisualGraph, phase_words
 
-del _registry  # imported for the adapters it registers
+del _registry, _flows  # imported for the adapters and the declarations they register
 
 __all__ = [
     "Ambience",
