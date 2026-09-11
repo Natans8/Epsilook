@@ -52,7 +52,6 @@ from .routes import (
     Route,
     SpellEffectRows,
     implicit_target_bits,
-    read_spell_values,
     resolve_paths,
     route,
 )
@@ -222,7 +221,7 @@ fills and the one a caller always supplies.
 """
 
 
-GIVEN = ("tables", "world", "pinned", "listfile", "named", "version", "ladder", "values", "zone_maps")
+GIVEN = ("tables", "base", "world", "pinned", "listfile", "named", "version", "ladder", "scaling", "level", "zone_maps")
 """What the wiring supplies rather than produces, by the name a route asks for it."""
 
 
@@ -264,23 +263,32 @@ class Derivations:
         providers: Providers,
         build: Build,
         ladder: ExpansionLadder,
-        values: DescriptionValues,
+        scaling: Mapping[int, Mapping[str, float]],
         zone_maps: Mapping[int, int],
+        known: Mapping[str, Any] | None = None,
     ) -> Derivations:
-        """The resolver over one build's providers."""
-        return cls(
+        """The resolver over one build's providers, seeded with fields already produced.
+
+        Any: a known field is whatever its route produced for the build, and
+        the context's own fields type each on the way in.
+        """
+        derive = cls(
             {
                 "tables": providers.tables,
+                "base": providers.base,
                 "world": providers.world,
                 "pinned": providers.pinned,
                 "listfile": providers.listfile,
                 "named": providers.named,
                 "version": build.version,
                 "ladder": ladder,
-                "values": values,
+                "scaling": scaling,
+                "level": build.max_level,
                 "zone_maps": zone_maps,
             }
         )
+        derive.held.update(known or {})
+        return derive
 
     def resolve(self, name: str) -> Any:
         """One field, produced once and remembered, or a given as it is."""
@@ -333,27 +341,14 @@ def declared_reads(sections: Iterable[Section]) -> frozenset[str]:
     return frozenset(name for section in sections for name in section.reads)
 
 
-def read_all(
-    providers: Providers,
-    build: Build,
-    ladder: ExpansionLadder,
-    values: DescriptionValues,
-    zone_maps: Mapping[int, int],
-    wanted: Iterable[str] | None = None,
-) -> DeriveContext:
+def read_all(derive: Derivations, build: Build, wanted: Iterable[str] | None = None) -> DeriveContext:
     """Derive what a section reads, and no more than that.
 
     `wanted` names the context fields the selected sections declared; anything
     they depend on comes with them, because `Derivations` resolves a dependency
     by asking for it. Naming none derives everything, which is what a whole
     pack needs.
-
-    `values` and `zone_maps` arrive rather than being read here because they
-    are what the language cannot touch: a number is a number in every language,
-    and a map id is a map id. Reading them once is what lets a second language
-    cost the nine routes that do change rather than all of them.
     """
-    derive = Derivations.wired(providers, build, ladder, values, zone_maps)
     asked = DERIVED_FIELDS if wanted is None else DERIVED_FIELDS & set(wanted)
     log(f"Deriving {len(asked)} of {len(DERIVED_FIELDS)} context fields ...")
     return DeriveContext(build=build, **{name: derive.resolve(name) for name in sorted(asked)})
@@ -365,6 +360,7 @@ def read_spoken(
     *,
     build: Build,
     ladder: ExpansionLadder,
+    scaling: Mapping[int, Mapping[str, float]],
     effects: SpellEffectRows,
     zone_maps: Mapping[int, int],
     values: DescriptionValues,
@@ -383,6 +379,7 @@ def read_spoken(
         locale: the language being read.
         build: the build being packed.
         ladder: the expansion ladder.
+        scaling: the spell-scaling game table.
         effects: the build's own effect rows, which every language shares:
             the override names and the faction templates they reach are read
             off them rather than read again.
@@ -395,8 +392,9 @@ def read_spoken(
     Returns:
         The slice of the derive context this language replaces.
     """
-    spoken = Derivations.wired(providers, build, ladder, values, zone_maps)
-    spoken.held["effects"] = effects
+    spoken = Derivations.wired(
+        providers, build, ladder, scaling, zone_maps, known={"effects": effects, "values": values}
+    )
     with step(f"read {locale.code} names", f"Reading the tables the game writes in {locale.code} ..."):
         said = {name: spoken.resolve(name) for name in sorted(SPOKEN_FIELDS - {"prose"})}
     with phase(f"cook {locale.code} descriptions"):
@@ -661,12 +659,13 @@ def packed(
     # value with a coarse one -- a degradation, not a correction. The overlaid
     # provider is right for everything that asks what a spell IS; this asks
     # what number to print.
-    with phase("read spell values"):
-        values = read_spell_values(providers.base, level=build.max_level, scaling=scaling)
     # An id derived by matching two translated names, so it is the build's
     # answer and every language is handed it. See `flows.zone_maps`.
     with phase("read zone maps"):
         zone_maps = flows.zone_maps.run(providers.tables)
+    derive = Derivations.wired(providers, build, ladder, scaling, zone_maps)
+    with phase("read spell values"):
+        values = derive.resolve("values")
 
     chosen = selected(want)
     asked = set(declared_reads(chosen))
@@ -677,7 +676,7 @@ def packed(
     # its alternate names.
     if sources.locale_tables:
         asked.add("effects")
-    context = read_all(providers, build, ladder, values, zone_maps, asked)
+    context = read_all(derive, build, asked)
     unavailable = unavailable_tables(build, providers.world)
     columns, encoded = produce(context, unavailable, policy, chosen)
     degraded = degraded_sections(chosen, encoded, unavailable)
@@ -701,6 +700,7 @@ def packed(
             locale,
             build=build,
             ladder=ladder,
+            scaling=scaling,
             effects=context.effects,
             zone_maps=zone_maps,
             values=values,

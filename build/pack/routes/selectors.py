@@ -16,8 +16,8 @@ from collections.abc import Mapping, Sequence
 from typing import Any, NamedTuple
 
 from ..sources import load_local_enum
-from .effects import EFFECT_SELECTORS
 from .flow import Holds, Slot, When
+from .flows import effects
 
 
 class Declared(NamedTuple):
@@ -57,7 +57,7 @@ def _from_enum(table: str, on: str, enum: str) -> list[Declared]:
 
 
 SELECTORS: tuple[Declared, ...] = (
-    *(Declared("SpellEffect", chosen) for chosen in EFFECT_SELECTORS),
+    *(Declared("SpellEffect", chosen) for chosen in effects.selectors),
     *_from_enum("SpellVisualKitEffect", "EffectType", "spell_visual_kit_effect_types"),
     *_from_enum("SpellVisualEffectName", "Type", "spell_visual_effect_name_types"),
     *_from_enum("SpellProceduralEffect", "Type", "spell_procedural_effect_types"),

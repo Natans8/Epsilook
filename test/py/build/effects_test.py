@@ -7,8 +7,7 @@ or drops one that is.
 
 from __future__ import annotations
 
-import pytest
-
+from pack.routes import flows
 from pack.routes.effects import (
     AURA_ANIM_REPLACEMENT_SET,
     AURA_KEYBOUND_OVERRIDE,
@@ -21,16 +20,15 @@ from pack.routes.effects import (
     AURA_TRANSFORM,
     EFFECT_APPLY_AURA,
     EFFECT_PLAY_SOUND,
-    EFFECT_SUMMON,
     EFFECT_SPAWN_OBJECT,
-    PAYLOADS,
+    EFFECT_SUMMON,
     EffectRow,
-    read_spell_effect_rows,
+    SpellEffectRows,
 )
-from pack.routes.flow import Holds
-from pack.routes.effects import SpellEffectRows
+from pack.routes.flow import AnyOf, Holds, Plan, Then, When
+from pack.routes.names import SpellNames
 from pack.targets import TARGET_AREA, TARGET_CASTER, TARGET_TARGET
-from support import BuildTables
+from support import BuildTables, resolve
 
 SPELLS = frozenset({100, 200, 300})
 
@@ -63,18 +61,22 @@ def effect_rows(*rows: str) -> str:
     return header + "".join((row if row.count(",") == 10 else row + ",0") + "\n" for row in rows)
 
 
-ROSTERS = {"screens": frozenset({50}), "keybounds": frozenset({60})}
+ROSTERS = {"screens": frozenset({50}), "keybinds": frozenset({60})}
 
 
 def read(tables: BuildTables, spell_effect: str, version: str = MODERN, **rosters: frozenset[int]) -> SpellEffectRows:
     """Read one `SpellEffect` fixture, overriding any roster by name."""
-    return read_spell_effect_rows(
+    found = resolve(
+        "effects",
         tables(SpellEffect=spell_effect, SummonProperties=SUMMON_PROPERTIES),
-        SPELLS,
-        {**ROSTERS, **rosters},
-        TARGET_BITS,
-        version,
+        version=version,
+        names=SpellNames(names={spell: "" for spell in SPELLS}),
+        target_bits=TARGET_BITS,
+        **{**ROSTERS, **rosters},
     )
+    if not isinstance(found, SpellEffectRows):
+        raise TypeError("the effects field is the effect record")
+    return found
 
 
 def test_a_misc_value_lands_where_its_aura_sends_it(tables: BuildTables) -> None:
@@ -371,20 +373,44 @@ def test_an_implicit_target_the_build_does_not_name_contributes_nothing(tables: 
     assert rows.morphs.masks == {(100, 900): 0}
 
 
+def selectors_of(name: str) -> list[When]:
+    """The selectors one branch of the effects split declares, in order."""
+    branch = flows.effects.branches[name]
+    plan = branch.plan if isinstance(branch, Then) else branch
+    assert isinstance(plan, Plan)
+    found: list[When] = []
+    for step in plan.flow.steps:
+        if isinstance(step, When):
+            found.append(step)
+        elif isinstance(step, AnyOf):
+            found.extend(step.selectors)
+    return found
+
+
 def test_every_payload_is_declared_not_branched() -> None:
     """The extension point, pinned.
 
-    Adding a payload must be a row in `PAYLOADS` plus the field it lands in,
-    with no edit to the walk. A declaration that stopped covering a selector
-    would show up as a branch somewhere in the reader instead.
+    Adding a payload must be a branch of the split plus the field it lands in,
+    with no edit to the walk. Every selector chooses on the aura or the effect
+    column, a value is claimed by one payload (its masks landing beside it in
+    a `_targets` branch over the same selector), and a selector's slots are
+    references or an amount, never both.
     """
-    for payload in PAYLOADS:
-        assert payload.select.on in ("EffectAura", "Effect"), "a payload selects on the aura or the effect column"
-        assert (payload.into is None) != (payload.record is None), "a payload lands in a field or through a record"
-        if payload.record is None:
-            assert payload.reference.holds is not Holds.AMOUNT
+    selectors = flows.effects.selectors
+    assert selectors
+    for chosen in selectors:
+        assert chosen.on in ("EffectAura", "Effect"), "a payload selects on the aura or the effect column"
+        amounts = {slot.holds is Holds.AMOUNT for slot in chosen.slots}
+        assert len(amounts) <= 1, "a selector's slots are references or an amount, not both"
     for column in ("EffectAura", "Effect"):
-        claimed = [value for p in PAYLOADS if p.select.on == column for value in p.select.values]
+        claimed = [
+            value
+            for name in flows.effects.branches
+            if not name.endswith("_targets")
+            for chosen in selectors_of(name)
+            if chosen.on == column
+            for value in chosen.values
+        ]
         assert len(claimed) == len(set(claimed)), f"two payloads claim one {column} value"
 
 
@@ -396,17 +422,11 @@ def test_a_faction_override_lands_as_its_template(tables: BuildTables) -> None:
     assert rows.factions.masks == {(100, 2577): TARGET_TARGET}
 
 
-def test_a_roster_nobody_supplied_is_refused(tables: BuildTables) -> None:
-    """A roster name with nothing behind it would keep every row silently, so
-    it is refused at the call rather than discovered in a pack."""
-    with pytest.raises(KeyError):
-        read_spell_effect_rows(
-            tables(SpellEffect=effect_rows(), SummonProperties=SUMMON_PROPERTIES),
-            SPELLS,
-            {"screens": frozenset()},
-            TARGET_BITS,
-            MODERN,
-        )
+def test_the_rosters_are_needs_the_wiring_resolves() -> None:
+    """A roster name with nothing behind it would keep every row silently; as
+    a need of the declaration it is a field the resolver produces or refuses,
+    never a parameter a caller forgets."""
+    assert {"screens", "keybinds", "names.names", "target_bits", "summon_controls"} <= flows.effects.needs
 
 
 def test_a_reused_effect_id_spawns_an_object_only_on_the_older_build(tables: BuildTables) -> None:

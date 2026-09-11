@@ -7,13 +7,10 @@ so the function that assembles it lives beside the record that names it.
 
 from __future__ import annotations
 
-from collections.abc import Container, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 
 from ..sources import read_anim_names
-from ..tables import Tables
-from .effects import MaskedIds, SpellEffectRows, implicit_target_bits, read_spell_effect_rows
-from .fx import ScreenRow
-from .keybinds import KeyboundOverride
+from .effects import implicit_target_bits
 from .route import route
 
 
@@ -37,19 +34,11 @@ def anim_names() -> list[str]:
     return read_anim_names()
 
 
-@route("effects", spell_names="names.names", screens="fx.screens")
-def effects(
-    tables: Tables,
-    spell_names: Container[int],
-    screens: Mapping[int, ScreenRow],
-    keybinds: Mapping[int, KeyboundOverride],
-    version: str,
-) -> SpellEffectRows:
-    """The effect rows, with the rosters and the target bits the reader wants
-    assembled from the fields that carry them."""
-    return read_spell_effect_rows(
-        tables, spell_names, {"screens": screens, "keybounds": keybinds}, implicit_target_bits(version), version
-    )
+@route("target_bits")
+def target_bits(version: str) -> Mapping[int, int]:
+    """This build's implicit-target ids resolved to target bits, which the
+    effect rows look their two target columns up through."""
+    return implicit_target_bits(version)
 
 
 @route("used_kits", sounds="visuals.sounds")

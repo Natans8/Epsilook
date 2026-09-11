@@ -13,7 +13,7 @@ from .assets import resolve_paths
 from .attributes import attribute_bit, read_spell_attributes
 from .creatures import CreatureModels
 from .delivery import Delivery
-from .effects import EffectRow, MaskedIds, SpellEffectRows, implicit_target_bits, read_spell_effect_rows
+from .effects import EffectRow, MaskedIds, SpellEffectRows, implicit_target_bits
 from . import flows as _flows
 from .factions import FactionTemplateRow
 from .fx import ChainEffect, FxPayloads, ScreenRow
@@ -43,7 +43,7 @@ from .skies import (
 from .sounds import Ambience, ZoneMusic
 from .spells import SpellProperties
 from .text import SpellText
-from .values import DescriptionValues, read_spell_values
+from .values import DescriptionValues
 from .vehicles import VehicleSeats
 from .visuals import KitEvent, VisualGraph, phase_words
 
@@ -78,8 +78,6 @@ __all__ = [
     "Reach",
     "read_skies",
     "read_spell_attributes",
-    "read_spell_effect_rows",
-    "read_spell_values",
     "resolve_paths",
     "Route",
     "ROUTES",

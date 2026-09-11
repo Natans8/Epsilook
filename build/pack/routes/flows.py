@@ -14,16 +14,42 @@ from __future__ import annotations
 
 from operator import attrgetter, or_
 
-from ..drift import SPELL_NAME_SOURCES
-from ..targets import VISUAL_REDIRECTS
+from ..drift import RETIRED_SPAWN_OBJECT_EFFECTS, SPAWN_OBJECT_SLOTS_UNTIL, SPELL_NAME_SOURCES
+from ..targets import NO_TARGET, VISUAL_REDIRECTS
 from .anims import SPEED_UNIT
 from .areas import UI_MAP_TYPE_ZONE, AreaGates, GateRow
 from .colors import channel, rgb_of
 from .columns import BASE_DIFFICULTY, to_float, to_int
 from .creatures import CreatureModels
 from .delivery import CHANNEL_BITS, MOVING_BIT, DeliveryRow, assemble_delivery
+from .effects import (
+    AMOUNT,
+    AURA_ANIM_REPLACEMENT_SET,
+    AURA_KEYBOUND_OVERRIDE,
+    AURA_MOD_FACTION,
+    AURA_MOD_INVISIBILITY,
+    AURA_MOD_INVISIBILITY_DETECT,
+    AURA_OVERRIDE_NAME,
+    AURA_SCREEN_EFFECT,
+    AURA_SET_VEHICLE_ID,
+    AURA_SHAPESHIFT,
+    AURA_TRANSFORM,
+    EFFECT_APPLY_AURA,
+    EFFECT_PLAYS_SOUND,
+    EFFECT_SPAWN_OBJECT,
+    EFFECT_SUMMON,
+    MISC0,
+    MISC1,
+    SCALE_AURAS,
+    SPEED_AURAS,
+    EffectRow,
+    SpellEffectRows,
+    as_masked,
+    tenth,
+)
 from .factions import FactionTemplateRow
 from .flow import (
+    amount,
     as_ids,
     as_lists,
     as_map,
@@ -33,19 +59,26 @@ from .flow import (
     as_sets,
     as_text,
     as_tree,
+    bits_of,
     c,
+    coalesce,
     compose,
     first_available,
+    flag,
     flow,
     ids_of,
     key_of,
+    landing,
     nonzero,
     number_of,
     ordered,
     real,
+    reference,
     text,
     typed,
     values_of,
+    vocabulary,
+    when,
     word,
 )
 from .fx import (
@@ -116,6 +149,7 @@ from .shapeshifts import FormRow, ShapeshiftForms
 from .sounds import Ambience, ZoneMusic
 from .spells import PropertiesRow, SpellProperties
 from .text import assignments
+from .values import DescriptionValues, EffectValues, PointRow, effect_number, resolve_points
 from .vehicles import SEAT_COLUMNS, Seat, VehicleSeats
 from .visuals import KitEvent, VisualGraph, target_bit
 
@@ -1020,6 +1054,290 @@ aura_interrupts = declare(
     ).then(nonzero),
 )
 """A spell carrying only housekeeping bits is absent rather than empty."""
+
+# The effects: one read of SpellEffect, each row split into the payloads it
+# feeds. A selector column and a value choose a meaning, and the slots say
+# what the row's other columns then hold: a reference into a table, a value
+# a vocabulary names, a number. The shipped selector table is read off these.
+
+summon_controls = declare(
+    "summon_controls",
+    flow("how a summoned creature is controlled").read("SummonProperties", c.ID, c.Control) >> as_map(c.ID, c.Control),
+)
+
+effect_rows = (
+    flow("a spell's effects, and who each is aimed at")
+    .read(
+        "SpellEffect",
+        c.SpellID,
+        c.Effect,
+        c.EffectAura,
+        c.EffectMiscValue_0,
+        c.EffectMiscValue_1,
+        c.ImplicitTarget_0,
+        c.ImplicitTarget_1,
+        c.EffectBasePoints,
+        c.EffectBasePointsF,
+        c.EffectTriggerSpell,
+        c.EffectIndex,
+    )
+    .narrow(c.SpellID, "names.names")
+    .lookup(c.ImplicitTarget_0, "target_bits", into="bit_a", default=NO_TARGET)
+    .lookup(c.ImplicitTarget_1, "target_bits", into="bit_b", default=NO_TARGET)
+    .map("mask", bits_of(c.bit_a, c.bit_b))
+    .map("amount", coalesce(c.EffectBasePoints, c.EffectBasePointsF, digits=1))
+)
+"""The mask is the union of the row's two implicit targets; an implicit target
+the build does not name contributes nothing. The amount is whichever of the two
+spellings this build exports."""
+
+masked = as_masked(c.SpellID, MISC0, c.mask)
+"""Where a payload of one reference lands: the ids per spell, each pair masked."""
+
+effects = declare(
+    "effects",
+    effect_rows.split(
+        SpellEffectRows,
+        morphs=flow("morphs").when("EffectAura", AURA_TRANSFORM, [reference(MISC0, "creature_template")]) >> masked,
+        forms=flow("forms").when("EffectAura", AURA_SHAPESHIFT, [reference(MISC0, "SpellShapeshiftForm")]) >> masked,
+        vehicles=flow("vehicles").when("EffectAura", AURA_SET_VEHICLE_ID, [reference(MISC0, "Vehicle")]) >> masked,
+        invis=flow("invis").when(
+            "EffectAura", AURA_MOD_INVISIBILITY, [vocabulary(MISC0, "channels", zero_is_a_value=True)]
+        )
+        >> masked,
+        detect=flow("detect").when(
+            "EffectAura", AURA_MOD_INVISIBILITY_DETECT, [vocabulary(MISC0, "channels", zero_is_a_value=True)]
+        )
+        >> masked,
+        screens=flow("screens")
+        .when("EffectAura", AURA_SCREEN_EFFECT, [reference(MISC0, "ScreenEffect")])
+        .narrow(MISC0, "screens")
+        >> masked,
+        keybinds=flow("keybinds")
+        .when("EffectAura", AURA_KEYBOUND_OVERRIDE, [reference(MISC0, "SpellKeyboundOverride")])
+        .narrow(MISC0, "keybinds")
+        >> masked,
+        altnames=flow("altnames").when("EffectAura", AURA_OVERRIDE_NAME, [reference(MISC0, "SpellOverrideName")])
+        >> as_sets(c.SpellID, MISC0),
+        anim_sets=flow("anim sets").when(
+            "EffectAura", AURA_ANIM_REPLACEMENT_SET, [reference(MISC0, "AnimReplacementSet")]
+        )
+        >> masked,
+        factions=flow("factions").when("EffectAura", AURA_MOD_FACTION, [reference(MISC0, "FactionTemplate")]) >> masked,
+        objects=flow("objects").any_of(
+            when("Effect", sorted(EFFECT_SPAWN_OBJECT), [reference(MISC0, "gameobject_template")]),
+            when(
+                "Effect",
+                sorted(RETIRED_SPAWN_OBJECT_EFFECTS),
+                [reference(MISC0, "gameobject_template")],
+                until=SPAWN_OBJECT_SLOTS_UNTIL,
+            ),
+        )
+        >> masked,
+        summons=flow("summons")
+        .when(
+            "Effect",
+            EFFECT_SUMMON,
+            [reference(MISC0, "creature_template"), reference(MISC1, "SummonProperties", zero_is_a_value=True)],
+        )
+        .lookup(MISC1, "summon_controls", into="control", default=0)
+        >> as_sets(c.SpellID, MISC0, c.control),
+        summon_targets=flow("summon targets").when(
+            "Effect",
+            EFFECT_SUMMON,
+            [reference(MISC0, "creature_template"), reference(MISC1, "SummonProperties", zero_is_a_value=True)],
+        )
+        >> as_map((c.SpellID, MISC0), c.mask, reduce=or_),
+        sounds=flow("sounds").when("Effect", sorted(EFFECT_PLAYS_SOUND), [reference(MISC0, "SoundKit")])
+        >> as_map((c.SpellID, MISC0), c.mask, reduce=or_),
+        speeds=flow("speeds")
+        .when("EffectAura", sorted(SPEED_AURAS), [amount(AMOUNT)])
+        .where(c.amount != 0)
+        .lookup(c.EffectAura, SPEED_AURAS, into="movement")
+        >> as_sets(c.SpellID, text(c.movement), real(c.amount)),
+        speed_targets=flow("speed targets")
+        .when("EffectAura", sorted(SPEED_AURAS), [amount(AMOUNT)])
+        .where(c.amount != 0)
+        .lookup(c.EffectAura, SPEED_AURAS, into="movement")
+        >> as_map((c.SpellID, text(c.movement), real(c.amount)), c.mask, reduce=or_),
+        scales=flow("scales").when("EffectAura", sorted(SCALE_AURAS), [amount(AMOUNT)]).where(c.amount != 0)
+        >> as_sets(c.SpellID, real(c.amount)),
+        scale_targets=flow("scale targets")
+        .when("EffectAura", sorted(SCALE_AURAS), [amount(AMOUNT)])
+        .where(c.amount != 0)
+        >> as_map((c.SpellID, real(c.amount)), c.mask, reduce=or_),
+        links=flow("links")
+        .where((c.EffectTriggerSpell != 0) & (c.EffectTriggerSpell != c.SpellID))
+        .narrow(c.EffectTriggerSpell, "names.names")
+        >> as_ids(c.SpellID, c.EffectTriggerSpell, c.Effect, c.EffectAura),
+        link_targets=flow("link targets")
+        .where((c.EffectTriggerSpell != 0) & (c.EffectTriggerSpell != c.SpellID))
+        .narrow(c.EffectTriggerSpell, "names.names")
+        >> as_map((c.SpellID, c.EffectTriggerSpell), c.mask, reduce=or_),
+        cast_target_bits=flow("cast targets") >> as_map(c.SpellID, c.mask, reduce=or_),
+        aura_target_bits=flow("aura targets").where(c.Effect == EFFECT_APPLY_AURA)
+        >> as_map(c.SpellID, c.mask, reduce=or_),
+        mechanics=landing(
+            (
+                flow("mechanics").where((c.Effect != 0) | (c.EffectAura != 0))
+                >> as_rows(
+                    EffectRow,
+                    c.SpellID,
+                    c.Effect,
+                    c.EffectAura,
+                    c.ImplicitTarget_0,
+                    c.ImplicitTarget_1,
+                    MISC0,
+                    MISC1,
+                    flag(c.consumed_Effect),
+                    flag(c.consumed_EffectAura),
+                    c.EffectIndex,
+                )
+            ).then(set)
+        ),
+    ),
+)
+"""A zero amount is dropped: a pill made of nothing but the number would
+promise a change and deliver none. A payload naming a roster drops a value the
+build has nothing to show for. The mechanics rows are every distinct effect,
+each half flagged where a branch landed it, so a value whose payload was
+dropped stays raw and unflagged. The link through the trigger column selects
+nothing: every row carries it."""
+
+
+# The numbers a description asks for, read from the client's own tables and
+# never the server's revisions: a hotfix prints a float at six significant
+# digits and carries only the integer spelling of an amount, so on a build
+# whose client exports only the float column the overlay would replace a
+# precise value with a coarse one.
+
+effect_values = declare(
+    "effect_values",
+    flow("the numbers a template asks of each effect")
+    .read(
+        "SpellEffect",
+        c.SpellID,
+        c.DifficultyID,
+        c.EffectIndex,
+        c.EffectBasePoints,
+        c.EffectBasePointsF,
+        c.EffectAuraPeriod,
+        c.EffectRadiusIndex_0,
+        c.EffectChainTargets,
+        c.EffectMiscValue_0,
+        c.Variance,
+        c.ScalingClass,
+        c.Coefficient,
+        source="base",
+    )
+    .where(BASE)
+    .join(c.SpellID, "SpellScaling", c.MinScalingLevel, c.MaxScalingLevel, by="SpellID", source="base")
+    .join(c.EffectRadiusIndex_0, "SpellRadius", c.Radius, source="base")
+    .map("amount", coalesce(c.EffectBasePoints, c.EffectBasePointsF, digits=1))
+    .map("spread", coalesce(c.Variance, digits=1))
+    .map("reached", coalesce(c.Radius, digits=1))
+    .split(
+        EffectValues,
+        points=(
+            flow("points")
+            >> as_rows(
+                PointRow,
+                c.SpellID,
+                typed(c.EffectIndex, effect_number),
+                real(c.amount),
+                c.ScalingClass,
+                typed(c.Coefficient, tenth),
+                c.MinScalingLevel,
+                c.MaxScalingLevel,
+            )
+        ).then(resolve_points, level="level", scaling="scaling"),
+        variance=flow("variance").where(c.spread != 0)
+        >> as_nested(c.SpellID, typed(c.EffectIndex, effect_number), real(c.spread)),
+        period=flow("period").where(c.EffectAuraPeriod != 0)
+        >> as_nested(c.SpellID, typed(c.EffectIndex, effect_number), c.EffectAuraPeriod),
+        radius=flow("radius").where(c.reached != 0)
+        >> as_nested(c.SpellID, typed(c.EffectIndex, effect_number), real(c.reached)),
+        chain_targets=flow("chain targets").where(c.EffectChainTargets != 0)
+        >> as_nested(c.SpellID, typed(c.EffectIndex, effect_number), c.EffectChainTargets),
+        misc_value=flow("misc value").where(c.EffectMiscValue_0 != 0)
+        >> as_nested(c.SpellID, typed(c.EffectIndex, effect_number), c.EffectMiscValue_0),
+    ),
+)
+"""Base difficulty only, and a zero is left out rather than recorded, so the
+cooker elides the code instead of substituting nothing."""
+
+spell_durations = declare(
+    "spell_durations",
+    flow("how long a spell lasts")
+    .read("SpellMisc", c.SpellID, c.DifficultyID, c.DurationIndex, source="base")
+    .where(BASE)
+    .join(c.DurationIndex, "SpellDuration", c.Duration, inner=True, source="base")
+    >> as_map(c.SpellID, c.Duration),
+)
+
+spell_ranges = declare(
+    "spell_ranges",
+    flow("how far a spell's description says it reaches")
+    .read("SpellMisc", c.SpellID, c.DifficultyID, c.RangeIndex, source="base")
+    .where(BASE)
+    .join(c.RangeIndex, "SpellRange", c.RangeMax_0, inner=True, source="base")
+    .map("distance", coalesce(c.RangeMax_0, digits=1))
+    .where(c.distance != 0)
+    >> as_map(c.SpellID, real(c.distance)),
+)
+
+aura_caps = (
+    flow("what an aura's options cap")
+    .read("SpellAuraOptions", c.SpellID, c.DifficultyID, c.CumulativeAura, c.ProcCharges, c.ProcChance, source="base")
+    .where(BASE)
+)
+
+spell_stack_caps = declare(
+    "spell_stack_caps", aura_caps.where(c.CumulativeAura != 0) >> as_map(c.SpellID, c.CumulativeAura)
+)
+
+spell_charges = declare("spell_charges", aura_caps.where(c.ProcCharges != 0) >> as_map(c.SpellID, c.ProcCharges))
+
+spell_proc_chances = declare(
+    "spell_proc_chances", aura_caps.where(c.ProcChance != 0) >> as_map(c.SpellID, c.ProcChance)
+)
+
+target_caps = (
+    flow("what a spell's targeting caps")
+    .read("SpellTargetRestrictions", c.SpellID, c.DifficultyID, c.MaxTargets, c.MaxTargetLevel, source="base")
+    .where(BASE)
+)
+
+spell_target_caps = declare(
+    "spell_target_caps", target_caps.where(c.MaxTargets != 0) >> as_map(c.SpellID, c.MaxTargets)
+)
+
+spell_target_levels = declare(
+    "spell_target_levels", target_caps.where(c.MaxTargetLevel != 0) >> as_map(c.SpellID, c.MaxTargetLevel)
+)
+
+values = declare(
+    "values",
+    compose(
+        DescriptionValues,
+        points="effect_values.points",
+        variance="effect_values.variance",
+        period="effect_values.period",
+        radius="effect_values.radius",
+        chain_targets="effect_values.chain_targets",
+        misc_value="effect_values.misc_value",
+        duration="spell_durations",
+        max_stacks="spell_stack_caps",
+        charges="spell_charges",
+        proc_chance="spell_proc_chances",
+        max_targets="spell_target_caps",
+        max_target_level="spell_target_levels",
+        level="level",
+        range_max="spell_ranges",
+    ),
+)
+"""None of it reaches the pack; only the substituted text does."""
+
 
 # The prose.
 

@@ -18,13 +18,20 @@ from pack.routes.flow import (
     as_nested,
     as_rows,
     as_sets,
+    any_of,
+    bits_of,
     c,
+    coalesce,
     compose,
     first_available,
+    flag,
     flow,
+    landing,
+    real,
     reference,
     text,
     vocabulary,
+    when,
 )
 from support import BuildTables
 
@@ -208,6 +215,97 @@ def test_a_list_keeps_the_order_met_and_a_nested_map_combines_two_paths(tables: 
     assert (reached >> as_nested(c.SpellID, c.Visual, c.Bits, reduce=lambda a, b: a | b)).run(source) == {
         100: {20: 3, 21: 0}
     }
+
+
+EFFECTS = "SpellID,Effect,EffectAura,EffectMiscValue_0,ImplicitTarget_0,ImplicitTarget_1\n"
+"""A tiny SpellEffect: a morph aimed at the caster, a summon, a row nothing selects."""
+
+
+class Landed(NamedTuple):
+    """Where a split of the tiny effect table lands."""
+
+    morphs: dict[int, set[int]]
+    summons: dict[int, set[int]]
+    rows: list[tuple[int, int, bool, bool]]
+
+
+def test_a_split_lands_one_read_in_many_shapes(tables: BuildTables) -> None:
+    """Each branch keeps what its selector chooses, the landing keeps every
+    row with a flag per selected column, and the trunk is read once."""
+    source = tables(SpellEffect=EFFECTS + "100,6,56,900,1,0\n100,28,0,700,2,0\n100,3,0,0,1,0\n")
+    plan = (
+        flow("effects")
+        .read(
+            "SpellEffect",
+            "SpellID",
+            "Effect",
+            "EffectAura",
+            "EffectMiscValue_0",
+            "ImplicitTarget_0",
+            "ImplicitTarget_1",
+        )
+        .lookup(c.ImplicitTarget_0, {1: 1, 2: 2}, into="bit_a", default=0)
+        .lookup(c.ImplicitTarget_1, {1: 1, 2: 2}, into="bit_b", default=0)
+        .map("mask", bits_of(c.bit_a, c.bit_b))
+        .split(
+            Landed,
+            morphs=flow("morphs").when("EffectAura", 56, [reference("EffectMiscValue_0", "creature_template")])
+            >> as_sets(c.SpellID, c.EffectMiscValue_0),
+            summons=flow("summons").when("Effect", 28, [reference("EffectMiscValue_0", "creature_template")])
+            >> as_sets(c.SpellID, c.EffectMiscValue_0),
+            rows=landing(
+                flow("rows")
+                >> as_rows(lambda *v: v, c.Effect, c.mask, flag(c.consumed_Effect), flag(c.consumed_EffectAura))
+            ),
+        )
+    )
+    landed = plan.run(source)
+    assert landed.morphs == {100: {900}}
+    assert landed.summons == {100: {700}}
+    assert landed.rows == [(6, 1, False, True), (28, 2, True, False), (3, 1, False, False)]
+    assert [chosen.values for chosen in plan.selectors] == [(56,), (28,)]
+
+
+def test_a_split_checks_its_branches_against_the_trunk_when_written() -> None:
+    trunk = flow("effects").read("SpellEffect", "SpellID", "Effect")
+    with pytest.raises(KeyError, match="no column 'EffectAura'"):
+        trunk.split(dict, morphs=flow("morphs").where(c.EffectAura == 56) >> as_ids(c.SpellID))
+    with pytest.raises(ValueError, match="cannot join"):
+        flow("bad").join(c.SpellID, "Spell", c.Name_lang)
+
+
+def test_any_of_selects_on_one_column_and_honours_each_retirement(tables: BuildTables) -> None:
+    """The stable values and the retired ones are two selections landing in
+    one place, and the retired one holds only before the patch that reused it."""
+    source = tables(SpellEffect=EFFECTS + "100,50,0,7000,1,0\n100,105,0,7001,1,0\n")
+    objects = flow("objects").read("SpellEffect", "SpellID", "Effect", "EffectMiscValue_0").any_of(
+        when("Effect", 50, [reference("EffectMiscValue_0", "gameobject_template")]),
+        when("Effect", 105, [reference("EffectMiscValue_0", "gameobject_template")], until="4.0"),
+    ) >> as_sets(c.SpellID, c.EffectMiscValue_0)
+    assert objects.run(source, "3.4.3.58936") == {100: {7000, 7001}}
+    assert objects.run(source, "9.2.7.45745") == {100: {7000}}
+    with pytest.raises(ValueError, match="one column"):
+        any_of(when("Effect", 50, []), when("EffectAura", 50, []))
+
+
+def test_coalesce_takes_the_first_spelling_that_says_something(tables: BuildTables) -> None:
+    """An amount a build exports twice, one spelling left at nought; rounded
+    where the spellings carry conversion noise."""
+    amounts = flow("amounts").read("SpellEffect", "SpellID", "EffectBasePoints", "EffectBasePointsF").map(
+        "amount", coalesce(c.EffectBasePoints, c.EffectBasePointsF, digits=1)
+    ) >> as_map(c.SpellID, real(c.amount))
+    source = tables(SpellEffect="SpellID,EffectBasePoints,EffectBasePointsF\n1,0,12.34\n2,50,\n3,,\n")
+    assert amounts.run(source) == {1: 12.3, 2: 50.0, 3: 0.0}
+
+
+def test_a_lookup_may_keep_a_row_the_field_does_not_answer(tables: BuildTables) -> None:
+    """With a default the row carries it; without one the row is dropped."""
+    seats = flow("seats").read("Vehicle", "ID", "SeatID_0")
+    source = tables(Vehicle="ID,SeatID_0\n1,10\n2,11\n")
+    kept = seats.lookup(c.SeatID_0, {10: 5}, into="attachment", default=-1) >> as_map(c.ID, c.attachment)
+    dropped = seats.lookup(c.SeatID_0, {10: 5}, into="attachment") >> as_map(c.ID, c.attachment)
+    assert kept.run(source) == {1: 5, 2: -1}
+    assert dropped.run(source) == {1: 5}
 
 
 class Bundle(NamedTuple):

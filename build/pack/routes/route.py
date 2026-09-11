@@ -132,7 +132,7 @@ def _plan_for(field: str, version: str) -> Any:
     return chosen
 
 
-def declare[T](field: str, plan: Runnable[T], *, phase: str = "", since: str = "") -> Runnable[T]:
+def declare[P: Runnable[Any]](field: str, plan: P, *, phase: str = "", since: str = "") -> P:
     """Register a plan as what fills `field`.
 
     The plan's needs are read off the plan itself, so a flow narrowing on a

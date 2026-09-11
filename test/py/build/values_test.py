@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
-from pack.routes.values import DescriptionValues, read_spell_values
-from support import BuildTables
+from pack.routes.values import DescriptionValues
+from pack.tables import Tables
+from support import BuildTables, resolve
 
 SPELL_EFFECT = """\
-SpellID,DifficultyID,EffectIndex,EffectBasePoints,EffectBasePointsF,EffectAuraPeriod,EffectRadiusIndex_0,EffectChainTargets,EffectMiscValue_0,Variance
-100,0,0,50,,3000,7,4,12,0.5
-100,0,1,25,,0,0,0,0,0
-100,23,0,999,,0,0,0,0,0
+SpellID,DifficultyID,EffectIndex,EffectBasePoints,EffectBasePointsF,EffectAuraPeriod,EffectRadiusIndex_0,EffectChainTargets,EffectMiscValue_0,Variance,ScalingClass,Coefficient
+100,0,0,50,,3000,7,4,12,0.5,0,0
+100,0,1,25,,0,0,0,0,0,0,0
+100,23,0,999,,0,0,0,0,0,0,0
 """
 
 SPELL_RADIUS = "ID,Radius\n7,8.5\n"
@@ -31,8 +32,17 @@ SpellID,DifficultyID,MaxTargets,MaxTargetLevel
 """
 
 
+def values_of(tables: BuildTables, base: Tables) -> DescriptionValues:
+    """The values read off one client's own tables, at no caster level."""
+    found = resolve("values", tables(), base=base, level=0, scaling={})
+    if not isinstance(found, DescriptionValues):
+        raise TypeError("the values field is the description values")
+    return found
+
+
 def build(tables: BuildTables) -> DescriptionValues:
-    return read_spell_values(
+    return values_of(
+        tables,
         tables(
             SpellEffect=SPELL_EFFECT,
             SpellRadius=SPELL_RADIUS,
@@ -41,7 +51,7 @@ def build(tables: BuildTables) -> DescriptionValues:
             SpellMisc=SPELL_MISC,
             SpellAuraOptions=SPELL_AURA_OPTIONS,
             SpellTargetRestrictions=SPELL_TARGET_RESTRICTIONS,
-        )
+        ),
     )
 
 
@@ -82,7 +92,8 @@ def test_the_variance_the_range_is_written_around_survives(tables: BuildTables) 
 def test_a_build_lacking_a_table_leaves_its_dict_empty(tables: BuildTables) -> None:
     """How an optional table reports itself: the prose still cooks, without
     that number."""
-    values = read_spell_values(
+    values = values_of(
+        tables,
         tables(
             SpellEffect=SPELL_EFFECT,
             SpellMisc=SPELL_MISC,
@@ -92,8 +103,9 @@ def test_a_build_lacking_a_table_leaves_its_dict_empty(tables: BuildTables) -> N
                 "SpellDuration": "the channel duration",
                 "SpellAuraOptions": "stack caps",
                 "SpellTargetRestrictions": "max-target counts",
+                "SpellScaling": "the level window",
             },
-        )
+        ),
     )
     assert values.radius == {}
     assert values.range_max == {}

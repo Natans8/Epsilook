@@ -251,6 +251,63 @@ class Bit:
 
 
 @dataclass(frozen=True)
+class Coalesce:
+    """The first of several columns holding a number other than nought, as
+    that number: an amount a build exports in two spellings, one of them
+    left at zero."""
+
+    names: tuple[str, ...]
+    digits: int | None = None
+    """Places to round to, where the spellings carry conversion noise."""
+
+    def __repr__(self) -> str:
+        return f"coalesce({', '.join(f'c.{name}' for name in self.names)})"
+
+    def columns(self) -> frozenset[str]:
+        """The columns tried."""
+        return frozenset(self.names)
+
+    def evaluate(self, row: Row, schema: Schema) -> float:
+        """The first spelling that is non-empty and non-zero, or nought."""
+        for name in self.names:
+            cell = row[schema.at(name)]
+            if cell and (held := number_of(cell)):
+                return held if self.digits is None else round(held, self.digits)
+        return 0.0
+
+
+@dataclass(frozen=True)
+class BitsOf:
+    """Several id columns unioned as bits: the mask two target columns make."""
+
+    names: tuple[str, ...]
+
+    def __repr__(self) -> str:
+        return f"bits_of({', '.join(f'c.{name}' for name in self.names)})"
+
+    def columns(self) -> frozenset[str]:
+        """The columns unioned."""
+        return frozenset(self.names)
+
+    def evaluate(self, row: Row, schema: Schema) -> int:
+        """The union."""
+        mask = 0
+        for name in self.names:
+            mask |= key_of(row[schema.at(name)])
+        return mask
+
+
+def coalesce(*columns: str | Column, digits: int | None = None) -> Coalesce:
+    """The first of the columns holding a number other than nought, rounded where asked."""
+    return Coalesce(tuple(column_name(name) for name in columns), digits)
+
+
+def bits_of(*columns: str | Column) -> BitsOf:
+    """The columns' ids unioned as bits."""
+    return BitsOf(tuple(column_name(name) for name in columns))
+
+
+@dataclass(frozen=True)
 class Both:
     """Two conditions, both."""
 
@@ -433,6 +490,16 @@ def _blank(columns: Sequence[str]) -> Row:
     return tuple(() if name.endswith("_*") else "" for name in columns)
 
 
+def _held(source: str, tables: Tables, needs: Needs) -> Tables | None:
+    """The tables a step reads from: the build's own, or another source the
+    wiring holds, such as the pinned build, the server dump or the client's
+    unrevised tables; None where the build lacks that source."""
+    if source == "tables":
+        return tables
+    found: Tables | None = needs.get(source)
+    return found
+
+
 @dataclass(frozen=True)
 class Read:
     """The origin: the rows of one table, by the columns named.
@@ -462,22 +529,15 @@ class Read:
         del incoming  # an origin follows nothing
         return Schema(self.columns)
 
-    def held(self, tables: Tables, needs: Needs) -> Tables | None:
-        """The source the table is read from, or None where the build lacks it."""
-        if self.source == "tables":
-            return tables
-        source: Tables | None = needs.get(self.source)
-        return source
-
     def available(self, tables: Tables, needs: Needs) -> bool:
         """Whether this build has the table, in the source it is read from."""
-        held = self.held(tables, needs)
+        held = _held(self.source, tables, needs)
         return held is not None and held.available(self.table)
 
     def rows(self, incoming: Rows, incoming_schema: Schema, tables: Tables, version: str, needs: Needs) -> Rows:
         """Read the table."""
         del incoming, incoming_schema, version
-        held = self.held(tables, needs)
+        held = _held(self.source, tables, needs)
         if held is None or (self.optional and not held.available(self.table)):
             return iter(())
         return _read(held, self.table, self.columns)
@@ -508,6 +568,9 @@ class Join:
     """Whether the key finds several rows there, each of which becomes a row
     here; otherwise the last row per key stands, as a source's revisions do."""
 
+    source: str = "tables"
+    """Which given the joined table is read from, as a read names it."""
+
     def schema(self, incoming: Schema) -> Schema:
         """The incoming columns, then the joined ones."""
         incoming.at(self.key)
@@ -520,9 +583,10 @@ class Join:
         is shared by every build and every language, and an index kept on it
         would answer the next run with the last run's table.
         """
-        del version, needs
+        del version
         index: dict[int, list[Row]] = {}
-        for source in _read(tables, self.table, [self.by, *self.columns]):
+        held = _held(self.source, tables, needs)
+        for source in _read(held, self.table, [self.by, *self.columns]) if held is not None else ():
             key = key_of(source[0])
             if self.many:
                 index.setdefault(key, []).append(source[1:])
@@ -607,6 +671,9 @@ class Expand:
     bits: str
     by: str = "ID"
 
+    source: str = "tables"
+    """Which given the table is read from, as a read names it."""
+
     def schema(self, incoming: Schema) -> Schema:
         """The incoming columns, then the reached id and its bits."""
         incoming.at(self.key)
@@ -630,11 +697,14 @@ class Expand:
 
     def rows(self, incoming: Rows, incoming_schema: Schema, tables: Tables, version: str, needs: Needs) -> Rows:
         """One row per id each seed reaches; the edges are read per run, as a join's index is."""
-        del version, needs
+        del version
         hops: dict[int, list[tuple[int, int]]] = {}
-        columns, widths = _flattened(tables, self.table, list(self.edges))
+        held = _held(self.source, tables, needs)
+        if held is None:
+            return
+        columns, widths = _flattened(held, self.table, list(self.edges))
         bits = [bit for bit, width in zip(self.edges.values(), widths) for _each in range(width)]
-        for source in tables.rows(self.table, [self.by, *columns]):
+        for source in held.rows(self.table, [self.by, *columns]):
             node = key_of(source[0])
             found = [(target, bit) for target, bit in zip(map(key_of, source[1:]), bits) if target and target != node]
             if found:
@@ -696,9 +766,13 @@ class Map:
     def rows(self, incoming: Rows, incoming_schema: Schema, tables: Tables, version: str, needs: Needs) -> Rows:
         """Each row with the value appended as text, a truth as 1 or 0."""
         del tables, version, needs
-        for row in incoming:
-            value = self.expr.evaluate(row, incoming_schema)
-            yield (*row, str(int(value)) if isinstance(value, bool) else str(value))
+        return (self.one(row, incoming_schema, {}) for row in incoming)
+
+    def one(self, row: Row, schema: Schema, needs: Needs) -> Row:
+        """One row with the value appended."""
+        del needs
+        value = self.expr.evaluate(row, schema)
+        return (*row, str(int(value)) if isinstance(value, bool) else str(value))
 
 
 class Holds(Enum):
@@ -798,20 +872,70 @@ class When:
 
     def rows(self, incoming: Rows, incoming_schema: Schema, tables: Tables, version: str, needs: Needs) -> Rows:
         """The rows the selector chooses, and none on a build past the meaning."""
-        del tables, needs
+        del tables
         if not self.holds(version):
-            return
-        at = incoming_schema.at(self.on)
-        wanted = set(self.values)
-        # A reference of nought names no row unless the slot says nought is
-        # data, so such a row is dropped here rather than by every reader.
-        gates = [(incoming_schema.at(slot.column), slot) for slot in self.slots if slot.holds is not Holds.AMOUNT]
-        for row in incoming:
-            if key_of(row[at]) not in wanted:
+            return iter(())
+        return (row for row in incoming if self.one(row, incoming_schema, needs) is not None)
+
+    def one(self, row: Row, schema: Schema, needs: Needs) -> Row | None:
+        """The row where the selector chooses it, on a build where the meaning holds.
+
+        A reference of nought names no row unless the slot says nought is
+        data, so such a row is dropped here rather than by every reader.
+        """
+        del needs
+        if key_of(row[schema.at(self.on)]) not in self.values:
+            return None
+        for slot in self.slots:
+            if slot.holds is Holds.AMOUNT or slot.zero_is_a_value:
                 continue
-            if any(not slot.zero_is_a_value and key_of(row[here]) <= 0 for here, slot in gates):
-                continue
-            yield row
+            if key_of(row[schema.at(slot.column)]) <= 0:
+                return None
+        return row
+
+
+@dataclass(frozen=True)
+class AnyOf:
+    """The rows any of several selectors on one column chooses: an id the
+    game reused, so the stable values and the retired ones are two
+    selections landing in one place."""
+
+    selectors: tuple[When, ...]
+
+    def __post_init__(self) -> None:
+        if len({chosen.on for chosen in self.selectors}) != 1:
+            raise ValueError("the selectors of any_of choose on one column")
+
+    @property
+    def on(self) -> str:
+        """The column every selector chooses on."""
+        return self.selectors[0].on
+
+    def schema(self, incoming: Schema) -> Schema:
+        """Unchanged."""
+        for chosen in self.selectors:
+            chosen.schema(incoming)
+        return incoming
+
+    def live(self, version: str) -> tuple[When, ...]:
+        """The selectors still meaning this on the build."""
+        return tuple(chosen for chosen in self.selectors if chosen.holds(version))
+
+    def rows(self, incoming: Rows, incoming_schema: Schema, tables: Tables, version: str, needs: Needs) -> Rows:
+        """The rows any live selector chooses."""
+        del tables
+        live = self.live(version)
+        return (row for row in incoming if any(chosen.one(row, incoming_schema, needs) is not None for chosen in live))
+
+    def one(self, row: Row, schema: Schema, needs: Needs) -> Row | None:
+        """The row where any selector chooses it; the build's retirements are
+        applied by whoever runs this per row."""
+        return row if any(chosen.one(row, schema, needs) is not None for chosen in self.selectors) else None
+
+
+def any_of(*selectors: When) -> AnyOf:
+    """The rows any of the selectors chooses."""
+    return AnyOf(selectors)
 
 
 @dataclass(frozen=True)
@@ -830,6 +954,11 @@ class Where:
         """The rows that pass."""
         del tables, version, needs
         return (row for row in incoming if self.keep.evaluate(row, incoming_schema))
+
+    def one(self, row: Row, schema: Schema, needs: Needs) -> Row | None:
+        """The row where it passes."""
+        del needs
+        return row if self.keep.evaluate(row, schema) else None
 
 
 @dataclass(frozen=True)
@@ -860,6 +989,11 @@ class Narrow:
         at = incoming_schema.at(self.column)
         return (row for row in incoming if key_of(row[at]) in roster)
 
+    def one(self, row: Row, schema: Schema, needs: Needs) -> Row | None:
+        """The row where the roster admits it."""
+        roster = needs[self.roster] if isinstance(self.roster, str) else self.roster
+        return row if key_of(row[schema.at(self.column)]) in roster else None
+
 
 @dataclass(frozen=True)
 class Lookup:
@@ -873,8 +1007,12 @@ class Lookup:
     """
 
     column: str
-    field: str
+    field: str | Mapping[int, object]
+    """The field's path, or a mapping written where the declaration is."""
     into: str
+
+    default: object = None
+    """What a row the field does not answer carries; None drops the row."""
 
     def schema(self, incoming: Schema) -> Schema:
         """The incoming columns, then the value found."""
@@ -884,12 +1022,13 @@ class Lookup:
     def rows(self, incoming: Rows, incoming_schema: Schema, tables: Tables, version: str, needs: Needs) -> Rows:
         """The rows the field answers, with its answer appended."""
         del tables, version
-        held: Mapping[int, int] = needs[self.field]
-        at = incoming_schema.at(self.column)
-        for row in incoming:
-            found = held.get(key_of(row[at]))
-            if found is not None:
-                yield (*row, str(found))
+        return (found for row in incoming if (found := self.one(row, incoming_schema, needs)) is not None)
+
+    def one(self, row: Row, schema: Schema, needs: Needs) -> Row | None:
+        """The row with the field's answer appended, or the default, or nothing."""
+        held: Mapping[int, object] = needs[self.field] if isinstance(self.field, str) else self.field
+        found = held.get(key_of(row[schema.at(self.column)]), self.default)
+        return None if found is None else (*row, str(found))
 
 
 # The flow.
@@ -907,11 +1046,25 @@ class Flow:
 
         The one way a step joins a flow; the methods below are the spellings
         of it for each kind of step, and a step built elsewhere is appended
-        with this directly.
+        with this directly. A tail, a flow that starts with no read, is
+        checked when it is joined to the trunk it branches from.
         """
         grown = Flow(self.name, (*self.steps, step))
-        grown.schema()
+        if grown.is_tail:
+            for held in grown.steps:
+                if not hasattr(held, "one"):
+                    raise ValueError(
+                        f"flow {self.name!r} must start by reading a table; "
+                        f"a branch of one cannot {type(held).__name__.lower()}, it takes one row at a time"
+                    )
+        else:
+            grown.schema()
         return grown
+
+    @property
+    def is_tail(self) -> bool:
+        """Whether the flow starts with no read: the steps of a branch, or none."""
+        return not (self.steps and isinstance(self.steps[0], Read))
 
     def read(self, table: str, *columns: str | Column, optional: bool = False, source: str = "tables") -> Flow:
         """Start from one table's rows, by the columns named."""
@@ -925,21 +1078,29 @@ class Flow:
         by: str = "ID",
         inner: bool = False,
         many: bool = False,
+        source: str = "tables",
     ) -> Flow:
         """Hop through a key into another table, taking the columns named."""
-        return self | Join(column_name(key), table, tuple(column_name(name) for name in columns), by, inner, many)
+        return self | Join(
+            column_name(key), table, tuple(column_name(name) for name in columns), by, inner, many, source
+        )
 
     def explode(self, *columns: str | Column, into: str, slot: str = "") -> Flow:
         """One row per value among the columns named, under one name, and its position where asked."""
         return self | Explode(tuple(column_name(name) for name in columns), into, slot)
 
-    def lookup(self, column: str | Column, field: str, *, into: str) -> Flow:
-        """Hop through a field: keep the rows it answers, carrying its answer."""
-        return self | Lookup(column_name(column), field, into)
+    def lookup(
+        self, column: str | Column, field: str | Mapping[int, object], *, into: str, default: object = None
+    ) -> Flow:
+        """Hop through a field, or a mapping written here: the rows it answers
+        carry its answer, and the rest carry the default or are dropped."""
+        return self | Lookup(column_name(column), field, into, default)
 
-    def expand(self, key: str | Column, table: str, edges: Mapping[str, int], *, into: str, bits: str) -> Flow:
+    def expand(
+        self, key: str | Column, table: str, edges: Mapping[str, int], *, into: str, bits: str, source: str = "tables"
+    ) -> Flow:
         """Every row the key reaches through the table's own references, with the bits the path took."""
-        return self | Expand(column_name(key), table, dict(edges), into, bits)
+        return self | Expand(column_name(key), table, dict(edges), into, bits, source=source)
 
     def prefer(self, key: str | Column, *, base: Expr) -> Flow:
         """One row per key, the base row standing for it."""
@@ -953,6 +1114,10 @@ class Flow:
         """Keep the rows a selector chooses, and say what their columns then mean."""
         return self | when(on, values, slots, until)
 
+    def any_of(self, *selectors: When) -> Flow:
+        """Keep the rows any of several selectors on one column chooses."""
+        return self | AnyOf(selectors)
+
     def where(self, keep: Expr) -> Flow:
         """Keep the rows the expression holds on."""
         return self | Where(keep)
@@ -965,19 +1130,35 @@ class Flow:
         """Land the rows in a shape: ``flow >> as_map(...)`` is the whole route."""
         return Plan(self, terminal)
 
-    def schema(self) -> Schema:
-        """The columns the flow's rows carry.
+    def split[T](self, record: Callable[..., T], **branches: Plan[Any] | Then[Any] | Landing) -> Split[T]:
+        """Land the rows in several shapes at once: one read, a branch per
+        field of the record, each a tail of steps and a terminal; the one
+        marked as the landing takes the rows themselves, flagged."""
+        return Split(self, record, branches)
+
+    def schema(self, incoming: Schema | None = None) -> Schema:
+        """The columns the flow's rows carry; a tail's, from the trunk's given.
 
         Raises:
             KeyError: a step names a column the flow does not carry there.
-            ValueError: the flow has no origin, or a step repeats a name.
+            ValueError: the flow has no origin and no trunk, or a step
+                repeats a name.
         """
-        if not self.steps or not isinstance(self.steps[0], Read):
+        if incoming is None and self.is_tail:
             raise ValueError(f"flow {self.name!r} must start by reading a table")
-        current = Schema(())
+        current = incoming if self.is_tail and incoming is not None else Schema(())
         for step in self.steps:
             current = step.schema(current)
         return current
+
+    def schemas(self, incoming: Schema) -> list[tuple[Step, Schema]]:
+        """Each step with the schema its rows arrive in, for a tail run one row at a time."""
+        out: list[tuple[Step, Schema]] = []
+        current = incoming
+        for step in self.steps:
+            out.append((step, current))
+            current = step.schema(current)
+        return out
 
     def at(self, name: str | Column) -> int:
         """Where one column sits in the flow's rows."""
@@ -1010,8 +1191,12 @@ class Flow:
         rosters = {
             step.roster for step in self.of_kind(Narrow) if isinstance(step, Narrow) and isinstance(step.roster, str)
         }
-        fields = {step.field for step in self.of_kind(Lookup) if isinstance(step, Lookup)}
-        sources = {step.source for step in self.of_kind(Read) if isinstance(step, Read) and step.source != "tables"}
+        fields = {
+            step.field for step in self.of_kind(Lookup) if isinstance(step, Lookup) and isinstance(step.field, str)
+        }
+        sources = {
+            step.source for step in self.steps if isinstance(step, (Read, Join, Expand)) and step.source != "tables"
+        }
         return frozenset(rosters | fields | sources)
 
     @property
@@ -1184,6 +1369,188 @@ class Composed[T](Runnable[T]):
         return self.build(**{name: held[path] for name, path in self.sources.items()})
 
 
+@dataclass(frozen=True)
+class Split[T](Runnable[T]):
+    """One read landing in several shapes: a trunk, and per field of a
+    record a branch of filter steps and a terminal, every branch fed each
+    row of the one pass.
+
+    What a selected meaning is when the selector column is one of many: a
+    misc value is a creature under one aura and a form under another, so the
+    row is read once and each branch keeps what its selector chooses. The
+    ``rows`` branch lands the rows themselves, and its rows carry, per column
+    the branches select on, whether any branch chose the row: what a
+    dedicated landing already shows, the row need not show again.
+    """
+
+    trunk: Flow
+    record: Callable[..., T]
+    declared: Mapping[str, Plan[Any] | Then[Any] | Landing]
+
+    def __post_init__(self) -> None:
+        """Check every branch against the trunk when the split is written."""
+        if sum(isinstance(plan, Landing) for plan in self.declared.values()) > 1:
+            raise ValueError("a split lands its rows once")
+        schema = self.trunk.schema()
+        for plan in self.branches.values():
+            _planned(plan).flow.schema(schema)
+        if self.landing is not None:
+            _planned(self.landing).flow.schema(self.landing_schema(schema))
+
+    @property
+    def branches(self) -> dict[str, Plan[Any] | Then[Any]]:
+        """The branches that select, by the field each lands in."""
+        return {name: plan for name, plan in self.declared.items() if not isinstance(plan, Landing)}
+
+    @property
+    def landing(self) -> Plan[Any] | Then[Any] | None:
+        """The branch that lands the rows themselves, if one is marked."""
+        return next((plan.plan for plan in self.declared.values() if isinstance(plan, Landing)), None)
+
+    @property
+    def landing_name(self) -> str:
+        """The field the landing fills."""
+        return next(name for name, plan in self.declared.items() if isinstance(plan, Landing))
+
+    @property
+    def selects_on(self) -> tuple[str, ...]:
+        """The columns the branches select on, sorted."""
+        found: set[str] = set()
+        for plan in self.branches.values():
+            for step in _planned(plan).flow.steps:
+                if isinstance(step, (When, AnyOf)):
+                    found.add(step.on)
+        return tuple(sorted(found))
+
+    def landing_schema(self, schema: Schema) -> Schema:
+        """The trunk's schema with a consumed flag per selected column."""
+        return schema.with_columns(*(f"consumed_{on}" for on in self.selects_on))
+
+    @property
+    def selectors(self) -> tuple[When, ...]:
+        """Every selector a branch declares, in branch order, each once: two
+        branches over one selector land its ids and its masks apart, and the
+        selector is one declaration."""
+        found: dict[When, None] = {}
+        for plan in self.branches.values():
+            for step in _planned(plan).flow.steps:
+                if isinstance(step, When):
+                    found[step] = None
+                elif isinstance(step, AnyOf):
+                    found.update(dict.fromkeys(step.selectors))
+        return tuple(found)
+
+    @property
+    def needs(self) -> frozenset[str]:
+        """The trunk's needs and every branch's."""
+        named = set(self.trunk.needs)
+        for plan in self.branches.values():
+            named |= plan.needs
+        if self.landing is not None:
+            named |= self.landing.needs
+        return frozenset(named)
+
+    def available(self, tables: Tables, needs: Needs) -> bool:
+        """Whether the build has the trunk's table."""
+        return self.trunk.origin.available(tables, needs)
+
+    @staticmethod
+    def _live(plan: Plan[Any] | Then[Any], schema: Schema, version: str) -> list[tuple[Any, Schema]] | None:
+        """A branch's steps with their schemas, or None on a build past a selector's meaning."""
+        steps = _planned(plan).flow.schemas(schema)
+        for step, _incoming in steps:
+            if isinstance(step, When) and not step.holds(version):
+                return None
+            if isinstance(step, AnyOf):
+                if not step.live(version):
+                    return None
+                steps = [(AnyOf(step.live(version)), held) if s is step else (s, held) for s, held in steps]
+        return steps
+
+    def run(self, tables: Tables, version: str = "", needs: Needs | None = None) -> T:
+        """Every landing, from one pass over the trunk's rows."""
+        held = needs or {}
+        schema = self.trunk.schema()
+        ons = self.selects_on
+        live: list[tuple[str, list[tuple[Any, Schema]], frozenset[str]]] = []
+        for name, plan in self.branches.items():
+            steps = self._live(plan, schema, version)
+            if steps is not None:
+                chosen = frozenset(step.on for step, _ in steps if isinstance(step, (When, AnyOf)))
+                live.append((name, steps, chosen))
+        accepted: dict[str, list[Row]] = {name: [] for name in self.branches}
+
+        def landed(rows: Rows) -> Rows:
+            """Each trunk row through every branch, then the row with its flags."""
+            for row in rows:
+                hit: set[str] = set()
+                for name, steps, chosen in live:
+                    out: Row | None = row
+                    for step, incoming in steps:
+                        out = step.one(out, incoming, held)
+                        if out is None:
+                            break
+                    if out is not None:
+                        accepted[name].append(out)
+                        hit |= chosen
+                yield (*row, *("1" if on in hit else "0" for on in ons))
+
+        results: dict[str, Any] = {}
+        landing_rows = landed(self.trunk.rows(tables, version, held))
+        if self.landing is None:
+            for _row in landing_rows:
+                pass
+        else:
+            landing_schema = self.landing_schema(schema)
+            steps = self._live(self.landing, landing_schema, version) or []
+            chosen_rows = (out for row in landing_rows if (out := self._through(row, steps, held)) is not None)
+            results[self.landing_name] = _landed(self.landing, chosen_rows, landing_schema, held)
+        for name, plan in self.branches.items():
+            results[name] = _landed(plan, iter(accepted[name]), schema, held)
+        return self.record(**results)
+
+    @staticmethod
+    def _through(row: Row, steps: list[tuple[Any, Schema]], needs: Needs) -> Row | None:
+        """One row through a branch's steps."""
+        out: Row | None = row
+        for step, incoming in steps:
+            out = step.one(out, incoming, needs)
+            if out is None:
+                return None
+        return out
+
+
+@dataclass(frozen=True)
+class Landing:
+    """The branch of a split that takes the rows themselves, each flagged
+    per selected column with whether a branch chose it."""
+
+    plan: Plan[Any] | Then[Any]
+
+
+def landing(plan: Plan[Any] | Then[Any]) -> Landing:
+    """Mark the branch of a split that lands the rows themselves."""
+    return Landing(plan)
+
+
+def _planned(plan: Plan[Any] | Then[Any]) -> Plan[Any]:
+    """The plan a branch runs, under whatever reshaping follows it."""
+    if isinstance(plan, Then):
+        if not isinstance(plan.plan, Plan):
+            raise TypeError("a branch reshapes a plan once; it does not nest")
+        return plan.plan
+    return plan
+
+
+def _landed(plan: Plan[Any] | Then[Any], rows: Rows, schema: Schema, needs: Needs) -> Any:
+    """A branch's rows landed in its shape, reshaped where the branch says."""
+    inner = _planned(plan)
+    found = inner.terminal.collect(rows, inner.flow.schema(schema))
+    if isinstance(plan, Then):
+        return plan.assemble(found, **{name: needs[path] for name, path in plan.wants.items()})
+    return found
+
+
 def first_available[T](*plans: Runnable[T]) -> Alternatives[T]:
     """The first of the plans whose table this build has."""
     return Alternatives(plans)
@@ -1207,10 +1574,10 @@ def compose[T](build: Callable[..., T], **sources: str) -> Composed[T]:
     return Composed(build, {name: sources.get(name, name) for name in parameters})
 
 
-def _picker(schema: Schema, columns: Sequence[str | Column]) -> Callable[[Row], tuple[int, ...]]:
-    """The named columns of a row, as the ids they hold."""
-    ats = [schema.at(name) for name in columns]
-    return lambda row: tuple(key_of(row[at]) for at in ats)
+def _picker(schema: Schema, columns: Sequence[Typed]) -> Callable[[Row], tuple[Any, ...]]:
+    """The named columns of a row, each through its reader: ids unless typed."""
+    readers = [(schema.at(picked.column), picked.read) for picked in columns]
+    return lambda row: tuple(read(row[at]) for at, read in readers)
 
 
 @dataclass(frozen=True)
@@ -1223,7 +1590,7 @@ class AsMap[T]:
     in types it on the way into the context.
     """
 
-    key: tuple[str, ...]
+    key: tuple[Typed, ...]
     value: str
     read: Callable[[Cell], T]
     first: bool = False
@@ -1321,20 +1688,20 @@ class AsLists[T]:
 class AsNested[T]:
     """Key under key to one value: a spell's visuals, each with its mask."""
 
-    outer: str
-    inner: str
+    outer: Typed
+    inner: Typed
     value: str
     read: Callable[[Cell], T]
     reduce: Callable[[T, T], T] | None = None
     """How two values under one pair combine; otherwise the last stands."""
 
-    def collect(self, rows: Rows, schema: Schema) -> dict[int, dict[int, T]]:
+    def collect(self, rows: Rows, schema: Schema) -> dict[Any, dict[Any, T]]:
         """The nested maps."""
-        outer_at, inner_at, at = schema.at(self.outer), schema.at(self.inner), schema.at(self.value)
-        out: dict[int, dict[int, T]] = {}
+        outer_at, inner_at, at = schema.at(self.outer.column), schema.at(self.inner.column), schema.at(self.value)
+        out: dict[Any, dict[Any, T]] = {}
         for row in rows:
-            inner = out.setdefault(key_of(row[outer_at]), {})
-            key = key_of(row[inner_at])
+            inner = out.setdefault(self.outer.read(row[outer_at]), {})
+            key = self.inner.read(row[inner_at])
             found = self.read(row[at])
             inner[key] = self.reduce(inner[key], found) if self.reduce is not None and key in inner else found
         return out
@@ -1403,6 +1770,11 @@ def real(named: str | Column) -> Typed:
     return Typed(column_name(named), number_of)
 
 
+def flag(named: str | Column) -> Typed:
+    """A computed truth, written as 1 or 0, read back as a bool."""
+    return Typed(column_name(named), lambda cell: cell == "1")
+
+
 def _typed(picked: Picked) -> Typed:
     """A picked column with its reader, ids by default."""
     return picked if isinstance(picked, Typed) else Typed(column_name(picked), key_of)
@@ -1432,14 +1804,17 @@ class AsRows[T]:
 
 @dataclass(frozen=True)
 class AsIds:
-    """The set of ids one column holds."""
+    """The set of ids one column holds, or of the tuples several make."""
 
-    column: str
+    columns: tuple[str, ...]
 
-    def collect(self, rows: Rows, schema: Schema) -> set[int]:
+    def collect(self, rows: Rows, schema: Schema) -> set[Any]:
         """The set."""
-        at = schema.at(self.column)
-        return {key_of(row[at]) for row in rows}
+        ats = [schema.at(name) for name in self.columns]
+        if len(ats) == 1:
+            at = ats[0]
+            return {key_of(row[at]) for row in rows}
+        return {tuple(key_of(row[at]) for at in ats) for row in rows}
 
 
 def as_text(cell: Cell) -> str:
@@ -1450,16 +1825,16 @@ def as_text(cell: Cell) -> str:
 
 
 def as_map(
-    key: str | Column | Sequence[str | Column],
+    key: Picked | Sequence[Picked],
     value: Picked,
     *,
     first: bool = False,
     reduce: Callable[[Any, Any], Any] | None = None,
 ) -> AsMap[Any]:
-    """Land as key to value; a key of several columns is a tuple, a value an id unless typed."""
-    keys = (key,) if isinstance(key, (str, Column)) else tuple(key)
+    """Land as key to value; a key of several columns is a tuple, each an id unless typed, a value likewise."""
+    keys = (key,) if isinstance(key, (str, Column, Typed)) else tuple(key)
     picked = _typed(value)
-    return AsMap(tuple(column_name(name) for name in keys), picked.column, picked.read, first, reduce)
+    return AsMap(tuple(_typed(name) for name in keys), picked.column, picked.read, first, reduce)
 
 
 def as_sets(key: str | Column, *value: Picked) -> AsSets[Any]:
@@ -1504,11 +1879,11 @@ def as_lists(key: str | Column, *value: Picked, record: Callable[..., Any] | Non
 
 
 def as_nested(
-    outer: str | Column, inner: str | Column, value: Picked, *, reduce: Callable[[Any, Any], Any] | None = None
+    outer: Picked, inner: Picked, value: Picked, *, reduce: Callable[[Any, Any], Any] | None = None
 ) -> AsNested[Any]:
-    """Land as key under key to one value, an id unless typed."""
+    """Land as key under key to one value, each an id unless typed."""
     picked = _typed(value)
-    return AsNested(column_name(outer), column_name(inner), picked.column, picked.read, reduce)
+    return AsNested(_typed(outer), _typed(inner), picked.column, picked.read, reduce)
 
 
 def as_tree(*keys: str | Column, value: Picked) -> AsTree:
@@ -1526,9 +1901,9 @@ def as_rows[T](record: Callable[..., T], *columns: Picked, sort: bool | Callable
     return AsRows(record, tuple(_typed(picked) for picked in columns), sort)
 
 
-def as_ids(column: str | Column) -> AsIds:
-    """Land as the set of ids a column holds."""
-    return AsIds(column_name(column))
+def as_ids(*columns: str | Column) -> AsIds:
+    """Land as the set of ids a column holds, or of the tuples several columns make."""
+    return AsIds(tuple(column_name(name) for name in columns))
 
 
 def gather(rows: Iterable[Row], schema: Schema, *columns: str | Column) -> Iterator[tuple[Cell, ...]]:
