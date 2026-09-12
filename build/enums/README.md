@@ -47,6 +47,11 @@ code change.
 | `summon_properties_control.json` | `SummonProperties.Control` | Control |
 | `spell_interrupt_flags.json` | `SpellInterruptFlags` — what cancels an **aura or channel** (`SpellInterrupts.AuraInterruptFlags` / `.ChannelInterruptFlags`); movement is **bit 3** | bit number |
 | `spell_interrupts_interrupt_flags.json` | `SpellInterrupts::InterruptFlags` — what cancels a **cast** (the scalar column only); movement is **bit 0** | bit number |
+| `gameobject_actions.json` | `GameObjectActions`, what `ACTIVATE_OBJECT` (effect 86) does to a gameobject; each value carries its class (model, state, other) | EffectMiscValue_0 |
+| `wowhead_effect_names.json` | `SpellEffect.Effect` as Wowhead labels it, pinned from the spell filter page | Effect |
+| `wowhead_aura_names.json` | `SpellEffect.EffectAura` as Wowhead labels it, pinned the same way | EffectAura |
+| `effect_name_overlay.json` | our own effect names, read ahead of both sources | Effect |
+| `aura_name_overlay.json` | our own aura names, read ahead of both sources | EffectAura |
 
 **The last two are a matched pair and the whole point is that they are DIFFERENT.** `SpellInterrupts` carries three
 interrupt columns and only two of them share an enum; reading all three with one decode is a mistake already made
