@@ -465,22 +465,23 @@ def test_a_terminal_lands_the_rows_as_a_record_and_a_narrow_names_its_need(table
 
 def test_a_table_is_its_class_and_a_column_carries_it() -> None:
     """The catalogue's classes are the tables, so a name a flow writes is one
-    the checker resolves rather than one a build discovers."""
+    the checker resolves rather than one a build discovers; the flow carries
+    the column qualified by its table, the source sees it bare."""
     assert T.SpellEffect.__tablename__ == "SpellEffect"
     assert repr(T.SpellEffect.SpellID) == "T.SpellEffect.SpellID"
-    assert T.creature_template.entry.name == "entry"
+    assert (T.creature_template.entry.name, T.creature_template.entry.base) == ("creature_template.entry", "entry")
 
 
 def test_an_array_column_has_slots_and_a_scalar_refuses_one() -> None:
     """A slot is the export's own column, the whole is the starred name, and
     a column no build stores as an array cannot be indexed."""
-    assert T.SpellEffect.EffectMiscValue[0].name == "EffectMiscValue_0"
-    assert T.SpellMisc.Attributes[:].name == "Attributes_*"
+    assert T.SpellEffect.EffectMiscValue[0].base == "EffectMiscValue_0"
+    assert T.SpellMisc.Attributes[:].name == "SpellMisc.Attributes_*"
     with pytest.raises(ValueError, match="no array"):
         _ = T.SpellEffect.Effect[0]
 
 
-def test_a_table_written_as_its_class_is_the_same_step_as_its_name(tables: BuildTables) -> None:
+def test_a_table_written_as_its_class_reads_as_its_name_does(tables: BuildTables) -> None:
     typed = (
         flow("factions")
         .read(T.SpellEffect, T.SpellEffect.SpellID, T.SpellEffect.EffectAura, T.SpellEffect.EffectMiscValue[0])
@@ -491,5 +492,39 @@ def test_a_table_written_as_its_class_is_the_same_step_as_its_name(tables: Build
         .read("SpellEffect", "SpellID", "EffectAura", "EffectMiscValue_0")
         .when("EffectAura", 243, [reference("EffectMiscValue_0", "FactionTemplate")])
     )
-    assert typed.steps == plain.steps
-    assert list(typed.rows(tables(SpellEffect=SPELL_EFFECT))) == [("100", "243", "35")]
+    assert typed.tables == plain.tables
+    assert list(typed.rows(tables(SpellEffect=SPELL_EFFECT))) == list(plain.rows(tables(SpellEffect=SPELL_EFFECT)))
+
+
+def test_an_open_read_is_settled_by_what_the_plan_names(tables: BuildTables) -> None:
+    """A read listing no columns reads the ones its later steps and its
+    terminal name, in the table's own order, as a lazy plan pushes its
+    projection down to the scan."""
+    plan = (
+        flow("factions").read(T.SpellEffect).where(T.SpellEffect.EffectAura == 243).into(as_ids(T.SpellEffect.SpellID))
+    )
+    settled = plan.flow.settled(plan.terminal.taken())
+    assert settled.origin.columns == ("SpellEffect.EffectAura", "SpellEffect.SpellID")
+    assert plan.run(tables(SpellEffect=SPELL_EFFECT)) == {100, 101}
+
+
+def test_a_bare_name_resolves_to_the_one_open_table_carrying_it(tables: BuildTables) -> None:
+    plan = flow("misc").read(T.SpellEffect).where(c.EffectAura == 56).into(as_ids("SpellID"))
+    assert plan.run(tables(SpellEffect=SPELL_EFFECT)) == {102}
+
+
+def test_a_column_of_a_table_the_flow_does_not_read_fails_when_written() -> None:
+    with pytest.raises(KeyError, match="SpellMisc.Speed"):
+        _ = flow("bad").read(T.SpellEffect).where(T.SpellMisc.Speed > 0)
+
+
+def test_a_bare_name_two_open_tables_carry_must_name_its_table() -> None:
+    """Both tables carry ``ID``; only a qualified name says which is meant."""
+    plan = (
+        flow("mounts")
+        .read(T.Mount)
+        .join(T.Mount.ID, T.MountXDisplay, by=T.MountXDisplay.MountID, many=True)
+        .into(as_ids("ID"))
+    )
+    with pytest.raises(ValueError, match="name its table"):
+        plan.flow.settled(plan.terminal.taken())

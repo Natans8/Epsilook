@@ -32,6 +32,10 @@ class AsMap[T]:
     """How two values under one key combine, where neither simply wins: the
     least of two map ids, say."""
 
+    def taken(self) -> frozenset[str]:
+        """The columns taken."""
+        return frozenset({*(picked.column for picked in self.key), self.value})
+
     def collect(self, rows: Rows, schema: Schema) -> dict[Any, T]:
         """The map."""
         keys = _picker(schema, self.key)
@@ -59,6 +63,10 @@ class AsSets[T]:
     key: str
     value: tuple[Typed, ...]
 
+    def taken(self) -> frozenset[str]:
+        """The columns taken."""
+        return frozenset({self.key, *(picked.column for picked in self.value)})
+
     def collect(self, rows: Rows, schema: Schema) -> dict[int, set[T]]:
         """The sets."""
         key_at = schema.at(self.key)
@@ -79,6 +87,10 @@ class AsRecords[T]:
     record: Callable[..., T]
     columns: tuple[Typed, ...]
     first: bool = False
+
+    def taken(self) -> frozenset[str]:
+        """The columns taken."""
+        return frozenset({self.key, *(picked.column for picked in self.columns)})
 
     def collect(self, rows: Rows, schema: Schema) -> dict[int, T]:
         """The records by key."""
@@ -102,6 +114,10 @@ class AsLists[T]:
     value: tuple[Typed, ...]
     record: Callable[..., T] | None = None
     """What several columns become, where not a tuple."""
+
+    def taken(self) -> frozenset[str]:
+        """The columns taken."""
+        return frozenset({self.key, *(picked.column for picked in self.value)})
 
     def collect(self, rows: Rows, schema: Schema) -> dict[int, list[T]]:
         """The lists."""
@@ -129,6 +145,10 @@ class AsNested[T]:
     reduce: Callable[[T, T], T] | None = None
     """How two values under one pair combine; otherwise the last stands."""
 
+    def taken(self) -> frozenset[str]:
+        """The columns taken."""
+        return frozenset({self.outer.column, self.inner.column, self.value})
+
     def collect(self, rows: Rows, schema: Schema) -> dict[Any, dict[Any, T]]:
         """The nested maps."""
         outer_at, inner_at, at = schema.at(self.outer.column), schema.at(self.inner.column), schema.at(self.value)
@@ -147,6 +167,10 @@ class AsTree:
 
     keys: tuple[str, ...]
     value: Typed
+
+    def taken(self) -> frozenset[str]:
+        """The columns taken."""
+        return frozenset({*self.keys, self.value.column})
 
     def collect(self, rows: Rows, schema: Schema) -> dict[int, Any]:
         """The tree, its leaves sorted lists."""
@@ -170,6 +194,10 @@ class AsPairs:
 
     left: str
     right: str
+
+    def taken(self) -> frozenset[str]:
+        """The columns taken."""
+        return frozenset({self.left, self.right})
 
     def collect(self, rows: Rows, schema: Schema) -> list[tuple[int, int]]:
         """The pairs."""
@@ -227,6 +255,10 @@ class AsRows[T]:
     sort: bool | Callable[[T], Any] = False
     """Whether to sort the records, and by what where they have no order of their own."""
 
+    def taken(self) -> frozenset[str]:
+        """The columns taken."""
+        return frozenset(picked.column for picked in self.columns)
+
     def collect(self, rows: Rows, schema: Schema) -> list[T]:
         """The records."""
         readers = [(schema.at(picked.column), picked.read) for picked in self.columns]
@@ -241,6 +273,10 @@ class AsIds:
     """The set of ids one column holds, or of the tuples several make."""
 
     columns: tuple[str, ...]
+
+    def taken(self) -> frozenset[str]:
+        """The columns taken."""
+        return frozenset(self.columns)
 
     def collect(self, rows: Rows, schema: Schema) -> set[Any]:
         """The set."""

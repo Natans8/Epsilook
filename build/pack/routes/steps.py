@@ -14,7 +14,20 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Protocol, runtime_checkable
 from ..tables import Tables
-from .expressions import Cell, Column, Expr, Needs, Row, Rows, Schema, Table, column_name, key_of, table_name
+from .expressions import (
+    Cell,
+    Column,
+    Expr,
+    Needs,
+    Row,
+    Rows,
+    Schema,
+    Table,
+    column_name,
+    export_name,
+    key_of,
+    table_name,
+)
 
 
 class Step(Protocol):
@@ -57,18 +70,20 @@ def _array_columns(tables: Tables, table: str, base: str) -> list[str]:
 
 
 def _flattened(tables: Tables, table: str, columns: Sequence[str]) -> tuple[list[str], list[int]]:
-    """The provider's own column names behind the ones asked for, an array
-    column standing for every ``Name_N`` the build has, with each column's width."""
-    arrays = {name: _array_columns(tables, table, name[:-2]) for name in columns if name.endswith("_*")}
-    flat = [name for column in columns for name in arrays.get(column, [column])]
-    widths = [len(arrays.get(column, [column])) for column in columns]
+    """The provider's own column names behind the ones asked for, the table
+    qualifier dropped and an array column standing for every ``Name_N`` the
+    build has, with each column's width."""
+    named = [export_name(column) for column in columns]
+    arrays = {name: _array_columns(tables, table, name[:-2]) for name in named if name.endswith("_*")}
+    flat = [name for column in named for name in arrays.get(column, [column])]
+    widths = [len(arrays.get(column, [column])) for column in named]
     return flat, widths
 
 
 def _read(tables: Tables, table: str, columns: Sequence[str]) -> Rows:
     """The table's rows by the columns named, an array column read whole into one cell."""
     if not any(name.endswith("_*") for name in columns):
-        return tables.rows(table, columns)
+        return tables.rows(table, [export_name(name) for name in columns])
     flat, widths = _flattened(tables, table, columns)
     return _gathered(tables.rows(table, flat), widths)
 
@@ -116,16 +131,26 @@ class Read:
 
     table: str
     columns: tuple[str, ...]
+    """The columns read; none where the read is open, which the plan settles."""
+
     optional: bool = False
 
     revised: bool = True
     """Whether the hotfix revisions apply. A number a description prints reads
     the client's own, unrevised, which the wiring holds under `base`."""
 
+    open: type[Table] | None = None
+    """The table's class where the read lists no columns: every column is
+    carried until the plan settles which its later steps and terminal name."""
+
     def schema(self, incoming: Schema) -> Schema:
         """The columns read, as the flow's first schema."""
         del incoming  # an origin follows nothing
-        return Schema(self.columns)
+        return (
+            Schema(self.columns).opened(self.open)
+            if self.open is not None and not self.columns
+            else Schema(self.columns)
+        )
 
     def available(self, tables: Tables, needs: Needs) -> bool:
         """Whether this build has the table, in the source it is read from."""
@@ -170,9 +195,14 @@ class Join:
     """Whether the hotfix revisions apply. A number a description prints reads
     the client's own, unrevised, which the wiring holds under `base`."""
 
+    open: type[Table] | None = None
+    """The joined table's class where the join lists no columns, as a read's."""
+
     def schema(self, incoming: Schema) -> Schema:
         """The incoming columns, then the joined ones."""
-        incoming.at(self.key)
+        incoming.check(self.key)
+        if self.open is not None and not self.columns:
+            return incoming.opened(self.open)
         return incoming.with_columns(*self.columns)
 
     def rows(self, incoming: Rows, incoming_schema: Schema, tables: Tables, version: str, needs: Needs) -> Rows:
@@ -224,14 +254,15 @@ class Explode:
     def schema(self, incoming: Schema) -> Schema:
         """The incoming columns less the fanned ones, then the one they became."""
         for name in self.columns:
-            incoming.at(name)
-        return incoming.without(*self.columns).with_columns(self.into, *((self.slot,) if self.slot else ()))
+            incoming.check(name)
+        fanned = tuple(incoming.columns[at] for name in self.columns if (at := incoming._found(name)) is not None)
+        return incoming.without(*fanned).with_columns(self.into, *((self.slot,) if self.slot else ()))
 
     def rows(self, incoming: Rows, incoming_schema: Schema, tables: Tables, version: str, needs: Needs) -> Rows:
         """One row per non-empty value among the fanned columns."""
         del tables, version, needs
         fanned = [incoming_schema.at(name) for name in self.columns]
-        kept = [at for at, name in enumerate(incoming_schema.columns) if name not in self.columns]
+        kept = [at for at in range(len(incoming_schema.columns)) if at not in fanned]
         for row in incoming:
             base = tuple(row[at] for at in kept)
             position = 0
@@ -276,7 +307,7 @@ class Expand:
 
     def schema(self, incoming: Schema) -> Schema:
         """The incoming columns, then the reached id and its bits."""
-        incoming.at(self.key)
+        incoming.check(self.key)
         return incoming.with_columns(self.into, self.bits)
 
     @staticmethod
@@ -331,9 +362,9 @@ class Prefer:
 
     def schema(self, incoming: Schema) -> Schema:
         """Unchanged."""
-        incoming.at(self.key)
+        incoming.check(self.key)
         for name in self.base.columns():
-            incoming.at(name)
+            incoming.check(name)
         return incoming
 
     def rows(self, incoming: Rows, incoming_schema: Schema, tables: Tables, version: str, needs: Needs) -> Rows:
@@ -360,7 +391,7 @@ class Map:
     def schema(self, incoming: Schema) -> Schema:
         """The incoming columns, then the computed one."""
         for name in self.expr.columns():
-            incoming.at(name)
+            incoming.check(name)
         return incoming.with_columns(self.into)
 
     def rows(self, incoming: Rows, incoming_schema: Schema, tables: Tables, version: str, needs: Needs) -> Rows:
@@ -461,9 +492,9 @@ class When:
 
     def schema(self, incoming: Schema) -> Schema:
         """Unchanged: a selection narrows rows and types columns, adding none."""
-        incoming.at(self.on)
+        incoming.check(self.on)
         for slot in self.slots:
-            incoming.at(slot.column)
+            incoming.check(slot.column)
         return incoming
 
     def holds(self, version: str) -> bool:
@@ -547,7 +578,7 @@ class Where:
     def schema(self, incoming: Schema) -> Schema:
         """Unchanged."""
         for name in self.keep.columns():
-            incoming.at(name)
+            incoming.check(name)
         return incoming
 
     def rows(self, incoming: Rows, incoming_schema: Schema, tables: Tables, version: str, needs: Needs) -> Rows:
@@ -579,7 +610,7 @@ class Narrow:
 
     def schema(self, incoming: Schema) -> Schema:
         """Unchanged."""
-        incoming.at(self.column)
+        incoming.check(self.column)
         return incoming
 
     def rows(self, incoming: Rows, incoming_schema: Schema, tables: Tables, version: str, needs: Needs) -> Rows:
@@ -616,7 +647,7 @@ class Lookup:
 
     def schema(self, incoming: Schema) -> Schema:
         """The incoming columns, then the value found."""
-        incoming.at(self.column)
+        incoming.check(self.column)
         return incoming.with_columns(self.into)
 
     def rows(self, incoming: Rows, incoming_schema: Schema, tables: Tables, version: str, needs: Needs) -> Rows:

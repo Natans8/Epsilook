@@ -293,6 +293,10 @@ class AsMasked:
     payload: str
     mask: str
 
+    def taken(self) -> frozenset[str]:
+        """The columns taken."""
+        return frozenset({self.spell, self.payload, self.mask})
+
     def collect(self, rows: Rows, schema: Schema) -> MaskedIds:
         """The masked ids."""
         spell_at, payload_at, mask_at = schema.at(self.spell), schema.at(self.payload), schema.at(self.mask)

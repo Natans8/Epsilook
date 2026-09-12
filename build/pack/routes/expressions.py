@@ -40,18 +40,26 @@ class Column:
     is therefore an expression too, and a column is hashed by its name.
     """
 
-    __slots__ = ("name", "table", "array")
+    __slots__ = ("base", "table", "array")
 
     def __init__(self, name: str, table: str = "", array: bool | None = None) -> None:
-        self.name = name
+        self.base = name
+        """The name as the source spells it."""
         self.table = table
         """The table the column belongs to; empty for a computed one, or one
         named through ``c`` without its table."""
         self.array = array
         """Whether the column is an array on some build; None where nothing says."""
 
+    @property
+    def name(self) -> str:
+        """The name the flow carries the column under: qualified by its table
+        where it has one, the way SQL spells a joined column, so two tables'
+        ``ID`` stay apart and a read can be settled from what names it."""
+        return f"{self.table}.{self.base}" if self.table else self.base
+
     def __repr__(self) -> str:
-        return f"T.{self.table}.{self.name}" if self.table else f"c.{self.name}"
+        return spelled(self.name)
 
     def __hash__(self) -> int:
         return hash(self.name)
@@ -100,10 +108,10 @@ class Column:
         if self.array is False:
             raise ValueError(f"{self!r} is no array column")
         if isinstance(span, int):
-            return Column(f"{self.name}_{span}", self.table, array=False)
+            return Column(f"{self.base}_{span}", self.table, array=False)
         if span != slice(None):
             raise ValueError("an array column is read whole; write Name[:]")
-        return Column(f"{self.name}_*", self.table, array=False)
+        return Column(f"{self.base}_*", self.table, array=False)
 
 
 class Columns:
@@ -150,6 +158,26 @@ def table_name(named: str | type[Table]) -> str:
     return named if isinstance(named, str) else named.__tablename__
 
 
+def export_name(name: str) -> str:
+    """The column as the source spells it, the table qualifier dropped."""
+    return name.rpartition(".")[2]
+
+
+def spelled(name: str) -> str:
+    """A column name as a flow writes it: off its table, or through ``c``."""
+    return f"T.{name}" if "." in name else f"c.{name}"
+
+
+def has_column(table: type[Table], base: str) -> bool:
+    """Whether the table's class declares the column, a slot or the whole of
+    an array column included."""
+    if isinstance(vars(table).get(base), Column):
+        return True
+    stem, _, suffix = base.rpartition("_")
+    held = vars(table).get(stem)
+    return isinstance(held, Column) and bool(held.array) and (suffix == "*" or suffix.isdigit())
+
+
 class Expr(Protocol):
     """A value computed from one row, as data the executor can read or compile."""
 
@@ -178,7 +206,7 @@ class Compare:
     value: object
 
     def __repr__(self) -> str:
-        return f"c.{self.column} {self.op} {self.value!r}"
+        return f"{spelled(self.column)} {self.op} {self.value!r}"
 
     def columns(self) -> frozenset[str]:
         """The column, and the other column where the comparison is against one."""
@@ -241,7 +269,7 @@ class Bit:
     which: int
 
     def __repr__(self) -> str:
-        return f"c.{self.column}.bit({self.which})"
+        return f"{spelled(self.column)}.bit({self.which})"
 
     def columns(self) -> frozenset[str]:
         """The one column."""
@@ -275,7 +303,7 @@ class Coalesce:
     """Places to round to, where the spellings carry conversion noise."""
 
     def __repr__(self) -> str:
-        return f"coalesce({', '.join(f'c.{name}' for name in self.names)})"
+        return f"coalesce({', '.join(spelled(name) for name in self.names)})"
 
     def columns(self) -> frozenset[str]:
         """The columns tried."""
@@ -297,7 +325,7 @@ class BitsOf:
     names: tuple[str, ...]
 
     def __repr__(self) -> str:
-        return f"bits_of({', '.join(f'c.{name}' for name in self.names)})"
+        return f"bits_of({', '.join(spelled(name) for name in self.names)})"
 
     def columns(self) -> frozenset[str]:
         """The columns unioned."""
@@ -408,20 +436,60 @@ def key_of(cell: Cell) -> int:
 
 @dataclass(frozen=True)
 class Schema:
-    """The columns a flow carries at one point, in order."""
+    """The columns a flow carries at one point, in order.
+
+    A column is found by its full name, or by its bare name where one column
+    carries it, the way SQL resolves an unqualified column.
+    """
 
     columns: tuple[str, ...]
+
+    open: tuple[type[Table], ...] = ()
+    """Tables read with no columns listed: every column of each is carried
+    until the plan settles, from what its later steps name, which it reads."""
+
+    def _found(self, name: str) -> int | None:
+        """The position of a carried column, or None."""
+        if name in self.columns:
+            return self.columns.index(name)
+        if "." in name:
+            return None
+        matched = [at for at, held in enumerate(self.columns) if export_name(held) == name]
+        if len(matched) > 1:
+            raise KeyError(f"column {name!r} is carried by {len(matched)} tables; name its table")
+        return matched[0] if matched else None
+
+    def _open(self, name: str) -> bool:
+        """Whether an open table carries the column."""
+        table, _, base = name.rpartition(".")
+        return any((not table or table == held.__tablename__) and has_column(held, base) for held in self.open)
+
+    def check(self, name: str | Column) -> None:
+        """That the flow carries the column, settled or not.
+
+        Raises:
+            KeyError: it does not, named with what the flow does carry.
+        """
+        name = column_name(name)
+        if self._found(name) is None and not self._open(name):
+            tables = "".join(f", every column of {held.__tablename__}" for held in self.open)
+            raise KeyError(f"no column {name!r}; the flow carries {', '.join(self.columns)}{tables}")
 
     def at(self, name: str | Column) -> int:
         """Where one column sits.
 
         Raises:
             KeyError: the flow does not carry it, named with what it does.
+            ValueError: it is carried by a read not yet settled, so it has no
+                position until the plan runs.
         """
         name = column_name(name)
-        if name not in self.columns:
-            raise KeyError(f"no column {name!r}; the flow carries {', '.join(self.columns)}")
-        return self.columns.index(name)
+        found = self._found(name)
+        if found is None:
+            if self._open(name):
+                raise ValueError(f"column {name!r} has no position until the plan settles its reads")
+            self.check(name)
+        return found if found is not None else -1
 
     def with_columns(self, *names: str) -> Schema:
         """This schema with columns appended.
@@ -433,8 +501,12 @@ class Schema:
         taken = [name for name in names if name in self.columns]
         if taken:
             raise ValueError(f"{', '.join(taken)} already carried; a column is named once")
-        return Schema((*self.columns, *names))
+        return Schema((*self.columns, *names), self.open)
+
+    def opened(self, table: type[Table]) -> Schema:
+        """This schema with every column of a table carried, unsettled."""
+        return Schema(self.columns, (*self.open, table))
 
     def without(self, *names: str) -> Schema:
         """This schema less the columns named."""
-        return Schema(tuple(name for name in self.columns if name not in names))
+        return Schema(tuple(name for name in self.columns if name not in names), self.open)

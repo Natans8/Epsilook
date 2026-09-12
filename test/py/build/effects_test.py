@@ -25,7 +25,9 @@ from pack.routes.effects import (
     EffectRow,
     SpellEffectRows,
 )
-from pack.routes.flow import AnyOf, Holds, Plan, Then, When
+from pack.routes.flow import export_name, AnyOf, Holds, Plan, Then, When
+from pack.derive.context import DeriveContext
+from pack.model.sections.mechanics import selectors
 from pack.routes.names import SpellNames
 from pack.targets import TARGET_AREA, TARGET_CASTER, TARGET_TARGET
 from support import BuildTables, resolve
@@ -410,7 +412,7 @@ def test_every_payload_is_declared_not_branched() -> None:
     selectors = Routes.effects.selectors
     assert selectors
     for chosen in selectors:
-        assert chosen.on in ("EffectAura", "Effect"), "a payload selects on the aura or the effect column"
+        assert export_name(chosen.on) in ("EffectAura", "Effect"), "a payload selects on the aura or the effect column"
         amounts = {slot.holds is Holds.AMOUNT for slot in chosen.slots}
         assert len(amounts) <= 1, "a selector's slots are references or an amount, not both"
     for column in ("EffectAura", "Effect"):
@@ -458,3 +460,11 @@ def test_a_stable_spawn_effect_is_read_on_every_build(tables: BuildTables) -> No
 
     assert read(tables, fixture, WRATH).objects.ids == {100: {7000}}
     assert read(tables, fixture, MODERN).objects.ids == {100: {7000}}
+
+
+def test_the_selectors_table_ships_a_column_as_the_source_spells_it() -> None:
+    """The flow carries a column qualified by its table; a reader of the pack
+    resolves a mechanics row by the column's own name."""
+    table = selectors(DeriveContext(build=None))  # type: ignore[arg-type]
+    assert "EffectAura" in table["columns"] and "EffectMiscValue_0" in table["slotColumns"]
+    assert not any("." in name for name in (*table["columns"], *table["slotColumns"]))

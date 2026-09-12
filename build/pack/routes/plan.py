@@ -10,12 +10,12 @@ split into several landings. Nothing runs until the terminal asks.
 from __future__ import annotations
 
 import inspect
-from collections.abc import Callable, Container, Mapping, Sequence
-from dataclasses import dataclass
+from collections.abc import Callable, Container, Iterable, Mapping, Sequence
+from dataclasses import dataclass, replace
 from abc import ABC, abstractmethod
 from typing import Any, Protocol
 from ..tables import Tables
-from .expressions import Column, Expr, Needs, Row, Rows, Schema, Table, column_name, table_name
+from .expressions import Column, Expr, Needs, Row, Rows, Schema, Table, column_name, export_name, has_column, table_name
 from .steps import (
     AnyOf,
     Expand,
@@ -70,8 +70,16 @@ class Flow:
     def read(
         self, table: str | type[Table], *columns: str | Column, optional: bool = False, revised: bool = True
     ) -> Flow:
-        """Start from one table's rows, by the columns named."""
-        return self | Read(table_name(table), tuple(column_name(name) for name in columns), optional, revised)
+        """Start from one table's rows, by the columns named; by the columns the
+        later steps and the terminal name, where the table is its class and
+        none are listed."""
+        return self | Read(
+            table_name(table),
+            tuple(column_name(name) for name in columns),
+            optional,
+            revised,
+            open=_open(table, columns),
+        )
 
     def join(
         self,
@@ -83,7 +91,8 @@ class Flow:
         many: bool = False,
         revised: bool = True,
     ) -> Flow:
-        """Hop through a key into another table, taking the columns named."""
+        """Hop through a key into another table, taking the columns named, or
+        the ones the later steps name where none are listed."""
         return self | Join(
             column_name(key),
             table_name(table),
@@ -92,6 +101,7 @@ class Flow:
             inner,
             many,
             revised,
+            open=_open(table, columns),
         )
 
     def explode(self, *columns: str | Column, into: str, slot: str = "") -> Flow:
@@ -185,6 +195,52 @@ class Flow:
         """Where one column sits in the flow's rows."""
         return self.schema().at(name)
 
+    @property
+    def is_settled(self) -> bool:
+        """Whether every read and join lists its columns."""
+        return not any(_unsettled(step) for step in self.steps)
+
+    def settled(self, referenced: Iterable[str] = ()) -> Flow:
+        """This flow with every open read given its columns: the ones the steps
+        after it and the terminal name, as the projection a lazy plan pushes
+        down to its scan. A qualified name goes to its table; a bare one to the
+        one open table carrying it.
+
+        Raises:
+            ValueError: a bare name is carried by two open tables, so it must
+                name its table.
+        """
+        if self.is_settled:
+            return self
+        steps = list(self.steps)
+        needed: set[str] = set(referenced)
+        pending: list[tuple[int, frozenset[str]]] = []
+        for at in range(len(steps) - 1, -1, -1):
+            if _unsettled(steps[at]) is not None:
+                pending.append((at, frozenset(needed)))
+            needed |= _referenced(steps[at])
+        opens = [held.open for at, _ in reversed(pending) if (held := _unsettled(steps[at])) is not None]
+        listed = {name for step in steps if isinstance(step, (Read, Join)) for name in step.columns}
+        for at, after in pending:
+            step = _unsettled(steps[at])
+            if step is None or step.open is None:
+                continue
+            table = step.open
+            mine: set[str] = set()
+            for name in after:
+                owner, _, base = name.rpartition(".")
+                if owner:
+                    if owner == table.__tablename__:
+                        mine.add(name)
+                elif name not in listed:
+                    carriers = [held for held in opens if held is not None and has_column(held, base)]
+                    if len(carriers) > 1:
+                        raise ValueError(f"column {name!r} is carried by {len(carriers)} open tables; name its table")
+                    if carriers and carriers[0] is table:
+                        mine.add(name)
+            steps[at] = replace(step, columns=tuple(sorted(mine, key=lambda name: _order(table, name))))
+        return Flow(self.name, tuple(steps))
+
     def rows(self, tables: Tables, version: str = "", needs: Needs | None = None) -> Rows:
         """Run the flow over one build's tables.
 
@@ -196,7 +252,7 @@ class Flow:
         """
         current = Schema(())
         rows: Rows = iter(())
-        for step in self.steps:
+        for step in self.settled().steps:
             rows = step.rows(rows, current, tables, version, needs or {})
             current = step.schema(current)
         return rows
@@ -255,6 +311,60 @@ class Terminal[T](Protocol):
         """The shape, from every row."""
         raise NotImplementedError
 
+    def taken(self) -> frozenset[str]:
+        """The columns it takes, which settle an open read."""
+        raise NotImplementedError
+
+
+def _open(table: str | type[Table], columns: Sequence[object]) -> type[Table] | None:
+    """The table's class where a read lists no columns and may be settled later.
+
+    Raises:
+        ValueError: a table named by string lists no columns, so nothing could
+            settle it.
+    """
+    if columns:
+        return None
+    if isinstance(table, str):
+        raise ValueError(f"a read of {table!r} names its columns; a read settled later names the table by its class")
+    return table
+
+
+def _unsettled(step: Step) -> Read | Join | None:
+    """The step as a read or join whose columns the plan still has to settle."""
+    if isinstance(step, (Read, Join)) and step.open is not None and not step.columns:
+        return step
+    return None
+
+
+def _referenced(step: Step) -> frozenset[str]:
+    """The incoming columns a step reads, which settle the open reads before it."""
+    if isinstance(step, Join):
+        return frozenset({step.key})
+    if isinstance(step, Explode):
+        return frozenset(step.columns)
+    if isinstance(step, (Expand, Prefer)):
+        return frozenset({step.key}) | (step.base.columns() if isinstance(step, Prefer) else frozenset())
+    if isinstance(step, Map):
+        return step.expr.columns()
+    if isinstance(step, When):
+        return frozenset({step.on, *(slot.column for slot in step.slots)})
+    if isinstance(step, AnyOf):
+        return frozenset().union(*(_referenced(chosen) for chosen in step.selectors))
+    if isinstance(step, Where):
+        return step.keep.columns()
+    if isinstance(step, (Narrow, Lookup)):
+        return frozenset({step.column})
+    return frozenset()
+
+
+def _order(table: type[Table], name: str) -> tuple[int, str]:
+    """A column's place in its table's declaration, a slot after its array."""
+    declared = list(vars(table))
+    base = export_name(name)
+    stem = base if base in declared else base.rpartition("_")[0]
+    return (declared.index(stem) if stem in declared else len(declared), base)
+
 
 class Runnable[T](ABC):
     """What the registry runs for a field: a plan, a plan with a step after
@@ -300,7 +410,8 @@ class Plan[T](Runnable[T]):
 
     def run(self, tables: Tables, version: str = "", needs: Needs | None = None) -> T:
         """The shape, from one build's tables."""
-        return self.terminal.collect(self.flow.rows(tables, version, needs), self.flow.schema())
+        flow = self.flow.settled(self.terminal.taken())
+        return self.terminal.collect(flow.rows(tables, version, needs), flow.schema())
 
 
 @dataclass(frozen=True)
@@ -436,7 +547,18 @@ class Split[T](Runnable[T]):
 
     def landing_schema(self, schema: Schema) -> Schema:
         """The trunk's schema with a consumed flag per selected column."""
-        return schema.with_columns(*(f"consumed_{on}" for on in self.selects_on))
+        return schema.with_columns(*(f"consumed_{export_name(on)}" for on in self.selects_on))
+
+    @property
+    def settled_trunk(self) -> Flow:
+        """The trunk with its open reads settled from every branch and the landing."""
+        referenced: set[str] = set()
+        for plan in (*self.branches.values(), *((self.landing,) if self.landing is not None else ())):
+            inner = _planned(plan)
+            for step in inner.flow.steps:
+                referenced |= _referenced(step)
+            referenced |= inner.terminal.taken()
+        return self.trunk.settled(referenced)
 
     @property
     def selectors(self) -> tuple[When, ...]:
@@ -482,7 +604,8 @@ class Split[T](Runnable[T]):
     def run(self, tables: Tables, version: str = "", needs: Needs | None = None) -> T:
         """Every landing, from one pass over the trunk's rows."""
         held = needs or {}
-        schema = self.trunk.schema()
+        trunk = self.settled_trunk
+        schema = trunk.schema()
         ons = self.selects_on
         live: list[tuple[str, list[tuple[Any, Schema]], frozenset[str]]] = []
         for name, plan in self.branches.items():
@@ -508,7 +631,7 @@ class Split[T](Runnable[T]):
                 yield (*row, *("1" if on in hit else "0" for on in ons))
 
         results: dict[str, Any] = {}
-        landing_rows = landed(self.trunk.rows(tables, version, held))
+        landing_rows = landed(trunk.rows(tables, version, held))
         if self.landing is None:
             for _row in landing_rows:
                 pass

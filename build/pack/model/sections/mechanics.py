@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from ...derive import Reads
 from ...routes import interrupt_words
+from ...routes.flow import export_name
 from ...routes.selectors import SELECTORS
 from ...targets import IMPLICIT_PREFIX
 from ..registry import register
@@ -40,9 +41,10 @@ def selectors(reads: Reads) -> SectionColumns:
     ]
     return {
         "tables": [table for table, _select, _value, _slot in rows],
-        "columns": [chosen.on for _table, chosen, _value, _slot in rows],
+        # A column ships as the source spells it, without the table the flow qualifies it by.
+        "columns": [export_name(chosen.on) for _table, chosen, _value, _slot in rows],
         "values": [value for _table, _select, value, _slot in rows],
-        "slotColumns": [slot.column for _table, _select, _value, slot in rows],
+        "slotColumns": [export_name(slot.column) for _table, _select, _value, slot in rows],
         "holds": [slot.holds.value for _table, _select, _value, slot in rows],
         "intos": [slot.into for _table, _select, _value, slot in rows],
         # The first patch on which the value stopped meaning this, or empty.
