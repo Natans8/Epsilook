@@ -139,7 +139,7 @@ class Read:
     """Whether the hotfix revisions apply. A number a description prints reads
     the client's own, unrevised, which the wiring holds under `base`."""
 
-    open: type[Table] | None = None
+    catalogue: type[Table] | None = None
     """The table's class where the read lists no columns: every column is
     carried until the plan settles which its later steps and terminal name."""
 
@@ -147,8 +147,8 @@ class Read:
         """The columns read, as the flow's first schema."""
         del incoming  # an origin follows nothing
         return (
-            Schema(self.columns).opened(self.open)
-            if self.open is not None and not self.columns
+            Schema(self.columns).carrying(self.catalogue)
+            if self.catalogue is not None and not self.columns
             else Schema(self.columns)
         )
 
@@ -195,14 +195,14 @@ class Join:
     """Whether the hotfix revisions apply. A number a description prints reads
     the client's own, unrevised, which the wiring holds under `base`."""
 
-    open: type[Table] | None = None
+    catalogue: type[Table] | None = None
     """The joined table's class where the join lists no columns, as a read's."""
 
     def schema(self, incoming: Schema) -> Schema:
         """The incoming columns, then the joined ones."""
         incoming.check(self.key)
-        if self.open is not None and not self.columns:
-            return incoming.opened(self.open)
+        if self.catalogue is not None and not self.columns:
+            return incoming.carrying(self.catalogue)
         return incoming.with_columns(*self.columns)
 
     def rows(self, incoming: Rows, incoming_schema: Schema, tables: Tables, version: str, needs: Needs) -> Rows:

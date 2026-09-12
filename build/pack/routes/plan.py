@@ -78,7 +78,7 @@ class Flow:
             tuple(column_name(name) for name in columns),
             optional,
             revised,
-            open=_open(table, columns),
+            catalogue=_catalogue(table, columns),
         )
 
     def join(
@@ -101,7 +101,7 @@ class Flow:
             inner,
             many,
             revised,
-            open=_open(table, columns),
+            catalogue=_catalogue(table, columns),
         )
 
     def explode(self, *columns: str | Column, into: str, slot: str = "") -> Flow:
@@ -219,13 +219,13 @@ class Flow:
             if _unsettled(steps[at]) is not None:
                 pending.append((at, frozenset(needed)))
             needed |= _referenced(steps[at])
-        opens = [held.open for at, _ in reversed(pending) if (held := _unsettled(steps[at])) is not None]
+        opens = [held.catalogue for at, _ in reversed(pending) if (held := _unsettled(steps[at])) is not None]
         listed = {name for step in steps if isinstance(step, (Read, Join)) for name in step.columns}
         for at, after in pending:
             step = _unsettled(steps[at])
-            if step is None or step.open is None:
+            if step is None or step.catalogue is None:
                 continue
-            table = step.open
+            table = step.catalogue
             mine: set[str] = set()
             for name in after:
                 owner, _, base = name.rpartition(".")
@@ -316,7 +316,7 @@ class Terminal[T](Protocol):
         raise NotImplementedError
 
 
-def _open(table: str | type[Table], columns: Sequence[object]) -> type[Table] | None:
+def _catalogue(table: str | type[Table], columns: Sequence[object]) -> type[Table] | None:
     """The table's class where a read lists no columns and may be settled later.
 
     Raises:
@@ -332,7 +332,7 @@ def _open(table: str | type[Table], columns: Sequence[object]) -> type[Table] | 
 
 def _unsettled(step: Step) -> Read | Join | None:
     """The step as a read or join whose columns the plan still has to settle."""
-    if isinstance(step, (Read, Join)) and step.open is not None and not step.columns:
+    if isinstance(step, (Read, Join)) and step.catalogue is not None and not step.columns:
         return step
     return None
 

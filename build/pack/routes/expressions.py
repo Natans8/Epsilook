@@ -444,7 +444,7 @@ class Schema:
 
     columns: tuple[str, ...]
 
-    open: tuple[type[Table], ...] = ()
+    whole: tuple[type[Table], ...] = ()
     """Tables read with no columns listed: every column of each is carried
     until the plan settles, from what its later steps name, which it reads."""
 
@@ -459,10 +459,10 @@ class Schema:
             raise KeyError(f"column {name!r} is carried by {len(matched)} tables; name its table")
         return matched[0] if matched else None
 
-    def _open(self, name: str) -> bool:
-        """Whether an open table carries the column."""
+    def _whole(self, name: str) -> bool:
+        """Whether a table read whole carries the column."""
         table, _, base = name.rpartition(".")
-        return any((not table or table == held.__tablename__) and has_column(held, base) for held in self.open)
+        return any((not table or table == held.__tablename__) and has_column(held, base) for held in self.whole)
 
     def check(self, name: str | Column) -> None:
         """That the flow carries the column, settled or not.
@@ -471,8 +471,8 @@ class Schema:
             KeyError: it does not, named with what the flow does carry.
         """
         name = column_name(name)
-        if self._found(name) is None and not self._open(name):
-            tables = "".join(f", every column of {held.__tablename__}" for held in self.open)
+        if self._found(name) is None and not self._whole(name):
+            tables = "".join(f", every column of {held.__tablename__}" for held in self.whole)
             raise KeyError(f"no column {name!r}; the flow carries {', '.join(self.columns)}{tables}")
 
     def at(self, name: str | Column) -> int:
@@ -486,7 +486,7 @@ class Schema:
         name = column_name(name)
         found = self._found(name)
         if found is None:
-            if self._open(name):
+            if self._whole(name):
                 raise ValueError(f"column {name!r} has no position until the plan settles its reads")
             self.check(name)
         return found if found is not None else -1
@@ -501,12 +501,12 @@ class Schema:
         taken = [name for name in names if name in self.columns]
         if taken:
             raise ValueError(f"{', '.join(taken)} already carried; a column is named once")
-        return Schema((*self.columns, *names), self.open)
+        return Schema((*self.columns, *names), self.whole)
 
-    def opened(self, table: type[Table]) -> Schema:
+    def carrying(self, table: type[Table]) -> Schema:
         """This schema with every column of a table carried, unsettled."""
-        return Schema(self.columns, (*self.open, table))
+        return Schema(self.columns, (*self.whole, table))
 
     def without(self, *names: str) -> Schema:
         """This schema less the columns named."""
-        return Schema(tuple(name for name in self.columns if name not in names), self.open)
+        return Schema(tuple(name for name in self.columns if name not in names), self.whole)
