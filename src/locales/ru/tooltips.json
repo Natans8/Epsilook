@@ -152,6 +152,7 @@
       "hint": "",
       "props": {
         "kit": "",
+        "loop": "",
         "type": ""
       }
     },
@@ -263,6 +264,13 @@
       "props": {
         "creature": "",
         "control": ""
+      }
+    },
+    "activate": {
+      "hint": "",
+      "props": {
+        "action": "",
+        "parameter": ""
       }
     },
     "gameObject": {
