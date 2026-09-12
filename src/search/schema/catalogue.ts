@@ -373,6 +373,7 @@ export const sound = defineKind({
         file: corpus(TIER.asset, path),
         kit: named(soundKitId, t("tooltips:kind.sound.props.kit"), TIER.asset),
         type: {types: [enumeration], hint: t("tooltips:kind.sound.props.type")},
+        loop: {types: [flag], hint: t("tooltips:kind.sound.props.loop")},
         target: target(),
         phase: phase(),
     },
@@ -595,6 +596,22 @@ export const summon = defineKind({
     props: {
         creature: named(creatureId, t("tooltips:kind.summon.props.creature"), TIER.asset),
         control: corpus(TIER.asset, enumeration),
+        target: target(),
+        phase: phase(),
+    },
+});
+
+/**
+ * What a spell does to the gameobject it reaches: the action, and the action's own parameter, an anim kit or a
+ * spell visual where the action plays one. Whether a bare prop answers is the action's class, which the vocabulary
+ * carries and the row does not.
+ */
+export const activate = defineKind({
+    column: mechColumn, word: "activate", group: "spawn", full: "activation",
+    hint: t("tooltips:kind.activate.hint"),
+    props: {
+        action: {types: [enumeration], hint: t("tooltips:kind.activate.props.action")},
+        parameter: {types: [count], hint: t("tooltips:kind.activate.props.parameter")},
         target: target(),
         phase: phase(),
     },

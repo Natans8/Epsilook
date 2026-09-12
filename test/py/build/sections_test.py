@@ -30,6 +30,7 @@ REGISTERED_ORDER = (
     "shapeshiftDisplays",
     "summons",
     "summonControlNames",
+    "gameobjectActionNames",
     "factionNames",
     "objects",
     "expansions",

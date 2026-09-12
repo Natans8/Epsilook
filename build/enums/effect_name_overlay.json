@@ -1,0 +1,15 @@
+{
+  "enum": "SpellEffect.Effect",
+  "description": "SpellEffect.Effect -> the name this build prints where neither source has the right word, read ahead of the Wowhead label and the enum name. Only our cells live here, so no file mixes the three provenances without saying which is which: the entries the spells themselves contradict on Wowhead, where the WoWDBDefs enum name stands, and the selectors only a Classic re-release uses, which neither source names.",
+  "source": [
+    "the spells carrying each selector, read off the packs"
+  ],
+  "keys": "Effect",
+  "values": {
+    "78": "ATTACK",
+    "80": "MODIFY_FOLLOWER_ITEM_LEVEL",
+    "81": "PUSH_ABILITY_TO_ACTION_BAR",
+    "113": "CANCEL_CONVERSATION",
+    "331": "Grant Experience"
+  }
+}

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from pack.drift import TDB_OPTIONAL_COLUMNS, TDB_OPTIONAL_TABLES
 from pack.routes.creatures import CreatureModels
 from pack.routes.flows import Routes
@@ -152,3 +154,14 @@ def test_a_mounts_flavour_text_rides_its_granting_spell(tables: BuildTables) -> 
         needs={"names.names": {100: "Summon Ram", 101: "Summon Nothing"}, "creatures": CREATURES},
     )
     assert mounts.flavour == {100: "A ram of some swiftness."}
+
+
+def test_the_pinned_build_stands_over_a_table_the_build_also_carries(tables: BuildTables) -> None:
+    """A build old enough to carry its own kit names still reads the pinned
+    build's, as every build does; two other sources holding one table is
+    still the error it should be."""
+    own = tables(SoundKitName="ID,Name\n1,own\n")
+    pinned = tables(SoundKitName="ID,Name\n1,pinned\n")
+    assert list(union(own, pinned=pinned).rows("SoundKitName", ["Name"])) == [("pinned",)]
+    with pytest.raises(ValueError, match="held by 2 sources"):
+        union(own, world=tables(SoundKitName="ID,Name\n1,world\n")).rows("SoundKitName", ["Name"])

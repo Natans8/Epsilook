@@ -199,6 +199,21 @@ SUMMON_CONTROL_NAMES = register(
     )
 )
 
+GAMEOBJECT_ACTION_NAMES = register(
+    Section(
+        name="gameobjectActionNames",
+        doc="The word each gameobject action value renders as.",
+        module="universal",
+        produce=lambda reads: {
+            "names": {value: held["name"] for value, held in reads.declared.gameobject_action_names.items()}
+        },
+        columns=("names",),
+        layout=Layout.BARE,
+        reads=("declared",),
+        scope=Scope.UNIVERSAL,
+    )
+)
+
 
 def faction_names(reads: Reads) -> SectionColumns:
     """Each faction template a spell sets: the faction's name, its group, its faction.

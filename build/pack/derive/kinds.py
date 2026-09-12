@@ -36,6 +36,7 @@ from dataclasses import dataclass, field
 from ..phases import PHASE_AURA
 from ..routes.colors import pack_rgb
 from ..routes.effects import (
+    EFFECT_ACTIVATE_OBJECT,
     EFFECT_ATTRIBUTE_FLAGS,
     EFFECT_SUMMON,
     MOVEMENT_NAMES,
@@ -517,16 +518,26 @@ def _sounds(reads: Reads) -> Iterable[SpellRow]:
     whose noise is simply a spell.
     """
     for row in reads.rows.sounds:
-        yield row.spell, (row.file, row.kit, reads.kit_types.get(row.kit, ABSENT), row.mask, row.phase)
+        yield (
+            row.spell,
+            (
+                row.file,
+                row.kit,
+                reads.kit_types.get(row.kit, ABSENT),
+                int(row.kit in reads.looping_kits),
+                row.mask,
+                row.phase,
+            ),
+        )
 
 
 SOUND_FAMILIES: tuple[Family, ...] = (
     timed(
         "sound",
-        ("file", "kit", "type", "target"),
+        ("file", "kit", "type", "loop", "target"),
         _sounds,
         vocab={"file": "files", "kit": "kits", "type": "soundTypes"},
-        absent={"type": ABSENT},
+        absent={"type": ABSENT, "loop": 0},
     ),
 )
 
@@ -797,6 +808,17 @@ def _summons(reads: Reads) -> Iterable[SpellRow]:
                 spell,
                 (creature, control, reads.effects.summon_targets.get((spell, creature), 0), phase),
             )
+
+
+def _activations(reads: Reads) -> Iterable[SpellRow]:
+    """What a spell does to the gameobject it reaches, with the action's own
+    number: the anim kit or spell visual an action plays, nought otherwise.
+    An activation is an effect, so it happens where the spell lands."""
+    for spell, performed in sorted(reads.effects.activations.items()):
+        phase = effect_phase(EFFECT_ACTIVATE_OBJECT, 0, spell, reads.props.delayed, reads.rows.channelled)
+        for action, number in sorted(performed):
+            mask = reads.effects.activation_targets.get((spell, action, number), 0)
+            yield spell, (action, number, mask, phase)
 
 
 def _objects(reads: Reads) -> Iterable[SpellRow]:
@@ -1145,6 +1167,7 @@ MECH_FAMILIES: tuple[Family, ...] = (
         vocab={"name": "factions"},
     ),
     Family(kind="breaks", props=("on",), rows=_breaks, vocab={"on": "interrupts"}),
+    timed("activate", ("action", "parameter", "target"), _activations, vocab={"action": "gameobjectActions"}),
 )
 
 COLUMN_FAMILIES: Mapping[str, tuple[Family, ...]] = {
@@ -1163,7 +1186,7 @@ the per-spell columns directly.
 
 COLUMN_READS: Mapping[str, tuple[str, ...]] = {
     "model": ("spell_ids", "rows", "mounts"),
-    "sound": ("spell_ids", "rows", "kit_types"),
+    "sound": ("spell_ids", "rows", "kit_types", "looping_kits"),
     "anim": (
         "spell_ids",
         "rows",
@@ -1198,6 +1221,7 @@ COLUMN_READS: Mapping[str, tuple[str, ...]] = {
         "declared",
         "vehicles",
         "attributes",
+        "props",
         "areas",
         "aura_interrupts",
     ),
@@ -1240,6 +1264,7 @@ VOCABULARIES: Mapping[str, Mapping[str, str]] = {
     "shapeshifts": {"in": "shapeshifts", "keys": "ids", "values": "names"},
     "creatures": {"in": "summons", "keys": "creatureIds", "values": "names"},
     "controls": {"in": "summonControlNames"},
+    "gameobjectActions": {"in": "gameobjectActionNames"},
     "objects": {"in": "objects", "keys": "ids", "values": "names"},
     "effects": {"in": "effectNames"},
     "auras": {"in": "auraNames"},

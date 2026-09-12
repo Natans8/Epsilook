@@ -20,7 +20,7 @@ from ..derive import DeriveContext
 from ..model import SECTIONS, CountFamily, Section, SectionColumns
 from ..progress import detail
 
-PACK_FORMAT = 64
+PACK_FORMAT = 65
 """What shape the artifact is in.
 
 63 makes a row an occurrence: one thing at one phase of the spell. Every kind

@@ -64,5 +64,6 @@ class Declarations:
     item_quality_names: Any = ()
     attachment_names: Any = ()
     summon_control_names: Any = ()
+    gameobject_action_names: Any = ()
     """The checked-in vocabularies the pack ships so the app names nothing
     itself. Each arrives in the shape its own declaration file has."""

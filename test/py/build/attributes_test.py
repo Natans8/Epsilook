@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from pack.sources.enums import display_names
 from pack.routes.attributes import WORD_BITS, attribute_bit, read_spell_attributes, shipped_attributes
 
 
@@ -71,3 +72,17 @@ def test_two_bits_sharing_a_handler_are_refused(monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setattr(attributes, "load_local_enum", lambda _name: {1: {"handler": "same"}, 2: {"handler": "same"}})
     with pytest.raises(SystemExit):
         attributes.shipped_attributes()
+
+
+def test_a_selector_prints_our_cell_then_wowheads_label_then_the_enums_name() -> None:
+    """The precedence the effect and aura words ship under; a selector only
+    one source names keeps that name."""
+    names = display_names(
+        {1: "INSTAKILL", 78: "WEAPON_DAMAGE_NOSCHOOL", 999: "ONLY_THE_ENUM"},
+        "wowhead_effect_names",
+        "effect_name_overlay",
+    )
+    assert names[1] == "Instakill"
+    assert names[78] == "ATTACK"
+    assert names[999] == "ONLY_THE_ENUM"
+    assert names[331] == "Grant Experience"

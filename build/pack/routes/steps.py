@@ -454,9 +454,13 @@ def amount(column: str | Column) -> Slot:
     return Slot(column_name(column), Holds.AMOUNT)
 
 
-def parameter(column: str | Column) -> Slot:
-    """A column whose meaning another slot decides under this selector."""
-    return Slot(column_name(column), Holds.PARAMETER)
+def parameter(column: str | Column, *, zero_is_a_value: bool = False) -> Slot:
+    """A column whose meaning another slot decides under this selector.
+
+    Nought drops the row unless the slot says nought is data: an action that
+    takes no parameter carries nought there and is still an action.
+    """
+    return Slot(column_name(column), Holds.PARAMETER, zero_is_a_value=zero_is_a_value)
 
 
 def before(version: str, threshold: str) -> bool:

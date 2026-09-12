@@ -63,6 +63,7 @@ from .sources import (
     fetch_sources,
     load_expansions,
     load_local_enum,
+    display_names,
     read_enum_names,
 )
 from .sources.cache import CACHE_DIR
@@ -161,7 +162,9 @@ class Providers:
             frozenset() if self.world is not None else frozenset(TDB_TABLES["world"]) | frozenset(TDB_OPTIONAL_TABLES)
         )
         self.tables = UnionTables(
-            tuple(held for held in (self.tables, self.world, self.pinned) if held is not None), absent
+            tuple(held for held in (self.tables, self.world, self.pinned) if held is not None),
+            absent,
+            authority=self.pinned,
         )
         # The community list names what Blizzard ships; the supplement names
         # what a private client added, and the two never claim the same id --
@@ -214,13 +217,18 @@ def declared(
         gobs=read_gob_displays(),
         expansions=rungs,
         era_of=era_of,
-        effect_names=read_enum_names("SpellEffect", version),
-        aura_names=read_enum_names("SpellEffectAura", version),
+        effect_names=display_names(
+            read_enum_names("SpellEffect", version), "wowhead_effect_names", "effect_name_overlay"
+        ),
+        aura_names=display_names(
+            read_enum_names("SpellEffectAura", version), "wowhead_aura_names", "aura_name_overlay"
+        ),
         target_names=read_enum_names("Target", version),
         target_bits=implicit_target_bits(version),
         item_quality_names=load_local_enum("item_quality"),
         attachment_names=load_local_enum("m2_attachments"),
         summon_control_names=load_local_enum("summon_properties_control"),
+        gameobject_action_names=load_local_enum("gameobject_actions"),
     )
 
 

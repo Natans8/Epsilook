@@ -1,0 +1,14 @@
+{
+  "enum": "SpellEffect.EffectAura",
+  "description": "SpellEffect.EffectAura -> the name this build prints where neither source has the right word, read ahead of the Wowhead label and the enum name. Only our cells live here, so no file mixes the three provenances without saying which is which: the entries the spells themselves contradict on Wowhead, where the WoWDBDefs enum name stands, and the selectors only a Classic re-release uses, which neither source names.",
+  "source": [
+    "the spells carrying each selector, read off the packs"
+  ],
+  "keys": "EffectAura",
+  "values": {
+    "128": "MOD_FIXATE",
+    "582": "Mod Regen From Stat",
+    "603": "SoD Tuning Modifier",
+    "605": "SoD Rune Driver"
+  }
+}

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence, Set as AbstractSet
 from dataclasses import dataclass, field, fields, replace
 from typing import Any
 
@@ -154,6 +154,9 @@ class DeriveContext:
 
     sound_type_names: Mapping[int, str] = field(default_factory=dict)
     """What each sound type is called, for the vocabulary the pack ships."""
+
+    looping_kits: AbstractSet[int] = frozenset()
+    """The reached sound kits that loop until stopped, by kit id."""
 
     # What this layer derived from them.
     visuals: SpellVisuals = field(default_factory=SpellVisuals)

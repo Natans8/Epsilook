@@ -7,6 +7,8 @@ the animation names. The latter two are refetched every build.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 import json
 import sys
 import re
@@ -70,6 +72,21 @@ def read_anim_names() -> list[str]:
     if len(names) < 1000 or names[0] != "Stand":
         sys.exit("error: anims.js did not parse as expected")
     return names
+
+
+def display_names(enum: Mapping[int, str], vocabulary: str, overlay: str) -> dict[int, str]:
+    """The word a selector prints: our own cell where one is declared, else
+    the label Wowhead prints, else the enum's own name.
+
+    A selector only one source names keeps that name, so the union is a
+    superset of each; the enum spelling stays in the vendored files and is
+    the one the pack no longer prints.
+    """
+    return {
+        **dict(enum),
+        **{value: str(name) for value, name in load_local_enum(vocabulary).items()},
+        **{value: str(name) for value, name in load_local_enum(overlay).items()},
+    }
 
 
 def read_enum_names(name: str, version: str) -> dict[int, str]:

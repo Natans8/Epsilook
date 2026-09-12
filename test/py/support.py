@@ -90,7 +90,7 @@ def union(tables: Tables, world: Tables | None = None, pinned: Tables | None = N
     the pinned build's as one, with the dump's tables declared absent where
     the test hands none over, as a build without a dump declares them."""
     absent = frozenset() if world is not None else frozenset(TDB_TABLES["world"]) | frozenset(TDB_OPTIONAL_TABLES)
-    return UnionTables(tuple(held for held in (tables, world, pinned) if held is not None), absent)
+    return UnionTables(tuple(held for held in (tables, world, pinned) if held is not None), absent, authority=pinned)
 
 
 def resolve(name: str, tables: Tables, **known: object) -> object:

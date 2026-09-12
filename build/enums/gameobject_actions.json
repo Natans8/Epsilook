@@ -1,0 +1,190 @@
+{
+  "enum": "GameObjectActions",
+  "description": "SpellEffect.EffectMiscValue_0 under effect 86, ACTIVATE_OBJECT -> what the spell does to the gameobject it reaches; EffectMiscValue_1 is the action's own parameter, an AnimKit id for 35 to 38 and a SpellVisual id for 42. Surfaced as the action word on an activation row; 0 is no action, shown as no word. The class says what a bare prop can answer: a model action asks the model for an animation and works on anything that has it, a state action needs a gameobject type with a state machine, and the rest are server bookkeeping. The client's own enum, transcribed by TrinityCore with the names lifted from the executable; too small and too free-form for read_enum_names, so it lives here.",
+  "source": [
+    "https://github.com/TrinityCore/TrinityCore/blob/master/src/server/game/Entities/GameObject/GameObjectData.h"
+  ],
+  "keys": "GameObjectActions",
+  "values": {
+    "0": {
+      "name": "",
+      "class": "none"
+    },
+    "1": {
+      "name": "animate custom 0",
+      "class": "model"
+    },
+    "2": {
+      "name": "animate custom 1",
+      "class": "model"
+    },
+    "3": {
+      "name": "animate custom 2",
+      "class": "model"
+    },
+    "4": {
+      "name": "animate custom 3",
+      "class": "model"
+    },
+    "5": {
+      "name": "disturb",
+      "class": "state"
+    },
+    "6": {
+      "name": "unlock",
+      "class": "state"
+    },
+    "7": {
+      "name": "lock",
+      "class": "state"
+    },
+    "8": {
+      "name": "open",
+      "class": "state"
+    },
+    "9": {
+      "name": "open and unlock",
+      "class": "state"
+    },
+    "10": {
+      "name": "close",
+      "class": "state"
+    },
+    "11": {
+      "name": "toggle open",
+      "class": "state"
+    },
+    "12": {
+      "name": "destroy",
+      "class": "state"
+    },
+    "13": {
+      "name": "rebuild",
+      "class": "state"
+    },
+    "14": {
+      "name": "creation",
+      "class": "other"
+    },
+    "15": {
+      "name": "despawn",
+      "class": "other"
+    },
+    "16": {
+      "name": "make inert",
+      "class": "state"
+    },
+    "17": {
+      "name": "make active",
+      "class": "state"
+    },
+    "18": {
+      "name": "close and lock",
+      "class": "state"
+    },
+    "19": {
+      "name": "use art kit 0",
+      "class": "state"
+    },
+    "20": {
+      "name": "use art kit 1",
+      "class": "state"
+    },
+    "21": {
+      "name": "use art kit 2",
+      "class": "state"
+    },
+    "22": {
+      "name": "use art kit 3",
+      "class": "state"
+    },
+    "23": {
+      "name": "set tap list",
+      "class": "other"
+    },
+    "24": {
+      "name": "go to 1st floor",
+      "class": "other"
+    },
+    "25": {
+      "name": "go to 2nd floor",
+      "class": "other"
+    },
+    "26": {
+      "name": "go to 3rd floor",
+      "class": "other"
+    },
+    "27": {
+      "name": "go to 4th floor",
+      "class": "other"
+    },
+    "28": {
+      "name": "go to 5th floor",
+      "class": "other"
+    },
+    "29": {
+      "name": "go to 6th floor",
+      "class": "other"
+    },
+    "30": {
+      "name": "go to 7th floor",
+      "class": "other"
+    },
+    "31": {
+      "name": "go to 8th floor",
+      "class": "other"
+    },
+    "32": {
+      "name": "go to 9th floor",
+      "class": "other"
+    },
+    "33": {
+      "name": "go to 10th floor",
+      "class": "other"
+    },
+    "34": {
+      "name": "use art kit 4",
+      "class": "state"
+    },
+    "35": {
+      "name": "play anim kit",
+      "class": "model"
+    },
+    "36": {
+      "name": "open and play anim kit",
+      "class": "model"
+    },
+    "37": {
+      "name": "close and play anim kit",
+      "class": "model"
+    },
+    "38": {
+      "name": "play one-shot anim kit",
+      "class": "model"
+    },
+    "39": {
+      "name": "stop anim kit",
+      "class": "model"
+    },
+    "40": {
+      "name": "open and stop anim kit",
+      "class": "model"
+    },
+    "41": {
+      "name": "close and stop anim kit",
+      "class": "model"
+    },
+    "42": {
+      "name": "play spell visual",
+      "class": "model"
+    },
+    "43": {
+      "name": "stop spell visual",
+      "class": "model"
+    },
+    "44": {
+      "name": "set tapped to challenge players",
+      "class": "other"
+    }
+  }
+}

@@ -36,6 +36,7 @@ from .effects import (
     AURA_TRANSFORM,
     EFFECT_APPLY_AURA,
     EFFECT_PLAYS_SOUND,
+    EFFECT_ACTIVATE_OBJECT,
     EFFECT_SPAWN_OBJECT,
     EFFECT_SUMMON,
     MISC0,
@@ -72,6 +73,7 @@ from .flow import (
     nonzero,
     number_of,
     ordered,
+    parameter,
     real,
     reference,
     text,
@@ -225,6 +227,16 @@ class Routes(Declarations):
         .narrow(T.SoundKit.SoundType, "sound_type_names", "the types the vendored enum names")
         .into(as_map(T.SoundKit.ID, T.SoundKit.SoundType))
     )
+
+    looping_kits = (
+        flow("the reached sound kits that loop until stopped")
+        .read(T.SoundKit)
+        .narrow(T.SoundKit.ID, "used_kits")
+        .where(T.SoundKit.Flags.bit(9))
+        .into(as_ids(T.SoundKit.ID))
+    )
+    """Bit 9 of the kit's flags is the loop; the other bits vary the pitch and
+    volume or forbid a repeat, which are not a fact a row needs."""
 
     kit_names = (
         flow("the names the pinned build gives the sound kits this pack reaches")
@@ -1222,6 +1234,20 @@ class Routes(Declarations):
             [reference(MISC0, T.creature_template), reference(MISC1, T.SummonProperties, zero_is_a_value=True)],
         )
         .into(as_map((T.SpellEffect.SpellID, MISC0), c.mask, reduce=or_)),
+        activations=flow("activations")
+        .when(
+            T.SpellEffect.Effect,
+            EFFECT_ACTIVATE_OBJECT,
+            [vocabulary(MISC0, "gameobject_actions", zero_is_a_value=True), parameter(MISC1, zero_is_a_value=True)],
+        )
+        .into(as_sets(T.SpellEffect.SpellID, MISC0, MISC1)),
+        activation_targets=flow("activation targets")
+        .when(
+            T.SpellEffect.Effect,
+            EFFECT_ACTIVATE_OBJECT,
+            [vocabulary(MISC0, "gameobject_actions", zero_is_a_value=True), parameter(MISC1, zero_is_a_value=True)],
+        )
+        .into(as_map((T.SpellEffect.SpellID, MISC0, MISC1), c.mask, reduce=or_)),
         sounds=flow("sounds")
         .when(T.SpellEffect.Effect, sorted(EFFECT_PLAYS_SOUND), [reference(MISC0, T.SoundKit)])
         .into(as_map((T.SpellEffect.SpellID, MISC0), c.mask, reduce=or_)),

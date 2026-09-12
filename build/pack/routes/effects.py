@@ -31,6 +31,8 @@ from .flow import Cell, Column, Rows, Schema, column_name, key_of, number_of
 EFFECT_APPLY_AURA = 6
 """Applies an aura. Its implicit target says who ends up carrying it."""
 
+EFFECT_ACTIVATE_OBJECT = 86
+"""What the spell does to a gameobject: misc0 the action, misc1 the action's own parameter."""
 EFFECT_SUMMON = 28
 """Summons a creature: misc0 is the creature, misc1 its `SummonProperties`."""
 
@@ -360,6 +362,10 @@ class SpellEffectRows:
     carries the control word too, while the mask belongs to the creature alone,
     since one creature summoned under two control words is one chip.
     """
+    activations: dict[int, set[tuple[int, int]]] = field(default_factory=dict)
+    """Spell to the gameobject action and parameter pairs it performs."""
+    activation_targets: dict[tuple[int, int, int], int] = field(default_factory=dict)
+    """Spell, action and parameter to mask: each pair is its own row, aimed once."""
     sounds: dict[tuple[int, int], int] = field(default_factory=dict)
     """Spell and sound kit to mask, for the effects that play a sound.
 

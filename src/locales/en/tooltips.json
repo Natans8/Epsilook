@@ -152,6 +152,7 @@
       "hint": "a sound file the spell plays",
       "props": {
         "kit": "the sound kit",
+        "loop": "the kit loops until it is stopped",
         "type": "what the kit is for"
       }
     },
@@ -263,6 +264,13 @@
       "props": {
         "creature": "the creature summoned",
         "control": "how it answers to you"
+      }
+    },
+    "activate": {
+      "hint": "an action the spell performs on a gameobject",
+      "props": {
+        "action": "what it does to the object",
+        "parameter": "the action's own number: the anim kit or spell visual it plays"
       }
     },
     "gameObject": {

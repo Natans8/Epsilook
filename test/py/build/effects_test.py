@@ -10,6 +10,7 @@ from __future__ import annotations
 from pack.routes.flows import Routes
 from pack.routes.effects import (
     AURA_ANIM_REPLACEMENT_SET,
+    EFFECT_ACTIVATE_OBJECT,
     AURA_KEYBOUND_OVERRIDE,
     AURA_MOD_INVISIBILITY,
     AURA_MOD_INVISIBILITY_DETECT,
@@ -204,6 +205,20 @@ def test_a_summon_property_the_build_lacks_reads_as_uncontrolled(tables: BuildTa
     on it rather than being dropped."""
     rows = read(tables, effect_rows(f"100,{EFFECT_SUMMON},0,900,99,1,0,0,0,0"))
     assert rows.summons == {100: {(900, 0)}}
+
+
+def test_an_activation_is_an_action_with_its_own_number_aimed_once(tables: BuildTables) -> None:
+    """Misc0 is the action, misc1 the parameter an action such as play-anim-kit
+    takes, and the row is aimed as its targets say."""
+    rows = read(tables, effect_rows(f"100,{EFFECT_ACTIVATE_OBJECT},0,35,6797,1,0,0,0,0"))
+    assert rows.activations == {100: {(35, 6797)}}
+    assert rows.activation_targets == {(100, 35, 6797): TARGET_CASTER}
+
+
+def test_an_activation_of_nought_is_still_an_activation(tables: BuildTables) -> None:
+    """Nought is the enum's own no-action value, so the row stands."""
+    rows = read(tables, effect_rows(f"100,{EFFECT_ACTIVATE_OBJECT},0,0,0,1,0,0,0,0"))
+    assert rows.activations == {100: {(0, 0)}}
 
 
 def test_a_played_sound_is_a_mask_with_no_id_set(tables: BuildTables) -> None:

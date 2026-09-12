@@ -196,11 +196,11 @@ def test_a_sound_kit_keeps_every_file_it_plays(tables: BuildTables) -> None:
     assert Routes.soundkit_files.run(tables(SoundKitEntry=SOUND_KIT_ENTRY)) == {300: {9000, 9001}}
 
 
-SOUND_KIT = """ID,SoundType
-300,29
-301,1
-302,-1
-303,53
+SOUND_KIT = """ID,SoundType,Flags
+300,29,512
+301,1,544
+302,-1,0
+303,53,512
 """
 
 
@@ -270,3 +270,9 @@ def test_a_consumed_effect_type_says_where_it_points() -> None:
     assert all(payload.get("reads", [{}])[0].get("into") for payload in consumed.values())
     handlers = [payload["handler"] for payload in consumed.values()]
     assert len(handlers) == len(set(handlers)), "a handler must select one type"
+
+
+def test_a_looping_kit_is_the_flag_bit_on_a_kit_the_pack_reaches(tables: BuildTables) -> None:
+    """Bit 9 of the kit's flags; a kit nothing reaches is not read, and the
+    other bits say nothing about looping."""
+    assert Routes.looping_kits.run(tables(SoundKit=SOUND_KIT), needs={"used_kits": {300, 301, 302}}) == {300, 301}
