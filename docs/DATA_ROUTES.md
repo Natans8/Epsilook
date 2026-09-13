@@ -1017,6 +1017,14 @@ resolve it. It is not a skeleton key: a value that indexes a table the pack does
 name, and giving it a name still means shipping its vocabulary. Carrying the values also makes the row identity finer,
 since two effects alike in everything the pack shows but summoning different creatures are two rows rather than one.
 
+**Every effect and aura value in use is typed, not only the ones a payload reads.** `spell_effect_slots.json` and
+`spell_aura_slots.json` under `build/enums` say per value what each misc column holds and on what evidence: measured
+against the id spaces, named, read by the Epsilon core's handler or never read by it, a dummy's script argument, or an
+amount by its shape. They are generated off the data and the core rather than written by hand, a payload wins where it
+reads the same value, and the payloads are the oracle `selectors_test.py` holds the typing to. A vocabulary a slot
+names ships its words in `selectorVocabularies`, and a mask's vocabulary is keyed by its bits, so the words a mask
+names are the bits it sets.
+
 **A route is a flow, and the steps are a small vocabulary.** Every route reads a table and follows a few hops, and the
 hops are of seven data kinds: read a table, join through a key, fan an array out into rows, select rows by a
 discriminator and say what their columns then mean, read whichever of several tables this build has, keep what a

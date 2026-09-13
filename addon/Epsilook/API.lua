@@ -403,9 +403,11 @@ end
 -- @param column the selector column, "Effect" or "EffectAura"
 -- @param value the selector's value, the effect or aura id
 -- @return a list of { column, holds, into }, each what one column holds
---   under this meaning: a reference into `into`, a value the vocabulary
---   `into` names, an amount, or a parameter another slot decides; empty
---   where the pack declares nothing for the value
+--   under this meaning: a reference into `into`, a value or a mask of values
+--   the vocabulary `into` names, an amount, a parameter another slot
+--   decides, an argument the spell's own server script reads, or a column
+--   the server never reads; empty where the pack declares nothing for the
+--   value
 function Epsilook:GetSelectorReads(table, column, value)
 	mounted(self)
 	local tables = Data.ReadAll("mech", "selectors", "tables") or {}
@@ -423,6 +425,38 @@ function Epsilook:GetSelectorReads(table, column, value)
 	for i = 1, #values do
 		if tables[i] == table and columns[i] == column and values[i] == value then
 			out[#out + 1] = { column = slotColumns[i], holds = holds[i], into = intos[i], ["until"] = untils[i] or "" }
+		end
+	end
+	return out
+end
+
+--- The words a raw value names, once GetSelectorReads has said its column
+-- holds a value or a mask of values of a vocabulary.
+-- @param into the vocabulary, as GetSelectorReads returns it
+-- @param holds "vocabulary" or "mask", as GetSelectorReads returns it
+-- @param value the raw value on the row
+-- @return a list of words in the vocabulary's order: the one the value
+--   names, or each one a mask's bits set; empty where it names nothing
+function Epsilook:GetSlotWords(into, holds, value)
+	mounted(self)
+	local vocabularies = Data.ReadAll("mech", "selectorVocabularies", "vocabularies") or {}
+	local values = Data.ReadAll("mech", "selectorVocabularies", "values") or {}
+	local words = Data.ReadAll("mech", "selectorVocabularies", "words") or {}
+	local out = {}
+	for i = 1, #values do
+		if vocabularies[i] == into then
+			local key = values[i]
+			local named
+			if holds == "mask" then
+				-- A mask vocabulary's values are single bits, so arithmetic
+				-- answers whether one is set without a bit library.
+				named = value >= 0 and math.floor(value / key) % 2 == 1
+			else
+				named = key == value
+			end
+			if named then
+				out[#out + 1] = words[i]
+			end
 		end
 	end
 	return out

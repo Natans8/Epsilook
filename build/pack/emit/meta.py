@@ -20,8 +20,14 @@ from ..derive import DeriveContext
 from ..model import SECTIONS, CountFamily, Section, SectionColumns
 from ..progress import detail
 
-PACK_FORMAT = 65
+PACK_FORMAT = 66
 """What shape the artifact is in.
+
+66 types every misc column of every effect and aura in use, where 65 typed the
+few the build reads by hand. `selectors` covers the whole roster, `holds` gains
+`mask`, `scripted` and `unread`, and `selectorVocabularies` ships the words of
+every vocabulary a slot names, a mask's keyed by its bits so the words it sets
+are the bits it carries. A reader of 65 finds holds words it does not know.
 
 63 makes a row an occurrence: one thing at one phase of the spell. Every kind
 that happens at a moment carries `phase`, resolved through `visualPhases`,

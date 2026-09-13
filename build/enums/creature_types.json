@@ -1,0 +1,25 @@
+{
+  "enum": "CreatureType.ID",
+  "description": "The client's own creature type names, keyed by the mask bit a misc slot typed `mask` over `creature_types` sets: bit id minus one, so 1 is Beast (id 1) and 8 Elemental (id 4).",
+  "source": [
+    "https://wago.tools/db2/CreatureType?build=9.2.7.45745"
+  ],
+  "keys": "creature type mask bit",
+  "values": {
+    "1": "Beast",
+    "2": "Dragonkin",
+    "4": "Demon",
+    "8": "Elemental",
+    "16": "Giant",
+    "32": "Undead",
+    "64": "Humanoid",
+    "128": "Critter",
+    "256": "Mechanical",
+    "512": "Not specified",
+    "1024": "Totem",
+    "2048": "Non-combat Pet",
+    "4096": "Gas Cloud",
+    "8192": "Wild Pet",
+    "16384": "Aberration"
+  }
+}

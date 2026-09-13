@@ -1,0 +1,12 @@
+{
+  "enum": "StealthType",
+  "description": "What a misc slot typed `vocabulary` over `stealth_types` names: the stealth a Stealth aura grants, or a Stealth Detection aura sees through. General is ordinary stealth, Trap the kind hunter traps use.",
+  "source": [
+    "https://github.com/EpsilonRP/TrinityCore/blob/master/src/server/game/Miscellaneous/SharedDefines.h"
+  ],
+  "keys": "StealthType",
+  "values": {
+    "0": "General",
+    "1": "Trap"
+  }
+}

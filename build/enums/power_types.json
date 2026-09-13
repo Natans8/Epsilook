@@ -1,0 +1,31 @@
+{
+  "enum": "Powers",
+  "description": "What a misc slot typed `vocabulary` over `power_types` names: the power an effect gives, drains or regenerates. -2 is health, which the core accepts where a power is read.",
+  "source": [
+    "https://github.com/EpsilonRP/TrinityCore/blob/master/src/server/game/Miscellaneous/SharedDefines.h"
+  ],
+  "keys": "Powers",
+  "values": {
+    "-2": "Health",
+    "0": "Mana",
+    "1": "Rage",
+    "2": "Focus",
+    "3": "Energy",
+    "4": "Combo Points",
+    "5": "Runes",
+    "6": "Runic Power",
+    "7": "Soul Shards",
+    "8": "Lunar Power",
+    "9": "Holy Power",
+    "10": "Alternate Power",
+    "11": "Maelstrom",
+    "12": "Chi",
+    "13": "Insanity",
+    "14": "Burning Embers",
+    "15": "Demonic Fury",
+    "16": "Arcane Charges",
+    "17": "Fury",
+    "18": "Pain",
+    "19": "Essence"
+  }
+}

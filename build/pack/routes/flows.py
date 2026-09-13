@@ -1182,13 +1182,17 @@ class Routes(Declarations):
         .when(T.SpellEffect.EffectAura, AURA_SET_VEHICLE_ID, [reference(MISC0, T.Vehicle)])
         .into(masked),
         invis=flow("invis")
-        .when(T.SpellEffect.EffectAura, AURA_MOD_INVISIBILITY, [vocabulary(MISC0, "channels", zero_is_a_value=True)])
+        .when(
+            T.SpellEffect.EffectAura,
+            AURA_MOD_INVISIBILITY,
+            [vocabulary(MISC0, "invisibility_types", zero_is_a_value=True)],
+        )
         .into(masked),
         detect=flow("detect")
         .when(
             T.SpellEffect.EffectAura,
             AURA_MOD_INVISIBILITY_DETECT,
-            [vocabulary(MISC0, "channels", zero_is_a_value=True)],
+            [vocabulary(MISC0, "invisibility_types", zero_is_a_value=True)],
         )
         .into(masked),
         screens=flow("screens")

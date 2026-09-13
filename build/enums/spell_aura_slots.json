@@ -1,0 +1,4708 @@
+{
+ "enum": "SpellEffect.EffectAura slot typing",
+ "description": "What each aura value's misc columns hold on the rows it selects: a reference into a table, a vocabulary or mask a vendored vocabulary names, an amount, a scripted argument, or unread by the server. Read mechanically, never by hand, so it can be held against the build's own payloads: `by` names the evidence. declared is not used here; measured means the slot's distinct values resolve into one id space far beyond the space's density over their range; named means the selector's name points at the table and the values fit it; core means the Epsilon core's handler reads the value as that vocabulary, or, for unread, that neither the handler nor any read of the aura in the core asks for it; scripted means the number is an argument the spell's own server script reads; shaped means an amount by name or by round values. A slot no evidence types is listed under unresolved. family is the selector's RP family, the ranking's axis.",
+ "source": [
+  "the 9.2.7 SpellEffect rows, the id spaces of every table the exploration database holds, the Epsilon core's SpellAuraEffects.cpp and SpellEffects.cpp",
+  "https://github.com/EpsilonRP/TrinityCore"
+ ],
+ "keys": "EffectAura",
+ "values": {
+  "1": {
+   "name": "Bind Sight",
+   "family": "world",
+   "reads": []
+  },
+  "2": {
+   "name": "Possess",
+   "family": "control",
+   "reads": []
+  },
+  "3": {
+   "name": "Periodic Damage",
+   "family": "combat",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0",
+    "EffectMiscValue_1"
+   ]
+  },
+  "4": {
+   "name": "Dummy",
+   "family": "scripted",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "scripted",
+     "into": "",
+     "by": "scripted"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "5": {
+   "name": "Confuse",
+   "family": "control",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "6": {
+   "name": "Charm",
+   "family": "control",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "7": {
+   "name": "Fear",
+   "family": "control",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "8": {
+   "name": "Periodic Heal",
+   "family": "combat",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "9": {
+   "name": "Mod Attack Speed",
+   "family": "world",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "10": {
+   "name": "Mod Threat",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "11": {
+   "name": "Taunt",
+   "family": "control",
+   "reads": []
+  },
+  "12": {
+   "name": "Stun",
+   "family": "control",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "13": {
+   "name": "Mod Damage Done",
+   "family": "combat",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "14": {
+   "name": "Mod Damage Taken",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "mask",
+     "into": "spell_schools",
+     "by": "core"
+    }
+   ]
+  },
+  "15": {
+   "name": "Damage shield",
+   "family": "combat",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "16": {
+   "name": "Stealth",
+   "family": "appearance",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "vocabulary",
+     "into": "stealth_types",
+     "by": "core"
+    }
+   ]
+  },
+  "17": {
+   "name": "Stealth Detection",
+   "family": "appearance",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "vocabulary",
+     "into": "stealth_types",
+     "by": "core"
+    }
+   ]
+  },
+  "18": {
+   "name": "Invisibility",
+   "family": "appearance",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "vocabulary",
+     "into": "invisibility_types",
+     "by": "core"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "19": {
+   "name": "Invisibility Detection",
+   "family": "appearance",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "vocabulary",
+     "into": "invisibility_types",
+     "by": "core"
+    }
+   ]
+  },
+  "20": {
+   "name": "Mod Total Health Regen %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "21": {
+   "name": "Mod Total Power Regen %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "vocabulary",
+     "into": "power_types",
+     "by": "named"
+    }
+   ]
+  },
+  "22": {
+   "name": "Mod Resistance",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "mask",
+     "into": "spell_schools",
+     "by": "named"
+    }
+   ]
+  },
+  "23": {
+   "name": "Periodically trigger spell",
+   "family": "scripted",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0",
+    "EffectMiscValue_1"
+   ]
+  },
+  "24": {
+   "name": "Periodically give power",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "vocabulary",
+     "into": "power_types",
+     "by": "named"
+    }
+   ]
+  },
+  "25": {
+   "name": "Pacify",
+   "family": "control",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "26": {
+   "name": "Root",
+   "family": "world",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "27": {
+   "name": "Silence",
+   "family": "control",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "mask",
+     "into": "spell_schools",
+     "by": "core"
+    }
+   ]
+  },
+  "28": {
+   "name": "Reflect All Spells",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "mask",
+     "into": "spell_schools",
+     "by": "named"
+    }
+   ]
+  },
+  "29": {
+   "name": "Mod Stat",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "30": {
+   "name": "Mod Skill - Temporary",
+   "family": "world",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "31": {
+   "name": "Increase Run Speed %",
+   "family": "world",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "32": {
+   "name": "Mod Mounted Speed %",
+   "family": "appearance",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "33": {
+   "name": "Decrease Run Speed %",
+   "family": "world",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "34": {
+   "name": "Increase Max Health - Flat",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "35": {
+   "name": "Increase Max Power - Flat",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "vocabulary",
+     "into": "power_types",
+     "by": "core"
+    }
+   ]
+  },
+  "36": {
+   "name": "Shapeshift",
+   "family": "appearance",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "SpellShapeshiftForm",
+     "by": "core"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "37": {
+   "name": "Effect Immunity",
+   "family": "control",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "38": {
+   "name": "State Immunity",
+   "family": "control",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "39": {
+   "name": "Immunity",
+   "family": "control",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "40": {
+   "name": "Immunity - Damage Only",
+   "family": "control",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "41": {
+   "name": "Immunity - Debuffs Only",
+   "family": "control",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "42": {
+   "name": "Proc Trigger Spell",
+   "family": "combat",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "43": {
+   "name": "Proc Trigger Damage",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "Spell",
+     "by": "named"
+    }
+   ]
+  },
+  "44": {
+   "name": "Track Creatures",
+   "family": "other",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "mask",
+     "into": "creature_types",
+     "by": "named"
+    }
+   ]
+  },
+  "45": {
+   "name": "Track Resources",
+   "family": "other",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "47": {
+   "name": "Mod Parry %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "48": {
+   "name": "One Periodic Spell",
+   "family": "scripted",
+   "reads": []
+  },
+  "49": {
+   "name": "Mod Dodge %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "50": {
+   "name": "Mod Amount Healed by Critical Heals %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "51": {
+   "name": "Modify Block %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "52": {
+   "name": "Mod Melee & Ranged Crit %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "53": {
+   "name": "Periodically Leech Health",
+   "family": "combat",
+   "reads": []
+  },
+  "54": {
+   "name": "Mod Melee & Ranged Hit Chance %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "55": {
+   "name": "Mod Spell Hit Chance %",
+   "family": "combat",
+   "reads": []
+  },
+  "56": {
+   "name": "Change Model",
+   "family": "appearance",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "creature_template",
+     "by": "named"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "57": {
+   "name": "Mod Spell Crit %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "58": {
+   "name": "Increase Swim Speed %",
+   "family": "world",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "59": {
+   "name": "Increase Physical Damage & Spell Damage",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "mask",
+     "into": "creature_types",
+     "by": "named"
+    }
+   ]
+  },
+  "60": {
+   "name": "Pacify & Silence",
+   "family": "control",
+   "reads": [
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "61": {
+   "name": "Mod Size %",
+   "family": "appearance",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "62": {
+   "name": "Periodically Transfer Health",
+   "family": "combat",
+   "reads": []
+  },
+  "63": {
+   "name": "Mod Additional Power Cost",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "vocabulary",
+     "into": "power_types",
+     "by": "named"
+    }
+   ]
+  },
+  "64": {
+   "name": "Periodically Drain Power",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "vocabulary",
+     "into": "power_types",
+     "by": "named"
+    }
+   ]
+  },
+  "65": {
+   "name": "Mod Spell Haste %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "66": {
+   "name": "Feign Death",
+   "family": "world",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "67": {
+   "name": "Disarm",
+   "family": "control",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "68": {
+   "name": "Stalked",
+   "family": "other",
+   "reads": []
+  },
+  "69": {
+   "name": "Absorb Damage",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "70": {
+   "name": "Periodic Damage",
+   "family": "combat",
+   "reads": []
+  },
+  "71": {
+   "name": "Mod Spell Crit %",
+   "family": "combat",
+   "reads": []
+  },
+  "72": {
+   "name": "Mod Mana Cost %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "mask",
+     "into": "spell_schools",
+     "by": "named"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "73": {
+   "name": "Mod Mana Cost %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "mask",
+     "into": "spell_schools",
+     "by": "named"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "vocabulary",
+     "into": "power_types",
+     "by": "core"
+    }
+   ]
+  },
+  "74": {
+   "name": "Reflect Spells",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "mask",
+     "into": "spell_schools",
+     "by": "core"
+    }
+   ]
+  },
+  "75": {
+   "name": "Force Language",
+   "family": "identity",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "vocabulary",
+     "into": "languages",
+     "by": "named"
+    }
+   ],
+   "unresolved": [
+    "EffectMiscValue_1"
+   ]
+  },
+  "76": {
+   "name": "Far Sight",
+   "family": "other",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "77": {
+   "name": "Immunity - Mechanic",
+   "family": "control",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "vocabulary",
+     "into": "spell_mechanics",
+     "by": "named"
+    }
+   ]
+  },
+  "78": {
+   "name": "Mounted",
+   "family": "appearance",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "creature_template",
+     "by": "measured"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "79": {
+   "name": "Mod Damage Done %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "mask",
+     "into": "spell_schools",
+     "by": "core"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "80": {
+   "name": "Mod Stat %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "81": {
+   "name": "Split Damage %",
+   "family": "other",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "82": {
+   "name": "Underwater Breathing",
+   "family": "other",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "83": {
+   "name": "Mod Base Resistance Flat",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "mask",
+     "into": "spell_schools",
+     "by": "core"
+    }
+   ]
+  },
+  "84": {
+   "name": "Health Regen",
+   "family": "combat",
+   "reads": []
+  },
+  "85": {
+   "name": "Power Regen",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "vocabulary",
+     "into": "power_types",
+     "by": "core"
+    }
+   ]
+  },
+  "86": {
+   "name": "Create Item on Death",
+   "family": "world",
+   "reads": []
+  },
+  "87": {
+   "name": "Mod % Damage Taken",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "mask",
+     "into": "spell_schools",
+     "by": "core"
+    }
+   ]
+  },
+  "88": {
+   "name": "Mod Health Regen %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "89": {
+   "name": "Mod Periodic Damage %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "90": {
+   "name": "Unknown Aura #90",
+   "family": "other",
+   "reads": []
+  },
+  "91": {
+   "name": "Mod Aggro Range",
+   "family": "other",
+   "reads": []
+  },
+  "92": {
+   "name": "Cannot Flee",
+   "family": "scripted",
+   "reads": []
+  },
+  "93": {
+   "name": "Unattackable",
+   "family": "other",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "94": {
+   "name": "Interrupt Power Decay",
+   "family": "combat",
+   "reads": []
+  },
+  "95": {
+   "name": "Ghost",
+   "family": "appearance",
+   "reads": []
+  },
+  "96": {
+   "name": "Magnet",
+   "family": "other",
+   "reads": []
+  },
+  "97": {
+   "name": "Absorb Damage - Mana Shield",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "mask",
+     "into": "spell_schools",
+     "by": "named"
+    }
+   ]
+  },
+  "98": {
+   "name": "Mod Skill",
+   "family": "world",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "SkillLine",
+     "by": "named"
+    }
+   ]
+  },
+  "99": {
+   "name": "Mod Melee Attack Power",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "100": {
+   "name": "Always Show Debuffs (Obsolete)",
+   "family": "scripted",
+   "reads": []
+  },
+  "101": {
+   "name": "Mod Resistance %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "102": {
+   "name": "Mod Melee Attack Power vs Creature",
+   "family": "combat",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "103": {
+   "name": "Mod Threat Flat - Temporary",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "104": {
+   "name": "Water Walking",
+   "family": "appearance",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "105": {
+   "name": "Slow Fall",
+   "family": "appearance",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "106": {
+   "name": "Levitate / Hover",
+   "family": "appearance",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "107": {
+   "name": "Add Modifier - Flat",
+   "family": "other",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0",
+    "EffectMiscValue_1"
+   ]
+  },
+  "108": {
+   "name": "Add Modifier - %",
+   "family": "other",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "109": {
+   "name": "Proc Spell on Target",
+   "family": "combat",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "110": {
+   "name": "Mod Power Regen %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "vocabulary",
+     "into": "power_types",
+     "by": "core"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "111": {
+   "name": "Intercept % of all Melee & Ranged Attacks",
+   "family": "other",
+   "reads": []
+  },
+  "112": {
+   "name": "Override Class Script",
+   "family": "appearance",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "scripted",
+     "into": "",
+     "by": "scripted"
+    }
+   ]
+  },
+  "113": {
+   "name": "Mod Ranged Damage Taken - Flat",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "mask",
+     "into": "spell_schools",
+     "by": "named"
+    }
+   ]
+  },
+  "114": {
+   "name": "Mod Ranged Damage Taken - %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "mask",
+     "into": "spell_schools",
+     "by": "named"
+    }
+   ]
+  },
+  "115": {
+   "name": "Mod Healing Taken - Flat",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "mask",
+     "into": "spell_schools",
+     "by": "core"
+    }
+   ]
+  },
+  "116": {
+   "name": "Allow % of Health Regeneration to Continue in Combat",
+   "family": "combat",
+   "reads": []
+  },
+  "117": {
+   "name": "Give % Chance to Resist Mechanic",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "vocabulary",
+     "into": "spell_mechanics",
+     "by": "named"
+    }
+   ]
+  },
+  "118": {
+   "name": "Mod Healing Taken - %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "119": {
+   "name": "Enable PvP Talents",
+   "family": "combat",
+   "reads": []
+  },
+  "120": {
+   "name": "Untrackable",
+   "family": "other",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "121": {
+   "name": "Beast Lore",
+   "family": "other",
+   "reads": []
+  },
+  "122": {
+   "name": "Mod Off-Hand Damage Done %",
+   "family": "combat",
+   "reads": []
+  },
+  "123": {
+   "name": "Reduce Target Resistances - Flat",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "mask",
+     "into": "spell_schools",
+     "by": "core"
+    }
+   ]
+  },
+  "124": {
+   "name": "Mod Ranged Attack Power",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "126": {
+   "name": "Mod Melee Damage Taken - %",
+   "family": "combat",
+   "reads": []
+  },
+  "127": {
+   "name": "Mod Attacker Ranged Attack Power",
+   "family": "combat",
+   "reads": []
+  },
+  "128": {
+   "name": "MOD_FIXATE",
+   "family": "other",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "129": {
+   "name": "Increase Run Speed % - Stacks",
+   "family": "world",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "130": {
+   "name": "Incerase Mounted Speed % - Stacks",
+   "family": "appearance",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "131": {
+   "name": "Mod Ranged Attack Power vs Creature",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "132": {
+   "name": "Mod Increase Maximum Power - %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "vocabulary",
+     "into": "power_types",
+     "by": "core"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "133": {
+   "name": "Mod Increase Maximum Health - %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "134": {
+   "name": "Allow % of Mana Regeneration to Continue in Combat",
+   "family": "combat",
+   "reads": []
+  },
+  "135": {
+   "name": "Mod Healing Power",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "mask",
+     "into": "spell_schools",
+     "by": "named"
+    }
+   ]
+  },
+  "136": {
+   "name": "Mod Healing Power - %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "137": {
+   "name": "Mod Stat - %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "vocabulary",
+     "into": "primary_stats",
+     "by": "named"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "138": {
+   "name": "Mod Melee Attack Speed - %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "139": {
+   "name": "Force Reputation",
+   "family": "identity",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "Faction",
+     "by": "measured"
+    }
+   ]
+  },
+  "140": {
+   "name": "Mod Ranged Attack Speed - %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "141": {
+   "name": "Mod Ranged Attack Speed - % - Ammo Only",
+   "family": "world",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "142": {
+   "name": "Mod Base Resistance - %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "143": {
+   "name": "Mod Recovery Rate By Spell Label - %",
+   "family": "other",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "144": {
+   "name": "Reduce Falling Damage by %",
+   "family": "other",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "145": {
+   "name": "Increase Pet Talent Points",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "146": {
+   "name": "Allow Exotic Pets Taming",
+   "family": "other",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "147": {
+   "name": "Add Creature Immunity (?)",
+   "family": "control",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "mask",
+     "into": "creature_types",
+     "by": "named"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "148": {
+   "name": "Mod Charge Cooldown Recharge Rate - %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "149": {
+   "name": "Decrease Pushback Time by %",
+   "family": "other",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "150": {
+   "name": "Modify Block Value - %",
+   "family": "combat",
+   "reads": []
+  },
+  "151": {
+   "name": "Track Hidden",
+   "family": "appearance",
+   "reads": []
+  },
+  "152": {
+   "name": "Mod Aggro Range of Mobs Against You",
+   "family": "other",
+   "reads": []
+  },
+  "153": {
+   "name": "Mod Auto Attack Range",
+   "family": "other",
+   "reads": []
+  },
+  "154": {
+   "name": "Mod Stealth Effectiveness",
+   "family": "appearance",
+   "reads": []
+  },
+  "155": {
+   "name": "Underwater Breathing",
+   "family": "other",
+   "reads": []
+  },
+  "156": {
+   "name": "Mod All Reputation Gained by %",
+   "family": "identity",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "Faction",
+     "by": "measured"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "157": {
+   "name": "Mod All Pet Damage Taken",
+   "family": "combat",
+   "reads": []
+  },
+  "158": {
+   "name": "Modify Block Value",
+   "family": "combat",
+   "reads": []
+  },
+  "159": {
+   "name": "Worth No Honor",
+   "family": "combat",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "161": {
+   "name": "Regen Health - Works in Combat",
+   "family": "combat",
+   "reads": []
+  },
+  "162": {
+   "name": "Power Burn",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "vocabulary",
+     "into": "power_types",
+     "by": "named"
+    }
+   ]
+  },
+  "163": {
+   "name": "Mod Melee Critical Damage %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "164": {
+   "name": "Force Breath Bar",
+   "family": "other",
+   "reads": []
+  },
+  "165": {
+   "name": "Marked by a Guard",
+   "family": "combat",
+   "reads": []
+  },
+  "166": {
+   "name": "Mod Melee Attack Power - %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "167": {
+   "name": "Mod Ranged Attack Power - %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "168": {
+   "name": "Mod All Damage Done Against Creature - %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "mask",
+     "into": "creature_types",
+     "by": "named"
+    }
+   ]
+  },
+  "169": {
+   "name": "Set PvP",
+   "family": "combat",
+   "reads": []
+  },
+  "170": {
+   "name": "Make a Certain Object Visible",
+   "family": "world",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "171": {
+   "name": "Mod Mounted Speed % - Stacks",
+   "family": "appearance",
+   "reads": []
+  },
+  "172": {
+   "name": "Mod Mounted Speed % - Doesn't Stack with Anything",
+   "family": "appearance",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "173": {
+   "name": "Mod Cooldown Recovery Rate %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "174": {
+   "name": "Mod Spell Power by % of Stat",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "175": {
+   "name": "Mod Healing Power by % of Stat",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "vocabulary",
+     "into": "primary_stats",
+     "by": "named"
+    }
+   ]
+  },
+  "176": {
+   "name": "Spirit of Redemption",
+   "family": "appearance",
+   "reads": []
+  },
+  "177": {
+   "name": "Mind Control (AoE only?)",
+   "family": "control",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "178": {
+   "name": "Mod Debuff Resistance - %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "vocabulary",
+     "into": "power_types",
+     "by": "core"
+    }
+   ]
+  },
+  "179": {
+   "name": "Mod Attacker Crit Chance %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "vocabulary",
+     "into": "power_types",
+     "by": "core"
+    }
+   ]
+  },
+  "180": {
+   "name": "Mod Spell Power Against Creature",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "mask",
+     "into": "creature_types",
+     "by": "named"
+    }
+   ]
+  },
+  "181": {
+   "name": "Mod Currency Cost %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "182": {
+   "name": "Mod Resistance by % of Stat",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "183": {
+   "name": "Mod Threat % of Critical Hits",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "184": {
+   "name": "Mod Attacker Melee Hit Chance - %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "185": {
+   "name": "Mod Attacker Ranged Hit Chance - %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "186": {
+   "name": "Mod Attacker Spell Hit Chance - %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "187": {
+   "name": "Mod Attacker Melee Crit Chance - %",
+   "family": "combat",
+   "reads": []
+  },
+  "188": {
+   "name": "Mod Attacker Ranged Crit Chance - %",
+   "family": "combat",
+   "reads": []
+  },
+  "189": {
+   "name": "Mod Rating",
+   "family": "combat",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "190": {
+   "name": "Mod Reputation Gained %",
+   "family": "identity",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "191": {
+   "name": "Run Speed Limit %",
+   "family": "world",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "192": {
+   "name": "Increase Attack Speed %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "193": {
+   "name": "Decrease Attack Speed %",
+   "family": "world",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "194": {
+   "name": "Bypass Damage Reduction Effects",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "mask",
+     "into": "spell_schools",
+     "by": "core"
+    }
+   ]
+  },
+  "195": {
+   "name": "Learn Spell",
+   "family": "progression",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "Spell",
+     "by": "named"
+    }
+   ]
+  },
+  "196": {
+   "name": "Increase All Cooldowns",
+   "family": "combat",
+   "reads": []
+  },
+  "197": {
+   "name": "Mod Chance to be Critically Hit %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "198": {
+   "name": "Mod Combat Rating From Combat Rating %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "199": {
+   "name": "Mod Spell Hit Chance %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "200": {
+   "name": "Mod Experience Gained % (mob kills only)",
+   "family": "world",
+   "reads": []
+  },
+  "201": {
+   "name": "Cannot dodge, block or parry",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "203": {
+   "name": "Mod Melee Crit Damage Taken by %",
+   "family": "combat",
+   "reads": []
+  },
+  "204": {
+   "name": "Mod Ranged Crit Damage Taken by %",
+   "family": "combat",
+   "reads": []
+  },
+  "205": {
+   "name": "Mod Spell Crit Damage Taken by %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "206": {
+   "name": "Mod Flight Speed % - Stacks",
+   "family": "appearance",
+   "reads": []
+  },
+  "207": {
+   "name": "Mod Flight Speed %",
+   "family": "appearance",
+   "reads": []
+  },
+  "208": {
+   "name": "Mod Flight Speed %",
+   "family": "appearance",
+   "reads": []
+  },
+  "209": {
+   "name": "Mod Mounted Speed %",
+   "family": "appearance",
+   "reads": []
+  },
+  "210": {
+   "name": "Mod Flight Speed %",
+   "family": "appearance",
+   "reads": []
+  },
+  "211": {
+   "name": "Mod Mounted Speed % (ground + flying)",
+   "family": "appearance",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "212": {
+   "name": "Mod Ranged Attack Power by % of Stat",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "213": {
+   "name": "Mod Rage % Generated From Damage Dealt",
+   "family": "combat",
+   "reads": []
+  },
+  "214": {
+   "name": "Tamed Pet Passive",
+   "family": "other",
+   "reads": []
+  },
+  "215": {
+   "name": "Arena Preparation",
+   "family": "other",
+   "reads": []
+  },
+  "216": {
+   "name": "Mod Casting Speed - %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "217": {
+   "name": "Mod Speed %",
+   "family": "combat",
+   "reads": []
+  },
+  "218": {
+   "name": "Add Modifier - % (Label)",
+   "family": "other",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "219": {
+   "name": "Add Modifier - Flat (Label)",
+   "family": "other",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0",
+    "EffectMiscValue_1"
+   ]
+  },
+  "220": {
+   "name": "Mod Combat Rating by % of Stat",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "221": {
+   "name": "Ignored",
+   "family": "control",
+   "reads": []
+  },
+  "222": {
+   "name": "Remove Transmog Cost",
+   "family": "combat",
+   "reads": []
+  },
+  "223": {
+   "name": "Remove Barber Shop Cost",
+   "family": "combat",
+   "reads": []
+  },
+  "224": {
+   "name": "Learn Talent",
+   "family": "progression",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "Talent",
+     "by": "measured"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "reference",
+     "into": "Item",
+     "by": "measured"
+    }
+   ]
+  },
+  "225": {
+   "name": "Mod Visibility Range",
+   "family": "other",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "226": {
+   "name": "Periodic Dummy",
+   "family": "scripted",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "scripted",
+     "into": "",
+     "by": "scripted"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "scripted",
+     "into": "",
+     "by": "scripted"
+    }
+   ]
+  },
+  "227": {
+   "name": "Periodically Trigger Spell with Value",
+   "family": "scripted",
+   "reads": []
+  },
+  "228": {
+   "name": "Stealth Detection (Always)",
+   "family": "appearance",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "229": {
+   "name": "Mod AoE Damage Taken %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "230": {
+   "name": "Mod Max Health",
+   "family": "combat",
+   "reads": []
+  },
+  "231": {
+   "name": "Proc Trigger Spell With Value",
+   "family": "combat",
+   "reads": []
+  },
+  "232": {
+   "name": "Mod Mechanic Duration %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "vocabulary",
+     "into": "spell_mechanics",
+     "by": "named"
+    }
+   ]
+  },
+  "233": {
+   "name": "Change Model of Every Humanoid Seen",
+   "family": "appearance",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0",
+    "EffectMiscValue_1"
+   ]
+  },
+  "234": {
+   "name": "Mod Mechanic Duration % - Does not Stack",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "vocabulary",
+     "into": "spell_mechanics",
+     "by": "named"
+    }
+   ]
+  },
+  "235": {
+   "name": "Mod Dispel Resistance %",
+   "family": "combat",
+   "reads": []
+  },
+  "236": {
+   "name": "Control Vehicle",
+   "family": "world",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "237": {
+   "name": "Mod Spell Power by % of Attack Power",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "238": {
+   "name": "Mod Healing Power by % of Attack Power",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "239": {
+   "name": "Mod Size % - Doesn't stack",
+   "family": "appearance",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "240": {
+   "name": "Mod Expertise",
+   "family": "combat",
+   "reads": []
+  },
+  "241": {
+   "name": "Force Move Forward",
+   "family": "world",
+   "reads": []
+  },
+  "243": {
+   "name": "Faction Override",
+   "family": "appearance",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "FactionTemplate",
+     "by": "measured"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "244": {
+   "name": "Comprehend Language",
+   "family": "identity",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "vocabulary",
+     "into": "languages",
+     "by": "measured"
+    }
+   ]
+  },
+  "245": {
+   "name": "Mod Debuffs Duration %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "vocabulary",
+     "into": "dispel_types",
+     "by": "named"
+    }
+   ]
+  },
+  "246": {
+   "name": "Mod Debuffs Duration %",
+   "family": "combat",
+   "reads": []
+  },
+  "247": {
+   "name": "Clone",
+   "family": "appearance",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "248": {
+   "name": "Mod Chance for Attacks to be Dodged by %",
+   "family": "combat",
+   "reads": []
+  },
+  "249": {
+   "name": "Create Death Rune",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "250": {
+   "name": "Increase Max Health - Stacks",
+   "family": "combat",
+   "reads": []
+  },
+  "251": {
+   "name": "Mod Enemy Dodge %",
+   "family": "combat",
+   "reads": []
+  },
+  "252": {
+   "name": "Mod Melee, Ranged & Spell Haste by %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "253": {
+   "name": "Critical Block Chance %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "254": {
+   "name": "Remove Shield",
+   "family": "control",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "255": {
+   "name": "Mod Mechanic Damage %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "vocabulary",
+     "into": "spell_mechanics",
+     "by": "named"
+    }
+   ]
+  },
+  "257": {
+   "name": "Mod Target Resist by Spell Class",
+   "family": "combat",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "258": {
+   "name": "Override Summoned Object",
+   "family": "appearance",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0",
+    "EffectMiscValue_1"
+   ]
+  },
+  "259": {
+   "name": "Mod Periodic Healing Taken %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "mask",
+     "into": "spell_schools",
+     "by": "named"
+    }
+   ]
+  },
+  "260": {
+   "name": "Screen Effect",
+   "family": "appearance",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "ScreenEffect",
+     "by": "measured"
+    }
+   ],
+   "unresolved": [
+    "EffectMiscValue_1"
+   ]
+  },
+  "261": {
+   "name": "Phase",
+   "family": "world",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "reference",
+     "into": "Phase",
+     "by": "measured"
+    }
+   ]
+  },
+  "262": {
+   "name": "Ignore Aura State",
+   "family": "other",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "263": {
+   "name": "Allows Spells",
+   "family": "other",
+   "reads": []
+  },
+  "264": {
+   "name": "Disable Attack",
+   "family": "other",
+   "reads": []
+  },
+  "265": {
+   "name": "Detect Azerite",
+   "family": "progression",
+   "reads": []
+  },
+  "266": {
+   "name": "Set Vignette",
+   "family": "other",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "267": {
+   "name": "Cancel Aura if Damage Absorbed Reaches X% of Caster Health",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "mask",
+     "into": "spell_schools",
+     "by": "core"
+    }
+   ]
+  },
+  "268": {
+   "name": "Mod Armor From Stat %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "vocabulary",
+     "into": "primary_stats",
+     "by": "named"
+    }
+   ]
+  },
+  "269": {
+   "name": "Mod Damage to Caster %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "270": {
+   "name": "Mod Damage From Caster %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "mask",
+     "into": "spell_schools",
+     "by": "core"
+    }
+   ]
+  },
+  "271": {
+   "name": "Mod All Damage Done % by Caster",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "mask",
+     "into": "spell_schools",
+     "by": "named"
+    }
+   ]
+  },
+  "272": {
+   "name": "Modify Block %",
+   "family": "combat",
+   "reads": []
+  },
+  "273": {
+   "name": "X-ray Vision",
+   "family": "other",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "274": {
+   "name": "Consume No Ammo",
+   "family": "combat",
+   "reads": []
+  },
+  "275": {
+   "name": "Allow Affected Spells to be Used in Any Stance",
+   "family": "appearance",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "276": {
+   "name": "Mod Damage Done % by Mechanic",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "vocabulary",
+     "into": "spell_mechanics",
+     "by": "named"
+    }
+   ]
+  },
+  "277": {
+   "name": "Mod Movement Speed By Secondary Stat %",
+   "family": "combat",
+   "reads": []
+  },
+  "278": {
+   "name": "Disarm Ranged Weapon",
+   "family": "control",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "279": {
+   "name": "Spawn Effect",
+   "family": "world",
+   "reads": []
+  },
+  "280": {
+   "name": "Mod Armor Penetration %",
+   "family": "combat",
+   "reads": []
+  },
+  "281": {
+   "name": "Mod All Honor Gain %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "282": {
+   "name": "Mod Base Health %",
+   "family": "combat",
+   "reads": []
+  },
+  "283": {
+   "name": "Mod All Healing Done % by Caster",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "284": {
+   "name": "Linked",
+   "family": "other",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "285": {
+   "name": "Mod Attack Power for every 'School' Resistance Point",
+   "family": "combat",
+   "reads": []
+  },
+  "286": {
+   "name": "Allow Dot to Crit",
+   "family": "combat",
+   "reads": []
+  },
+  "287": {
+   "name": "Deflect Spells",
+   "family": "other",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "288": {
+   "name": "Ignore Hit Direction",
+   "family": "combat",
+   "reads": []
+  },
+  "289": {
+   "name": "Prevent Durability Loss",
+   "family": "scripted",
+   "reads": []
+  },
+  "290": {
+   "name": "Mod Crit Chance % - All",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "291": {
+   "name": "Mod Experience Gained % (Quests too)",
+   "family": "scripted",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "293": {
+   "name": "Mechanic Abilities",
+   "family": "appearance",
+   "reads": [
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "294": {
+   "name": "Aura of Despair",
+   "family": "combat",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0",
+    "EffectMiscValue_1"
+   ]
+  },
+  "295": {
+   "name": "Mod Periodic Damage Taken %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "mask",
+     "into": "spell_schools",
+     "by": "core"
+    }
+   ]
+  },
+  "296": {
+   "name": "Set Vehicle ID",
+   "family": "world",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "Vehicle",
+     "by": "measured"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "297": {
+   "name": "Mod Root Disable Gravity",
+   "family": "world",
+   "reads": []
+  },
+  "298": {
+   "name": "Mod Stun Disable Gravity",
+   "family": "control",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "299": {
+   "name": "Comprehend Emote",
+   "family": "appearance",
+   "reads": []
+  },
+  "300": {
+   "name": "Share Damage %",
+   "family": "other",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "301": {
+   "name": "Mod Healing Absorb %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "303": {
+   "name": "Mod Damage Done Versus Aura State %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "304": {
+   "name": "Fake Inebriate",
+   "family": "other",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "305": {
+   "name": "Mod Minimum Speed %",
+   "family": "world",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "306": {
+   "name": "Mod Crit Chance From Caster %",
+   "family": "combat",
+   "reads": []
+  },
+  "307": {
+   "name": "Cast While Moving (Spell Label)",
+   "family": "other",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "308": {
+   "name": "Mod Critical Strike %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "309": {
+   "name": "Mod Resillience",
+   "family": "other",
+   "reads": []
+  },
+  "310": {
+   "name": "Mod Pet AOE Damage Avoidance",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "mask",
+     "into": "spell_schools",
+     "by": "core"
+    }
+   ]
+  },
+  "311": {
+   "name": "Ignore Combat",
+   "family": "other",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "312": {
+   "name": "Animation Replacement",
+   "family": "appearance",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "AnimReplacementSet",
+     "by": "measured"
+    }
+   ]
+  },
+  "313": {
+   "name": "Mount Animation Replacement",
+   "family": "appearance",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "314": {
+   "name": "Prevent Resurrection",
+   "family": "world",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "315": {
+   "name": "Underwater Walking",
+   "family": "appearance",
+   "reads": []
+  },
+  "316": {
+   "name": "Absorb Overkill Damage",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "mask",
+     "into": "spell_schools",
+     "by": "named"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "317": {
+   "name": "Mod Increase Spell Power %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "mask",
+     "into": "spell_schools",
+     "by": "named"
+    }
+   ]
+  },
+  "318": {
+   "name": "Mod Mastery %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "319": {
+   "name": "Mod Melee Attack Speed",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "320": {
+   "name": "Mod Ranged Attack Speed",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "321": {
+   "name": "Mod No Actions",
+   "family": "other",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "322": {
+   "name": "Interfere Targeting",
+   "family": "other",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "323": {
+   "name": "Portal",
+   "family": "world",
+   "reads": []
+  },
+  "324": {
+   "name": "Override Unlocked Azerite Essense Rank",
+   "family": "appearance",
+   "reads": []
+  },
+  "325": {
+   "name": "Learn PvP Talent",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "326": {
+   "name": "Phase Group",
+   "family": "world",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "reference",
+     "into": "Phase",
+     "by": "core"
+    }
+   ]
+  },
+  "327": {
+   "name": "Phase Always Visible",
+   "family": "world",
+   "reads": []
+  },
+  "328": {
+   "name": "Trigger Spell On Power %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "vocabulary",
+     "into": "power_types",
+     "by": "core"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "329": {
+   "name": "Mod Power Regen %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "vocabulary",
+     "into": "power_types",
+     "by": "named"
+    }
+   ]
+  },
+  "330": {
+   "name": "Allows Cast while Moving",
+   "family": "other",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "331": {
+   "name": "Mod Weather",
+   "family": "world",
+   "reads": [
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "332": {
+   "name": "Overrides Actionbar Spell",
+   "family": "appearance",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "Spell",
+     "by": "named"
+    }
+   ],
+   "unresolved": [
+    "EffectMiscValue_1"
+   ]
+  },
+  "333": {
+   "name": "Overrides Actionbar Spell",
+   "family": "appearance",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "Spell",
+     "by": "named"
+    }
+   ],
+   "unresolved": [
+    "EffectMiscValue_1"
+   ]
+  },
+  "334": {
+   "name": "Mod Auto Attack Crit Chance %",
+   "family": "combat",
+   "reads": []
+  },
+  "335": {
+   "name": "Unknown Aura #335",
+   "family": "other",
+   "reads": []
+  },
+  "336": {
+   "name": "Mount Restrictions",
+   "family": "appearance",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "338": {
+   "name": "Mod Durability Loss",
+   "family": "progression",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "339": {
+   "name": "Mod Crit Chance From Caster %",
+   "family": "combat",
+   "reads": []
+  },
+  "340": {
+   "name": "Mod Resurrected Health %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "341": {
+   "name": "Mod Spell Category Cooldown",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "SpellCategory",
+     "by": "measured"
+    }
+   ]
+  },
+  "342": {
+   "name": "Mod Attack Speed %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "343": {
+   "name": "Mod Melee Damage From Caster %",
+   "family": "other",
+   "reads": []
+  },
+  "344": {
+   "name": "Mod Auto Attack Damage %",
+   "family": "other",
+   "reads": []
+  },
+  "345": {
+   "name": "Ignore Armor %",
+   "family": "combat",
+   "reads": []
+  },
+  "346": {
+   "name": "Enable Alt Power",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "347": {
+   "name": "Mod Cooldown From Haste",
+   "family": "combat",
+   "reads": []
+  },
+  "348": {
+   "name": "Mod Money Gain %",
+   "family": "progression",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "349": {
+   "name": "Mod Currency Gain %",
+   "family": "progression",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "CurrencyTypes",
+     "by": "measured"
+    }
+   ]
+  },
+  "350": {
+   "name": "Mod Material Gain %",
+   "family": "other",
+   "reads": []
+  },
+  "351": {
+   "name": "Mod Currency Category Gain %",
+   "family": "progression",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "352": {
+   "name": "Allow Worgen Transform",
+   "family": "appearance",
+   "reads": []
+  },
+  "354": {
+   "name": "Mod Healing Based on Target Health %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "355": {
+   "name": "Mod Casting Speed %",
+   "family": "world",
+   "reads": []
+  },
+  "356": {
+   "name": "Mod Spell Damage Done %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "357": {
+   "name": "Enable Unit Frame",
+   "family": "other",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "358": {
+   "name": "Worgen Altered Form",
+   "family": "other",
+   "reads": []
+  },
+  "359": {
+   "name": "Mod Healing Done Versus Aura State",
+   "family": "combat",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "360": {
+   "name": "Proc Duplicate Spells",
+   "family": "combat",
+   "reads": []
+  },
+  "361": {
+   "name": "Triggers AoE",
+   "family": "appearance",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "Spell",
+     "by": "named"
+    }
+   ],
+   "unresolved": [
+    "EffectMiscValue_1"
+   ]
+  },
+  "362": {
+   "name": "Binding Visual Effect",
+   "family": "appearance",
+   "reads": []
+  },
+  "363": {
+   "name": "Mod Next Spell",
+   "family": "combat",
+   "reads": []
+  },
+  "365": {
+   "name": "Max Far Clip Override",
+   "family": "appearance",
+   "reads": []
+  },
+  "366": {
+   "name": "Override Spell Power By AP %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "mask",
+     "into": "spell_schools",
+     "by": "named"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "367": {
+   "name": "Override Auto Attack With Ranged Spell",
+   "family": "appearance",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "Spell",
+     "by": "named"
+    }
+   ]
+  },
+  "368": {
+   "name": "Copy Weapons",
+   "family": "appearance",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "369": {
+   "name": "Enable Power Bar Timer",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "370": {
+   "name": "Spell Override Name Group",
+   "family": "appearance",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "SpellOverrideName",
+     "by": "named"
+    }
+   ]
+  },
+  "371": {
+   "name": "Disable Player Auto Attack",
+   "family": "other",
+   "reads": []
+  },
+  "372": {
+   "name": "Override Mount From Set",
+   "family": "appearance",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "373": {
+   "name": "Mod Speed % and Unable to Control Character",
+   "family": "world",
+   "reads": []
+  },
+  "374": {
+   "name": "Mod Falling Damage %",
+   "family": "other",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "375": {
+   "name": "Mod Reduce Damage and Healing Done %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "376": {
+   "name": "Mod Currency Gain From Source %",
+   "family": "progression",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "CurrencyTypes",
+     "by": "measured"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "377": {
+   "name": "Allows Cast while Moving",
+   "family": "other",
+   "reads": []
+  },
+  "378": {
+   "name": "Mod Possess Pet",
+   "family": "control",
+   "reads": []
+  },
+  "379": {
+   "name": "Mod Mana Regen %",
+   "family": "combat",
+   "reads": []
+  },
+  "380": {
+   "name": "Mod Damage Taken From Caster %",
+   "family": "combat",
+   "reads": []
+  },
+  "381": {
+   "name": "Mod Damage Taken From Caster Pet %",
+   "family": "combat",
+   "reads": []
+  },
+  "382": {
+   "name": "Mod Pet Stat %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "383": {
+   "name": "Ignore Spell Cooldown",
+   "family": "combat",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "384": {
+   "name": "Unknown Aura #384",
+   "family": "other",
+   "reads": []
+  },
+  "385": {
+   "name": "Listening to survivor's tale",
+   "family": "other",
+   "reads": []
+  },
+  "388": {
+   "name": "Mod Taxi Flight Speed %",
+   "family": "appearance",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "393": {
+   "name": "Block Spells From Front",
+   "family": "combat",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "394": {
+   "name": "Show Confirmation Prompt",
+   "family": "other",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "395": {
+   "name": "Area Trigger",
+   "family": "world",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "AreaTriggerCreateProperties",
+     "by": "named, server-side"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "396": {
+   "name": "Trigger Spell by Power Level",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "vocabulary",
+     "into": "power_types",
+     "by": "core"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "397": {
+   "name": "Battleground Player Position Factional",
+   "family": "world",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "398": {
+   "name": "Battleground Player Position",
+   "family": "world",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "399": {
+   "name": "Mod Time Rate %",
+   "family": "other",
+   "reads": []
+  },
+  "400": {
+   "name": "Mod Skill",
+   "family": "world",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "SkillLine",
+     "by": "named"
+    }
+   ]
+  },
+  "401": {
+   "name": "Cart Control Capture Point Unit",
+   "family": "other",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "402": {
+   "name": "Mod Override Power Display",
+   "family": "combat",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "403": {
+   "name": "Override Spell Visual",
+   "family": "appearance",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "Spell",
+     "by": "named"
+    }
+   ],
+   "unresolved": [
+    "EffectMiscValue_1"
+   ]
+  },
+  "404": {
+   "name": "Attack Power equals Spell Power %",
+   "family": "combat",
+   "reads": []
+  },
+  "405": {
+   "name": "Mod Secondary Stat %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "406": {
+   "name": "Keyboard Override",
+   "family": "appearance",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "SpellKeyboundOverride",
+     "by": "named"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "408": {
+   "name": "Set Action Button Spell Count",
+   "family": "other",
+   "reads": []
+  },
+  "409": {
+   "name": "Slow Fall",
+   "family": "appearance",
+   "reads": []
+  },
+  "411": {
+   "name": "Modifies Charges",
+   "family": "world",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "SpellCategory",
+     "by": "measured"
+    }
+   ]
+  },
+  "413": {
+   "name": "Mod Ranged Attack Deflect Chance %",
+   "family": "combat",
+   "reads": []
+  },
+  "414": {
+   "name": "Mod Ranged Attack Block Chance From Front %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "415": {
+   "name": "Unknown Aura #415",
+   "family": "other",
+   "reads": []
+  },
+  "416": {
+   "name": "Modifies Cooldown by Haste",
+   "family": "combat",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "417": {
+   "name": "Modifies Global Cooldown by Haste",
+   "family": "combat",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "418": {
+   "name": "Modifies Max Power - Flat",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "vocabulary",
+     "into": "power_types",
+     "by": "core"
+    }
+   ]
+  },
+  "419": {
+   "name": "Mod Mana Pool %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "vocabulary",
+     "into": "power_types",
+     "by": "named"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "420": {
+   "name": "Mod Battle Pet XP Gain %",
+   "family": "progression",
+   "reads": []
+  },
+  "421": {
+   "name": "Mod Absorb Done %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "mask",
+     "into": "spell_schools",
+     "by": "named"
+    }
+   ]
+  },
+  "422": {
+   "name": "Mod Absorb Taken %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "423": {
+   "name": "Mod Mana Cost %",
+   "family": "combat",
+   "reads": []
+  },
+  "424": {
+   "name": "Caster Ignore Line Of Sight",
+   "family": "other",
+   "reads": []
+  },
+  "426": {
+   "name": "Unknown Aura #426",
+   "family": "other",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "427": {
+   "name": "Scale Player Level",
+   "family": "appearance",
+   "reads": []
+  },
+  "428": {
+   "name": "Linked Summon",
+   "family": "world",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "429": {
+   "name": "Mod Pet Damage %",
+   "family": "world",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "430": {
+   "name": "Play Scene",
+   "family": "world",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "SceneScriptPackage",
+     "by": "core"
+    }
+   ]
+  },
+  "431": {
+   "name": "Mod Override Zone PvP Type",
+   "family": "combat",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "434": {
+   "name": "Attack Nearby Enemies",
+   "family": "other",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0",
+    "EffectMiscValue_1"
+   ]
+  },
+  "436": {
+   "name": "Mod Environmental Damage Taken %",
+   "family": "combat",
+   "reads": []
+  },
+  "437": {
+   "name": "Mod Movement Speed %",
+   "family": "world",
+   "reads": []
+  },
+  "438": {
+   "name": "Preload Personal Phase",
+   "family": "world",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_1"
+   ]
+  },
+  "441": {
+   "name": "Mod Multistrike Damage %",
+   "family": "combat",
+   "reads": []
+  },
+  "443": {
+   "name": "Mod Leech %",
+   "family": "combat",
+   "reads": []
+  },
+  "447": {
+   "name": "Mod XP Gain From Creature Type",
+   "family": "progression",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "mask",
+     "into": "creature_types",
+     "by": "named"
+    }
+   ]
+  },
+  "448": {
+   "name": "Mod Crit Healing %",
+   "family": "combat",
+   "reads": []
+  },
+  "450": {
+   "name": "Character Upgrade Spell Tier",
+   "family": "other",
+   "reads": []
+  },
+  "451": {
+   "name": "Override Pet Specs",
+   "family": "appearance",
+   "reads": []
+  },
+  "453": {
+   "name": "Mod Cooldown Ms",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "SpellCategory",
+     "by": "measured"
+    }
+   ]
+  },
+  "454": {
+   "name": "Mod Cooldown %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "SpellCategory",
+     "by": "measured"
+    }
+   ]
+  },
+  "455": {
+   "name": "Root",
+   "family": "world",
+   "reads": []
+  },
+  "457": {
+   "name": "Charge Recovery Affected By Haste Regen",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "SpellCategory",
+     "by": "measured"
+    }
+   ]
+  },
+  "458": {
+   "name": "Ignore Dual Wield Hit Penalty",
+   "family": "combat",
+   "reads": []
+  },
+  "459": {
+   "name": "Ignore Movement Forces",
+   "family": "world",
+   "reads": []
+  },
+  "460": {
+   "name": "Reset Cooldowns On Duel Start",
+   "family": "combat",
+   "reads": []
+  },
+  "463": {
+   "name": "Converts one stat into another %",
+   "family": "combat",
+   "reads": []
+  },
+  "465": {
+   "name": "Mod Armor Bonus",
+   "family": "combat",
+   "reads": []
+  },
+  "466": {
+   "name": "Mod Armor Bonus %",
+   "family": "combat",
+   "reads": []
+  },
+  "467": {
+   "name": "Mod Stat Bonus %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "vocabulary",
+     "into": "primary_stats",
+     "by": "named"
+    }
+   ]
+  },
+  "468": {
+   "name": "Triggers Spell Based On Health %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "469": {
+   "name": "Show Bonus Roll Prompt",
+   "family": "other",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "reference",
+     "into": "JournalEncounter",
+     "by": "measured"
+    }
+   ]
+  },
+  "470": {
+   "name": "Mod Aura Time Rate By Spell Label",
+   "family": "other",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "471": {
+   "name": "Mod Versatility %",
+   "family": "combat",
+   "reads": []
+  },
+  "472": {
+   "name": "Fixate",
+   "family": "other",
+   "reads": []
+  },
+  "473": {
+   "name": "Prevent Durability Loss From Combat",
+   "family": "scripted",
+   "reads": []
+  },
+  "474": {
+   "name": "Replace Item Bonus Tree",
+   "family": "progression",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "475": {
+   "name": "Allow Objects Interaction While Mounted",
+   "family": "appearance",
+   "reads": []
+  },
+  "476": {
+   "name": "Mod Currency Gain %",
+   "family": "progression",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "477": {
+   "name": "Test Scaling Aura",
+   "family": "scripted",
+   "reads": []
+  },
+  "479": {
+   "name": "Test Scaling Aura",
+   "family": "scripted",
+   "reads": []
+  },
+  "482": {
+   "name": "Selfie",
+   "family": "other",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "483": {
+   "name": "Suppress Transforms",
+   "family": "appearance",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_1"
+   ]
+  },
+  "484": {
+   "name": "Allow Interrupt Spell",
+   "family": "control",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "485": {
+   "name": "Mod Resist Forced Movement %",
+   "family": "combat",
+   "reads": []
+  },
+  "486": {
+   "name": "Obscured",
+   "family": "other",
+   "reads": []
+  },
+  "487": {
+   "name": "Set Mount Model",
+   "family": "appearance",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "488": {
+   "name": "Time Stop",
+   "family": "other",
+   "reads": []
+  },
+  "489": {
+   "name": "Mod Alternative Default Language",
+   "family": "identity",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "vocabulary",
+     "into": "languages",
+     "by": "named"
+    }
+   ]
+  },
+  "490": {
+   "name": "Unknown Aura #490",
+   "family": "other",
+   "reads": []
+  },
+  "491": {
+   "name": "Mod Honor Gain %",
+   "family": "progression",
+   "reads": []
+  },
+  "492": {
+   "name": "Mod Dodge Chance %",
+   "family": "combat",
+   "reads": []
+  },
+  "493": {
+   "name": "Hunter Animal Companion",
+   "family": "appearance",
+   "reads": []
+  },
+  "494": {
+   "name": "Set Power Point Charge",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "495": {
+   "name": "Triggers spell on expire",
+   "family": "scripted",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "unread",
+     "into": "",
+     "by": "core"
+    }
+   ]
+  },
+  "496": {
+   "name": "Allow changing equipment in Torghast",
+   "family": "progression",
+   "reads": []
+  },
+  "497": {
+   "name": "Mod Currency Gain %",
+   "family": "appearance",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "498": {
+   "name": "Mod Currency Loss On Death",
+   "family": "world",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "499": {
+   "name": "Mod Reduce Rested XP Consumption %",
+   "family": "progression",
+   "reads": []
+  },
+  "500": {
+   "name": "Ignore Spell Charge Cooldown",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "501": {
+   "name": "Mod Critical Damage Taken From Caster %",
+   "family": "combat",
+   "reads": []
+  },
+  "502": {
+   "name": "Mod Versatility Damage Done Benefit",
+   "family": "combat",
+   "reads": []
+  },
+  "503": {
+   "name": "Mod Versatility Healing Done Benefit",
+   "family": "combat",
+   "reads": []
+  },
+  "504": {
+   "name": "Mod Increase Healing Done %",
+   "family": "combat",
+   "reads": []
+  },
+  "505": {
+   "name": "Anima Power Rerolls Per Run",
+   "family": "combat",
+   "reads": []
+  },
+  "506": {
+   "name": "Disable Inertia",
+   "family": "other",
+   "reads": []
+  },
+  "509": {
+   "name": "Block Music and Vocal Around Player",
+   "family": "combat",
+   "reads": []
+  },
+  "510": {
+   "name": "Modify Raid",
+   "family": "other",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  }
+ }
+}

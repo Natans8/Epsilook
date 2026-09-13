@@ -1,0 +1,21 @@
+{
+  "enum": "SpellDispelType.ID",
+  "description": "The client's own dispel type names, for a misc slot typed `vocabulary` or `mask` over `dispel_types`.",
+  "source": [
+    "https://wago.tools/db2/SpellDispelType?build=9.2.7.45745"
+  ],
+  "keys": "SpellDispelType.ID",
+  "values": {
+    "1": "Magic",
+    "2": "Curse",
+    "3": "Disease",
+    "4": "Poison",
+    "5": "Stealth",
+    "6": "Invisibility",
+    "7": "All(M+C+D+P)",
+    "8": "Special - npc only",
+    "9": "Enrage",
+    "10": "ZG Trinkets",
+    "11": "ZZOLD UNUSED"
+  }
+}

@@ -92,7 +92,7 @@ AXES: Mapping[str, str] = {
         "mechRows spellTimeline spellDelivery spellRanges areas keybinds "
         "linkKindNames effectNames auraNames implicitTargetNames "
         "implicitTargetBits targetNames speedModeNames spellAttrs "
-        "selectors factionNames interruptNames"
+        "selectors selectorVocabularies factionNames interruptNames"
     ),
     "spell": "spells expansions iconNames iconFids",
     # The sky is not reached through a query at all: nothing about a spell

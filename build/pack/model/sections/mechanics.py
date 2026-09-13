@@ -15,7 +15,7 @@ from __future__ import annotations
 from ...derive import Reads
 from ...routes import interrupt_words
 from ...routes.flow import export_name
-from ...routes.selectors import SELECTORS
+from ...routes.selectors import SELECTORS, WORDS
 from ...targets import IMPLICIT_PREFIX
 from ..registry import register
 from ..section import Layout, Scope, Section, SectionColumns, size
@@ -137,6 +137,35 @@ SELECTORS_TABLE = register(
         columns=("tables", "columns", "values", "slotColumns", "holds", "intos", "untils"),
         scope=Scope.UNIVERSAL,
         counts=(size("selectors", "values"),),
+    )
+)
+
+
+def selector_vocabularies(reads: Reads) -> SectionColumns:
+    """The words of every vocabulary a slot in `selectors` names, one row per word.
+
+    A slot holding a value or a mask of a vocabulary names it by its checked-in
+    file, and this is that file's words, so a reader holding the raw value can
+    name it: a value is the row whose value it equals, and a mask is every row
+    whose bit it sets, since a mask's vocabulary is keyed by its bits.
+    """
+    del reads  # a declaration, the same on every build
+    return {
+        "vocabularies": [word.vocabulary for word in WORDS],
+        "values": [word.value for word in WORDS],
+        "words": [word.word for word in WORDS],
+    }
+
+
+SELECTOR_VOCABULARIES = register(
+    Section(
+        name="selectorVocabularies",
+        doc="The word each value of a vocabulary a selector's slot names stands for.",
+        module="universal",
+        produce=selector_vocabularies,
+        columns=("vocabularies", "values", "words"),
+        scope=Scope.UNIVERSAL,
+        counts=(size("selectorVocabularies", "values"),),
     )
 )
 

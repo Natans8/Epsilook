@@ -415,8 +415,20 @@ class Holds(Enum):
     VOCABULARY = "vocabulary"
     """A value the named vocabulary gives a word to."""
 
+    MASK = "mask"
+    """A set of the named vocabulary's values, one bit each: a school mask
+    naming fire and frost at once."""
+
     AMOUNT = "amount"
     """A number that is itself the value."""
+
+    SCRIPTED = "scripted"
+    """A number the spell's own server script reads, which nothing in the
+    data gives a meaning to: a dummy effect's argument."""
+
+    UNREAD = "unread"
+    """A column the server never reads under this selector, whatever the row
+    holds there."""
 
     PARAMETER = "parameter"
     """A value whose meaning another slot of the same row decides."""

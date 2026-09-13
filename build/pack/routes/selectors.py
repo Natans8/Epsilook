@@ -16,7 +16,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any, NamedTuple
 
 from ..sources import load_local_enum
-from .flow import Holds, Slot, When
+from .flow import Holds, Slot, When, export_name
 from .flows import Routes
 
 
@@ -49,17 +49,63 @@ def _from_enum(table: str, on: str, enum: str) -> list[Declared]:
     """
     declared: list[Declared] = []
     for value, record in sorted(load_local_enum(enum).items()):
-        if not isinstance(record, dict) or "reads" not in record:
+        if not isinstance(record, dict) or not record.get("reads"):
             continue
         held: Sequence[Mapping[str, Any]] = record["reads"]
         declared.append(Declared(table, When(on, (value,), tuple(_slot(slot) for slot in held))))
     return declared
 
 
+PAYLOADS: tuple[Declared, ...] = tuple(Declared("SpellEffect", chosen) for chosen in Routes.effects.selectors)
+"""The selectors the effects split reads, which a typing file never overrides."""
+
+CLAIMED = frozenset(
+    (export_name(declared.select.on), value) for declared in PAYLOADS for value in declared.select.values
+)
+"""The (column, value) pairs a payload already reads, which a typing file leaves alone."""
+
+
+def _unclaimed(declared: Sequence[Declared]) -> list[Declared]:
+    """The typings of values no payload of the split already declares."""
+    return [each for each in declared if (export_name(each.select.on), each.select.values[0]) not in CLAIMED]
+
+
 SELECTORS: tuple[Declared, ...] = (
-    *(Declared("SpellEffect", chosen) for chosen in Routes.effects.selectors),
+    *PAYLOADS,
+    *_unclaimed(_from_enum("SpellEffect", "Effect", "spell_effect_slots")),
+    *_unclaimed(_from_enum("SpellEffect", "EffectAura", "spell_aura_slots")),
     *_from_enum("SpellVisualKitEffect", "EffectType", "spell_visual_kit_effect_types"),
     *_from_enum("SpellVisualEffectName", "Type", "spell_visual_effect_name_types"),
     *_from_enum("SpellProceduralEffect", "Type", "spell_procedural_effect_types"),
 )
 """Every discriminated reference, in the order the pack lists them."""
+
+
+class Word(NamedTuple):
+    """One word of a vocabulary a slot names, with the value it stands for."""
+
+    vocabulary: str
+    value: int
+    word: str
+
+
+def _word(held: object) -> str:
+    """A vocabulary value's word: the name the file holds, or its record's name."""
+    return str(held["name"]) if isinstance(held, dict) else str(held)
+
+
+WORDS: tuple[Word, ...] = tuple(
+    Word(vocabulary, value, _word(held))
+    for vocabulary in sorted(
+        {
+            slot.into
+            for declared in SELECTORS
+            for slot in declared.select.slots
+            if slot.holds in (Holds.VOCABULARY, Holds.MASK)
+        }
+    )
+    for value, held in sorted(load_local_enum(vocabulary).items())
+)
+"""Every word a vocabulary or mask slot can name, so a raw value resolves to one.
+
+A mask vocabulary is keyed by its bits, so a mask's words are the values it sets."""

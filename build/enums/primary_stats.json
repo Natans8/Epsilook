@@ -1,0 +1,17 @@
+{
+  "enum": "Stats",
+  "description": "What a misc slot typed `vocabulary` over `primary_stats` names: the stat an aura modifies, -1 meaning every stat and -2 the class's primary one, as the core's stat handlers read it.",
+  "source": [
+    "https://github.com/EpsilonRP/TrinityCore/blob/master/src/server/game/Miscellaneous/SharedDefines.h",
+    "https://github.com/wowdev/WoWDBDefs/blob/master/meta/enums/PrimaryStats.dbde"
+  ],
+  "keys": "Stats",
+  "values": {
+    "-2": "Primary Stat",
+    "-1": "All Stats",
+    "0": "Strength",
+    "1": "Agility",
+    "2": "Stamina",
+    "3": "Intellect"
+  }
+}

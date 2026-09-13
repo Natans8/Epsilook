@@ -1,0 +1,2382 @@
+{
+ "enum": "SpellEffect.Effect slot typing",
+ "description": "What each effect value's misc columns hold on the rows it selects: a reference into a table, a vocabulary or mask a vendored vocabulary names, an amount, a scripted argument, or unread by the server. Read mechanically, never by hand, so it can be held against the build's own payloads: `by` names the evidence. declared is not used here; measured means the slot's distinct values resolve into one id space far beyond the space's density over their range; named means the selector's name points at the table and the values fit it; core means the Epsilon core's handler reads the value as that vocabulary, or, for unread, that neither the handler nor any read of the aura in the core asks for it; scripted means the number is an argument the spell's own server script reads; shaped means an amount by name or by round values. A slot no evidence types is listed under unresolved. family is the selector's RP family, the ranking's axis.",
+ "source": [
+  "the 9.2.7 SpellEffect rows, the id spaces of every table the exploration database holds, the Epsilon core's SpellAuraEffects.cpp and SpellEffects.cpp",
+  "https://github.com/EpsilonRP/TrinityCore"
+ ],
+ "keys": "Effect",
+ "values": {
+  "0": {
+   "name": "",
+   "family": "other",
+   "reads": []
+  },
+  "1": {
+   "name": "Instakill",
+   "family": "world",
+   "reads": []
+  },
+  "2": {
+   "name": "School Damage",
+   "family": "combat",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0",
+    "EffectMiscValue_1"
+   ]
+  },
+  "3": {
+   "name": "Dummy",
+   "family": "scripted",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "scripted",
+     "into": "",
+     "by": "scripted"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "scripted",
+     "into": "",
+     "by": "scripted"
+    }
+   ]
+  },
+  "5": {
+   "name": "Teleport",
+   "family": "world",
+   "reads": []
+  },
+  "6": {
+   "name": "Apply Aura",
+   "family": "other",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "7": {
+   "name": "Environment Damage",
+   "family": "other",
+   "reads": []
+  },
+  "8": {
+   "name": "Drain Power",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "vocabulary",
+     "into": "power_types",
+     "by": "core"
+    }
+   ]
+  },
+  "9": {
+   "name": "Drain Health",
+   "family": "combat",
+   "reads": []
+  },
+  "10": {
+   "name": "Heal",
+   "family": "combat",
+   "reads": []
+  },
+  "11": {
+   "name": "Bind",
+   "family": "world",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "12": {
+   "name": "Portal",
+   "family": "world",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "13": {
+   "name": "Ritual Base",
+   "family": "world",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "14": {
+   "name": "Increase Currency Cap",
+   "family": "progression",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "15": {
+   "name": "Ritual Activate Portal",
+   "family": "appearance",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ],
+   "unresolved": [
+    "EffectMiscValue_1"
+   ]
+  },
+  "16": {
+   "name": "Complete Quest",
+   "family": "scripted",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "QuestV2",
+     "by": "measured"
+    }
+   ]
+  },
+  "17": {
+   "name": "Weapon Damage - No School",
+   "family": "combat",
+   "reads": []
+  },
+  "18": {
+   "name": "Resurrect with % Health/Mana",
+   "family": "combat",
+   "reads": []
+  },
+  "19": {
+   "name": "Add Extra Attacks",
+   "family": "other",
+   "reads": []
+  },
+  "20": {
+   "name": "Can Dodge",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "21": {
+   "name": "Can Evade",
+   "family": "other",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "22": {
+   "name": "Can Parry",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "23": {
+   "name": "Can Block",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "24": {
+   "name": "Create Item",
+   "family": "progression",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0",
+    "EffectMiscValue_1"
+   ]
+  },
+  "25": {
+   "name": "Can Use Weapon",
+   "family": "other",
+   "reads": []
+  },
+  "26": {
+   "name": "Knows Defense Skill",
+   "family": "world",
+   "reads": []
+  },
+  "27": {
+   "name": "Persistent Area Aura",
+   "family": "world",
+   "reads": []
+  },
+  "28": {
+   "name": "Summon",
+   "family": "world",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "creature_template",
+     "by": "measured"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "reference",
+     "into": "SummonProperties",
+     "by": "measured"
+    }
+   ]
+  },
+  "29": {
+   "name": "Blink",
+   "family": "world",
+   "reads": []
+  },
+  "30": {
+   "name": "Give Power",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "vocabulary",
+     "into": "power_types",
+     "by": "core"
+    }
+   ]
+  },
+  "31": {
+   "name": "Weapon Damage - %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "32": {
+   "name": "Trigger Missile",
+   "family": "scripted",
+   "reads": []
+  },
+  "33": {
+   "name": "Open Object",
+   "family": "world",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "34": {
+   "name": "Transform Item",
+   "family": "appearance",
+   "reads": []
+  },
+  "35": {
+   "name": "Apply Area Aura",
+   "family": "other",
+   "reads": []
+  },
+  "36": {
+   "name": "Learn Spell",
+   "family": "progression",
+   "reads": []
+  },
+  "37": {
+   "name": "Knows Spell Defense (Obsolete)",
+   "family": "scripted",
+   "reads": []
+  },
+  "38": {
+   "name": "Dispel",
+   "family": "control",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "39": {
+   "name": "Learn Language",
+   "family": "identity",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "vocabulary",
+     "into": "languages",
+     "by": "measured"
+    }
+   ]
+  },
+  "40": {
+   "name": "Dual Wield",
+   "family": "other",
+   "reads": []
+  },
+  "41": {
+   "name": "Jump to Target",
+   "family": "world",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "42": {
+   "name": "Jump Behind Target",
+   "family": "world",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "43": {
+   "name": "Teleport Target to Caster",
+   "family": "world",
+   "reads": []
+  },
+  "44": {
+   "name": "Learn Skill Step",
+   "family": "world",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "SkillLine",
+     "by": "measured"
+    }
+   ]
+  },
+  "45": {
+   "name": "Play Movie",
+   "family": "world",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "Movie",
+     "by": "measured"
+    }
+   ]
+  },
+  "46": {
+   "name": "Spawn Effect",
+   "family": "world",
+   "reads": []
+  },
+  "47": {
+   "name": "Trade Skill",
+   "family": "world",
+   "reads": []
+  },
+  "48": {
+   "name": "Base Stealth",
+   "family": "appearance",
+   "reads": []
+  },
+  "49": {
+   "name": "Base Detect Stealthed",
+   "family": "appearance",
+   "reads": []
+  },
+  "50": {
+   "name": "Summon Object",
+   "family": "world",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "gameobject_template",
+     "by": "measured"
+    }
+   ],
+   "unresolved": [
+    "EffectMiscValue_1"
+   ]
+  },
+  "52": {
+   "name": "Set Max Battle Pet Count",
+   "family": "progression",
+   "reads": []
+  },
+  "53": {
+   "name": "Enchant Item",
+   "family": "progression",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "SpellItemEnchantment",
+     "by": "measured"
+    }
+   ],
+   "unresolved": [
+    "EffectMiscValue_1"
+   ]
+  },
+  "54": {
+   "name": "Enchant Item - Temporary",
+   "family": "progression",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "SpellItemEnchantment",
+     "by": "measured"
+    }
+   ]
+  },
+  "55": {
+   "name": "Tame Creature",
+   "family": "other",
+   "reads": []
+  },
+  "56": {
+   "name": "Summon Pet",
+   "family": "world",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "creature_template",
+     "by": "measured"
+    }
+   ],
+   "unresolved": [
+    "EffectMiscValue_1"
+   ]
+  },
+  "57": {
+   "name": "Learn Spell - Pet",
+   "family": "progression",
+   "reads": []
+  },
+  "58": {
+   "name": "Deal Weapon Damage",
+   "family": "combat",
+   "reads": []
+  },
+  "59": {
+   "name": "Open Item & Fast Loot",
+   "family": "progression",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "Item",
+     "by": "named"
+    }
+   ]
+  },
+  "60": {
+   "name": "Proficiency",
+   "family": "other",
+   "reads": []
+  },
+  "61": {
+   "name": "Send Script Event",
+   "family": "scripted",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "scripted",
+     "into": "",
+     "by": "scripted"
+    }
+   ]
+  },
+  "62": {
+   "name": "Power Burn",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "vocabulary",
+     "into": "power_types",
+     "by": "core"
+    }
+   ]
+  },
+  "63": {
+   "name": "Threat",
+   "family": "combat",
+   "reads": []
+  },
+  "64": {
+   "name": "Trigger Spell",
+   "family": "scripted",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ],
+   "unresolved": [
+    "EffectMiscValue_1"
+   ]
+  },
+  "65": {
+   "name": "Apply Area Aura",
+   "family": "other",
+   "reads": []
+  },
+  "66": {
+   "name": "Create or Recharge Item",
+   "family": "world",
+   "reads": []
+  },
+  "67": {
+   "name": "Heal to Full",
+   "family": "combat",
+   "reads": []
+  },
+  "68": {
+   "name": "Interrupt Cast",
+   "family": "control",
+   "reads": []
+  },
+  "69": {
+   "name": "Distract",
+   "family": "other",
+   "reads": []
+  },
+  "70": {
+   "name": "Distract Move",
+   "family": "world",
+   "reads": []
+  },
+  "71": {
+   "name": "Pickpocket",
+   "family": "other",
+   "reads": []
+  },
+  "72": {
+   "name": "Far Sight",
+   "family": "other",
+   "reads": []
+  },
+  "73": {
+   "name": "Forget Talents",
+   "family": "progression",
+   "reads": []
+  },
+  "74": {
+   "name": "Use Glyph",
+   "family": "progression",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "75": {
+   "name": "Heal Mechanic",
+   "family": "combat",
+   "reads": []
+  },
+  "76": {
+   "name": "Summon Object - Temporary",
+   "family": "world",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "gameobject_template",
+     "by": "measured"
+    }
+   ],
+   "unresolved": [
+    "EffectMiscValue_1"
+   ]
+  },
+  "77": {
+   "name": "Script Effect",
+   "family": "scripted",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "scripted",
+     "into": "",
+     "by": "scripted"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "scripted",
+     "into": "",
+     "by": "scripted"
+    }
+   ]
+  },
+  "78": {
+   "name": "ATTACK",
+   "family": "other",
+   "reads": []
+  },
+  "79": {
+   "name": "Abort All Pending Attacks",
+   "family": "other",
+   "reads": []
+  },
+  "80": {
+   "name": "MODIFY_FOLLOWER_ITEM_LEVEL",
+   "family": "progression",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "81": {
+   "name": "PUSH_ABILITY_TO_ACTION_BAR",
+   "family": "other",
+   "reads": []
+  },
+  "82": {
+   "name": "Bind Sight - Car Camera",
+   "family": "world",
+   "reads": []
+  },
+  "83": {
+   "name": "Duel",
+   "family": "other",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "84": {
+   "name": "Stuck",
+   "family": "other",
+   "reads": []
+  },
+  "85": {
+   "name": "Summon Player",
+   "family": "world",
+   "reads": []
+  },
+  "86": {
+   "name": "Activate Object",
+   "family": "world",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "vocabulary",
+     "into": "gameobject_actions",
+     "by": "core"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "reference",
+     "into": "AnimKit",
+     "by": "measured"
+    }
+   ]
+  },
+  "87": {
+   "name": "Siege Damage",
+   "family": "world",
+   "reads": []
+  },
+  "88": {
+   "name": "Repair Building",
+   "family": "world",
+   "reads": []
+  },
+  "89": {
+   "name": "Siege Building Action",
+   "family": "world",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "90": {
+   "name": "Kill Credit",
+   "family": "world",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "creature_template",
+     "by": "measured"
+    }
+   ]
+  },
+  "91": {
+   "name": "Threat All",
+   "family": "combat",
+   "reads": []
+  },
+  "92": {
+   "name": "Enchant Held Item (OBSOLETE)",
+   "family": "scripted",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "SpellItemEnchantment",
+     "by": "named"
+    }
+   ]
+  },
+  "93": {
+   "name": "Force Deselect",
+   "family": "other",
+   "reads": []
+  },
+  "94": {
+   "name": "Self Resurrect",
+   "family": "world",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "95": {
+   "name": "Skin Mob",
+   "family": "other",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "96": {
+   "name": "Charge",
+   "family": "world",
+   "reads": [
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "97": {
+   "name": "Summon Critter",
+   "family": "combat",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0",
+    "EffectMiscValue_1"
+   ]
+  },
+  "98": {
+   "name": "Knock Back",
+   "family": "world",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "99": {
+   "name": "Disenchant",
+   "family": "progression",
+   "reads": []
+  },
+  "100": {
+   "name": "Inebriate",
+   "family": "other",
+   "reads": []
+  },
+  "101": {
+   "name": "Feed Pet",
+   "family": "other",
+   "reads": []
+  },
+  "102": {
+   "name": "Dismiss Pet",
+   "family": "other",
+   "reads": []
+  },
+  "103": {
+   "name": "Give Reputation",
+   "family": "identity",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "Faction",
+     "by": "measured"
+    }
+   ]
+  },
+  "104": {
+   "name": "Drop Trap",
+   "family": "world",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "gameobject_template",
+     "by": "named"
+    }
+   ],
+   "unresolved": [
+    "EffectMiscValue_1"
+   ]
+  },
+  "105": {
+   "name": "Drop Battle Standard",
+   "family": "progression",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "106": {
+   "name": "Change Raid Marker",
+   "family": "other",
+   "reads": []
+  },
+  "107": {
+   "name": "Show Corpse Loot",
+   "family": "progression",
+   "reads": []
+  },
+  "108": {
+   "name": "Dispel Mechanic",
+   "family": "control",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "vocabulary",
+     "into": "spell_mechanics",
+     "by": "named"
+    }
+   ]
+  },
+  "109": {
+   "name": "Resurrect Dead Pet",
+   "family": "world",
+   "reads": []
+  },
+  "111": {
+   "name": "Durability Damage",
+   "family": "progression",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "112": {
+   "name": "Unknown Effect #112",
+   "family": "other",
+   "reads": []
+  },
+  "113": {
+   "name": "CANCEL_CONVERSATION",
+   "family": "sound",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "Conversation",
+     "by": "named, server-side"
+    }
+   ]
+  },
+  "114": {
+   "name": "Taunt",
+   "family": "control",
+   "reads": []
+  },
+  "115": {
+   "name": "Durability Damage %",
+   "family": "progression",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "116": {
+   "name": "Skin Player Corpse (PvP)",
+   "family": "combat",
+   "reads": []
+  },
+  "117": {
+   "name": "AoE Resurrect With % Health",
+   "family": "combat",
+   "reads": []
+  },
+  "118": {
+   "name": "Learn Skill",
+   "family": "world",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "SkillLine",
+     "by": "measured"
+    }
+   ]
+  },
+  "119": {
+   "name": "Apply Aura - Pet",
+   "family": "other",
+   "reads": []
+  },
+  "120": {
+   "name": "Teleport to Closest Graveyard",
+   "family": "world",
+   "reads": []
+  },
+  "121": {
+   "name": "Normalized Weapon Damage",
+   "family": "combat",
+   "reads": []
+  },
+  "122": {
+   "name": "Faction Reputation Reward Cap",
+   "family": "identity",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "123": {
+   "name": "Take Flight Path",
+   "family": "appearance",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "124": {
+   "name": "Pull",
+   "family": "world",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "125": {
+   "name": "Modify Threat Percent",
+   "family": "combat",
+   "reads": []
+  },
+  "126": {
+   "name": "Spell Steal",
+   "family": "control",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "vocabulary",
+     "into": "dispel_types",
+     "by": "core"
+    }
+   ]
+  },
+  "127": {
+   "name": "Prospect",
+   "family": "progression",
+   "reads": []
+  },
+  "130": {
+   "name": "Transfer Threat Done %",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "131": {
+   "name": "Play Sound",
+   "family": "sound",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "SoundKit",
+     "by": "named"
+    }
+   ]
+  },
+  "132": {
+   "name": "Play Music",
+   "family": "sound",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "SoundKit",
+     "by": "named"
+    }
+   ]
+  },
+  "133": {
+   "name": "Unlearn Spell",
+   "family": "progression",
+   "reads": []
+  },
+  "134": {
+   "name": "Kill Credit",
+   "family": "world",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "creature_template",
+     "by": "measured"
+    }
+   ],
+   "unresolved": [
+    "EffectMiscValue_1"
+   ]
+  },
+  "135": {
+   "name": "Call Pet",
+   "family": "other",
+   "reads": []
+  },
+  "136": {
+   "name": "Heal for % of Total Health",
+   "family": "combat",
+   "reads": []
+  },
+  "137": {
+   "name": "Give % of Total Power",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "vocabulary",
+     "into": "power_types",
+     "by": "core"
+    }
+   ]
+  },
+  "138": {
+   "name": "Jump (2)",
+   "family": "world",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "139": {
+   "name": "Abandon Quest",
+   "family": "scripted",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "QuestV2",
+     "by": "measured"
+    }
+   ]
+  },
+  "140": {
+   "name": "Trigger Spell from Target with Caster as Target",
+   "family": "scripted",
+   "reads": []
+  },
+  "141": {
+   "name": "Force Cast with Value",
+   "family": "other",
+   "reads": []
+  },
+  "142": {
+   "name": "Trigger Spell with Value",
+   "family": "scripted",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "143": {
+   "name": "Apply Aura - Pet Owner",
+   "family": "other",
+   "reads": []
+  },
+  "144": {
+   "name": "Area Knockback",
+   "family": "world",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "145": {
+   "name": "Suspend Gravity",
+   "family": "world",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "146": {
+   "name": "Activate Rune",
+   "family": "progression",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_1"
+   ]
+  },
+  "147": {
+   "name": "Fail Quest",
+   "family": "scripted",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "QuestV2",
+     "by": "named"
+    }
+   ]
+  },
+  "148": {
+   "name": "Trigger Missile Spell with Value",
+   "family": "scripted",
+   "reads": []
+  },
+  "149": {
+   "name": "Charge to Object",
+   "family": "world",
+   "reads": []
+  },
+  "150": {
+   "name": "Quest Start",
+   "family": "scripted",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "QuestV2",
+     "by": "named"
+    }
+   ]
+  },
+  "151": {
+   "name": "Validate Summon",
+   "family": "world",
+   "reads": []
+  },
+  "152": {
+   "name": "Summon - Refer-A-Friend Program",
+   "family": "world",
+   "reads": []
+  },
+  "153": {
+   "name": "Dummy, Pet",
+   "family": "scripted",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "scripted",
+     "into": "",
+     "by": "scripted"
+    }
+   ]
+  },
+  "154": {
+   "name": "Teach Flight Path",
+   "family": "appearance",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "TaxiNodes",
+     "by": "measured"
+    }
+   ]
+  },
+  "155": {
+   "name": "Dual Wield 2H Weapons",
+   "family": "other",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "156": {
+   "name": "Add Socket to Item",
+   "family": "progression",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "SpellItemEnchantment",
+     "by": "named"
+    }
+   ]
+  },
+  "157": {
+   "name": "Create Tradeskill Item",
+   "family": "world",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "Item",
+     "by": "named"
+    }
+   ],
+   "unresolved": [
+    "EffectMiscValue_1"
+   ]
+  },
+  "158": {
+   "name": "Milling",
+   "family": "progression",
+   "reads": []
+  },
+  "159": {
+   "name": "Rename Pet",
+   "family": "other",
+   "reads": []
+  },
+  "160": {
+   "name": "Force Cast 2",
+   "family": "other",
+   "reads": []
+  },
+  "161": {
+   "name": "Change Talent Specialization Count",
+   "family": "progression",
+   "reads": []
+  },
+  "162": {
+   "name": "Activate Talent Specialization",
+   "family": "progression",
+   "reads": []
+  },
+  "163": {
+   "name": "Obliterate Item",
+   "family": "progression",
+   "reads": []
+  },
+  "164": {
+   "name": "Cancel Aura",
+   "family": "other",
+   "reads": []
+  },
+  "165": {
+   "name": "Damage From Max Health Pct",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "166": {
+   "name": "Give Currency",
+   "family": "progression",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "CurrencyTypes",
+     "by": "measured"
+    }
+   ],
+   "unresolved": [
+    "EffectMiscValue_1"
+   ]
+  },
+  "167": {
+   "name": "Update Player Phase",
+   "family": "world",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "168": {
+   "name": "Allow Control Pet",
+   "family": "other",
+   "reads": []
+  },
+  "169": {
+   "name": "Destroy Item",
+   "family": "progression",
+   "reads": []
+  },
+  "170": {
+   "name": "Update Player Auras",
+   "family": "world",
+   "reads": []
+  },
+  "171": {
+   "name": "Summon Object",
+   "family": "world",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "gameobject_template",
+     "by": "named"
+    }
+   ],
+   "unresolved": [
+    "EffectMiscValue_1"
+   ]
+  },
+  "172": {
+   "name": "Mass Resurrection",
+   "family": "world",
+   "reads": []
+  },
+  "173": {
+   "name": "Unlock Guild Bank Slot",
+   "family": "identity",
+   "reads": []
+  },
+  "175": {
+   "name": "Unknown Effect #175",
+   "family": "other",
+   "reads": []
+  },
+  "176": {
+   "name": "Sanctuary 2",
+   "family": "other",
+   "reads": []
+  },
+  "177": {
+   "name": "Despawn Persistent Area Aura",
+   "family": "world",
+   "reads": []
+  },
+  "178": {
+   "name": "Abandon Scenario Quest",
+   "family": "scripted",
+   "reads": []
+  },
+  "179": {
+   "name": "Create Area Trigger",
+   "family": "world",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "AreaTriggerCreateProperties",
+     "by": "named, server-side"
+    }
+   ],
+   "unresolved": [
+    "EffectMiscValue_1"
+   ]
+  },
+  "180": {
+   "name": "Update Area Trigger",
+   "family": "world",
+   "reads": []
+  },
+  "181": {
+   "name": "Remove Talent",
+   "family": "progression",
+   "reads": []
+  },
+  "182": {
+   "name": "Despawn Area Trigger",
+   "family": "world",
+   "reads": []
+  },
+  "183": {
+   "name": "Ground Effect",
+   "family": "other",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "184": {
+   "name": "Give Reputation",
+   "family": "identity",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "185": {
+   "name": "Play Scene Script Package",
+   "family": "world",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "scripted",
+     "into": "",
+     "by": "scripted"
+    }
+   ]
+  },
+  "186": {
+   "name": "Play Scene Script Package",
+   "family": "world",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "scripted",
+     "into": "",
+     "by": "scripted"
+    }
+   ]
+  },
+  "187": {
+   "name": "Randomize Archaeology Digsites",
+   "family": "progression",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "188": {
+   "name": "Summon Multiple Hunter Pets",
+   "family": "world",
+   "reads": []
+  },
+  "189": {
+   "name": "Push Loot",
+   "family": "progression",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "Item",
+     "by": "named"
+    }
+   ],
+   "unresolved": [
+    "EffectMiscValue_1"
+   ]
+  },
+  "190": {
+   "name": "Change Party Members",
+   "family": "other",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "191": {
+   "name": "Teleport to Digsite",
+   "family": "world",
+   "reads": []
+  },
+  "192": {
+   "name": "Uncage Battle Pet",
+   "family": "progression",
+   "reads": []
+  },
+  "193": {
+   "name": "Start Pet Battle",
+   "family": "progression",
+   "reads": []
+  },
+  "195": {
+   "name": "Play Scene Script Package",
+   "family": "world",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "SceneScriptPackage",
+     "by": "core"
+    }
+   ]
+  },
+  "196": {
+   "name": "Summon Scene Object",
+   "family": "world",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "197": {
+   "name": "Summon Personal Scene Object",
+   "family": "world",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "198": {
+   "name": "Start Scene",
+   "family": "world",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "SceneScriptPackage",
+     "by": "core"
+    }
+   ]
+  },
+  "199": {
+   "name": "Despawn Summons",
+   "family": "world",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "creature_template",
+     "by": "named"
+    }
+   ],
+   "unresolved": [
+    "EffectMiscValue_1"
+   ]
+  },
+  "200": {
+   "name": "Heal Battle Pet Pct",
+   "family": "combat",
+   "reads": []
+  },
+  "201": {
+   "name": "Enable Battle Pets",
+   "family": "progression",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "203": {
+   "name": "Cancel Aura",
+   "family": "other",
+   "reads": []
+  },
+  "204": {
+   "name": "Change Battle Pet Quality",
+   "family": "progression",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "205": {
+   "name": "Launch Quest Choice",
+   "family": "scripted",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "206": {
+   "name": "Alter Item",
+   "family": "progression",
+   "reads": []
+  },
+  "207": {
+   "name": "Launch Quest Task",
+   "family": "scripted",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "QuestV2",
+     "by": "named"
+    }
+   ]
+  },
+  "208": {
+   "name": "Set Reputation",
+   "family": "identity",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "209": {
+   "name": "Unknown Effect #209",
+   "family": "other",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "210": {
+   "name": "Learn Garrison Building",
+   "family": "progression",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "GarrBuilding",
+     "by": "named"
+    }
+   ]
+  },
+  "211": {
+   "name": "Learn Garrison Specialization",
+   "family": "progression",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "212": {
+   "name": "Cancel Aura By Spell Label",
+   "family": "other",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "213": {
+   "name": "Jump Destination",
+   "family": "world",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "214": {
+   "name": "Create Garrison",
+   "family": "progression",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "215": {
+   "name": "Upgrade Character Spells",
+   "family": "other",
+   "reads": []
+  },
+  "216": {
+   "name": "Create Shipment",
+   "family": "progression",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "217": {
+   "name": "Upgrade Garrison",
+   "family": "progression",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "218": {
+   "name": "Reduction Force Area Trigger",
+   "family": "world",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "AreaTriggerCreateProperties",
+     "by": "named, server-side"
+    }
+   ]
+  },
+  "219": {
+   "name": "Create Conversation",
+   "family": "sound",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "Conversation",
+     "by": "named, server-side"
+    }
+   ]
+  },
+  "220": {
+   "name": "Obtain Follower",
+   "family": "progression",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "GarrFollower",
+     "by": "named"
+    }
+   ],
+   "unresolved": [
+    "EffectMiscValue_1"
+   ]
+  },
+  "221": {
+   "name": "Add Garrison Mission",
+   "family": "progression",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "222": {
+   "name": "Create Heirloom Item",
+   "family": "progression",
+   "reads": []
+  },
+  "223": {
+   "name": "Change Item Bonuses",
+   "family": "progression",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "224": {
+   "name": "Activate Garrison Building",
+   "family": "progression",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0",
+    "EffectMiscValue_1"
+   ]
+  },
+  "225": {
+   "name": "Grant Battle Pet Level",
+   "family": "progression",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "226": {
+   "name": "Trigger Action Set",
+   "family": "scripted",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "227": {
+   "name": "Teleport To LFG Dungeon",
+   "family": "world",
+   "reads": [
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "reference",
+     "into": "LFGDungeons",
+     "by": "measured"
+    }
+   ],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "228": {
+   "name": "Recruit A Friend Summon",
+   "family": "world",
+   "reads": []
+  },
+  "229": {
+   "name": "Set Follower Quality",
+   "family": "progression",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_1"
+   ]
+  },
+  "230": {
+   "name": "Upgrade Follower/Player Item Level",
+   "family": "progression",
+   "reads": [
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "reference",
+     "into": "Item",
+     "by": "measured"
+    }
+   ],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "231": {
+   "name": "Give Follower XP",
+   "family": "progression",
+   "reads": [
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "232": {
+   "name": "Remove Phase",
+   "family": "world",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "Phase",
+     "by": "named"
+    }
+   ]
+  },
+  "233": {
+   "name": "Retrain Follower",
+   "family": "progression",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0",
+    "EffectMiscValue_1"
+   ]
+  },
+  "234": {
+   "name": "Summon Object",
+   "family": "world",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "gameobject_template",
+     "by": "named"
+    }
+   ]
+  },
+  "236": {
+   "name": "Give XP",
+   "family": "progression",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0",
+    "EffectMiscValue_1"
+   ]
+  },
+  "237": {
+   "name": "Give Rested Experience Bonus",
+   "family": "progression",
+   "reads": []
+  },
+  "238": {
+   "name": "Give Skill Points",
+   "family": "world",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "SkillLine",
+     "by": "named"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "239": {
+   "name": "End Garrison Building Construction",
+   "family": "progression",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "240": {
+   "name": "Give Artifact Power",
+   "family": "combat",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0",
+    "EffectMiscValue_1"
+   ]
+  },
+  "242": {
+   "name": "Give Artifact Power (Without Scaling)",
+   "family": "combat",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "243": {
+   "name": "Apply Enchant Appearance",
+   "family": "appearance",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "SpellItemEnchantment",
+     "by": "named"
+    }
+   ]
+  },
+  "244": {
+   "name": "Teach Follower Ability",
+   "family": "progression",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0",
+    "EffectMiscValue_1"
+   ]
+  },
+  "245": {
+   "name": "Upgrade Heirloom",
+   "family": "progression",
+   "reads": []
+  },
+  "246": {
+   "name": "Finish Garrison Mission",
+   "family": "progression",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "247": {
+   "name": "Add Garrison Mission Set",
+   "family": "progression",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "248": {
+   "name": "Finish Shipment",
+   "family": "other",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "249": {
+   "name": "Force Equip Item",
+   "family": "progression",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "Item",
+     "by": "named"
+    }
+   ]
+  },
+  "250": {
+   "name": "Take Screenshot",
+   "family": "other",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "251": {
+   "name": "Set Garrison Cache Size",
+   "family": "appearance",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "252": {
+   "name": "Teleport Units",
+   "family": "world",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0",
+    "EffectMiscValue_1"
+   ]
+  },
+  "253": {
+   "name": "Give Honor",
+   "family": "progression",
+   "reads": []
+  },
+  "254": {
+   "name": "Jump Charge",
+   "family": "world",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "255": {
+   "name": "Learn Transmog Set",
+   "family": "progression",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "258": {
+   "name": "Modify Keystone",
+   "family": "other",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0",
+    "EffectMiscValue_1"
+   ]
+  },
+  "259": {
+   "name": "Respec Azerite Empowered Item",
+   "family": "progression",
+   "reads": []
+  },
+  "260": {
+   "name": "Summon Stabled Pet",
+   "family": "world",
+   "reads": []
+  },
+  "261": {
+   "name": "Scrap Item",
+   "family": "progression",
+   "reads": []
+  },
+  "263": {
+   "name": "Repair Item",
+   "family": "progression",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "264": {
+   "name": "Remove Gem",
+   "family": "progression",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "265": {
+   "name": "Learn Azerite Essence Power",
+   "family": "combat",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0",
+    "EffectMiscValue_1"
+   ]
+  },
+  "266": {
+   "name": "Set Item Bonus List Group Entry",
+   "family": "progression",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "267": {
+   "name": "Play Conversation",
+   "family": "sound",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "Conversation",
+     "by": "named, server-side"
+    }
+   ],
+   "unresolved": [
+    "EffectMiscValue_1"
+   ]
+  },
+  "268": {
+   "name": "Apply Mount Equipment",
+   "family": "appearance",
+   "reads": []
+  },
+  "269": {
+   "name": "Upgrade Item",
+   "family": "progression",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    },
+    {
+     "column": "EffectMiscValue_1",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "270": {
+   "name": "Teleport",
+   "family": "world",
+   "reads": []
+  },
+  "272": {
+   "name": "Set Covenant",
+   "family": "progression",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "273": {
+   "name": "Legendary Runecarving",
+   "family": "progression",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_1"
+   ]
+  },
+  "276": {
+   "name": "Learn Transmog Illusion",
+   "family": "progression",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "277": {
+   "name": "Set Chromie Time",
+   "family": "other",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "amount",
+     "into": "",
+     "by": "shaped"
+    }
+   ]
+  },
+  "278": {
+   "name": "Teleport",
+   "family": "world",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "279": {
+   "name": "Learn Garr Talent",
+   "family": "progression",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0",
+    "EffectMiscValue_1"
+   ]
+  },
+  "281": {
+   "name": "Learn Soulbind Conduit",
+   "family": "world",
+   "reads": []
+  },
+  "282": {
+   "name": "Deposit Currency",
+   "family": "progression",
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "reference",
+     "into": "CurrencyTypes",
+     "by": "named"
+    }
+   ],
+   "unresolved": [
+    "EffectMiscValue_1"
+   ]
+  },
+  "283": {
+   "name": "Complete Quest Campaign",
+   "family": "scripted",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "284": {
+   "name": "Send Chat Message",
+   "family": "sound",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0",
+    "EffectMiscValue_1"
+   ]
+  },
+  "285": {
+   "name": "Modify Keystone",
+   "family": "other",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "286": {
+   "name": "Grant Battle Pet Experience",
+   "family": "progression",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_0"
+   ]
+  },
+  "287": {
+   "name": "Set Garrison Follower Level",
+   "family": "progression",
+   "reads": [],
+   "unresolved": [
+    "EffectMiscValue_1"
+   ]
+  },
+  "289": {
+   "name": "Modify Cast Stacks",
+   "family": "other",
+   "reads": []
+  }
+ }
+}

@@ -55,6 +55,7 @@ REGISTERED_ORDER = (
     "auraNames",
     "implicitTargetNames",
     "selectors",
+    "selectorVocabularies",
     "interruptNames",
     "implicitTargetBits",
     "missileMotions",

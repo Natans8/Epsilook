@@ -1,0 +1,17 @@
+{
+  "enum": "SpellSchoolMask",
+  "description": "A spell school as its mask bit, the unit a misc slot typed `mask` over `spell_schools` combines: 1 Physical through 64 Arcane. Wowhead prints a mask as the school names in bit order.",
+  "source": [
+    "https://github.com/EpsilonRP/TrinityCore/blob/master/src/server/game/Miscellaneous/SharedDefines.h"
+  ],
+  "keys": "school mask bit",
+  "values": {
+    "1": "Physical",
+    "2": "Holy",
+    "4": "Fire",
+    "8": "Nature",
+    "16": "Frost",
+    "32": "Shadow",
+    "64": "Arcane"
+  }
+}
