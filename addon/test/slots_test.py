@@ -35,3 +35,25 @@ def test_an_invisibility_aura_reads_down_to_its_type(engine: LuaRuntime) -> None
         return Epsilook:GetSlotWords(read.into, read.holds, 6)
     """
     assert listed(engine, code) == ["Drunk"]
+
+
+def test_a_reference_reads_down_to_its_name(engine: LuaRuntime) -> None:
+    """Aura 36 shifts into a form, and form 1 is the cat."""
+    # language=Lua
+    code = b"""
+        local read = Epsilook:GetSelectorReads("SpellEffect", "EffectAura", 36)[1]
+        return Epsilook:GetReferenceName(read.into, 1)
+    """
+    assert unwrap(engine.execute(code)) == "Cat Form"
+
+
+def test_a_reference_is_named_through_its_own_table(engine: LuaRuntime) -> None:
+    # language=Lua
+    assert unwrap(engine.execute(b'return Epsilook:GetReferenceName("creature_template", 3)')) == "Flesh Eater"
+    # language=Lua
+    assert unwrap(engine.execute(b'return Epsilook:GetReferenceName("FactionTemplate", 1)')) == "PLAYER, Human"
+
+
+def test_an_id_no_row_points_at_names_nothing(engine: LuaRuntime) -> None:
+    # language=Lua
+    assert unwrap(engine.execute(b'return Epsilook:GetReferenceName("creature_template", -1)')) is None

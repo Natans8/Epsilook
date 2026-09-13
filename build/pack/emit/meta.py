@@ -20,8 +20,13 @@ from ..derive import DeriveContext
 from ..model import SECTIONS, CountFamily, Section, SectionColumns
 from ..progress import detail
 
-PACK_FORMAT = 66
+PACK_FORMAT = 67
 """What shape the artifact is in.
+
+67 names what a reference column points at. `referenceNames` carries, per build
+and per language, the name of every creature, object, item, spell, shapeshift
+form, screen effect, faction template and sound kit a reference column of this
+build's effect rows holds, empty where the build has no name for it.
 
 66 types every misc column of every effect and aura in use, where 65 typed the
 few the build reads by hand. `selectors` covers the whole roster, `holds` gains

@@ -12,9 +12,13 @@ vocabulary module of their own.
 
 from __future__ import annotations
 
+from collections import defaultdict
+from collections.abc import Callable, Iterable, Mapping
+
 from ...derive import Reads
+from ...derive.rows import MechanicRow
 from ...routes import interrupt_words
-from ...routes.flow import export_name
+from ...routes.flow import Holds, export_name
 from ...routes.selectors import SELECTORS, WORDS
 from ...targets import IMPLICIT_PREFIX
 from ..registry import register
@@ -166,6 +170,74 @@ SELECTOR_VOCABULARIES = register(
         columns=("vocabularies", "values", "words"),
         scope=Scope.UNIVERSAL,
         counts=(size("selectorVocabularies", "values"),),
+    )
+)
+
+REFERENCE_NAMES: Mapping[str, Callable[[Reads], Mapping[int, str]]] = {
+    "creature_template": lambda reads: reads.creatures.names,
+    "gameobject_template": lambda reads: reads.objects.name,
+    "Item": lambda reads: {item: named.name for item, named in reads.items.names.items()},
+    "Spell": lambda reads: reads.names.names,
+    "SpellShapeshiftForm": lambda reads: reads.forms.names,
+    "ScreenEffect": lambda reads: {screen: row.name for screen, row in reads.fx.screens.items()},
+    "FactionTemplate": lambda reads: {row.template: row.name for row in reads.factions},
+    "SoundKit": lambda reads: dict(reads.kit_names),
+}
+"""The tables a reference slot points into whose names the build already reads, each as its whole id to name map."""
+
+
+def referenced(rows: Iterable[MechanicRow]) -> dict[str, set[int]]:
+    """The ids the rows' reference slots point at, by the table they point into.
+
+    An aura row is read under its aura and any other row under its effect, the
+    way the selector roster declares them.
+    """
+    slots: dict[tuple[str, int], list[tuple[str, str]]] = defaultdict(list)
+    for declared in SELECTORS:
+        if declared.table != "SpellEffect":
+            continue
+        on = export_name(declared.select.on)
+        for slot in declared.select.slots:
+            if slot.holds is Holds.REFERENCE and slot.into in REFERENCE_NAMES:
+                for value in declared.select.values:
+                    slots[(on, value)].append((export_name(slot.column), slot.into))
+    found: dict[str, set[int]] = defaultdict(set)
+    for row in rows:
+        for column, into in slots.get(("EffectAura", row.aura) if row.aura else ("Effect", row.effect), ()):
+            value = row.misc_a if column.endswith("_0") else row.misc_b
+            if value:
+                found[into].add(value)
+    return found
+
+
+def reference_names(reads: Reads) -> SectionColumns:
+    """The name of every id a reference slot of this build's rows points at.
+
+    One row per table and id. The ids come from the rows alone and a name the
+    build cannot find is empty, so every language's column lines up with the
+    same ids.
+    """
+    found = referenced(reads.rows.mechanics)
+    rows = [(table, ident) for table in sorted(found) for ident in sorted(found[table])]
+    names = {table: REFERENCE_NAMES[table](reads) for table in found}
+    return {
+        "tables": [table for table, _ident in rows],
+        "ids": [ident for _table, ident in rows],
+        "names": [names[table].get(ident, "") for table, ident in rows],
+    }
+
+
+REFERENCE_NAMES_TABLE = register(
+    Section(
+        name="referenceNames",
+        doc="The name of each id an effect or aura's reference slot points at.",
+        module="core",
+        produce=reference_names,
+        columns=("tables", "ids", "names"),
+        reads=("rows", "creatures", "objects", "items", "names", "forms", "fx", "factions", "kit_names"),
+        degraded_without=("creature_template", "gameobject_template"),
+        counts=(size("referenceNames", "ids"),),
+        localizable=("names",),
     )
 )
 

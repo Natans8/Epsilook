@@ -56,6 +56,7 @@ REGISTERED_ORDER = (
     "implicitTargetNames",
     "selectors",
     "selectorVocabularies",
+    "referenceNames",
     "interruptNames",
     "implicitTargetBits",
     "missileMotions",

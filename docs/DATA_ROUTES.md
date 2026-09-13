@@ -1023,7 +1023,10 @@ against the id spaces, named, read by the Epsilon core's handler or never read b
 amount by its shape. They are generated off the data and the core rather than written by hand, a payload wins where it
 reads the same value, and the payloads are the oracle `selectors_test.py` holds the typing to. A vocabulary a slot
 names ships its words in `selectorVocabularies`, and a mask's vocabulary is keyed by its bits, so the words a mask
-names are the bits it sets.
+names are the bits it sets. A reference names its target in `referenceNames`, per build and per language: every
+creature, object, item, spell, shapeshift form, screen effect, faction template and sound kit a reference column of the
+build's own effect rows holds, with the name the build already reads for it and an empty one where it has none. The ids come from the rows and never from the
+names, because a language column is joined to its ids by position.
 
 **A route is a flow, and the steps are a small vocabulary.** Every route reads a table and follows a few hops, and the
 hops are of seven data kinds: read a table, join through a key, fan an array out into rows, select rows by a

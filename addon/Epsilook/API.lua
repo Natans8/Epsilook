@@ -462,6 +462,28 @@ function Epsilook:GetSlotWords(into, holds, value)
 	return out
 end
 
+--- The name of the thing a raw value points at, once GetSelectorReads has
+-- said its column is a reference into a table.
+-- @param into the table, as GetSelectorReads returns it
+-- @param id the raw value on the row
+-- @return the name; nil where the pack names nothing under that id
+function Epsilook:GetReferenceName(into, id)
+	mounted(self)
+	local tables = Data.ReadAll("mech", "referenceNames", "tables") or {}
+	local ids = Data.ReadAll("mech", "referenceNames", "ids") or {}
+	local names = Data.ReadAll("mech", "referenceNames", "names") or {}
+	for i = 1, #ids do
+		if ids[i] == id and tables[i] == into then
+			local name = names[i]
+			if name == "" then
+				return nil
+			end
+			return name
+		end
+	end
+	return nil
+end
+
 --- The two kits a music set or an ambience plays, by day and by night.
 -- @param section "zoneMusic" or "ambiences"
 -- @param id the set's id
