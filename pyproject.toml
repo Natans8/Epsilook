@@ -133,7 +133,7 @@ warn_unreachable = true
 # tools module.
 [[tool.mypy.overrides]]
 module = [
-    "addon", "arcanum", "builddb", "bump", "check", "docker_smoke", "dossier",
+    "addon", "addon_release", "arcanum", "builddb", "bump", "check", "docker_smoke", "dossier",
     "epsilon_names", "epsilon_storage", "epsilon_tables", "epsilon_walks",
     "expansions", "listfile", "mermaid", "packdb", "packfile", "packs",
     "rebuild", "repo", "catalogue", "routes", "spellings", "supplement", "verify_live",
