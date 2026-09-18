@@ -25,7 +25,6 @@ API.lua
 Interface\Config.lua
 Interface\Shell.lua
 Interface\Inspect.lua
-Interface\Sky.lua
 Interface\Options.lua
 
 SelfTest.lua
