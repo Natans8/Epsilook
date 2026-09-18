@@ -55,6 +55,7 @@ dev = [
     # 5.1, so the tests can be exact about the one that matters rather than
     # hoping a newer one behaves the same.
     "lupa",
+    "pillow>=12.3.0",
 ]
 
 [tool.pytest.ini_options]
