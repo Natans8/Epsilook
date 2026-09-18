@@ -213,8 +213,9 @@ end
 -- @return a list of { name, text, id, path, number, colour, stored, vocab }:
 --   the property, its value as written, the stored id where the value
 --   resolved from one, whether it is a file path, whether it is a bare id,
---   the packed colour where it is one, the stored number itself, and the
---   vocabulary the number was read through, where it was
+--   the packed colour where it is one, the stored number itself, the
+--   vocabulary the number was read through, where it was, and the
+--   property's first type
 function Inspect.Values(part)
 	local kind = Epsilook.Schema.kindById[part.axis .. "." .. part.kind]
 	local out = {}
@@ -233,6 +234,7 @@ function Inspect.Values(part)
 				colour = prop.types[1] == "colour" and value or nil,
 				stored = Epsilook.Schema.Stored(part.axis, part.kind, part.slot, prop),
 				vocab = Epsilook.Data.GetVocabName(part.axis, part.kind, prop.name),
+				type = prop.types[1],
 			}
 		end
 	end
@@ -421,15 +423,96 @@ local function detailed(value)
 	return written(value)
 end
 
+--- The longest row, label and value together, a tooltip may hold and still
+-- be set in two columns. One long line, a path above all, widens the whole
+-- frame, and a value set against the far edge of a wide frame is a long way
+-- from its label; such a tooltip reads better as plain lines.
+local ROW_LIMIT = 40
+
+--- The properties a tooltip leaves out.
+-- TODO: empty this once the words for these are settled; until then they
+-- are carried by the pack and shown nowhere.
+local WITHHELD =
+	{ every = true, hops = true, unimplemented = true, nostack = true, chainfirst = true }
+
+--- The types whose value of one says nothing: drawn at its own size, played
+-- at its own speed.
+local NEUTRAL = { multiplier = true, pace = true }
+
+--- How such a value is written when it changes nothing. The stored number
+-- is scaled by its type, so the written form is the one thing they share.
+local UNCHANGED = "x1"
+
+--- Text with the client's markup taken off, for measuring.
+local function unmarked(text)
+	return (text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""):gsub("|T.-|t", "  "))
+end
+
+--- One more row for a tooltip: a label and its value, or a flag's word
+-- alone where there is no value.
+local function row(rows, label, text)
+	rows[#rows + 1] = { label = label, text = text }
+end
+
+--- Write a tooltip's rows: in two columns, the label in grey on the left and
+-- the value in white on the right, where the tooltip has a second column and
+-- every row is short; as plain lines otherwise. A flag is its word in orange
+-- either way.
+-- @param tooltip the tooltip
+-- @param rows what `row` gathered
+local function emit(tooltip, rows)
+	local columns = tooltip.AddDoubleLine ~= nil
+	for _, entry in ipairs(rows) do
+		if entry.text and #entry.label + #unmarked(entry.text) > ROW_LIMIT then
+			columns = false
+		end
+	end
+	for _, entry in ipairs(rows) do
+		if not entry.text then
+			tooltip:AddLine(entry.label, 1, 0.62, 0.26)
+		elseif columns then
+			tooltip:AddDoubleLine(entry.label, entry.text, 0.62, 0.62, 0.62, 1, 1, 1)
+		else
+			tooltip:AddLine(GREY .. entry.label .. END .. " " .. entry.text, 1, 1, 1)
+		end
+	end
+end
+
+--- Widen a tooltip to its two-column rows. The client sizes a tooltip to
+-- its left column alone, so a row's right half runs past the frame unless
+-- the frame is told how wide its widest row is.
+-- @param tooltip the tooltip, filled
+function Inspect.Fit(tooltip)
+	if not (tooltip.GetName and tooltip.NumLines and tooltip.SetMinimumWidth) then
+		return
+	end
+	local name, widest = tooltip:GetName(), 0
+	for i = 1, tooltip:NumLines() do
+		local left, right = _G[name .. "TextLeft" .. i], _G[name .. "TextRight" .. i]
+		if left and right and right:IsShown() and right:GetText() and left.GetStringWidth then
+			widest =
+				math.max(widest, left:GetStringWidth() + right:GetStringWidth() + Inspect.GUTTER)
+		end
+	end
+	if widest > 0 then
+		tooltip:SetMinimumWidth(widest)
+	end
+end
+
+--- The space kept between a row's label and its value.
+Inspect.GUTTER = 24
+
 --- Fill a tooltip with a part: its kind as the title and what the kind
--- means under it, then one line per value, a path written whole and a
--- vocabulary word with its number, then what the part carries beyond its
--- properties -- an effect's implicit targets and the aura it applies --
--- then the creature displays it names, each with its model file and the
--- textures it paints, so a creature reads down to what it looks like.
--- Each is one unwrapped line rather than a double line, because a double
--- line's right half does not widen the tooltip and a long path would run
--- past it, and an unwrapped line always sizes the frame to itself.
+-- means under it, then one row per value that says something, the label the
+-- word a query would use and the value beside it. A value of one on a size
+-- or a speed is left out, a flag is its word alone, and a vocabulary word
+-- keeps the number it stands for, since the number is what the game's own
+-- tables hold. The rows are two columns where all of them are short and
+-- plain lines where one is long, as a path is. Then what the part
+-- carries beyond its properties -- an effect's implicit targets and the
+-- aura it applies -- then the creature displays it names, each with its
+-- model file and the textures it paints, so a creature reads down to what
+-- it looks like.
 -- @param tooltip the GameTooltip, already owned
 -- @param part a PartData
 function Inspect.FillTooltip(tooltip, part)
@@ -438,29 +521,31 @@ function Inspect.FillTooltip(tooltip, part)
 	if kind and kind.hint and kind.hint ~= "" then
 		tooltip:AddLine(kind.hint, 0.62, 0.62, 0.62)
 	end
-	local values = Inspect.Values(part)
+	local values, rows = Inspect.Values(part), {}
 	for _, value in ipairs(values) do
-		tooltip:AddLine(GREY .. value.label .. END .. " " .. detailed(value), 1, 1, 1)
+		local silent = WITHHELD[value.name] or (NEUTRAL[value.type] and value.text == UNCHANGED)
+		if not silent then
+			row(rows, value.label, value.type ~= "flag" and detailed(value) or nil)
+		end
 	end
 	for _, extra in ipairs(Epsilook:GetPartExtras(part)) do
-		local text = extra.text ~= "" and extra.text or tostring(extra.value)
-		tooltip:AddLine(GREY .. extra.name .. END .. " " .. text, 1, 1, 1)
+		row(rows, extra.name, extra.text ~= "" and extra.text or tostring(extra.value))
 	end
 	for _, display in ipairs(Epsilook:GetPartDisplays(part)) do
 		-- A display the part carries itself is on the lines above already,
 		-- and only its skins follow; one reached through a creature is named
 		-- here, with the model it wears.
 		if display.file then
-			tooltip:AddLine(GREY .. "display" .. END .. " " .. display.id, 1, 1, 1)
+			row(rows, "display", tostring(display.id))
 			if display.file.text ~= "" then
-				tooltip:AddLine(GREY .. "  model" .. END .. " " .. display.file.text, 1, 1, 1)
+				row(rows, "  model", display.file.text)
 			end
 		end
 		for _, skin in ipairs(display.skins) do
-			local indent = display.file and "  " or ""
-			tooltip:AddLine(GREY .. indent .. "skin" .. END .. " " .. skin.text, 1, 1, 1)
+			row(rows, (display.file and "  " or "") .. "skin", skin.text)
 		end
 	end
+	emit(tooltip, rows)
 	local texture, fid = Inspect.TEXTURES[part.axis .. "." .. part.kind], pathFid(values)
 	if texture and texture.tip and fid then
 		tooltip:AddLine(
@@ -468,6 +553,7 @@ function Inspect.FillTooltip(tooltip, part)
 		)
 	end
 	Inspect.FillPalette(tooltip, part)
+	Inspect.Fit(tooltip)
 end
 
 --- What a screen effect paints, in the tooltip: a palette line with a swatch
@@ -526,19 +612,16 @@ end
 function Inspect.FillAxisTooltip(tooltip, spellID, axis)
 	local n = Epsilook:GetPartCounts(spellID)[axis] or 0
 	tooltip:SetText(n .. " " .. Inspect.Label(axis), 1, 1, 1)
-	local part = {}
+	local part, rows = {}, {}
 	for i = 1, math.min(n, Inspect.LISTED) do
 		Epsilook:GetPartDataByIndex(spellID, axis, i, part)
-		tooltip:AddLine(
-			GREY .. part.kind .. END .. " " .. unextended(Inspect.Subject(part) or ""),
-			1,
-			1,
-			1
-		)
+		row(rows, part.kind, unextended(Inspect.Subject(part) or ""))
 	end
+	emit(tooltip, rows)
 	if n > Inspect.LISTED then
 		tooltip:AddLine("and " .. (n - Inspect.LISTED) .. " more", 0.62, 0.62, 0.62)
 	end
+	Inspect.Fit(tooltip)
 end
 
 --- The one stored number an action needs off a part: the value's own number

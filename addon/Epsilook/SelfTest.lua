@@ -32,10 +32,10 @@ function Epsilook:SelfTest()
 		say("%d spells", self:GetNumSpells())
 		say("%s %s", info.pack, info.variation)
 
-		local spell = self:GetSpellDataByID(133)
-		say("133=%s %s %s", tostring(spell.name), tostring(spell.school), tostring(spell.expansion))
+		local spell = self:GetSpellDataByID(116)
+		say("116=%s %s %s", tostring(spell.name), tostring(spell.school), tostring(spell.expansion))
 
-		local counts = self:GetPartCounts(133)
+		local counts = self:GetPartCounts(116)
 		say(
 			"m%d s%d a%d x%d e%d",
 			counts.model or 0,
@@ -45,13 +45,13 @@ function Epsilook:SelfTest()
 			counts.mech or 0
 		)
 
-		local part = self:GetPartDataByIndex(133, "model", 1)
+		local part = self:GetPartDataByIndex(116, "model", 1)
 		say("model1=%s %s", tostring(part and part.kind), tostring(part and part.values.file))
 
-		local query, problems = self:ParseQuery("name:fireball -model:missile")
+		local query, problems = self:ParseQuery("name:frostbolt -model:missile")
 		say("parse=%s (%d problems)", self:FormatQuery(query), #problems)
 
-		local _, first = self:FindSpells("name:=Fireball")()
+		local _, first = self:FindSpells("name:=Frostbolt")()
 		say("find=%s", tostring(first))
 		return table.concat(said, " | ")
 	end)

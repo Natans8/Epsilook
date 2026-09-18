@@ -240,6 +240,40 @@ def test_a_creatures_tooltip_reads_down_to_what_it_looks_like(engine: LuaRuntime
     assert "display 2320" not in lines
 
 
+def test_a_tooltip_says_only_what_says_something(engine: LuaRuntime) -> None:
+    """A size of one is left out, a flag is its word alone, and a property whose word is unsettled is absent."""
+    api = lua_table(engine, b"Epsilook")
+    attached = tooltip_lines(engine, 116, b"model", part_index(api, 116, b"model", "attach"))
+    assert not [line for line in attached if line.startswith(("scale", "built"))]
+    assert "point Head - 20" in attached
+    sound = tooltip_lines(engine, 116, b"sound", 1)
+    assert "loop" in sound and not [line for line in sound if line.startswith("loop ")]
+    effect = tooltip_lines(engine, 116, b"mech", part_index(api, 116, b"mech", "effect"))
+    assert not [line for line in effect if line.startswith("chainfirst")]
+
+
+def test_a_tooltip_of_short_rows_is_two_columns_and_one_with_a_path_is_lines(engine: LuaRuntime) -> None:
+    """Short rows are set label and value apart; one long row, a path, turns the whole tooltip to lines."""
+    # language=Lua
+    engine.execute(b"""
+                   function TOOLTIP_ROWS(id, axis, n)
+                       local out = {}
+                       local tip = {}
+                       function tip:SetText(text) out[#out + 1] = text end
+                       function tip:AddLine(text) out[#out + 1] = text end
+                       function tip:AddDoubleLine(left, right) out[#out + 1] = left .. "\\t" .. right end
+                       Epsilook.Inspect.FillTooltip(tip, Epsilook:GetPartDataByIndex(id, axis, n))
+                       return table.concat(out, "\\n")
+                   end
+                   """)
+    rows = lua_function(engine, b"TOOLTIP_ROWS")
+    short = re.sub(r"\|c[0-9a-f]{8}|\|r", "", cast(bytes, rows(116, b"anim", 1)).decode()).split("\n")
+    assert "phase\tcast - 3" in short and "anim\tSpellCastDirected - 53" in short
+    long = re.sub(r"\|c[0-9a-f]{8}|\|r", "", cast(bytes, rows(116, b"sound", 1)).decode()).split("\n")
+    assert "file SOUND/SPELLS/SPELL_MA_Revamp_Frostbolt_Precast_Loop_01.ogg" in long
+    assert "phase precast - 1" in long and not [line for line in long if "\t" in line]
+
+
 def test_a_vocabulary_word_carries_its_number_in_the_tooltip(engine: LuaRuntime) -> None:
     """The number is what the game's own tables hold; the line keeps the word alone.
 
