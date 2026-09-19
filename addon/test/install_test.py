@@ -200,3 +200,45 @@ def test_a_property_with_no_vocabulary_asks_and_is_told_none(engine: LuaRuntime)
     """An absence is an answer. Asked through to the cache, nil raised on the key."""
     # language=Lua
     assert engine.execute(b"return Epsilook.Data.LocateVocab(nil)") is None
+
+
+def test_waiting_for_items_calls_back_once_when_both_arrive(engine: LuaRuntime) -> None:
+    """The items load and then the wait runs out regardless; both are being done.
+
+    A caller answering both printed what it prints twice, and clicking an axis's
+    count on a spell whose items the client had not cached printed the section
+    twice over. The stand-ins below fire in the order the client fires them.
+    """
+    # language=Lua
+    code = b"""
+        local timers, loaders, calls = {}, {}, 0
+        local realItem, realTimer = _G.Item, _G.C_Timer
+        _G.Item = {
+            CreateFromItemID = function(_, id)
+                return {
+                    IsItemEmpty = function() return false end,
+                    IsItemDataCached = function() return false end,
+                    ContinueOnItemLoad = function(_, done) loaders[#loaders + 1] = done end,
+                }
+            end,
+        }
+        _G.C_Timer = { After = function(_, done) timers[#timers + 1] = done end }
+        -- A spell whose parts name an item, asked of the engine rather than
+        -- walked for: a few hundred of a quarter of a million spells carry one.
+        local spellID
+        for _, id in Epsilook:FindSpells("model:item") do
+            if id then
+                spellID = id
+                break
+            end
+        end
+        Epsilook.Inspect.WhenItemsLoaded(spellID, function() calls = calls + 1 end)
+        for _, done in ipairs(loaders) do done() end
+        for _, done in ipairs(timers) do done() end
+        _G.Item, _G.C_Timer = realItem, realTimer
+        return spellID ~= nil, #loaders, #timers, calls
+    """
+    found, loaders, timers, calls = cast(tuple[bool, int, int, int], engine.execute(code))
+    assert found, "a spell naming an item exists in the pack"
+    assert loaders >= 1 and timers == 1, "both ways of being done were armed"
+    assert calls == 1, "called back once, not once per way of being done"

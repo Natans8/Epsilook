@@ -1430,12 +1430,7 @@ function Inspect.Print(spellID, say)
 		say(Shell.Said(RED .. "no spell " .. tostring(spellID) .. " in this pack" .. END))
 		return
 	end
-	local printed = false
 	local function printNow()
-		if printed then
-			return
-		end
-		printed = true
 		say(Inspect.HeadLine(spell))
 		local clock = Inspect.ClockLine(spellID)
 		if clock then
@@ -1463,14 +1458,20 @@ local function unloadedItems(spellID)
 	for _, axis in ipairs(Epsilook:GetPartAxes()) do
 		for i = 1, counts[axis] or 0 do
 			local part = Epsilook:GetPartDataByIndex(spellID, axis, i)
-			for name, value in pairs(part.values) do
-				if
-					type(value) == "table"
-					and Epsilook:GetPartVocabulary(axis, part.kind, name) == "items"
-				then
-					local item = make(_G.Item, value.id)
+			for _, value in ipairs(part and Inspect.Values(part) or {}) do
+				-- Read the way the line reads it. A name the pack resolved is an id
+				-- and a text; one it could not is the bare stored number, and a
+				-- blank name is still an item. Asking only for the first shape
+				-- found no item on a part the pack could not name -- exactly the
+				-- ones the client's own name is waited for -- so nothing waited.
+				local id
+				if value.vocab == "items" then
+					id = value.id or value.stored
+				end
+				if id then
+					local item = make(_G.Item, id)
 					if not item:IsItemEmpty() and not item:IsItemDataCached() then
-						ids[#ids + 1] = value.id
+						ids[#ids + 1] = id
 					end
 				end
 			end
@@ -1486,9 +1487,20 @@ end
 -- @param spellID the spell
 -- @param continue the function to run
 function Inspect.WhenItemsLoaded(spellID, continue)
+	-- ⛔ Once, whichever arrives first. The items loading and the wait running
+	-- out are two ways of being done, and both happen: the items land, then the
+	-- timer fires a moment later regardless, and a caller answering both prints
+	-- what it prints twice. Held here so no caller has to remember to guard.
+	local done = false
+	local function once()
+		if not done then
+			done = true
+			continue()
+		end
+	end
 	local pending = unloadedItems(spellID)
 	if #pending == 0 then
-		continue()
+		once()
 		return
 	end
 	local left = #pending
@@ -1496,12 +1508,12 @@ function Inspect.WhenItemsLoaded(spellID, continue)
 		_G.Item:CreateFromItemID(id):ContinueOnItemLoad(function()
 			left = left - 1
 			if left == 0 then
-				continue()
+				once()
 			end
 		end)
 	end
 	if _G.C_Timer and _G.C_Timer.After then
-		_G.C_Timer.After(Inspect.ITEM_WAIT, continue)
+		_G.C_Timer.After(Inspect.ITEM_WAIT, once)
 	end
 end
 
