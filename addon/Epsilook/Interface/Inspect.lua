@@ -370,21 +370,26 @@ local function leading(values, i)
 	return out
 end
 
---- The file id behind a list's path value, where it has one: what a texture
--- escape draws.
+--- The file id behind a list's path value, where it has one, and the path
+-- itself: what a texture escape draws, and what names what kind of file it is.
 local function pathFid(values)
 	for _, value in ipairs(values) do
 		if value.path and value.stored then
-			return value.stored
+			return value.stored, value.text
 		end
 	end
 	return nil
 end
 
---- The file a part names, by the id the client loads a model with, or nil
--- where the part names no file. The one door to it, so that a reader wanting
--- to draw a part does not have to know how a path is stored.
+--- The file a part names, by the id the client loads it with, or nil where the
+-- part names no file. The one door to it, so that a reader wanting to draw a
+-- part does not have to know how a path is stored.
+--
+-- The path comes back beside the id because an id says nothing about what the
+-- file is, and a model, a sound and a texture all arrive here through the same
+-- property.
 -- @param part a PartData
+-- @return the file id and its path, or nil
 function Inspect.FileOf(part)
 	return pathFid(Inspect.Values(part))
 end
@@ -1523,10 +1528,14 @@ function Inspect.Execute(spellID, key, axis, n, say)
 		say(Shell.Said(RED .. "that part is no longer in the pack" .. END))
 		return
 	end
-	if Epsilook.Preview and Epsilook.Preview.Offers(part) then
-		-- Resting on a part that can be looked at shows it, so clicking the same
-		-- thing keeps it. A second word offering what the hover already does is
-		-- one affordance too many.
+	if key == Inspect.PART and Epsilook.Preview and Epsilook.Preview.Offers(part) then
+		-- Resting on a part's own link shows it, so clicking that same link keeps
+		-- it. A second word offering what the hover already does is one affordance
+		-- too many.
+		--
+		-- ⛔ The part's link only. An action is a verb the reader asked for by
+		-- name, and pinning in front of one answers a different question than the
+		-- one that was clicked: it swallowed every `[Play]` on the sound axis.
 		Epsilook.Preview.Pin(part)
 		return
 	end

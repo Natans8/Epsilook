@@ -2306,12 +2306,11 @@ def check_addon_layers(rep: Report) -> None:
     }
     breaches = []
     for layer, allowed in below.items():
-        forbidden = {
-            name: other
-            for other, names in modules.items()
-            if other != layer and other not in allowed
-            for name in names
-        }
+        forbidden = {}
+        for other, names in modules.items():
+            if other != layer and other not in allowed:
+                for name in names:
+                    forbidden[name] = other
         for path in sorted((addon / layer).glob("*.lua")):
             for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
                 if line.lstrip().startswith("--"):

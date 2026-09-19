@@ -19,9 +19,10 @@
 -- it is clicked. Nothing arranges them after that, because the player put them
 -- where they are.
 --
--- ⚠ Only a model is drawn today. What a subject is and how it is drawn is a row
--- in `SUBJECTS`, so an animation, a creature or a spell's own visual is a row
--- rather than a branch when each is built.
+-- A part is looked at as one of the things in `SUBJECTS`, which is a row each
+-- rather than a branch, so a creature or a piece of gear is a row when it is
+-- built. A whole spell is not one of them: it is not a part, it is the thing the
+-- parts belong to, and it is played rather than drawn.
 
 _G.Epsilook = _G.Epsilook or {}
 local Epsilook = _G.Epsilook
@@ -48,6 +49,31 @@ Preview.FACING = 0.6
 -- the client takes.
 local function stored(part, prop)
 	return Epsilook:GetPartStored(part.axis, part.kind, part.slot, prop)
+end
+
+--- The extensions of the files the client loads as a model.
+local MODEL_FILES = { m2 = true, mdx = true }
+
+--- The model file a part names, or nil where the file it names is not one.
+--
+-- ⛔ A part naming a file is not a part naming a model: a sound row names an
+-- `.ogg` and a texture a `.blp`, both through the same path property. Handing
+-- either to `SetModel` crashes the game outright rather than erroring, which is
+-- no more survivable inside a `pcall` than the light was -- the native loader
+-- reads the bytes as a model whatever they are. So the file is asked what it is
+-- before it is drawn, which is also why this is not a question about the axis:
+-- what makes a file drawable is the file.
+-- @param part a PartData
+function Preview.ModelOf(part)
+	local fileID, path = Epsilook.Inspect.FileOf(part)
+	if not fileID then
+		return nil
+	end
+	local extension = (path or ""):match("%.([%a%d]+)$")
+	if not (extension and MODEL_FILES[extension:lower()]) then
+		return nil
+	end
+	return fileID
 end
 
 --- What can be looked at, and how, in the order a part is tried against them.
@@ -84,7 +110,7 @@ Preview.SUBJECTS = {
 	{
 		word = "model",
 		from = function(part)
-			return Epsilook.Inspect.FileOf(part)
+			return Preview.ModelOf(part)
 		end,
 		draw = function(model, fileID)
 			-- A file the client has no model for leaves the frame empty, which is
@@ -152,6 +178,12 @@ local function build(pinned)
 		frame.close:SetScript("OnClick", function()
 			Preview.Unpin(frame)
 		end)
+		-- Above the model, or the model takes the click. A child frame is born at
+		-- its parent's level plus one, so the model and the button sit at the same
+		-- height and the model, which fills the frame, wins the ground they share:
+		-- the button answered only on the two pixels hanging off the corner, which
+		-- is what an unclickable close button looks like from the outside.
+		frame.close:SetFrameLevel(frame.model:GetFrameLevel() + 5)
 		-- A pinned look is looked at, so it turns and it zooms.
 		frame:EnableMouseWheel(true)
 		frame:SetScript("OnMouseWheel", function(_, direction)
@@ -187,6 +219,10 @@ local function draw(frame, part)
 	if not (frame and frame.model and subject) then
 		return false
 	end
+	-- A frame is reused, so whatever was running on it stops: a spell's sequence
+	-- left ticking would keep laying kits over whatever is drawn next.
+	frame.kits = nil
+	frame:SetScript("OnUpdate", nil)
 	frame.model:ClearModel()
 	subject.draw(frame.model, value)
 	frame.model:SetPosition(0, 0, 0)
@@ -232,6 +268,122 @@ local function cursor()
 	return x / scale, y / scale
 end
 
+--- Put a look beside the tooltip that is already up for the same link, so the
+-- words and the look are read in one place, falling back to the pointer.
+-- @param frame the look
+function Preview.Place(frame)
+	local owner = _G.GameTooltip
+	local x, y = cursor()
+	frame:ClearAllPoints()
+	if owner and owner.IsShown and owner:IsShown() and x then
+		local mine, theirs = sides(x, y)
+		frame:SetPoint(mine, owner, theirs, 0, 0)
+	elseif x then
+		local mine = sides(x, y)
+		frame:SetPoint(mine, _G.UIParent, "BOTTOMLEFT", x, y)
+	else
+		frame:SetPoint("CENTER")
+	end
+end
+
+--- The visual kits a spell draws, in the order the client plays them: by stage,
+-- since a stage's stored number is its place in the cast, and by the order the
+-- pack holds them within a stage.
+-- @param spellID the spell
+-- @return a list of `{id, stage}`, the first cast first
+function Preview.KitsOf(spellID)
+	local kits, seen = {}, {}
+	for i = 1, Epsilook:GetNumParts(spellID, "fx") do
+		local part = Epsilook:GetPartDataByIndex(spellID, "fx", i)
+		if part.kind == "visual" then
+			local id = stored(part, "id")
+			local stage = stored(part, "phase") or 0
+			-- A kit at two stages is played twice, which is what the spell does;
+			-- the same kit twice at one stage is one row per audience.
+			local once = stage .. ":" .. tostring(id)
+			if id and not seen[once] then
+				seen[once] = true
+				kits[#kits + 1] = { id = id, stage = stage, at = #kits + 1 }
+			end
+		end
+	end
+	table.sort(kits, function(a, b)
+		if a.stage ~= b.stage then
+			return a.stage < b.stage
+		end
+		return a.at < b.at
+	end)
+	return kits
+end
+
+--- How long one stage is held before the next is laid over it, and how long the
+-- whole cast stands before the body is cleared and it runs again.
+Preview.BEAT, Preview.REST = 1.2, 2
+
+--- Run a spell's kits on a body, one stage at a time, over and over.
+--
+-- A spell is a sequence and not a picture, so this plays it as one: the kits go
+-- on in cast order, layering the way they layer during a real cast, and at the
+-- end the body is cleared and it starts again. That is the loop a reader is
+-- actually asking to see, and it is what one frame can show honestly -- all of
+-- them at once would be every stage of the spell happening simultaneously, which
+-- is a thing the spell never does.
+-- @param frame a look whose `kits` are set
+local function play(frame)
+	frame.at, frame.due = 0, 0
+	frame:SetScript("OnUpdate", function(_, elapsed)
+		frame.due = frame.due - elapsed
+		if frame.due > 0 then
+			return
+		end
+		frame.at = frame.at + 1
+		local kit = frame.kits and frame.kits[frame.at]
+		if not kit then
+			-- What takes the applied visuals back off a body, which is how the
+			-- client's own browser of these does it. A cleared model faces where it
+			-- was put rather than where it was turned to.
+			frame.at, frame.due = 0, Preview.REST
+			pcall(frame.model.RefreshUnit, frame.model)
+			frame.model:SetFacing(frame.facing or Preview.FACING)
+			return
+		end
+		frame.due = Preview.BEAT
+		-- Held rather than played once, so a stage with a loop in it keeps going
+		-- for as long as the stage lasts.
+		pcall(frame.model.ApplySpellVisualKit, frame.model, kit.id, false)
+	end)
+end
+
+--- Show what a whole spell looks like, on the player's own body.
+--
+-- This is the one a reader wants most and the only one they can have without
+-- opening a spell: a page of results is twenty names, and the question asked of
+-- every one of them is what it looks like. So resting on a spell answers it,
+-- wherever the spell is named.
+-- @param spellID the spell
+-- @return whether there was anything to show
+function Preview.Spell(spellID)
+	local kits = Preview.KitsOf(spellID)
+	if #kits == 0 then
+		return false
+	end
+	if not hovered then
+		hovered = build(false)
+	end
+	if not (hovered and hovered.model) then
+		return false
+	end
+	hovered.model:ClearModel()
+	hovered.model:SetUnit("player")
+	hovered.facing = Preview.FACING
+	hovered.model:SetFacing(hovered.facing)
+	hovered.kits = kits
+	play(hovered)
+	Preview.Place(hovered)
+	hovered:Show()
+	return true
+end
+
 --- Show a part while it is hovered, above the chat where there is room.
 -- @param part a PartData
 -- @return whether there was something to show
@@ -242,20 +394,7 @@ function Preview.Hover(part)
 	if not draw(hovered, part) then
 		return false
 	end
-	-- Beside the tooltip that is already up for the same link, so the words and
-	-- the look are read in one place.
-	local owner = _G.GameTooltip
-	local x, y = cursor()
-	hovered:ClearAllPoints()
-	if owner and owner.IsShown and owner:IsShown() and x then
-		local mine, theirs = sides(x, y)
-		hovered:SetPoint(mine, owner, theirs, 0, 0)
-	elseif x then
-		local mine = sides(x, y)
-		hovered:SetPoint(mine, _G.UIParent, "BOTTOMLEFT", x, y)
-	else
-		hovered:SetPoint("CENTER")
-	end
+	Preview.Place(hovered)
 	hovered:Show()
 	return true
 end

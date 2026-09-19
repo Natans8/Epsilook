@@ -1316,7 +1316,17 @@ end
 function Shell.OnHyperlinkEnter(frame, link)
 	local id, verb, axis, n = Shell.ParseLink(link)
 	local tooltip = _G.GameTooltip
-	if not id or not tooltip then
+	if not id then
+		-- A spell's own link, which is the name on a result line and the only
+		-- thing a reader sees before they inspect anything. The client shows the
+		-- tooltip for it; what it cannot show is what the spell looks like.
+		local spellID = tonumber(link:match("^spell:(%d+)"))
+		if spellID and Epsilook.Preview then
+			Epsilook.Preview.Spell(spellID)
+		end
+		return
+	end
+	if not tooltip then
 		return
 	end
 	tooltip:SetOwner(frame, "ANCHOR_CURSOR")
@@ -1331,8 +1341,10 @@ function Shell.OnHyperlinkEnter(frame, link)
 		hint = Epsilook.Inspect.HintOf(axis, verb)
 	elseif axis then
 		local part = Epsilook:GetPartDataByIndex(id, axis, n)
-		if part and Epsilook.Preview then
-			-- Resting on a part that can be looked at shows it beside the tooltip.
+		if part and verb == Epsilook.Inspect.PART and Epsilook.Preview then
+			-- Resting on a part's own link shows it beside the tooltip. On its own
+			-- link and not on its actions, which is the same rule the click follows:
+			-- an action word answers for the verb it names.
 			Epsilook.Preview.Hover(part)
 		end
 		if part and (verb == Epsilook.Inspect.GROUP or verb == Epsilook.Inspect.COPYGROUP) then
