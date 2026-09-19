@@ -5,7 +5,7 @@ other is the ordinary case rather than the rare one. So every way the pair can
 disagree is named here, and a player is told which folder to fix.
 
 The client's addon calls are stood in for, since this tree runs without a
-client. ⚠ A stand-in that encodes the assumption cannot test the assumption, so
+client. A stand-in that encodes the assumption cannot test the assumption, so
 these return exactly what the client's own addon list reads off them:
 `name, title, notes, loadable, reason, security, newVersion`.
 """
@@ -65,7 +65,8 @@ def problem(runtime: LuaRuntime) -> dict[str, object] | None:
     found = runtime.execute(b"return Epsilook.Data.Problem()")
     if found is None:
         return None
-    return {cast(bytes, key).decode(): unwrap(value) for key, value in cast(LuaTable, found).items()}
+    record = cast(LuaTable, found)
+    return {cast(bytes, key).decode(): unwrap(record[key]) for key in record.keys()}
 
 
 def said(runtime: LuaRuntime, found: dict[str, object] | None) -> str:
@@ -81,8 +82,8 @@ def said(runtime: LuaRuntime, found: dict[str, object] | None) -> str:
     return cast(bytes, lines[1]).decode()
 
 
-def test_a_whole_install_raises_nothing(bare: LuaRuntime) -> None:
-    fields = {DATA: {"X-Epsilook-Format": "2"}, READER: {"Version": "0.4"}}
+def test_both_folders_from_one_download_raise_nothing(bare: LuaRuntime) -> None:
+    fields = {DATA: {"X-Epsilook-Format": "2", "X-Epsilook-Release": "0.4"}, READER: {"Version": "0.4"}}
     with client(bare, fields=fields):
         assert problem(bare) is None
 
