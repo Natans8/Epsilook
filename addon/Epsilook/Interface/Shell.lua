@@ -732,6 +732,40 @@ function Shell.Thousands(number)
 	end
 end
 
+--- What the addon is measuring against, for when a line does not look right.
+--
+-- Not a mode and not a log. This addon speaks when it is asked and is silent
+-- otherwise, so a running commentary would be noise; what is wanted when a line
+-- lands in the wrong place is the handful of numbers the layout was computed
+-- from, which nobody can read off a screenshot. A report answers that in one
+-- line each, and asking for it costs nothing when nothing is wrong.
+-- @return a list of lines
+function Shell.DebugLines()
+	local frame = _G.DEFAULT_CHAT_FRAME
+	local file, height, flags = nil, nil, nil
+	if frame and frame.GetFont then
+		file, height, flags = frame:GetFont()
+	end
+	local function say(label, value)
+		return "  " .. Shell.Cell(GREY .. label .. END, "measured width") .. tostring(value)
+	end
+	local lines = { Shell.InfoLine() }
+	lines[#lines + 1] = GOLD .. "The frame it prints to" .. END
+	lines[#lines + 1] = say("name", frame and frame.GetName and frame:GetName() or "none")
+	lines[#lines + 1] = say("width", frame and frame.GetWidth and frame:GetWidth() or "unknown")
+	lines[#lines + 1] =
+		say("scale", frame and frame.GetEffectiveScale and frame:GetEffectiveScale() or "unknown")
+	lines[#lines + 1] =
+		say("font", tostring(file) .. " " .. tostring(height) .. " " .. tostring(flags))
+	lines[#lines + 1] = say("lines kept", Shell.Kept() or "unknown")
+	lines[#lines + 1] = GOLD .. "What it measures to" .. END
+	lines[#lines + 1] = say("a page", Shell.Page() .. " results")
+	lines[#lines + 1] =
+		say("measured width", Shell.Width("measured width") or "nothing can measure")
+	lines[#lines + 1] = say("the id column", (Shell.Width(Shell.ID_COLUMN) or 0) .. " plus a gap")
+	return lines
+end
+
 --- The topics the help is divided into, and the order they are offered in.
 -- The whole of it runs to some thirty lines, which is a wall rather than an
 -- answer, so what a reader is most likely to want -- what can be typed -- comes
@@ -1086,6 +1120,11 @@ Shell.SUBCOMMANDS = {
 	end,
 	info = function()
 		say(Shell.InfoLine())
+	end,
+	debug = function()
+		for _, line in ipairs(Shell.DebugLines()) do
+			say(line)
+		end
 	end,
 	-- Not offered in the help: it reads as a report to whoever wrote the addon
 	-- rather than as an answer, and a player told to run it learns nothing. It

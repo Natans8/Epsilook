@@ -165,6 +165,18 @@ def test_the_info_line_says_what_is_loaded(engine: LuaRuntime) -> None:
     assert cast(bytes, thousands(280180)).decode() == "280,180"
 
 
+def test_the_debug_report_says_what_it_could_not_measure(engine: LuaRuntime) -> None:
+    """A report of the numbers a layout was computed from, honest where there are none.
+
+    Under a bare interpreter there is no frame and no font, and saying so is the
+    point: a zero printed as though it were a measurement is worse than nothing.
+    """
+    lines = cast(LuaTable, lua_function(engine, b"Epsilook.Shell.DebugLines")())
+    text = "\n".join(cast(bytes, lines[i]).decode() for i in range(1, len(list(lines.keys())) + 1))
+    assert "9.2.7-epsilon.45745" in text, "it leads with what is loaded"
+    assert "nothing can measure" in text
+
+
 def test_help_answers_what_was_asked_and_not_everything(engine: LuaRuntime) -> None:
     """The commands alone, then a topic at a time, each read off the declarations.
 
