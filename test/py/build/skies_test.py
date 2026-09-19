@@ -9,13 +9,26 @@ everywhere rather than the sky of being dead.
 from __future__ import annotations
 
 import support
-from pack.model.sections.skies import PLACE_MAP, PLACE_WHOLE, PLACE_ZONE, representative
+from dataclasses import replace
+
+from pack.derive.context import DeriveContext, Reads
+from pack.model.section import Section, SectionColumns
+from pack.model.sections.skies import (
+    PLACE_MAP,
+    PLACE_WHOLE,
+    PLACE_ZONE,
+    SKY_PRESETS,
+    SKY_RAMPS,
+    representative,
+)
 from pack.routes.skies import (
     CONDITIONS,
     RAMP_COLORS,
+    Skybox,
     SkyPlace,
     SkyPreset,
     SkyRoster,
+    SkyStop,
     read_skies,
     spaced_name,
 )
@@ -136,3 +149,44 @@ def test_a_zone_name_is_spaced_the_way_a_reader_spells_it() -> None:
 def test_the_three_place_kinds_are_distinct() -> None:
     """They ship as numbers, so a reader tells them apart by value."""
     assert len({PLACE_ZONE, PLACE_MAP, PLACE_WHOLE}) == 3
+
+
+def roster_of(presets: dict[int, SkyPreset], skyboxes: dict[int, Skybox]) -> SkyRoster:
+    """A roster of the presets and domes a test names, with nowhere to be seen."""
+    return SkyRoster(skyboxes=skyboxes, presets=presets, places={})
+
+
+def stop(time: int, colour: int) -> SkyStop:
+    """One stop holding the same colour in every channel."""
+    return SkyStop(time=time, colors=tuple([colour] * len(RAMP_COLORS)), fog_end=100.0, shadow=0.5, cloud=0.25)
+
+
+def produced(section: Section, roster: SkyRoster) -> SectionColumns:
+    """One sky section, handed only the fields its record declares."""
+    context = replace(DeriveContext(build=None), skies=roster)  # type: ignore[arg-type]
+    return section.produce(Reads(context, section.reads))
+
+
+def test_a_preset_carries_its_ramp_whether_or_not_its_dome_stands_for_it() -> None:
+    """The spells name presets, and only one preset per dome is the dome's own,
+    so a ramp keyed by dome leaves the rest of them colourless."""
+    roster = roster_of(
+        {
+            10: SkyPreset(1, 0, 0.0, [stop(0, 111), stop(1440, 222)]),
+            11: SkyPreset(1, 0, 0.0, [stop(0, 333)]),
+        },
+        {1: Skybox(name=r"Environments\Stars\Dome.mdx", file=4242, celestial=0, flags=3)},
+    )
+    ramp = produced(SKY_RAMPS, roster)
+    assert ramp["paramIds"] == [10, 10, 11]
+    assert ramp["skyTopColors"] == [111, 222, 333]
+
+
+def test_a_preset_that_draws_no_dome_is_listed_under_nought() -> None:
+    """It still tints the sky, and a spell can still name it."""
+    roster = roster_of({12: SkyPreset(0, 0, 0.0, [stop(0, 444)]), 13: SkyPreset(99, 0, 0.0, [])}, {})
+    listed = produced(SKY_PRESETS, roster)
+    assert listed["ids"] == [12, 13]
+    # 99 is a dome this build does not carry, which reads the same as none
+    assert listed["skyboxIds"] == [0, 0]
+    assert listed["flat"] == [1, 1]

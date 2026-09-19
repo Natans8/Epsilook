@@ -615,8 +615,8 @@ flowchart TD
 | **roster**     | A subject that is not a spell, keyed by its own id, with parallel sections hanging off it      |
 
 **The sky is the first roster whose subject is not a spell.** `skyboxes` is keyed by `LightSkybox` id and
-`skyPlaces`, `skySpells` and `skyRamps` are parallel rows hanging off it, the same one-to-many shape `screenTextures`
-uses. It lands in its own `sky` module, so a pack carries it without every other pack paying for it.
+`skyPlaces` and `skySpells` are parallel rows hanging off it, the same one-to-many shape `screenTextures` uses;
+`skyPresets` and `skyRamps` hang off the preset instead, which is the id a spell names. It lands in its own `sky` module, so a pack carries it without every other pack paying for it.
 
 Nothing but `spells` is dense, and that is the point: a column every spell has is rare, and everything else is a count,
 a reference or a value somebody else's row also uses.
@@ -1073,8 +1073,16 @@ rather than the thing it hangs off, so the roster is the domes and the spell col
 | **dome**      | `skyboxes`                          | One row per `LightSkybox`, standing for the preset most lights draw |
 | **place**     | `skyPlaces`                         | A `ZoneLight` name where there is one, else the map it stands on   |
 | **condition** | `skyboxes.conditions`, `skyConditions` | A mask over a `Light` row's eight slots, and what each bit means |
-| **ramp**      | `skyRamps`                          | The preset's day, one row per stop; a reader between two interpolates |
+| **preset**    | `skyPresets`                        | Every `LightParams` row, the dome it draws, and whether its day is flat |
+| **ramp**      | `skyRamps`                          | A preset's day, one row per stop; a reader between two interpolates |
 | **spell**     | `skySpells`                         | Through the screen effect a spell's aura names and the preset that row carries |
+
+**The colours belong to the preset, not to the dome.** A dome's row stands for one preset of the many that pick it, and
+a spell or a screen effect names whichever preset it likes: on the default pack 1,328 of the 2,050 sky spells set one
+that is not its dome's own, and the screen effects between them name nearly every preset the build has. So `skyRamps` is
+keyed by `paramIds` and carries every preset, and `skyPresets` says which dome each draws, nought where it only tints
+the sky. A reader with a spell goes `skySpells.paramIds` to the ramp, and one looking at a dome goes through
+`skyboxes.params`.
 
 **A `Light` row carries eight LightParams, and they are conditions rather than a set.** Clear, clear underwater, storm,
 storm underwater, death, and three the client documents as unknown. Reading them together is not a rounding error: the

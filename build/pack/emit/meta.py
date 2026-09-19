@@ -20,8 +20,16 @@ from ..derive import DeriveContext
 from ..model import SECTIONS, CountFamily, Section, SectionColumns
 from ..progress import detail
 
-PACK_FORMAT = 68
+PACK_FORMAT = 69
 """What shape the artifact is in.
+
+69 gives every light preset its colours. `skyRamps` is keyed by the preset
+rather than by the dome it draws, and carries every preset the build has
+instead of the one each dome's row stands for; `skyPresets` lists them, with
+the dome each draws and whether its ramp is flat. A preset is what a spell and
+a screen effect name, and most of them are not their dome's own, so a reader
+handed one could not say what colour the sky turns. A reader of 68 finds the
+ramps keyed by a column that is gone.
 
 68 gives an effect its numbers. `effectAmounts` carries, per spell and effect
 index, the amount resolved at the build's level cap, both radii, the facing,

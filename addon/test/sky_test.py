@@ -128,3 +128,49 @@ def test_every_action_names_a_field_the_record_carries(engine: LuaRuntime) -> No
     sky = record(engine, b"return Epsilook:GetSkyDataByID(9)")
     for action in actions:
         assert cast(Record, action)["needs"] in sky
+
+
+def test_a_preset_a_spell_sets_carries_its_own_colours(engine: LuaRuntime) -> None:
+    """Shadowmoon is shared by seventeen presets, and a spell may set any of
+    them; the one the dome's row stands for is only one answer of the many."""
+    # language=Lua
+    own = record(engine, b"return Epsilook:GetSkyLightByParam(2124, 1440)")
+    # language=Lua
+    sibling = listed(
+        engine,
+        b"""
+            local _, params = Epsilook:GetSkySpells(9)
+            local found = {}
+            for at = 1, #params do
+                if params[at] ~= 2124 and Epsilook:GetSkyLightByParam(params[at], 1440) then
+                    found[#found + 1] = params[at]
+                end
+            end
+            return found
+        """,
+    )
+    assert isinstance(own["top"], (int, float))
+    assert sibling, "a dome's other presets carry ramps of their own"
+
+
+def test_a_dome_answers_through_the_preset_its_row_stands_for(engine: LuaRuntime) -> None:
+    """The dome call is the preset call underneath, so the two agree."""
+    # language=Lua
+    by_dome = record(engine, b"return Epsilook:GetSkyLight(9, 600)")
+    # language=Lua
+    by_param = record(engine, b"return Epsilook:GetSkyLightByParam(2124, 600)")
+    assert by_dome == by_param
+
+
+def test_a_preset_nothing_carries_answers_nothing(engine: LuaRuntime) -> None:
+    # language=Lua
+    assert engine.execute(b"return Epsilook:GetSkyLightByParam(999999, 0)") is None
+
+
+def test_a_preset_says_which_dome_it_draws(engine: LuaRuntime) -> None:
+    """A spell names a preset, and the dome is what a reader wants to show."""
+    # language=Lua
+    preset = record(engine, b"return Epsilook:GetSkyPresetByID(2124)")
+    assert preset["skybox"] == 9
+    # language=Lua
+    assert engine.execute(b"return Epsilook:GetSkyPresetByID(999999)") is None

@@ -83,6 +83,7 @@ REGISTERED_ORDER = (
     "skyboxes",
     "skyPlaces",
     "skySpells",
+    "skyPresets",
     "skyRamps",
     "skyConditions",
     "soundKitNames",

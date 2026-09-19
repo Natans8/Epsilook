@@ -153,17 +153,41 @@ def spells(reads: Reads) -> SectionColumns:
     }
 
 
+def presets(reads: Reads) -> SectionColumns:
+    """Every light preset the build carries, and the dome each draws.
+
+    The roster is still the domes, but a preset is what a spell and a screen
+    effect actually name, and most of them are not the one their dome's row
+    stands for. Listing them is what lets a reader handed one of those ids say
+    which dome it draws and find its colours.
+    """
+    skies: SkyRoster = reads.skies
+    listed = sorted(skies.presets)
+    return {
+        "ids": listed,
+        # the dome it draws, nought for a preset that only tints the sky
+        "skyboxIds": [
+            skies.presets[preset].skybox if skies.presets[preset].skybox in skies.skyboxes else 0 for preset in listed
+        ],
+        "flat": [int(flat_ramp(skies.presets[preset])) for preset in listed],
+    }
+
+
 def ramps(reads: Reads) -> SectionColumns:
-    """The chosen presets' ramps, one row per stop.
+    """Every preset's ramp, one row per stop.
 
     A stop is keyed at a half-minute of the 2,880-half-minute day and a reader
     between two stops interpolates; shipping the stops rather than a fixed set
     of hours is what lets a consumer ask for any moment.
+
+    Keyed by the preset rather than by the dome it draws: a dome's row stands
+    for one preset of the many that pick it, and the rest are what the spells
+    and the screen effects name.
     """
     skies: SkyRoster = reads.skies
-    stops = [(sky, stop) for sky, preset in chosen_presets(reads) for stop in skies.presets[preset].ramp]
+    stops = [(preset, stop) for preset in sorted(skies.presets) for stop in skies.presets[preset].ramp]
     return {
-        "skyboxIds": [sky for sky, _ in stops],
+        "paramIds": [sky for sky, _ in stops],
         "times": [stop.time for _, stop in stops],
         "fogEnds": [stop.fog_end for _, stop in stops],
         "shadowOpacities": [stop.shadow for _, stop in stops],
@@ -230,15 +254,29 @@ SKY_SPELLS = register(
     )
 )
 
+SKY_PRESETS = register(
+    Section(
+        name="skyPresets",
+        doc="Every light preset, and the dome it draws; what a spell or a screen effect names.",
+        module="sky",
+        produce=presets,
+        columns=("ids", "skyboxIds", "flat"),
+        reads=("skies",),
+        needs=("LightSkybox", "LightParams"),
+        counts=(size("skyPresets", "ids"),),
+    )
+)
+
 SKY_RAMPS = register(
     Section(
         name="skyRamps",
-        doc="The colour of the day for each dome's preset, one row per stop.",
+        doc="The colour of the day for every preset, one row per stop.",
         module="sky",
         produce=ramps,
-        columns=("skyboxIds", "times", "fogEnds", "shadowOpacities", "cloudDensities", *RAMP_COLUMNS),
-        reads=("skies", "sky_spells"),
+        columns=("paramIds", "times", "fogEnds", "shadowOpacities", "cloudDensities", *RAMP_COLUMNS),
+        reads=("skies",),
         needs=("LightSkybox", "LightParams", "LightData"),
+        counts=(size("skyRamps", "paramIds"),),
     )
 )
 

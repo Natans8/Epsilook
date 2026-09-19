@@ -1290,13 +1290,14 @@ end
 -- are a couple of thousand rows in the largest of them.
 local skyRuns = {}
 
-local function runsOf(section)
-	local found = skyRuns[section]
+local function runsOf(section, column)
+	column = column or "skyboxIds"
+	local found = skyRuns[section .. "." .. column]
 	if found then
 		return found
 	end
 	found = {}
-	local keys = Data.ReadAll("sky", section, "skyboxIds") or {}
+	local keys = Data.ReadAll("sky", section, column) or {}
 	for row = 1, #keys do
 		local run = found[keys[row]]
 		if run then
@@ -1305,7 +1306,7 @@ local function runsOf(section)
 			found[keys[row]] = { row - 1, 1 }
 		end
 	end
-	skyRuns[section] = found
+	skyRuns[section .. "." .. column] = found
 	return found
 end
 
@@ -1479,58 +1480,102 @@ local function blend(from, to, part)
 	return out
 end
 
---- What the sky holds at one moment of the day.
+--- What a light preset draws, by its own id.
+-- A preset is what a spell and a screen effect name, and most of them are not
+-- the one their dome's row stands for, so this is how a reader turns one of
+-- those ids into the dome to show.
+-- @param paramID the LightParams id
+-- @param target an optional table to fill instead of allocating one
+-- @return a record of `id`, `skybox` (nought where the preset draws no dome,
+--   only tinting the sky) and `flat` (whether its day never changes), or nil
+--   where this build has no such preset
+function Epsilook:GetSkyPresetByID(paramID, target)
+	mounted(self)
+	local node, blob = Data.GetColumn("sky", "skyPresets", "ids")
+	local row = node and Reader.rowOf(blob, node, paramID)
+	if not row then
+		return nil
+	end
+	local out = target or {}
+	out.id = paramID
+	out.skybox = cell("skyPresets", "skyboxIds", row, 0)
+	out.flat = cell("skyPresets", "flat", row, 0) == 1
+	return out
+end
+
+--- What one preset holds at one moment of the day.
 -- The ramp ships as stops rather than as a fixed set of hours, so any moment
 -- can be asked for; between two stops the colours are blended, and the day
 -- wraps, so a moment after the last stop reads back towards the first.
--- @param skyboxID the LightSkybox id
+-- @param paramID the LightParams id, which is what a spell and a screen effect
+--   name; a dome's own is the `param` of its SkyData
 -- @param time a half-minute of the day, from zero to 2879
 -- @param target an optional table to fill instead of allocating one
--- @return a SkyLight, or nil where the dome has no ramp
-function Epsilook:GetSkyLight(skyboxID, time, target)
+-- @return a SkyLight, or nil where the preset has no ramp
+function Epsilook:GetSkyLightByParam(paramID, time, target)
 	mounted(self)
-	local run = runsOf("skyRamps")[skyboxID]
+	local run = runsOf("skyRamps", "paramIds")[paramID]
 	if not run then
 		return nil
 	end
-	local times = Data.ReadAll("sky", "skyRamps", "times") or {}
-	local first, count = run[1] + 1, run[2]
+	local first, last = run[1], run[1] + run[2] - 1
 	time = time % 2880
+	local function at(column, row)
+		return cell("skyRamps", column, row, 0)
+	end
 
 	-- The stop at or before the moment, and the one after it, wrapping the day.
-	local before = first + count - 1
-	for at = first, first + count - 1 do
-		if times[at] > time then
-			before = at - 1
+	local before = last
+	for row = first, last do
+		if at("times", row) > time then
+			before = row - 1
 			break
 		end
 	end
 	if before < first then
-		before = first + count - 1
+		before = last
 	end
 	local after = before + 1
-	if after > first + count - 1 then
+	if after > last then
 		after = first
 	end
-	local span = (times[after] - times[before]) % 2880
-	local part = span > 0 and (((time - times[before]) % 2880) / span) or 0
+	local span = (at("times", after) - at("times", before)) % 2880
+	local part = 0
+	if span > 0 then
+		part = ((time - at("times", before)) % 2880) / span
+	end
 
 	local out = target or {}
-	for at = 1, #SKY_LIGHT_FIELDS do
-		local name, column = SKY_LIGHT_FIELDS[at][1], SKY_LIGHT_FIELDS[at][2]
-		local values = Data.ReadAll("sky", "skyRamps", column)
-		out[name] = values and blend(values[before], values[after], part) or 0
+	for index = 1, #SKY_LIGHT_FIELDS do
+		local name, column = SKY_LIGHT_FIELDS[index][1], SKY_LIGHT_FIELDS[index][2]
+		out[name] = blend(at(column, before), at(column, after), part)
 	end
 	for _, pair in ipairs({
 		{ "fogEnd", "fogEnds" },
 		{ "shadow", "shadowOpacities" },
 		{ "cloud", "cloudDensities" },
 	}) do
-		local values = Data.ReadAll("sky", "skyRamps", pair[2])
-		local from, to = values and values[before] or 0, values and values[after] or 0
+		local from, to = at(pair[2], before), at(pair[2], after)
 		out[pair[1]] = from + (to - from) * part
 	end
 	return out
+end
+
+--- What the sky a dome draws holds at one moment of the day.
+-- The dome's own preset is the one its row stands for; the others that pick it
+-- are reached with GetSkyLightByParam.
+-- @param skyboxID the LightSkybox id
+-- @param time a half-minute of the day, from zero to 2879
+-- @param target an optional table to fill instead of allocating one
+-- @return a SkyLight, or nil where the dome has no ramp
+function Epsilook:GetSkyLight(skyboxID, time, target)
+	mounted(self)
+	local row = self:GetSkyIndexByID(skyboxID)
+	if not row then
+		return nil
+	end
+	local param = cell("skyboxes", "params", row, 0)
+	return self:GetSkyLightByParam(param, time, target)
 end
 
 --- Every dome whose name, zone, map or spell contains the text.
