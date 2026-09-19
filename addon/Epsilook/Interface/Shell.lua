@@ -1009,7 +1009,12 @@ local function run(job)
 		do
 			local ok, err = coroutine.resume(running)
 			if not ok then
-				say(Shell.Said(RED .. tostring(err) .. END))
+				-- A search runs on after the command that began it has returned,
+				-- so the command's guard does not reach it. Reported the same way,
+				-- with the job's own stack, which is gone once it is thrown away.
+				local trace = debug and debug.traceback and debug.traceback(running, tostring(err))
+					or err
+				Shell.Report(trace)
 				running = nil
 			end
 		end
@@ -1448,7 +1453,7 @@ local reported = {}
 -- Called at the site of the fault, which is what keeps the stack a report is
 -- read by. Repeats of one fault are dropped, so a broken row reports once
 -- rather than every time the mouse crosses it.
-local function report(fault)
+function Shell.Report(fault)
 	local text = tostring(fault)
 	if reported[text] then
 		return
@@ -1485,7 +1490,7 @@ function Shell.Safely(fn, onFault)
 		local given, args = select("#", ...), { ... }
 		local ok = xpcall(function()
 			return fn(unpack(args, 1, given))
-		end, report)
+		end, Shell.Report)
 		if not ok and onFault then
 			pcall(onFault)
 		end

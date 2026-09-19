@@ -564,6 +564,12 @@ local located = {}
 -- @param name the vocabulary
 -- @return a table with values, blob, and keys plus textKeys where paired; or nil
 function Data.LocateVocab(name)
+	-- A property that names no vocabulary asks with nothing, and the answer is
+	-- that there is none. Asked through to the cache below, it would raise on
+	-- the key instead, turning an absence into a fault.
+	if name == nil then
+		return nil
+	end
 	local found = located[name]
 	if found ~= nil then
 		return found or nil

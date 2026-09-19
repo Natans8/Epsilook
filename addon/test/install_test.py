@@ -194,3 +194,9 @@ def test_a_door_that_does_not_fault_passes_its_arguments_through(bare: LuaRuntim
         return seen
     """
     assert unwrap(bare.execute(code)) == "1nil3", "a nil in the middle survives"
+
+
+def test_a_property_with_no_vocabulary_asks_and_is_told_none(engine: LuaRuntime) -> None:
+    """An absence is an answer. Asked through to the cache, nil raised on the key."""
+    # language=Lua
+    assert engine.execute(b"return Epsilook.Data.LocateVocab(nil)") is None
