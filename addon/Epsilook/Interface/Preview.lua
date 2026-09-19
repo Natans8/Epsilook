@@ -16,9 +16,8 @@
 -- in this client is: the client's own pinned chat link, ItemRefTooltip, is
 -- movable, toplevel, and closed with a button. So one appears where it was
 -- asked for, is dragged wherever it is wanted, and rises above its fellows when
--- it is clicked. Nothing arranges them, because nothing in this interface
--- arranges anything and a column of frames beside the chat is not a shape a
--- player has ever seen here.
+-- it is clicked. Nothing arranges them after that, because the player put them
+-- where they are.
 --
 -- ⚠ Only a model is drawn today. What a subject is and how it is drawn is a row
 -- in `SUBJECTS`, so an animation, a creature or a spell's own visual is a row
@@ -31,10 +30,14 @@ local Preview = {}
 Epsilook.Preview = Preview
 
 --- How large a look is, how far the next one is offset from the last, and how
--- many may be pinned at once. They are offset rather than stacked so that a
--- second one does not land exactly on the first and read as though nothing
--- happened.
-Preview.SIZE, Preview.GAP, Preview.MOST = 180, 24, 4
+-- many may be pinned at once.
+--
+-- It does not follow the pointer. A chat frame sits near the foot of the screen
+-- and a look pinned to the pointer there has only the room left between the two
+-- to be drawn in, which is not enough of a model to be worth looking at. So it
+-- opens above the chat, where the whole height of the screen is, and is as
+-- large as that allows rather than as small as the pointer allows.
+Preview.SIZE, Preview.GAP, Preview.MOST = 300, 24, 4
 
 --- What can be looked at, and how. `from` is what the subject needs off a part;
 -- `draw` puts it on a model frame. A part offers a preview when its `from`
@@ -123,20 +126,22 @@ local hovered
 --- The looks that have been pinned, oldest first.
 local pinned = {}
 
---- Where the pointer is, in the coordinates a frame is placed in, or nothing.
-local function cursor()
-	local x, y
-	if _G.GetCursorPosition then
-		x, y = _G.GetCursorPosition()
+--- Put a look where there is room for it: standing on the chat frame it belongs
+-- to, which leaves it the height of the screen to be drawn in, and falling back
+-- to the middle where there is no chat frame to stand on.
+-- @param frame the look
+-- @param step how far to offset it, for a look that is not the first
+local function place(frame, step)
+	frame:ClearAllPoints()
+	local chat = _G.DEFAULT_CHAT_FRAME
+	if chat and chat.GetName and chat:GetName() then
+		frame:SetPoint("BOTTOMLEFT", chat, "TOPLEFT", step, Preview.GAP + step)
+	else
+		frame:SetPoint("CENTER", _G.UIParent, "CENTER", step, step)
 	end
-	local scale = _G.UIParent and _G.UIParent:GetEffectiveScale()
-	if not (x and y and scale and scale > 0) then
-		return nil
-	end
-	return x / scale, y / scale
 end
 
---- Show a part beside the pointer while it is hovered.
+--- Show a part while it is hovered, above the chat where there is room.
 -- @param part a PartData
 -- @return whether there was something to show
 function Preview.Hover(part)
@@ -146,13 +151,7 @@ function Preview.Hover(part)
 	if not draw(hovered, part) then
 		return false
 	end
-	hovered:ClearAllPoints()
-	local x, y = cursor()
-	if x then
-		hovered:SetPoint("BOTTOMLEFT", _G.UIParent, "BOTTOMLEFT", x + Preview.GAP, y)
-	else
-		hovered:SetPoint("CENTER")
-	end
+	place(hovered, 0)
 	hovered:Show()
 	return true
 end
@@ -173,16 +172,9 @@ function Preview.Pin(part)
 	if not draw(frame, part) then
 		return false
 	end
-	local x, y = cursor()
-	frame:ClearAllPoints()
-	if x then
-		-- Offset by however many are already up, so the newest is visibly its own
-		-- rather than landing exactly on the one before it.
-		local step = #pinned * Preview.GAP
-		frame:SetPoint("BOTTOMLEFT", _G.UIParent, "BOTTOMLEFT", x + Preview.GAP + step, y - step)
-	else
-		frame:SetPoint("CENTER")
-	end
+	-- Offset by however many are already up, so the newest is visibly its own
+	-- rather than landing exactly on the one before it.
+	place(frame, (#pinned + 1) * Preview.GAP)
 	table.insert(pinned, frame)
 	while #pinned > Preview.MOST do
 		local oldest = table.remove(pinned, 1)
