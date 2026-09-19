@@ -88,6 +88,17 @@ function Preview.ModelOf(part)
 	return fileID
 end
 
+--- The first display a part names, or nil. A creature wears several and the
+-- game picks one when it appears, so the first is the one shown.
+-- @param part a PartData
+function Preview.DisplayOf(part)
+	local worn = Epsilook:GetPartDisplays(part)[1]
+	if not worn then
+		return nil
+	end
+	return worn.id
+end
+
 --- One moment of a cast, empty. `has` seeds a field with its one value, which
 -- is how a lone subject becomes a sequence of one.
 -- @param at the stage's stored number, or nil for a moment of its own
@@ -110,38 +121,43 @@ local function beat(at, word, has)
 end
 
 --- What can be looked at, and how, in the order a part is tried against them.
--- `from` is what the subject needs off a part; a part offers a preview when the
--- first `from` resolves, so the order is which reading of a part wins where it
--- could be read two ways. Teaching this one more subject is a row.
 --
--- A subject then says what it IS, and the two answers are drawn differently.
--- Something that happens to a body carries `stage`, which hands back one moment
--- of a cast in the shape a spell's stages already have, and is played on a loop,
--- because an animation runs through once in about a second and a thing that has
--- already finished by the time the eye reaches it is not a preview. Something
--- that simply IS carries `draw` and is put up once.
+-- `from` is what the subject needs off a part, and a part offers a preview when
+-- the first `from` resolves, so the order is which reading of a part wins where
+-- it could be read two ways: a creature before the file it is built from,
+-- because a display is that model already wearing its textures and the file
+-- alone is a grey shape, and a mount before either, because you sit on one
+-- rather than turn into one.
 --
--- A creature is drawn as its display rather than as its model file, because a
--- display is the model already wearing its textures, and the file alone is a
--- grey shape. A part naming a creature names every display the creature wears,
--- so the first is the one shown.
+-- `put` is the whole of what happens to the look, so a subject is a row rather
+-- than a row plus a branch somewhere else. The three ways to put something up
+-- are named once each below and a subject picks one: looped, because an
+-- animation runs through in about a second and a thing already over by the time
+-- the eye reaches it is not a preview; seated, for the one thing a body carries
+-- rather than becomes; and still, for a thing that simply is.
 Preview.SUBJECTS = {
 	{
 		word = "animkit",
 		from = function(part)
-			return part.axis == "anim" and stored(part, "id") or nil
+			if part.axis ~= "anim" then
+				return nil
+			end
+			return stored(part, "id")
 		end,
-		stage = function(kitID)
-			return beat(nil, nil, { animkits = kitID })
+		put = function(frame, kitID)
+			Preview.Loop(frame, "animkits", kitID)
 		end,
 	},
 	{
 		word = "anim",
 		from = function(part)
-			return part.axis == "anim" and stored(part, "anim") or nil
+			if part.axis ~= "anim" then
+				return nil
+			end
+			return stored(part, "anim")
 		end,
-		stage = function(animation)
-			return beat(nil, nil, { anims = animation })
+		put = function(frame, animation)
+			Preview.Loop(frame, "anims", animation)
 		end,
 	},
 	{
@@ -152,8 +168,8 @@ Preview.SUBJECTS = {
 			end
 			return stored(part, "id")
 		end,
-		stage = function(kitID)
-			return beat(nil, nil, { kits = kitID })
+		put = function(frame, kitID)
+			Preview.Loop(frame, "kits", kitID)
 		end,
 	},
 	{
@@ -162,19 +178,19 @@ Preview.SUBJECTS = {
 			if part.kind ~= "mount" then
 				return nil
 			end
-			local displays = Epsilook:GetPartDisplays(part)
-			return displays[1] and displays[1].id or nil
+			return Preview.DisplayOf(part)
 		end,
-		seats = true,
+		put = function(frame, displayID)
+			Preview.Mount(frame, displayID)
+		end,
 	},
 	{
 		word = "creature",
 		from = function(part)
-			local displays = Epsilook:GetPartDisplays(part)
-			return displays[1] and displays[1].id or nil
+			return Preview.DisplayOf(part)
 		end,
-		draw = function(actor, displayID)
-			pcall(actor.SetModelByCreatureDisplayID, actor, displayID)
+		put = function(frame, displayID)
+			Preview.Still(frame, "SetModelByCreatureDisplayID", displayID)
 		end,
 	},
 	{
@@ -182,10 +198,8 @@ Preview.SUBJECTS = {
 		from = function(part)
 			return Preview.ModelOf(part)
 		end,
-		draw = function(actor, fileID)
-			-- A file the client has no model for leaves the frame empty, which is
-			-- a better answer to a hover than an error on every one.
-			pcall(actor.SetModelByFileID, actor, fileID)
+		put = function(frame, fileID)
+			Preview.Still(frame, "SetModelByFileID", fileID)
 		end,
 	},
 }
@@ -326,8 +340,10 @@ function Preview.Mount(frame, displayID)
 	end
 	frame.body:SetAnimation(0)
 	frame.rider:Show()
-	if not frame.rider:SetModelByUnit("player", true) then
-		-- The mount alone is still the answer to what the spell gives you.
+	local seated, riding = pcall(frame.rider.SetModelByUnit, frame.rider, "player", true)
+	if not (seated and riding) then
+		-- The mount alone is still the answer to what the spell gives you, and
+		-- the client's own list takes the same way out when a rider will not load.
 		frame.rider:Hide()
 		return true
 	end
@@ -409,6 +425,28 @@ local function play(frame)
 	end)
 end
 
+--- Put one thing up and leave it there, which is every subject that is a thing
+-- rather than something happening.
+-- @param frame the look
+-- @param method the actor method that takes this kind of id
+-- @param id the id
+function Preview.Still(frame, method, id)
+	pcall(frame.body[method], frame.body, id)
+	frame.body:SetPosition(0, 0, 0)
+	frame.body:SetYaw(frame.facing or Preview.FACING)
+end
+
+--- Play one thing on the player's own body, over and over, as a sequence of
+-- one. A lone animation has no final state to hold, so it names no held beat.
+-- @param frame the look
+-- @param field which of a beat's lists it belongs in
+-- @param id the id
+function Preview.Loop(frame, field, id)
+	Preview.Body(frame)
+	frame.sequence, frame.hold = { beat(nil, nil, { [field] = id }) }, nil
+	play(frame)
+end
+
 --- Put a subject on a frame, the same way whether it is hovered or pinned.
 --
 -- ⚠ The frame must already be SHOWN. A model frame applies nothing while it is
@@ -428,18 +466,7 @@ local function draw(frame, part)
 	frame.rider:ClearModel()
 	frame.rider:Hide()
 	frame.facing = Preview.FACING
-	if subject.stage then
-		-- It happens to a body, so there has to be a body for it to happen to.
-		Preview.Body(frame)
-		frame.sequence, frame.hold = { subject.stage(value) }, nil
-		play(frame)
-	elseif subject.seats then
-		Preview.Mount(frame, value)
-	else
-		subject.draw(frame.body, value)
-	end
-	frame.body:SetPosition(0, 0, 0)
-	frame.body:SetYaw(frame.facing)
+	subject.put(frame, value)
 	return true
 end
 

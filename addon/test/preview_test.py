@@ -144,33 +144,31 @@ def test_a_creature_is_previewed_as_its_display(engine: LuaRuntime) -> None:
     assert value(engine, code) == "found"
 
 
-def test_a_thing_that_happens_to_a_body_is_played_rather_than_drawn(engine: LuaRuntime) -> None:
-    """An animation runs through once in about a second, so it has to loop.
+def test_a_part_is_read_as_the_richest_thing_it_names(engine: LuaRuntime) -> None:
+    """The order of the subjects is which reading wins where two could apply.
 
-    A subject carries a `stage` when it happens to a body and a `draw` when it
-    simply is, and that split is what decides whether the clock runs for it.
+    A creature comes before the file it is built from, since a display is that
+    model already wearing its textures; a mount comes before either, since you
+    sit on one rather than turn into one.
     """
     # language=Lua
     code = b"""
         local out = {}
         for _, subject in ipairs(Epsilook.Preview.SUBJECTS) do
-            local how = ":drawn"
-            if subject.stage then
-                how = ":played"
-            elseif subject.seats then
-                how = ":seated"
+            out[#out + 1] = subject.word
+            if type(subject.put) ~= "function" then
+                return "a subject with no way to put it up: " .. subject.word
             end
-            out[#out + 1] = subject.word .. how
         end
         return out
     """
     assert cast(list[str], value(engine, code)) == [
-        "animkit:played",
-        "anim:played",
-        "visual:played",
-        "mount:seated",
-        "creature:drawn",
-        "model:drawn",
+        "animkit",
+        "anim",
+        "visual",
+        "mount",
+        "creature",
+        "model",
     ]
 
 
@@ -304,9 +302,9 @@ def test_a_mount_is_its_own_subject_so_a_rider_can_be_seated(engine: LuaRuntime)
                 if not subject then
                     return "the mount offered nothing"
                 end
-                return subject.word .. ":" .. tostring(subject.seats) .. ":" .. tostring(display)
+                return subject.word .. ":" .. tostring(display)
             end
         end
         return "no mount row"
     """
-    assert value(engine, code) == "mount:true:2404"
+    assert value(engine, code) == "mount:2404"
