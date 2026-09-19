@@ -43,6 +43,9 @@ Inspect.PART = "part"
 Inspect.GROUP = "group"
 Inspect.LIST = "list"
 Inspect.COPY = "copy"
+
+--- The verb that keeps a look at a part until it is closed.
+Inspect.PREVIEW = "preview"
 Inspect.COPYGROUP = "copygroup"
 
 --- The copy verb a line's verb draws, and the line verb a copy stands for.
@@ -960,6 +963,11 @@ function Inspect.ActionLinks(spellID, part, n, actions, verb)
 			out[#out + 1] = Shell.Link(spellID, action.key, action.label, part.axis, n)
 		end
 	end
+	if Epsilook.Preview and Epsilook.Preview.Offers(part) then
+		-- A thing that is looked at rather than read offers the word; resting on
+		-- the word shows it and clicking keeps it.
+		out[#out + 1] = Shell.Link(spellID, Inspect.PREVIEW, "Preview", part.axis, n)
+	end
 	if COPY_VERB[verb] and Inspect.CopyOf(part, actions) then
 		out[#out + 1] = Shell.Link(spellID, COPY_VERB[verb], "Copy Entry", part.axis, n)
 	end
@@ -1520,6 +1528,10 @@ function Inspect.Execute(spellID, key, axis, n, say)
 	local part = Epsilook:GetPartDataByIndex(spellID, axis, n)
 	if not part then
 		say(Shell.Said(RED .. "that part is no longer in the pack" .. END))
+		return
+	end
+	if key == Inspect.PREVIEW then
+		Epsilook.Preview.Pin(part)
 		return
 	end
 	if COPY_LINE[key] then

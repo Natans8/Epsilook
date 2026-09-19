@@ -1331,6 +1331,10 @@ function Shell.OnHyperlinkEnter(frame, link)
 		hint = Epsilook.Inspect.HintOf(axis, verb)
 	elseif axis then
 		local part = Epsilook:GetPartDataByIndex(id, axis, n)
+		if part and Epsilook.Preview then
+			-- Resting on a part that can be looked at shows it beside the tooltip.
+			Epsilook.Preview.Hover(part)
+		end
 		if part and (verb == Epsilook.Inspect.GROUP or verb == Epsilook.Inspect.COPYGROUP) then
 			Epsilook.Inspect.FillGroupTooltip(tooltip, part)
 		elseif part then
@@ -1348,6 +1352,9 @@ end
 
 --- The tooltip taken down as the mouse leaves one of this addon's links.
 function Shell.OnHyperlinkLeave(_, link)
+	if Epsilook.Preview then
+		Epsilook.Preview.Leave()
+	end
 	local tooltip = _G.GameTooltip
 	if tooltip and link:sub(1, #Shell.LINK + 1) == Shell.LINK .. ":" then
 		tooltip:Hide()

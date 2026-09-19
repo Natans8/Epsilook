@@ -26,6 +26,7 @@ Interface\Config.lua
 Interface\Shell.lua
 Interface\Inspect.lua
 Interface\Spellbook.lua
+Interface\Preview.lua
 Interface\Options.lua
 
 SelfTest.lua
