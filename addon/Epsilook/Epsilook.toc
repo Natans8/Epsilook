@@ -2,7 +2,7 @@
 ## Title: Epsilook
 ## Notes: Search and inspect Epsilon's spell data.
 ## Author: Nataari
-## Version: 0.4
+## Version: 0.3
 ## OptionalDeps: Epsilook_Data
 ## X-Website: https://natans8.github.io/Epsilook/
 ## SavedVariables: EpsilookSettings
