@@ -1224,17 +1224,63 @@ end
 -- @param spellID the spell
 -- @param axis the axis
 -- @param say the function that prints a line
+--- The effect that only says an aura follows. `Effect` and `EffectAura` are two
+-- columns of one row in the game's own table, and the pack ships them as two
+-- rows, so a spell that applies three auras draws three effects saying nothing
+-- but that it does and three auras saying which. The effect is the half with
+-- nothing in it.
+local APPLY_AURA = 6
+
+--- Whether a row says only that another row follows: an apply-aura effect
+-- where the aura it applies is drawn too. The count in the heading is of the
+-- rows the spell has, which is what it has; this is about what is worth a line.
+-- @param spellID the spell
+-- @param part the part about to be drawn
+local function restated(spellID, part)
+	if part.kind ~= "effect" then
+		return false
+	end
+	if Epsilook.Data.GetStored(part.axis, part.kind, part.slot, "name") ~= APPLY_AURA then
+		return false
+	end
+	for i = 1, Epsilook:GetNumParts(spellID, part.axis) do
+		local other = Epsilook:GetPartDataByIndex(spellID, part.axis, i)
+		if
+			other.kind == "aura"
+			and Shell.Same(other.values.phase, part.values.phase)
+			and Shell.Same(other.values.target, part.values.target)
+		then
+			return true
+		end
+	end
+	return false
+end
+
 function Inspect.PrintAxis(spellID, axis, say)
 	local n = Epsilook:GetPartCounts(spellID)[axis] or 0
 	if n == 0 then
 		return
 	end
-	say(GOLD .. n .. " " .. Inspect.Label(axis) .. END)
+	-- The heading counts what is about to be drawn rather than what the spell
+	-- holds, so a reader can count the lines under it and arrive at the same
+	-- number. What the spell holds is what the result line's own count says.
+	local drawn = 0
+	for i = 1, n do
+		if not restated(spellID, Epsilook:GetPartDataByIndex(spellID, axis, i)) then
+			drawn = drawn + 1
+		end
+	end
+	if drawn == 0 then
+		return
+	end
+	say(GOLD .. drawn .. " " .. Inspect.Label(axis) .. END)
 	local seen
 	for i = 1, n do
 		local part = Epsilook:GetPartDataByIndex(spellID, axis, i)
 		local grouping = groupOf(part)
-		if not grouping then
+		if restated(spellID, part) then
+			seen = nil
+		elseif not grouping then
 			seen = nil
 			say(Inspect.PartLine(spellID, part, i))
 		else
