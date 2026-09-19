@@ -164,7 +164,7 @@ test("inside a kind's scope: what its own word asks for, then that kind's proper
     // `file` is missing on purpose: the kind's own word asks for it and plain search reads it, so a row would
     // only offer `missile:{file:...}` — the head said the same thing.
     assert.deepEqual(words(offers, "doors").toSorted((a, b) => a.localeCompare(b)),
-        ["count", "from", "motion", "phase", "projectiles", "target", "to"]);
+        ["count", "from", "motion", "projectiles", "stage", "target", "to"]);
 });
 
 test("a kind with no properties is offered as the bare word it is, never as a door", () => {

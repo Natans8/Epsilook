@@ -393,10 +393,10 @@ def test_a_tooltip_of_short_rows_is_two_columns_and_one_with_a_path_is_lines(eng
                    """)
     rows = lua_function(engine, b"TOOLTIP_ROWS")
     short = re.sub(r"\|c[0-9a-f]{8}|\|r", "", cast(bytes, rows(116, b"anim", 1)).decode()).split("\n")
-    assert "phase\tcast - 3" in short and "anim\tSpellCastDirected - 53" in short
+    assert "stage\tcast - 3" in short and "anim\tSpellCastDirected - 53" in short
     long = re.sub(r"\|c[0-9a-f]{8}|\|r", "", cast(bytes, rows(116, b"sound", 1)).decode()).split("\n")
     assert "file SOUND/SPELLS/SPELL_MA_Revamp_Frostbolt_Precast_Loop_01.ogg" in long
-    assert "phase precast - 1" in long and not [line for line in long if "\t" in line]
+    assert "stage precast - 1" in long and not [line for line in long if "\t" in line]
 
 
 def test_an_effect_says_what_it_does_and_a_bare_one_says_nothing(engine: LuaRuntime) -> None:

@@ -90,8 +90,16 @@ const target = (): Prop => ({
  * the aura for whatever holds under one. The words are the pack's own phase vocabulary, so a start and its end are
  * distinct words and `phase:aura` reaches both by the substring rule.
  */
+/**
+ * When in the spell something happens.
+ *
+ * Stored as `phase` and SPOKEN as `stage`, because a phase on this server is a copy of the world that a player
+ * stands in, and a word that already means that cannot also mean a moment of a cast. The reader's word rides the
+ * declaration, so this costs no pack.
+ */
 const phase = (): Prop => ({
     types: [enumeration],
+    word: "stage",
     hint: t("tooltips:phase"),
     qualifier: true,
 });

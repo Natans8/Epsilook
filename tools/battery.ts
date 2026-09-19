@@ -191,8 +191,8 @@ const PROBES: Probe[] = [
     {v1: "mech:debuff", v2: "mech:debuff", was: 17219, note: "flag became a kind"},
     {v1: "fx:tracking", v2: "fx:tracking", was: 2720, note: "flag became a kind"},
     // Format 64: the pack's own timeline. No 1.0 count exists for any of these.
-    {v1: "mech:{effect phase:launch}", v2: "mech:{effect phase:launch}", note: "the launch phase, one past the client's own events"},
-    {v1: "mech:{effect phase:channel}", v2: "mech:{effect phase:channel}", note: "a channelled spell's effects land at the channel start"},
+    {v1: "mech:{effect stage:launch}", v2: "mech:{effect stage:launch}", note: "the launch phase, one past the client's own events"},
+    {v1: "mech:{effect stage:channel}", v2: "mech:{effect stage:channel}", note: "a channelled spell's effects land at the channel start"},
     {v1: "spell:clock", v2: "spell:clock", note: "every spell with a launch delay or a speed"},
     {v1: "velocity:>40", v2: "velocity:>40", note: "projectiles faster than forty yards a second"},
     {v1: "delay:*", v2: "delay:*", note: "the speeds that are really fixed impact delays"},

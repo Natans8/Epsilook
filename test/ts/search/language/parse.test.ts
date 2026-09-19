@@ -1144,13 +1144,13 @@ it("claims a flag word for the property whose own word it is", () => {
 it("a qualifier that can refuse a word claims it on the kind's word; one that cannot is reached by name", () => {
     // The role vocabulary reads nothing but roles, so `scale:caster` is the audience. The phase word is an open
     // vocabulary: it would claim every bare number a quantity beside it reads and every typo the kind should refuse,
-    // so on the kind's word it claims nothing and `scale:{phase:impact}` is how it is asked.
+    // so on the kind's word it claims nothing and `scale:{stage:impact}` is how it is asked.
     const roled = parse("scale:caster").clauses[0].ask;
     assert.ok(roled !== null && roled.on === "kind" && roled.test?.is === "props");
     assert.deepEqual(roled.test.props.map((ref) => ref.prop), ["target"]);
     assert.equal(invalid("scale:abc").length, 1, "a word no subject reads stays an error");
     assert.equal(invalid("scale:*aura*").length, 1, "and a pattern reaches no open qualifier either");
-    const named = parse("scale:{phase:impact}");
+    const named = parse("scale:{stage:impact}");
     assert.ok(named.clauses[0].ask?.on === "kind");
     assert.deepEqual(errors(named), []);
     assert.equal(warnings(named).length, 1, "a qualifier alone is a weak ask, and says so");
