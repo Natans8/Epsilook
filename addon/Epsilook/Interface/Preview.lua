@@ -46,9 +46,19 @@ Preview.SIZE, Preview.GAP, Preview.MOST = 300, 24, 4
 Preview.FACING = 0.6
 
 --- One property of a part as the pack stores it, which for an id is the number
--- the client takes.
-local function stored(part, prop)
-	return Epsilook:GetPartStored(part.axis, part.kind, part.slot, prop)
+-- the client takes, and as it is spelled; nil where the part does not carry it.
+--
+-- ⛔ Read off the part's own declared properties rather than asked for by name.
+-- A kind refuses a property it does not declare, and the kinds on one axis do
+-- not agree on what they carry: an animation pose has no `id` where an anim kit
+-- does, so asking every anim row for one throws on the third spell tried.
+local function stored(part, name)
+	for _, value in ipairs(Epsilook.Inspect.Values(part)) do
+		if value.name == name then
+			return value.stored, value.text
+		end
+	end
+	return nil
 end
 
 --- The extensions of the files the client loads as a model.
@@ -76,6 +86,20 @@ function Preview.ModelOf(part)
 	return fileID
 end
 
+--- One moment of a cast, empty. `has` seeds a field with its one value, which
+-- is how a lone subject becomes a sequence of one.
+-- @param at the stage's stored number, or nil for a moment of its own
+-- @param word how the stage is spelled
+-- @param has a field name to the single id it holds
+local function beat(at, word, has)
+	local one =
+		{ stage = at or 0, word = word, displays = {}, anims = {}, animkits = {}, kits = {} }
+	for field, id in pairs(has or {}) do
+		one[field] = { id }
+	end
+	return one
+end
+
 --- What can be looked at, and how, in the order a part is tried against them.
 -- `from` is what the subject needs off a part; a part offers a preview when the
 -- first `from` resolves, so the order is which reading of a part wins where it
@@ -99,7 +123,7 @@ Preview.SUBJECTS = {
 			return part.axis == "anim" and stored(part, "id") or nil
 		end,
 		stage = function(kitID)
-			return { stage = 0, kits = {}, animkits = { kitID }, anims = {} }
+			return beat(nil, nil, { animkits = kitID })
 		end,
 	},
 	{
@@ -108,7 +132,19 @@ Preview.SUBJECTS = {
 			return part.axis == "anim" and stored(part, "anim") or nil
 		end,
 		stage = function(animation)
-			return { stage = 0, kits = {}, animkits = {}, anims = { animation } }
+			return beat(nil, nil, { anims = animation })
+		end,
+	},
+	{
+		word = "visual",
+		from = function(part)
+			if not (part.axis == "fx" and part.kind == "visual") then
+				return nil
+			end
+			return stored(part, "id")
+		end,
+		stage = function(kitID)
+			return beat(nil, nil, { kits = kitID })
 		end,
 	},
 	{
@@ -236,6 +272,12 @@ Preview.BEAT, Preview.REST = 1.2, 2
 -- @param model the model frame
 -- @param stage one entry of a sequence
 local function stand(model, stage)
+	for _, display in ipairs(stage.displays) do
+		-- First, because it replaces the body the rest of this stage happens to:
+		-- a spell that turns its target into something and then has it move is
+		-- the something moving.
+		pcall(model.SetDisplayInfo, model, display)
+	end
 	for _, anim in ipairs(stage.anims) do
 		pcall(model.SetAnimation, model, anim)
 	end
@@ -271,12 +313,12 @@ local function play(frame)
 		frame.at = frame.at + 1
 		local stage = frame.sequence and frame.sequence[frame.at]
 		if stage then
-			frame.due = Preview.BEAT
+			if frame.at == frame.hold then
+				frame.due = Preview.BEAT + Preview.REST
+			else
+				frame.due = Preview.BEAT
+			end
 			stand(frame.model, stage)
-		elseif frame.sequence and #frame.sequence > 1 and frame.at == #frame.sequence + 1 then
-			-- Only where there were stages to arrive at: a lone animation has no
-			-- final state to hold, so resting on it is dead time before the replay.
-			frame.due = Preview.REST
 		else
 			-- Setting the body again is what takes the applied visuals back off it.
 			-- ⛔ Not `RefreshUnit`, which is the same addon's path for a unit that is
@@ -309,7 +351,7 @@ local function draw(frame, part)
 	if subject.stage then
 		-- It happens to a body, so there has to be a body for it to happen to.
 		frame.model:SetUnit("player")
-		frame.sequence = { subject.stage(value) }
+		frame.sequence, frame.hold = { subject.stage(value) }, nil
 		play(frame)
 	else
 		subject.draw(frame.model, value)
@@ -374,19 +416,86 @@ function Preview.Place(frame)
 	end
 end
 
+--- The order a spell's stages are played in, and the one a reader is left
+-- looking at.
+--
+-- ⚠ A stage's stored number is NOT its running order, though seven of the nine
+-- fall that way by luck. The channel runs with the cast rather than after the
+-- aura, and launch is the server's own moment rather than one of the client's,
+-- numbered past the end of them; sorting on the number alone puts both after
+-- the spell has finished.
+--
+-- `HELD` is the stage the loop rests on, because a loop has to settle
+-- somewhere and the question a reader is usually asking of a spell is what it
+-- LEAVES. ⛔ That is the aura by name and not the last stage.
+--
+-- ⛔ And `ENDED` is not played at all. On this server an aura runs until it is
+-- cancelled, so the stage where it ends is not a stage of the spell running: it
+-- is what the player sees when they choose to stop it. Playing it would say
+-- every spell undoes itself a moment after it lands, which is the opposite of
+-- what an aura does here. It stays reachable on its own row, like any other
+-- visual kit.
+Preview.ORDER = {
+	precast = 1,
+	cast = 2,
+	channel = 3,
+	launch = 4,
+	travel = 5,
+	travelend = 6,
+	impact = 7,
+	aura = 8,
+	auraend = 9,
+}
+Preview.HELD = "aura"
+Preview.ENDED = "auraend"
+
+--- Where a stage falls in the running order. A word this file does not know
+-- keeps its number and follows the ones it does, so a stage the pack learns
+-- later plays at the end rather than not at all.
+local function rank(stage)
+	local known = Preview.ORDER[stage.word or ""]
+	if known then
+		return known
+	end
+	-- Past every rank above, since `ORDER` is keyed by word and so has no length
+	-- to count; a stage keeps its own number to order it among its fellows.
+	return 100 + stage.stage
+end
+
+--- The kinds that put a creature on the caster's own body, and where each one
+-- happens: a morph at the stage it names, a mount at the stage the loop holds,
+-- since a mount carries no stage and being mounted is what the spell leaves.
+--
+-- ⚠ A mount is drawn as the mount alone, the way the client's own mount list
+-- draws one. A rider on it wants two actors and one model frame has one.
+local BODIES = { morph = "own", mount = "held" }
+
+--- The stage a part happens at, as the pack stores it and as it is spelled. A
+-- part that names no stage is one moment of its own, before every named one.
+local function phaseOf(part)
+	local at, word = stored(part, "phase")
+	return at or 0, word
+end
+
 --- One id gathered against the stage it happens at, refusing a repeat. A row
 -- exists once per audience, so the same thing at the same stage arrives twice.
-local function gather(stages, order, stage, field, id, seen)
-	local once = stage .. ":" .. field .. ":" .. tostring(id)
+local function gather(stages, order, at, field, id, seen)
+	local stage, word = at[1], at[2]
+	-- Keyed by the word where there is one. A stage is a moment, and a row that
+	-- names the moment in words belongs with the others that name it the same,
+	-- whether or not the two were stored against one number -- which is what lets
+	-- a row carrying no stage of its own be placed at one by name.
+	local key = word or ("#" .. stage)
+	local once = key .. ":" .. field .. ":" .. tostring(id)
 	if not id or seen[once] then
 		return
 	end
 	seen[once] = true
-	if not stages[stage] then
-		stages[stage] = { stage = stage, kits = {}, animkits = {}, anims = {} }
-		order[#order + 1] = stages[stage]
+	if not stages[key] then
+		stages[key] = beat(stage, word)
+		order[#order + 1] = stages[key]
 	end
-	local into = stages[stage][field]
+	local into = stages[key][field]
 	into[#into + 1] = id
 end
 
@@ -402,35 +511,69 @@ end
 -- @return a list of `{stage, kits, animkits, anims}`, the first cast first
 function Preview.SequenceOf(spellID)
 	local stages, order, seen = {}, {}, {}
-	for i = 1, Epsilook:GetNumParts(spellID, "fx") do
-		local part = Epsilook:GetPartDataByIndex(spellID, "fx", i)
-		if part.kind == "visual" then
-			gather(stages, order, stored(part, "phase") or 0, "kits", stored(part, "id"), seen)
+	for _, axis in ipairs({ "fx", "mech", "model" }) do
+		for i = 1, Epsilook:GetNumParts(spellID, axis) do
+			local part = Epsilook:GetPartDataByIndex(spellID, axis, i)
+			if part.kind == "visual" then
+				gather(stages, order, { phaseOf(part) }, "kits", stored(part, "id"), seen)
+			elseif BODIES[part.kind] then
+				-- ⛔ These two kinds by name, not anything that names a creature: a
+				-- summon names one too, and putting the summoned creature on the
+				-- caster's body says the caster turned into what they called up.
+				local displays = Epsilook:GetPartDisplays(part)
+				local first = displays[1] and displays[1].id or nil
+				local at, word = phaseOf(part)
+				if BODIES[part.kind] == "held" then
+					-- A mount names no stage of its own, and does not need to: being
+					-- mounted is what the spell LEAVES, which is the stage held anyway.
+					word = Preview.HELD
+				end
+				gather(stages, order, { at, word }, "displays", first, seen)
+			end
 		end
 	end
 	for i = 1, Epsilook:GetNumParts(spellID, "anim") do
 		local part = Epsilook:GetPartDataByIndex(spellID, "anim", i)
-		local stage = stored(part, "phase") or 0
+		local at = { phaseOf(part) }
 		-- An anim kit names its own animation as well, and playing both would be
 		-- the kit fighting the animation underneath it; the kit is the fuller
 		-- reading, so a row that has one contributes only that.
 		local kit = stored(part, "id")
 		if kit then
-			gather(stages, order, stage, "animkits", kit, seen)
+			gather(stages, order, at, "animkits", kit, seen)
 		else
-			gather(stages, order, stage, "anims", stored(part, "anim"), seen)
+			gather(stages, order, at, "anims", stored(part, "anim"), seen)
 		end
 	end
-	for at, each in ipairs(order) do
-		each.at = at
+	-- The cast, and no further. See `ENDED` above.
+	local run = {}
+	for _, each in ipairs(order) do
+		if each.word ~= Preview.ENDED then
+			run[#run + 1] = each
+			each.at = #run
+		end
 	end
+	order = run
 	table.sort(order, function(a, b)
-		if a.stage ~= b.stage then
-			return a.stage < b.stage
+		if rank(a) ~= rank(b) then
+			return rank(a) < rank(b)
 		end
 		return a.at < b.at
 	end)
 	return order
+end
+
+--- Which beat of a sequence the loop settles on: the aura where the spell has
+-- one, and otherwise wherever it ends up.
+-- @param sequence as SequenceOf gives it
+-- @return the index to hold
+function Preview.HoldOf(sequence)
+	for at, stage in ipairs(sequence) do
+		if stage.word == Preview.HELD then
+			return at
+		end
+	end
+	return #sequence
 end
 
 --- Show what a whole spell looks like, on the player's own body.
@@ -458,7 +601,7 @@ function Preview.Spell(spellID)
 	hovered.model:SetUnit("player")
 	hovered.facing = Preview.FACING
 	hovered.model:SetFacing(hovered.facing)
-	hovered.sequence = sequence
+	hovered.sequence, hovered.hold = sequence, Preview.HoldOf(sequence)
 	play(hovered)
 	return true
 end

@@ -161,6 +161,71 @@ def test_a_thing_that_happens_to_a_body_is_played_rather_than_drawn(engine: LuaR
     assert cast(list[str], value(engine, code)) == [
         "animkit:played",
         "anim:played",
+        "visual:played",
         "creature:drawn",
         "model:drawn",
     ]
+
+
+def test_a_visual_kit_is_previewed_on_its_own(engine: LuaRuntime) -> None:
+    """The kit rows are the handles on what a spell draws, so each is a look."""
+    # language=Lua
+    code = b"""
+        for i = 1, Epsilook:GetNumParts(%d, "fx") do
+            local part = Epsilook:GetPartDataByIndex(%d, "fx", i)
+            if part.kind == "visual" then
+                local subject = Epsilook.Preview.SubjectOf(part)
+                return subject and subject.word or "none"
+            end
+        end
+        return "no visual row"
+    """ % (FROSTBOLT, FROSTBOLT)
+    assert value(engine, code) == "visual"
+
+
+def test_the_loop_settles_on_the_aura_rather_than_the_last_stage(engine: LuaRuntime) -> None:
+    """A stage's number is not its running order, and the aura is not always last."""
+    # language=Lua
+    code = b"""
+        local sequence = { { word = "cast" }, { word = "aura" }, { word = "travel" } }
+        local bare = { { word = "cast" }, { word = "impact" } }
+        return Epsilook.Preview.HoldOf(sequence) .. ":" .. Epsilook.Preview.HoldOf(bare)
+    """
+    assert value(engine, code) == "2:2", "the aura, and otherwise wherever it ends up"
+
+
+def test_the_aura_ending_is_not_part_of_the_run(engine: LuaRuntime) -> None:
+    """On this server an aura runs until it is cancelled.
+
+    So the stage where one ends is what a player sees when they choose to stop
+    it, not a stage of the spell running, and a loop that played it would say
+    every spell undoes itself a moment after it lands.
+    """
+    # language=Lua
+    code = b"""
+        local ending = 0
+        for _, spell in ipairs({ 458, 2645, 32235 }) do
+            for _, stage in ipairs(Epsilook.Preview.SequenceOf(spell)) do
+                if stage.word == Epsilook.Preview.ENDED then
+                    ending = ending + 1
+                end
+            end
+        end
+        return ending
+    """
+    assert value(engine, code) == 0, "all three spells carry an auraend row"
+
+
+def test_a_mount_is_shown_at_the_stage_the_spell_leaves(engine: LuaRuntime) -> None:
+    """A mount row carries no stage; being mounted is what the spell leaves."""
+    # language=Lua
+    code = b"""
+        local sequence = Epsilook.Preview.SequenceOf(458)
+        local at = Epsilook.Preview.HoldOf(sequence)
+        local held = sequence[at]
+        if not held then
+            return "nothing held"
+        end
+        return held.word .. ":" .. #held.displays
+    """
+    assert value(engine, code) == "aura:1", "the horse, held"
