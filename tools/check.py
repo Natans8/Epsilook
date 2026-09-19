@@ -2682,6 +2682,10 @@ def check_toolchain(rep: Report) -> None:
     run_tool(
         rep, "cli bundle", ["node", "tools/build.mjs", "--cli"], "esbuild tools/*.ts -> tools/*.mjs (query, measure)"
     )
+    # The query-language listing is built from the declarations, so a value
+    # type with no sample prints an example nobody can type; --check is what
+    # refuses one, and it only guards while something runs it.
+    run_tool(rep, "surface examples", ["node", "tools/surface.mjs", "--check"], "every printed example parses")
     run_tool(rep, "tests", ["npm", "test", "--silent"], "node --test over test/*.test.ts")
     # Gated on everything 2.0 is being built out of: the engine (src/search),
     # the presentation layer (src/ui), the tools and the tests. .oxlintrc.json

@@ -11,15 +11,22 @@
  * operators changes what this prints, and a query that looks wrong here is wrong in the design rather than in code
  * nobody has written yet.
  *
- * Example queries are printed in the shortest spelling the grammar allows: a kind with one property binds its value
- * directly, a property with a door uses it, and only a property that needs naming appears in a scope. Operators
- * appear with the spelling a reader types, taken from the registry, so a change of symbol reaches this output without
- * an edit here.
+ * Example queries are built from the declarations, one per accepted operator, and printed in the canonical tier of
+ * the engine's own formatter, so the listing spells a query exactly as every other surface that hands one back. The
+ * builder only has to reach the property; how the grammar writes what it reached is the formatter's decision, never
+ * this file's.
  */
 import type {Head, Kind, Operator, Prop} from "../src/search/index";
 import {
-    CLAUSE_OPERATORS, COLUMNS, HEADS, hintOf, isFlag, KINDS, kindsOf, operatorsOf, OPERATORS, parse, spokenProp,
+    CLAUSE_OPERATORS, COLUMNS, formatQuery, HEADS, hintOf, isFlag, isIdentity, KINDS, kindsOf, operatorsOf, OPERATORS,
+    parse, spokenProp,
 } from "../src/search/index";
+
+/** One example: the query as built from the declarations, and what its operator does. */
+interface Example {
+    readonly query: string;
+    readonly hint: string;
+}
 
 /**
  * Two example operands per type, so a printed query reads as one a person would write.
@@ -40,6 +47,8 @@ const SAMPLE: Readonly<Record<string, readonly [string, string]>> = {
     length: ["40", "100"],
     angle: ["27", "60"],
     multiplier: ["x1.5", "x0.5"],
+    pace: ["x0.5", "x2"],
+    velocity: ["20", "40"],
     colour: ["#ff00aa", "#00aaff"],
     bitmask: ["caster", "target"],
     offset: ["z=3", "x=1"],
@@ -105,28 +114,41 @@ function template(kind: Kind, key: string, prop: Prop): string {
 }
 
 /**
- * Every query a property allows, as text.
+ * Every query a property allows, as built from the declarations.
  *
  * @param kind The property's kind.
  * @param name The property name.
  * @param prop The property.
- * @returns One line per accepted operator.
+ * @returns One example per accepted operator.
  */
-function queriesFor(kind: Kind, name: string, prop: Prop): string[] {
+function queriesFor(kind: Kind, name: string, prop: Prop): Example[] {
     if (isFlag(prop)) {
-        return [template(kind, name, prop).padEnd(46) + "the word alone; present, excluded with -, or ignored"];
+        return [{query: template(kind, name, prop), hint: "the word alone; present, excluded with -, or ignored"}];
     }
     const shape = template(kind, name, prop);
-    const sample = SAMPLE[prop.types[0].name] ?? ["value", "other"];
-    const lines: string[] = [];
+    // Every member of the identity family reads and writes the same whole number, so one sample serves them all
+    // and a new member needs no entry of its own.
+    const type = prop.types[0];
+    const sample = SAMPLE[type.name] ?? (isIdentity(type) ? SAMPLE.id : ["value", "other"]);
+    const examples: Example[] = [];
     for (const opName of operatorsOf(prop)) {
         const op = OPERATORS.get(opName);
         if (!op) continue;
         const written = spell(op, sample);
         if (written === null) continue;
-        lines.push(shape.replace("¤", written).padEnd(46) + op.hint);
+        examples.push({query: shape.replace("¤", written), hint: op.hint});
     }
-    return lines;
+    return examples;
+}
+
+/**
+ * One example as the listing prints it: the canonical spelling, then the hint.
+ *
+ * @param example The example as built.
+ * @returns The printed line.
+ */
+function lineOf(example: Example): string {
+    return formatQuery(parse(example.query)).padEnd(46) + example.hint;
 }
 
 /**
@@ -155,7 +177,7 @@ function showKind(kind: Kind): void {
             ? `; plain search reads ${prop.plain.map((t) => t.name).join(", ")} at tier ${String(prop.tier)}`
             : "";
         console.log(`      ${types}${sentinels}${plain}`);
-        for (const line of queriesFor(kind, name, prop)) console.log(`      ${line}`);
+        for (const example of queriesFor(kind, name, prop)) console.log(`      ${lineOf(example)}`);
     }
 }
 
@@ -217,7 +239,9 @@ function showRosters(): void {
  *
  * The examples are built from the declarations, so a spelling the parser does not read is a query printed for a
  * reader to paste that cannot work. It happened: a property spoken by a word other than its storage key printed
- * the key, so every example for it was untypeable. Prose cannot catch that; reading the output back can.
+ * the key, so every example for it was untypeable. Prose cannot catch that; reading the output back can. The check
+ * reads the example as built rather than as printed, because the formatter drops a clause it cannot evaluate and
+ * would print a blank in place of the error.
  *
  * @returns The examples the parser refused, each with what it said.
  */
@@ -225,8 +249,7 @@ function unreadable(): string[] {
     const bad: string[] = [];
     for (const kind of KINDS.values()) {
         for (const [name, prop] of Object.entries(kind.props)) {
-            for (const line of queriesFor(kind, name, prop)) {
-                const query = line.slice(0, 46).trim();
+            for (const {query} of queriesFor(kind, name, prop)) {
                 const found = parse(query).diagnostics.filter((d) => d.severity === "error");
                 if (found.length > 0) bad.push(`${kind.id}.${name}: ${query} — ${found[0].message}`);
             }
