@@ -339,11 +339,12 @@ local function play(frame)
 		frame.at = frame.at + 1
 		local kit = frame.kits and frame.kits[frame.at]
 		if not kit then
-			-- What takes the applied visuals back off a body, which is how the
-			-- client's own browser of these does it. A cleared model faces where it
-			-- was put rather than where it was turned to.
+			-- Setting the body again is what takes the applied visuals back off it.
+			-- ⛔ Not `RefreshUnit`, which is the same addon's path for a unit that
+			-- is not the player; for the player it sets the model by unit instead,
+			-- and this frame only ever shows the player.
 			frame.at, frame.due = 0, Preview.REST
-			pcall(frame.model.RefreshUnit, frame.model)
+			frame.model:SetUnit("player")
 			frame.model:SetFacing(frame.facing or Preview.FACING)
 			return
 		end
