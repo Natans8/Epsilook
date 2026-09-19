@@ -233,7 +233,7 @@ function Inspect.Values(part)
 				number = Epsilook.Schema.IsIdentity(prop.types[1]) and type(value) ~= "table",
 				colour = prop.types[1] == "colour" and value or nil,
 				stored = Epsilook.Schema.Stored(part.axis, part.kind, part.slot, prop),
-				vocab = Epsilook.Data.GetVocabName(part.axis, part.kind, prop.name),
+				vocab = Epsilook:GetPartVocabulary(part.axis, part.kind, prop.name),
 				type = prop.types[1],
 			}
 		end
@@ -559,7 +559,7 @@ local function payloadOf(spellID, part)
 	-- The selector table is keyed by the number the game's own tables hold, and
 	-- the row's name is the word that number was read as, so the stored value is
 	-- what is asked for here.
-	local selector = Epsilook.Data.GetStored(part.axis, part.kind, part.slot, "name")
+	local selector = Epsilook:GetPartStored(part.axis, part.kind, part.slot, "name")
 	if type(selector) ~= "number" then
 		return nil
 	end
@@ -677,7 +677,7 @@ end
 -- @param tooltip the GameTooltip, already owned
 -- @param part a PartData
 function Inspect.FillPalette(tooltip, part)
-	local screenID = Epsilook.Data.GetCarried(part.axis, part.kind, part.slot, "screen")
+	local screenID = Epsilook:GetPartCarried(part.axis, part.kind, part.slot, "screen")
 	local screen = screenID and Epsilook:GetScreenEffect(screenID)
 	if not screen then
 		return
@@ -745,7 +745,7 @@ local function needed(part, name)
 	if type(value) == "table" then
 		return value.id
 	end
-	return Epsilook.Data.GetStored(part.axis, part.kind, part.slot, name)
+	return Epsilook:GetPartStored(part.axis, part.kind, part.slot, name)
 end
 
 --- The spawn id for a part's file, where the pack knows one.
@@ -1067,12 +1067,12 @@ local function line(spellID, part, n, label, verb)
 		end
 	end
 	local out = MARGIN .. Shell.Cell(cell, labelReference(part.axis))
-	local vocab = subject and Epsilook.Data.GetVocabName(part.axis, part.kind, subject.name)
+	local vocab = subject and Epsilook:GetPartVocabulary(part.axis, part.kind, subject.name)
 	-- An item's name may be blank and yield the lead to its id; the item is
 	-- still an item, so the items reading looks past the subject.
 	local item
 	for _, value in ipairs(values) do
-		if Epsilook.Data.GetVocabName(part.axis, part.kind, value.name) == "items" then
+		if Epsilook:GetPartVocabulary(part.axis, part.kind, value.name) == "items" then
 			item = value
 		end
 	end
@@ -1256,7 +1256,7 @@ local function restated(spellID, part)
 	if part.kind ~= "effect" then
 		return false
 	end
-	if Epsilook.Data.GetStored(part.axis, part.kind, part.slot, "name") ~= APPLY_AURA then
+	if Epsilook:GetPartStored(part.axis, part.kind, part.slot, "name") ~= APPLY_AURA then
 		return false
 	end
 	for i = 1, Epsilook:GetNumParts(spellID, part.axis) do
@@ -1353,12 +1353,12 @@ end
 -- different questions: a model, a sound, an animation and an effect that all
 -- land at the impact belong together for one reader and apart for the other.
 --
--- The order comes from the data rather than from a list here. A phase is an
+-- The order comes from the data rather than from a list here. A stage is an
 -- enum whose stored numbers run in the order the client plays them -- precast
 -- before cast before travel before impact -- so sorting by the number is the
--- running order, and a phase nobody has shipped yet falls into place unasked.
+-- running order, and a stage nobody has shipped yet falls into place unasked.
 --
--- A part with no phase of its own happens whenever the spell does and is said
+-- A part with no stage of its own happens whenever the spell does and is said
 -- last, under its own heading, rather than being forced into a moment it does
 -- not belong to.
 -- @param spellID the spell
@@ -1381,12 +1381,12 @@ function Inspect.PrintTimeline(spellID, say)
 			local part = Epsilook:GetPartDataByIndex(spellID, axis, i)
 			local group = groupOf(part)
 			local value = part.values.phase
-			local order = Epsilook.Data.GetStored(axis, part.kind, part.slot, "phase")
+			local order = Epsilook:GetPartStored(axis, part.kind, part.slot, "phase")
 			local word = type(value) == "table" and value.text or value
-			-- A phase nothing names sorts after everything that has one.
+			-- A stage nothing names sorts after everything that has one.
 			local key = order or math.huge
 			-- A kit is one thing happening, not one thing per file it plays, so a
-			-- group is said once at each moment it happens and its files are left
+			-- group is said once at each stage it happens and its files are left
 			-- to the reading that is about what a spell is made of.
 			local id = group and part.values[group.prop]
 			local held = type(id) == "table" and id.id or id
@@ -1460,7 +1460,7 @@ local function unloadedItems(spellID)
 			for name, value in pairs(part.values) do
 				if
 					type(value) == "table"
-					and Epsilook.Data.GetVocabName(axis, part.kind, name) == "items"
+					and Epsilook:GetPartVocabulary(axis, part.kind, name) == "items"
 				then
 					local item = make(_G.Item, value.id)
 					if not item:IsItemEmpty() and not item:IsItemDataCached() then

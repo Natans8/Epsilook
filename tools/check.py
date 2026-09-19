@@ -2281,6 +2281,51 @@ def check_supplement(rep: Report) -> None:
     rep.ok("supplement", f"{count:,} rows, sorted, all above {theirs:,}")
 
 
+def check_addon_layers(rep: Report) -> None:
+    """The addon is three layers, and a layer may only name the one below it.
+
+    `Pack/` reads bytes, `Engine/` answers questions about them, `Interface/`
+    draws. The rule is what keeps the API honest: an interface that reaches past
+    it into the pack is asking a question the API does not offer, and the next
+    surface to want that question re-derives it rather than finding it. It is a
+    path rule, so a new file lands on the right side by where it is put.
+
+    It had drifted to eleven breaches with nothing watching, which is the whole
+    argument for a guard rather than a paragraph.
+    """
+    addon = ROOT / "addon" / "Epsilook"
+    if not addon.is_dir():
+        rep.skip("addon layers", "no addon tree")
+        return
+    # What each layer is allowed to name of the addon's own, beyond itself.
+    below = {"Pack": set(), "Engine": {"Pack"}, "Interface": {"Engine"}}
+    modules = {
+        "Pack": {"Data", "Reader", "Text"},
+        "Engine": {"Schema", "Query", "Match", "Search"},
+        "Interface": {"Config", "Shell", "Inspect", "Options", "Spellbook", "Preview"},
+    }
+    breaches = []
+    for layer, allowed in below.items():
+        forbidden = {
+            name: other
+            for other, names in modules.items()
+            if other != layer and other not in allowed
+            for name in names
+        }
+        for path in sorted((addon / layer).glob("*.lua")):
+            for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+                if line.lstrip().startswith("--"):
+                    continue
+                for name, other in forbidden.items():
+                    if f"Epsilook.{name}." in line:
+                        breaches.append(f"{layer}/{path.name}:{number} names {other}.{name}")
+    if breaches:
+        rep.fail("addon layers", f"{len(breaches)} breach(es): {breaches[0]}")
+    else:
+        counted = sum(len(list((addon / layer).glob("*.lua"))) for layer in below)
+        rep.ok("addon layers", f"{counted} files, each naming only the layer below it")
+
+
 def check_arcanum(rep: Report) -> None:
     """tools/arcanum.py must still produce strings Arcanum can import.
 
@@ -2776,6 +2821,7 @@ def main() -> int:
     check_kit_effect_types(rep)
     check_soundkit_declaration(rep)
     check_supplement(rep)
+    check_addon_layers(rep)
     check_arcanum(rep)
     check_pack_freshness(rep)
     check_cache(rep)

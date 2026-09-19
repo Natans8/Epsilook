@@ -43,6 +43,7 @@ _G.Epsilook = _G.Epsilook or {}
 local Epsilook = _G.Epsilook
 
 local Data = Epsilook.Data
+local Text = Epsilook.Text
 local Reader = Epsilook.Reader
 local Schema = Epsilook.Schema
 local Query = Epsilook.Query
@@ -136,6 +137,49 @@ function Epsilook:GetSpellClock(spellID)
 		delay = at("delayMs", 1000),
 		velocity = at("velocity", 1),
 	}
+end
+
+--- The vocabulary a property's values are read out of, or nil where they are
+-- not words. What a value means depends on the vocabulary behind it -- an id
+-- into the creatures is not an id into the items -- so a reader deciding how to
+-- draw a value asks this rather than guessing from the number.
+-- @param axis the part's axis
+-- @param kind the part's kind
+-- @param prop the property's storage name
+function Epsilook:GetPartVocabulary(axis, kind, prop)
+	mounted(self)
+	return Data.GetVocabName(axis, kind, prop)
+end
+
+--- One property as the pack stores it, before any vocabulary is read over it.
+-- The number the game's own tables hold, which is what another tool calls the
+-- same thing and what a selector is keyed by.
+-- @param axis the part's axis
+-- @param kind the part's kind
+-- @param slot the part's slot, as a PartData carries it
+-- @param prop the property's storage name
+function Epsilook:GetPartStored(axis, kind, slot, prop)
+	mounted(self)
+	return Data.GetStored(axis, kind, slot, prop)
+end
+
+--- A value a row carries beyond its own properties, or nil. A row holds what
+-- every row of its kind holds; a few carry one more thing that belongs to them
+-- alone, and this is how that is asked for by name.
+-- @param axis the part's axis
+-- @param kind the part's kind
+-- @param slot the part's slot, as a PartData carries it
+-- @param name what is carried
+function Epsilook:GetPartCarried(axis, kind, slot, name)
+	mounted(self)
+	return Data.GetCarried(axis, kind, slot, name)
+end
+
+--- Text folded the way this engine compares it, so that a caller matching a
+-- word against the language matches it the way a query would.
+-- @param text the text
+function Epsilook:Fold(text)
+	return Text.fold(text)
 end
 
 --- Every axis the payload is split across, in the order it ships them.

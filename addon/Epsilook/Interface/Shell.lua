@@ -579,7 +579,7 @@ function Shell.Lenient(message)
 	if not head or head:find(grammar.bind, 1, true) then
 		return message
 	end
-	local resolved = Epsilook.Schema.HeadOf(Epsilook.Text.fold(head))
+	local resolved = Epsilook.Schema.HeadOf(Epsilook:Fold(head))
 	if not resolved then
 		return message
 	end
@@ -609,7 +609,7 @@ function Shell.LoneColumn(message)
 	if not word or word:find(Epsilook.Schema.grammar.bind, 1, true) then
 		return nil
 	end
-	local head = Epsilook.Schema.HeadOf(Epsilook.Text.fold(word))
+	local head = Epsilook.Schema.HeadOf(Epsilook:Fold(word))
 	if head and head.role == "column" then
 		return head.column
 	end
@@ -1331,11 +1331,6 @@ function Shell.OnHyperlinkEnter(frame, link)
 		hint = Epsilook.Inspect.HintOf(axis, verb)
 	elseif axis then
 		local part = Epsilook:GetPartDataByIndex(id, axis, n)
-		-- A model is looked at rather than read, so a part that names one shows
-		-- it beside the tooltip in a frame of this addon's own.
-		if part and Epsilook.Preview then
-			Epsilook.Preview.ShowModel(Epsilook.Inspect.FileOf(part))
-		end
 		if part and (verb == Epsilook.Inspect.GROUP or verb == Epsilook.Inspect.COPYGROUP) then
 			Epsilook.Inspect.FillGroupTooltip(tooltip, part)
 		elseif part then
@@ -1353,9 +1348,6 @@ end
 
 --- The tooltip taken down as the mouse leaves one of this addon's links.
 function Shell.OnHyperlinkLeave(_, link)
-	if Epsilook.Preview then
-		Epsilook.Preview.Hide()
-	end
 	local tooltip = _G.GameTooltip
 	if tooltip and link:sub(1, #Shell.LINK + 1) == Shell.LINK .. ":" then
 		tooltip:Hide()
