@@ -41,9 +41,11 @@ Epsilook.Preview = Preview
 -- pointer near the foot of the screen has only the floor to be drawn in.
 Preview.SIZE, Preview.GAP, Preview.MOST = 300, 24, 4
 
---- Which way a model is turned when it is first drawn, a little off straight on
--- so that it reads as a thing rather than a silhouette.
+--- Which way a body is turned when it is first drawn, a little off straight on
+-- so that it reads as a thing rather than a silhouette, and where the camera
+-- stands to see it.
 Preview.FACING = 0.6
+Preview.DISTANCE, Preview.FIELD = 4, 1.2
 
 --- One property of a part as the pack stores it, which for an id is the number
 -- the client takes, and as it is spelled; nil where the part does not carry it.
@@ -92,8 +94,15 @@ end
 -- @param word how the stage is spelled
 -- @param has a field name to the single id it holds
 local function beat(at, word, has)
-	local one =
-		{ stage = at or 0, word = word, displays = {}, anims = {}, animkits = {}, kits = {} }
+	local one = {
+		stage = at or 0,
+		word = word,
+		mounts = {},
+		displays = {},
+		anims = {},
+		animkits = {},
+		kits = {},
+	}
 	for field, id in pairs(has or {}) do
 		one[field] = { id }
 	end
@@ -148,13 +157,24 @@ Preview.SUBJECTS = {
 		end,
 	},
 	{
+		word = "mount",
+		from = function(part)
+			if part.kind ~= "mount" then
+				return nil
+			end
+			local displays = Epsilook:GetPartDisplays(part)
+			return displays[1] and displays[1].id or nil
+		end,
+		seats = true,
+	},
+	{
 		word = "creature",
 		from = function(part)
 			local displays = Epsilook:GetPartDisplays(part)
 			return displays[1] and displays[1].id or nil
 		end,
-		draw = function(model, displayID)
-			pcall(model.SetDisplayInfo, model, displayID)
+		draw = function(actor, displayID)
+			pcall(actor.SetModelByCreatureDisplayID, actor, displayID)
 		end,
 	},
 	{
@@ -162,10 +182,10 @@ Preview.SUBJECTS = {
 		from = function(part)
 			return Preview.ModelOf(part)
 		end,
-		draw = function(model, fileID)
+		draw = function(actor, fileID)
 			-- A file the client has no model for leaves the frame empty, which is
 			-- a better answer to a hover than an error on every one.
-			pcall(model.SetModel, model, fileID)
+			pcall(actor.SetModelByFileID, actor, fileID)
 		end,
 	},
 }
@@ -200,20 +220,26 @@ local function build(pinned)
 	local frame = _G.CreateFrame("Frame", nil, _G.UIParent, "TooltipBorderedFrameTemplate")
 	frame:SetSize(Preview.SIZE, Preview.SIZE)
 	frame:SetFrameStrata("TOOLTIP")
-	frame.model = _G.CreateFrame("PlayerModel", nil, frame)
-	frame.model:SetPoint("TOPLEFT", 6, -6)
-	frame.model:SetPoint("BOTTOMRIGHT", -6, 6)
-	-- A model frame lights nothing by default, and a dark model in the dark is
-	-- not a preview. The light is in front and a little above, as a viewer's is.
-	--
-	-- ⛔ Flat arguments, not the table this client's successors take. The table
-	-- form is what the current transmogrification browser uses, and handing it
-	-- to this client crashes the game outright rather than erroring: the native
-	-- code reads a boolean and twelve numbers off what it was given. The four
-	-- places 9.2.7 calls this itself all pass them flat.
-	if frame.model.SetLight then
-		frame.model:SetLight(true, false, 0, 0.8, -1, 1, 1, 1, 1, 0.3, 1, 1, 1)
+	frame.scene = _G.CreateFrame("ModelScene", nil, frame)
+	frame.scene:SetPoint("TOPLEFT", 6, -6)
+	frame.scene:SetPoint("BOTTOMRIGHT", -6, 6)
+	if _G.Mixin and _G.ModelSceneMixin then
+		_G.Mixin(frame.scene, _G.ModelSceneMixin)
 	end
+	-- A scene draws nothing until it is told where to look from and what lights
+	-- it. There is no camera in the scene's own right and no default: these are
+	-- the numbers the addons on this client use for a figure filling a square.
+	frame.scene:SetCameraPosition(Preview.DISTANCE, 0, 0)
+	frame.scene:SetCameraOrientationByYawPitchRoll(math.pi, 0, 0)
+	frame.scene:SetCameraFieldOfView(Preview.FIELD)
+	frame.scene:SetLightDiffuseColor(0.8, 0.8, 0.8)
+	frame.scene:SetLightAmbientColor(0.6, 0.6, 0.6)
+	frame.scene:SetLightPosition(1, 0, 1)
+	frame.scene:SetLightDirection(-1, 0, -1)
+	frame.scene:SetLightVisible(true)
+	frame.body = frame.scene:CreateActor(nil, "ModelSceneActorTemplate")
+	frame.rider = frame.scene:CreateActor(nil, "ModelSceneActorTemplate")
+	frame.rider:Hide()
 	if pinned then
 		-- What the client's own pinned chat link is: movable, above its fellows
 		-- when clicked, and closed with a button.
@@ -233,28 +259,31 @@ local function build(pinned)
 		-- height and the model, which fills the frame, wins the ground they share:
 		-- the button answered only on the two pixels hanging off the corner, which
 		-- is what an unclickable close button looks like from the outside.
-		frame.close:SetFrameLevel(frame.model:GetFrameLevel() + 5)
+		frame.close:SetFrameLevel(frame.scene:GetFrameLevel() + 5)
 		-- A pinned look is looked at, so it turns and it zooms.
 		frame:EnableMouseWheel(true)
 		frame:SetScript("OnMouseWheel", function(_, direction)
-			frame.zoom = math.max(0, math.min(1, (frame.zoom or 0) + direction * 0.1))
-			frame.model:SetPortraitZoom(frame.zoom)
+			-- The camera walks in and out rather than the model growing, which is
+			-- the only zoom a scene has and the truer one anyway.
+			frame.distance =
+				math.max(1, math.min(20, (frame.distance or Preview.DISTANCE) - direction * 0.4))
+			frame.scene:SetCameraPosition(frame.distance, 0, 0)
 		end)
-		frame.model:EnableMouse(true)
-		frame.model:SetScript("OnMouseDown", function()
+		frame.scene:EnableMouse(true)
+		frame.scene:SetScript("OnMouseDown", function()
 			frame.turning = select(1, _G.GetCursorPosition())
 		end)
-		frame.model:SetScript("OnMouseUp", function()
+		frame.scene:SetScript("OnMouseUp", function()
 			frame.turning = nil
 		end)
 		-- Where it is facing is kept here rather than asked back, so that turning
 		-- it is arithmetic on a number this frame owns rather than a round trip
 		-- through the model on every frame.
-		frame.model:SetScript("OnUpdate", function(model)
+		frame.scene:SetScript("OnUpdate", function()
 			if frame.turning then
 				local at = select(1, _G.GetCursorPosition())
 				frame.facing = (frame.facing or Preview.FACING) + (at - frame.turning) / 80
-				model:SetFacing(frame.facing)
+				frame.body:SetYaw(frame.facing)
 				frame.turning = at
 			end
 		end)
@@ -267,27 +296,77 @@ end
 -- stands before the body is cleared and it runs again.
 Preview.BEAT, Preview.REST = 1.2, 2
 
+--- Put the player back on the body actor, which is both how a look starts and
+-- how a loop wipes what the last run applied to it.
+-- @param frame the look
+function Preview.Body(frame)
+	frame.rider:ClearModel()
+	frame.rider:Hide()
+	frame.body:SetModelByUnit("player")
+	frame.body:SetPosition(0, 0, 0)
+	frame.body:SetYaw(frame.facing or Preview.FACING)
+end
+
+--- Seat the player on a mount, which is what the game's own mount list shows
+-- and what a reader asking about a mount is asking to see.
+--
+-- ⛔ The order is the client's own, from the list that does this: the mount
+-- takes the display and an idle, the rider is scaled by what the mount says it
+-- needs rather than by anything we choose, and `AttachToMount` is what puts one
+-- on the other. A rider scaled by hand rides through the saddle.
+-- @param frame the look
+-- @param displayID the mount's creature display
+function Preview.Mount(frame, displayID)
+	frame.body:ClearModel()
+	frame.body:SetYaw(frame.facing or Preview.FACING)
+	frame.body:SetUseCenterForOrigin(false, false, false)
+	frame.body:SetPosition(0, 0, 0)
+	if not pcall(frame.body.SetModelByCreatureDisplayID, frame.body, displayID) then
+		return false
+	end
+	frame.body:SetAnimation(0)
+	frame.rider:Show()
+	if not frame.rider:SetModelByUnit("player", true) then
+		-- The mount alone is still the answer to what the spell gives you.
+		frame.rider:Hide()
+		return true
+	end
+	local fitted, scale = pcall(frame.body.CalculateMountScale, frame.body, frame.rider)
+	if fitted and scale and scale ~= 0 then
+		frame.rider:SetScale(1 / scale)
+	end
+	frame.rider:SetYaw(0)
+	frame.rider:SetUseCenterForOrigin(false, false, false)
+	pcall(frame.rider.SheatheWeapon, frame.rider, true)
+	pcall(frame.body.AttachToMount, frame.body, frame.rider, 0)
+	return true
+end
+
 --- Put everything one stage of a spell does on a body at once, since a stage is
 -- a moment rather than a list: the pose first, then what is drawn over it.
 -- @param model the model frame
 -- @param stage one entry of a sequence
-local function stand(model, stage)
+local function stand(frame, stage)
+	local actor = frame.body
+	for _, display in ipairs(stage.mounts) do
+		-- Before the plain displays, and instead of them: a body cannot both turn
+		-- into something and sit on it.
+		Preview.Mount(frame, display)
+	end
 	for _, display in ipairs(stage.displays) do
 		-- First, because it replaces the body the rest of this stage happens to:
 		-- a spell that turns its target into something and then has it move is
 		-- the something moving.
-		pcall(model.SetDisplayInfo, model, display)
+		pcall(actor.SetModelByCreatureDisplayID, actor, display)
 	end
 	for _, anim in ipairs(stage.anims) do
-		pcall(model.SetAnimation, model, anim)
+		pcall(actor.SetAnimation, actor, anim)
 	end
 	for _, kit in ipairs(stage.animkits) do
-		pcall(model.PlayAnimKit, model, kit)
+		pcall(actor.PlayAnimationKit, actor, kit)
 	end
 	for _, kit in ipairs(stage.kits) do
-		-- Held rather than played once, so a stage with a loop in it keeps going
-		-- for as long as the stage lasts.
-		pcall(model.ApplySpellVisualKit, model, kit, false)
+		pcall(actor.SetSpellVisualKit, actor, kit)
 	end
 end
 
@@ -318,15 +397,14 @@ local function play(frame)
 			else
 				frame.due = Preview.BEAT
 			end
-			stand(frame.model, stage)
+			stand(frame, stage)
 		else
 			-- Setting the body again is what takes the applied visuals back off it.
 			-- ⛔ Not `RefreshUnit`, which is the same addon's path for a unit that is
 			-- not the player; for the player it sets the model by unit instead, and
 			-- this frame only ever shows the player.
 			frame.at, frame.due = 0, 0
-			frame.model:SetUnit("player")
-			frame.model:SetFacing(frame.facing or Preview.FACING)
+			Preview.Body(frame)
 		end
 	end)
 end
@@ -339,25 +417,29 @@ end
 -- instead, which reads as every preview showing the player.
 local function draw(frame, part)
 	local subject, value = Preview.SubjectOf(part)
-	if not (frame and frame.model and subject) then
+	if not (frame and frame.body and subject) then
 		return false
 	end
 	-- A frame is reused, so whatever was running on it stops: a sequence left
 	-- ticking would keep laying its own beats over whatever is drawn next.
 	frame.sequence = nil
 	frame:SetScript("OnUpdate", nil)
-	frame.model:ClearModel()
+	frame.body:ClearModel()
+	frame.rider:ClearModel()
+	frame.rider:Hide()
 	frame.facing = Preview.FACING
 	if subject.stage then
 		-- It happens to a body, so there has to be a body for it to happen to.
-		frame.model:SetUnit("player")
+		Preview.Body(frame)
 		frame.sequence, frame.hold = { subject.stage(value) }, nil
 		play(frame)
+	elseif subject.seats then
+		Preview.Mount(frame, value)
 	else
-		subject.draw(frame.model, value)
+		subject.draw(frame.body, value)
 	end
-	frame.model:SetPosition(0, 0, 0)
-	frame.model:SetFacing(frame.facing)
+	frame.body:SetPosition(0, 0, 0)
+	frame.body:SetYaw(frame.facing)
 	return true
 end
 
@@ -524,12 +606,13 @@ function Preview.SequenceOf(spellID)
 				local displays = Epsilook:GetPartDisplays(part)
 				local first = displays[1] and displays[1].id or nil
 				local at, word = phaseOf(part)
+				local field = "displays"
 				if BODIES[part.kind] == "held" then
 					-- A mount names no stage of its own, and does not need to: being
 					-- mounted is what the spell LEAVES, which is the stage held anyway.
-					word = Preview.HELD
+					word, field = Preview.HELD, "mounts"
 				end
-				gather(stages, order, { at, word }, "displays", first, seen)
+				gather(stages, order, { at, word }, field, first, seen)
 			end
 		end
 	end
@@ -593,15 +676,16 @@ function Preview.Spell(spellID)
 	if not hovered then
 		hovered = build(false)
 	end
-	if not (hovered and hovered.model) then
+	if not (hovered and hovered.body) then
 		return false
 	end
 	Preview.Place(hovered)
 	hovered:Show()
-	hovered.model:ClearModel()
-	hovered.model:SetUnit("player")
+	hovered.body:ClearModel()
+	hovered.rider:ClearModel()
+	hovered.rider:Hide()
 	hovered.facing = Preview.FACING
-	hovered.model:SetFacing(hovered.facing)
+	Preview.Body(hovered)
 	hovered.sequence, hovered.hold = sequence, Preview.HoldOf(sequence)
 	play(hovered)
 	return true
@@ -617,7 +701,7 @@ function Preview.Hover(part)
 	if not hovered then
 		hovered = build(false)
 	end
-	if not (hovered and hovered.model) then
+	if not (hovered and hovered.body) then
 		return false
 	end
 	Preview.Place(hovered)
@@ -641,7 +725,7 @@ function Preview.Pin(part)
 		return false
 	end
 	local frame = build(true)
-	if not (frame and frame.model) then
+	if not (frame and frame.body) then
 		return false
 	end
 	-- Where the hovered one was, but held to the screen rather than to a tooltip

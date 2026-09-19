@@ -154,7 +154,13 @@ def test_a_thing_that_happens_to_a_body_is_played_rather_than_drawn(engine: LuaR
     code = b"""
         local out = {}
         for _, subject in ipairs(Epsilook.Preview.SUBJECTS) do
-            out[#out + 1] = subject.word .. (subject.stage and ":played" or ":drawn")
+            local how = ":drawn"
+            if subject.stage then
+                how = ":played"
+            elseif subject.seats then
+                how = ":seated"
+            end
+            out[#out + 1] = subject.word .. how
         end
         return out
     """
@@ -162,6 +168,7 @@ def test_a_thing_that_happens_to_a_body_is_played_rather_than_drawn(engine: LuaR
         "animkit:played",
         "anim:played",
         "visual:played",
+        "mount:seated",
         "creature:drawn",
         "model:drawn",
     ]
@@ -226,9 +233,9 @@ def test_a_mount_is_shown_at_the_stage_the_spell_leaves(engine: LuaRuntime) -> N
         if not held then
             return "nothing held"
         end
-        return held.word .. ":" .. #held.displays
+        return held.word .. ":" .. #held.mounts
     """
-    assert value(engine, code) == "aura:1", "the horse, held"
+    assert value(engine, code) == "aura:1", "the horse, held, with a rider to seat"
 
 
 def test_a_shapeshift_form_reads_down_to_what_it_looks_like(engine: LuaRuntime) -> None:
@@ -280,3 +287,26 @@ def test_a_shapeshift_row_is_previewed_on_its_own(engine: LuaRuntime) -> None:
         return "no shapeshift row"
     """
     assert value(engine, code) == "creature:55287"
+
+
+def test_a_mount_is_its_own_subject_so_a_rider_can_be_seated(engine: LuaRuntime) -> None:
+    """A mount is not a morph: you sit on it rather than turn into it.
+
+    The client's own mount list draws the rider, so the distinction has to
+    survive as far as the frame rather than collapsing into a display.
+    """
+    # language=Lua
+    code = b"""
+        for i = 1, Epsilook:GetNumParts(458, "model") do
+            local part = Epsilook:GetPartDataByIndex(458, "model", i)
+            if part.kind == "mount" then
+                local subject, display = Epsilook.Preview.SubjectOf(part)
+                if not subject then
+                    return "the mount offered nothing"
+                end
+                return subject.word .. ":" .. tostring(subject.seats) .. ":" .. tostring(display)
+            end
+        end
+        return "no mount row"
+    """
+    assert value(engine, code) == "mount:true:2404"
