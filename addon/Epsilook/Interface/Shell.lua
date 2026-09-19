@@ -699,8 +699,13 @@ function Shell.HelpLines()
 	local function title(text)
 		return GOLD .. text .. END
 	end
+	-- The widest thing either column holds, so that a help line meets its
+	-- neighbours instead of landing wherever a proportional font puts it. The
+	-- longest command is the reference because it is the longest either column
+	-- takes, and a column sized once is the same on every line of the page.
+	local COMMAND = "/elo <id or spell link>"
 	local function row(left, right, tone)
-		return "  " .. (tone or GOLD) .. left .. END .. "  " .. right
+		return "  " .. Shell.Cell((tone or GOLD) .. left .. END, COMMAND) .. right
 	end
 	local lines = {
 		title("Epsilook") .. GREY .. " searches Epsilon's spells from chat" .. END,
