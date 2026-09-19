@@ -782,6 +782,40 @@ function Epsilook:GetDisplaysByCreature(creatureID)
 	return wears("creatureDisplays", "creatureIds", creatureID)
 end
 
+--- What the server bills a creature as: what it is, how it is billed, and
+-- who it fights for. A morph and a summon both store a creature, and this is
+-- the line a reader wants beside its name.
+-- @param creatureID the creature id
+-- @param target an optional table to fill instead of allocating one
+-- @return a record of `type` and `rank`, each { id, text }, and `faction`,
+--   the FactionTemplate it belongs to as { id, text }; nil where the pack
+--   carries nothing for the creature
+function Epsilook:GetCreatureKind(creatureID, target)
+	mounted(self)
+	local node, blob = Data.GetColumn("model", "creatures", "ids")
+	local row = node and Reader.rowOf(blob, node, creatureID)
+	if not row then
+		return nil
+	end
+	-- The words ship keyed by the value a creature carries, so naming one is a
+	-- search of the id column and a read of the word beside it.
+	local function named(section, id)
+		local ids, bytes = Data.GetColumn("model", section, "ids")
+		local at = ids and Reader.rowOf(bytes, ids, id)
+		local text = ""
+		if at then
+			text = cell(section, "words", at, "")
+		end
+		return { id = id, text = text }
+	end
+	local faction = cell("creatures", "factions", row, 0)
+	local out = target or {}
+	out.type = named("creatureTypes", cell("creatures", "types", row, 0))
+	out.rank = named("creatureRanks", cell("creatures", "ranks", row, 0))
+	out.faction = { id = faction, text = self:GetReferenceName("FactionTemplate", faction) or "" }
+	return out
+end
+
 --- The displays a shapeshift form wears, by form id. A form is stored as a
 -- number into the forms and shown as a name, which says what the caster
 -- turns into without saying what that looks like; this is the rest of the

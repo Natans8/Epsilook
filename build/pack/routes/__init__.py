@@ -11,7 +11,7 @@ from . import registry as _registry
 from .areas import Area, AreaGates
 from .assets import resolve_paths
 from .attributes import attribute_bit, read_spell_attributes
-from .creatures import CreatureModels
+from .creatures import CreatureKind, CreatureModels, creature_rank_words, creature_type_words
 from .delivery import Delivery
 from .effects import EffectNumbers, EffectRow, MaskedIds, SpellEffectRows, implicit_target_bits
 from . import flows as _flows
@@ -57,6 +57,9 @@ __all__ = [
     "attribute_bit",
     "ChainEffect",
     "CONDITIONS",
+    "CreatureKind",
+    "creature_rank_words",
+    "creature_type_words",
     "CreatureModels",
     "Delivery",
     "DescriptionValues",

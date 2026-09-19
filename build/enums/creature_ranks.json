@@ -1,0 +1,15 @@
+{
+ "enum": "creature_template.rank",
+ "description": "What a creature is billed as, from the Epsilon core's CreatureEliteType: a summoned or morphed creature's rank says whether it reads as an ordinary mob, an elite, a rare or a world boss. The server's own column, so it says what Epsilon spawns rather than what retail shows.",
+ "source": ["the Epsilon core's SharedDefines.h, enum CreatureEliteType", "https://github.com/EpsilonRP/TrinityCore"],
+ "keys": "rank",
+ "values": {
+  "0": "Normal",
+  "1": "Elite",
+  "2": "Rare Elite",
+  "3": "World Boss",
+  "4": "Rare",
+  "5": "Trivial",
+  "6": "Weak"
+ }
+}

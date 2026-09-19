@@ -75,7 +75,7 @@ over bytes the client has just read anyway.
 
 AXES: Mapping[str, str] = {
     "model": (
-        "modelRows morphs creatureDisplays displaySkins mounts shapeshifts "
+        "modelRows morphs creatures creatureTypes creatureRanks creatureDisplays displaySkins mounts shapeshifts "
         "shapeshiftDisplays summons summonControlNames gameobjectActionNames objects files "
         "modelCatNames equippedSlots items itemIconNames "
         "itemQualityNames vehicles vehicleSeats"

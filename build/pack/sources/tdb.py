@@ -107,7 +107,24 @@ another language.
 # rows by row id.
 TDB_TABLES = {
     "world": {
-        "creature_template": ["entry", "name", "modelid1", "modelid2", "modelid3", "modelid4"],
+        # `type` is the CREATURE_TYPE enum (1 BEAST, 6 UNDEAD, 7 HUMANOID,
+        # ...) and `faction` a FactionTemplate the build already names: what a
+        # summoned or morphed creature IS, which no client table carries for
+        # more than a tenth of the creatures a spell reaches. The rank is
+        # `rank` on the older dumps and `Classification` on the newer ones, so
+        # both are kept and the route reads whichever the release wrote.
+        "creature_template": [
+            "entry",
+            "name",
+            "modelid1",
+            "modelid2",
+            "modelid3",
+            "modelid4",
+            "type",
+            "rank",
+            "Classification",
+            "faction",
+        ],
         "creature_template_model": ["CreatureID", "Idx", "CreatureDisplayID", "Probability"],
         # A spawn effect's misc0 is a gameobject_template entry. The client's
         # GameObjects.db2 uses a different keying, so the name and displayId

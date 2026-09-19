@@ -13,13 +13,25 @@ appears in the files table at all.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections import defaultdict
+from collections.abc import Container, Iterable, Mapping
 from dataclasses import dataclass, field
 
-from ..routes import CreatureModels, FxPayloads, GameObjectData, ItemModels, MountData, SpellEffectRows
+from ..routes import (
+    CreatureModels,
+    EffectNumbers,
+    FxPayloads,
+    GameObjectData,
+    ItemModels,
+    MountData,
+    SpellEffectRows,
+)
+from ..routes.flow import Holds, export_name
+from ..routes.selectors import SELECTORS
 from ..routes.models import MODEL_CAT_DISPLAY, MODEL_CAT_ITEM
 from ..routes.route import route
 from .displays import ResolvedDisplays
+from .rows import MechanicRow
 from .walk import SpellVisuals, screen_reach
 
 
@@ -68,6 +80,38 @@ class References:
     def wanted(self) -> set[int]:
         """Every file id one pass over the listfile has to resolve."""
         return self.assets | self.icons
+
+
+def referenced(
+    rows: Iterable[MechanicRow], numbers: Iterable[EffectNumbers] = (), into: Container[str] | None = None
+) -> dict[str, set[int]]:
+    """The ids the rows' reference slots point at, by the table they point into.
+
+    An aura row is read under its aura and any other row under its effect, the
+    way the selector roster declares them. The item an effect creates is one
+    more reference, held in its own column rather than a misc slot. `into`
+    limits the answer to the tables a caller can do something with, and
+    everything the selectors point at is kept without one.
+    """
+    slots: dict[tuple[str, int], list[tuple[str, str]]] = defaultdict(list)
+    for declared in SELECTORS:
+        if declared.table != "SpellEffect":
+            continue
+        on = export_name(declared.select.on)
+        for slot in declared.select.slots:
+            if slot.holds is Holds.REFERENCE and (into is None or slot.into in into):
+                for value in declared.select.values:
+                    slots[(on, value)].append((export_name(slot.column), slot.into))
+    found: dict[str, set[int]] = defaultdict(set)
+    for row in rows:
+        for column, into in slots.get(("EffectAura", row.aura) if row.aura else ("Effect", row.effect), ()):
+            value = row.misc_a if column.endswith("_0") else row.misc_b
+            if value:
+                found[into].add(value)
+    for number in numbers:
+        if number.item:
+            found["Item"].add(number.item)
+    return found
 
 
 @route("references", phase="collect_references", spell_icons="props.icon_fid")

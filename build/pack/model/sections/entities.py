@@ -8,9 +8,11 @@ and a pill has to say which one it is holding.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 
 from ...derive import Reads
+from ...derive.references import referenced
+from ...routes import creature_rank_words, creature_type_words
 from ..registry import register
 from ..section import Layout, Scope, Section, SectionColumns, size
 
@@ -92,6 +94,79 @@ def objects(reads: Reads) -> SectionColumns:
         "types": [reads.objects.type.get(entry, NO_TYPE) for entry in ids],
     }
 
+
+def creature_kinds(reads: Reads) -> SectionColumns:
+    """What the server bills each creature the pack names as.
+
+    Type, rank and faction are the server's own columns, so this says what
+    Epsilon spawns rather than what retail shows, the same footing the object
+    types and the cast gates already stand on. The client's own creature table
+    carries the first two for barely a tenth of the creatures a spell reaches,
+    which is why the server dump is the source.
+    """
+    kinds = {row.creature: row for row in reads.creature_kinds}
+    listed = [
+        creature
+        for creature in sorted(referenced(reads.rows.mechanics, reads.effects.numbers)["creature_template"])
+        if creature in kinds
+    ]
+    return {
+        "ids": listed,
+        "types": [kinds[creature].type for creature in listed],
+        "ranks": [kinds[creature].rank for creature in listed],
+        # a FactionTemplate, which referenceNames already names
+        "factions": [kinds[creature].faction for creature in listed],
+    }
+
+
+def enum_words(words: Callable[[], Mapping[int, str]]) -> Callable[[Reads], SectionColumns]:
+    """A vocabulary as two parallel columns, keyed by the value it names."""
+
+    def produce(reads: Reads) -> SectionColumns:
+        del reads  # a declaration, the same on every build
+        held = words()
+        listed = sorted(held)
+        return {"ids": listed, "words": [held[key] for key in listed]}
+
+    return produce
+
+
+CREATURE_KINDS = register(
+    Section(
+        name="creatures",
+        doc="What the server bills each named creature as: its type, its rank and the faction it belongs to.",
+        module="core",
+        produce=creature_kinds,
+        columns=("ids", "types", "ranks", "factions"),
+        reads=("rows", "effects", "creature_kinds"),
+        needs=("creature_template",),
+        counts=(size("creatures", "ids"),),
+    )
+)
+
+CREATURE_TYPES = register(
+    Section(
+        name="creatureTypes",
+        doc="The word for each creature type, keyed by the value a creature carries.",
+        module="universal",
+        produce=enum_words(creature_type_words),
+        columns=("ids", "words"),
+        reads=(),
+        scope=Scope.UNIVERSAL,
+    )
+)
+
+CREATURE_RANKS = register(
+    Section(
+        name="creatureRanks",
+        doc="The word for each creature rank, from normal up to world boss.",
+        module="universal",
+        produce=enum_words(creature_rank_words),
+        columns=("ids", "words"),
+        reads=(),
+        scope=Scope.UNIVERSAL,
+    )
+)
 
 MORPHS = register(
     Section(

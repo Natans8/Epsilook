@@ -20,7 +20,7 @@ from .anims import SPEED_UNIT
 from .areas import UI_MAP_TYPE_ZONE, AreaGates, GateRow
 from .colors import channel, rgb_of
 from .columns import BASE_DIFFICULTY, to_float, to_int
-from .creatures import CreatureModels
+from .creatures import CreatureKind, CreatureModels
 from .delivery import CHANNEL_BITS, MOVING_BIT, DeliveryRow, assemble_delivery
 from .effects import (
     AMOUNT,
@@ -396,6 +396,25 @@ class Routes(Declarations):
         .read(T.creature_template)
         .into(as_map(T.creature_template.entry, word(T.creature_template.name)))
     )
+
+    creature_kinds = (
+        flow("what the server bills each creature as")
+        .read(T.creature_template, optional=True)
+        .map("billed", coalesce(T.creature_template.rank, T.creature_template.Classification))
+        .where((T.creature_template.type != 0) | (c.billed != 0) | (T.creature_template.faction != 0))
+        .into(
+            as_rows(
+                CreatureKind,
+                T.creature_template.entry,
+                T.creature_template.type,
+                c.billed,
+                T.creature_template.faction,
+                sort=True,
+            )
+        )
+    )
+    """Every creature the server dump describes rather than only the ones a
+    spell reaches: which of them the pack lists is the section's question."""
 
     faction_names = (
         flow("what every faction is called").read(T.Faction).into(as_map(T.Faction.ID, word(T.Faction.Name_lang)))

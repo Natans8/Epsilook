@@ -12,6 +12,7 @@ from ..routes import (
     Ambience,
     AreaGates,
     Cone,
+    CreatureKind,
     CreatureModels,
     Delivery,
     DescriptionValues,
@@ -134,6 +135,9 @@ class DeriveContext:
 
     enchantment_names: Mapping[int, str] = field(default_factory=dict)
     """Every enchantment's name, by enchantment id."""
+
+    creature_kinds: Sequence[CreatureKind] = ()
+    """What the server bills each creature as, sorted by creature."""
 
     spell_radii: Mapping[int, float] = field(default_factory=dict)
     """Every radius id's distance in yards."""

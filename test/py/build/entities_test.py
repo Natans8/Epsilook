@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+from typing import cast
+
 import pytest
 
+from pack.derive import Reads
 from pack.drift import TDB_OPTIONAL_COLUMNS, TDB_OPTIONAL_TABLES
-from pack.routes.creatures import CreatureModels
+from pack.model.sections.entities import enum_words
+from pack.routes.creatures import CreatureModels, creature_type_words
 from pack.routes.flows import Routes
 from support import BuildTables, union
 
@@ -165,3 +169,41 @@ def test_the_pinned_build_stands_over_a_table_the_build_also_carries(tables: Bui
     assert list(union(own, pinned=pinned).rows("SoundKitName", ["Name"])) == [("pinned",)]
     with pytest.raises(ValueError, match="held by 2 sources"):
         union(own, world=tables(SoundKitName="ID,Name\n1,world\n")).rows("SoundKitName", ["Name"])
+
+
+CREATURE_TEMPLATE = """\
+entry,name,modelid1,modelid2,modelid3,modelid4,type,rank,Classification,faction
+400,Imp,50,0,0,0,3,0,0,90
+401,Waypoint,0,0,0,0,0,0,0,0
+402,Onyxia,51,0,0,0,2,3,0,103
+"""
+
+CREATURE_TEMPLATE_CLASSIFIED = """\
+entry,name,modelid1,modelid2,modelid3,modelid4,type,rank,Classification,faction
+402,Onyxia,51,0,0,0,2,0,3,103
+"""
+
+
+def test_a_creature_the_server_says_nothing_about_is_left_out(tables: BuildTables) -> None:
+    """Rank nought is a real answer and type nought is not, so a row is kept
+    where any of the three says something: a GM waypoint says nothing at all."""
+    kinds = Routes.creature_kinds.run(tables(creature_template=CREATURE_TEMPLATE))
+    assert [row.creature for row in kinds] == [400, 402]
+    assert [(row.type, row.rank, row.faction) for row in kinds] == [(3, 0, 90), (2, 3, 103)]
+
+
+def test_the_rank_is_read_under_whichever_name_the_release_wrote(tables: BuildTables) -> None:
+    """The older dumps call it `rank` and the newer ones `Classification`, so a
+    release writes one of the two and the other stands in at nought."""
+    kinds = Routes.creature_kinds.run(tables(creature_template=CREATURE_TEMPLATE_CLASSIFIED))
+    assert [(row.creature, row.rank) for row in kinds] == [(402, 3)]
+
+
+def test_the_type_words_are_keyed_by_the_value_a_creature_carries() -> None:
+    """The vocabulary is vendored keyed by the mask bit a misc slot sets, and a
+    creature carries the value itself, so the build turns it back here rather
+    than in every reader."""
+    words = dict(zip(*(enum_words(creature_type_words)(cast(Reads, None))[column] for column in ("ids", "words"))))
+    assert words[1] == "Beast"
+    assert words[3] == "Demon"
+    assert words[7] == "Humanoid"

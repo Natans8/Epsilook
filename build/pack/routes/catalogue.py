@@ -1901,6 +1901,10 @@ class creature_template(Table):
     modelid2 = Column("modelid2")
     modelid3 = Column("modelid3")
     modelid4 = Column("modelid4")
+    type = Column("type")
+    rank = Column("rank")
+    Classification = Column("Classification")
+    faction = Column("faction")
 
 
 class creature_template_model(Table):

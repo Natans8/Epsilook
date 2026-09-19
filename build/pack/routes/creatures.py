@@ -11,6 +11,36 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
+from typing import NamedTuple
+
+from ..sources.enums import load_local_enum
+
+
+def creature_type_words() -> dict[int, str]:
+    """The type value a creature carries -> the client's word for it.
+
+    The vocabulary is vendored keyed by the mask bit a misc slot sets, since
+    that is how a spell tests it, and a creature carries the value itself. The
+    bit is turned back here rather than in every reader that draws one.
+    """
+    return {bit.bit_length(): str(word) for bit, word in load_local_enum("creature_types").items()}
+
+
+def creature_rank_words() -> dict[int, str]:
+    """The rank value -> the word for it, from normal up to world boss."""
+    return {rank: str(word) for rank, word in load_local_enum("creature_ranks").items()}
+
+
+class CreatureKind(NamedTuple):
+    """What a creature is, as the server bills it."""
+
+    creature: int
+    type: int
+    """A `CreatureType` value: 1 beast, 6 undead, 7 humanoid, and the rest."""
+    rank: int
+    """A `CreatureEliteType` value: normal, elite, rare, world boss."""
+    faction: int
+    """The `FactionTemplate` it belongs to, which the build already names."""
 
 
 @dataclass

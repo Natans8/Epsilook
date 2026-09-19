@@ -20,8 +20,16 @@ from ..derive import DeriveContext
 from ..model import SECTIONS, CountFamily, Section, SectionColumns
 from ..progress import detail
 
-PACK_FORMAT = 69
+PACK_FORMAT = 70
 """What shape the artifact is in.
+
+70 says what a creature is. `creatures` carries, per creature the pack names,
+the type the server bills it as, its rank from normal up to world boss, and
+the faction template it belongs to, which `referenceNames` already names;
+`creatureTypes` and `creatureRanks` ship the words, keyed by the value a
+creature carries rather than by the bit a mask sets. The columns come from the
+server dump, because the client's own creature table describes barely a tenth
+of the creatures a spell reaches.
 
 69 gives every light preset its colours. `skyRamps` is keyed by the preset
 rather than by the dome it draws, and carries every preset the build has

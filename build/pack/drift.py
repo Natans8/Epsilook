@@ -127,6 +127,10 @@ TDB_OPTIONAL_COLUMNS = {
     ("creature_template", "modelid2"): "0",
     ("creature_template", "modelid3"): "0",
     ("creature_template", "modelid4"): "0",
+    # the rank, renamed between releases: older dumps write `rank` and newer
+    # ones `Classification`, so a release has one of the two and never both
+    ("creature_template", "rank"): "0",
+    ("creature_template", "Classification"): "0",
 }
 
 # Legion-era world dumps keep up to four display ids on creature_template,

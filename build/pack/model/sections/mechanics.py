@@ -13,13 +13,12 @@ vocabulary module of their own.
 from __future__ import annotations
 
 import math
-from collections import defaultdict
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Mapping
 
 from ...derive import Reads
-from ...derive.rows import MechanicRow
+from ...derive.references import referenced
 from ...routes import EffectNumbers, interrupt_words
-from ...routes.flow import Holds, export_name
+from ...routes.flow import export_name
 from ...routes.selectors import SELECTORS, WORDS
 from ...routes.values import FIRST_EFFECT_INDEX
 from ...targets import IMPLICIT_PREFIX
@@ -198,34 +197,6 @@ REFERENCE_NAMES: Mapping[str, Callable[[Reads], Mapping[int, str]]] = {
 """The tables a reference slot points into whose names the build already reads, each as its whole id to name map."""
 
 
-def referenced(rows: Iterable[MechanicRow], numbers: Iterable[EffectNumbers] = ()) -> dict[str, set[int]]:
-    """The ids the rows' reference slots point at, by the table they point into.
-
-    An aura row is read under its aura and any other row under its effect, the
-    way the selector roster declares them. The item an effect creates is one
-    more reference, held in its own column rather than a misc slot.
-    """
-    slots: dict[tuple[str, int], list[tuple[str, str]]] = defaultdict(list)
-    for declared in SELECTORS:
-        if declared.table != "SpellEffect":
-            continue
-        on = export_name(declared.select.on)
-        for slot in declared.select.slots:
-            if slot.holds is Holds.REFERENCE and slot.into in REFERENCE_NAMES:
-                for value in declared.select.values:
-                    slots[(on, value)].append((export_name(slot.column), slot.into))
-    found: dict[str, set[int]] = defaultdict(set)
-    for row in rows:
-        for column, into in slots.get(("EffectAura", row.aura) if row.aura else ("Effect", row.effect), ()):
-            value = row.misc_a if column.endswith("_0") else row.misc_b
-            if value:
-                found[into].add(value)
-    for number in numbers:
-        if number.item:
-            found["Item"].add(number.item)
-    return found
-
-
 def reference_names(reads: Reads) -> SectionColumns:
     """The name of every id a reference slot of this build's rows points at.
 
@@ -233,7 +204,7 @@ def reference_names(reads: Reads) -> SectionColumns:
     build cannot find is empty, so every language's column lines up with the
     same ids.
     """
-    found = referenced(reads.rows.mechanics, reads.effects.numbers)
+    found = referenced(reads.rows.mechanics, reads.effects.numbers, into=REFERENCE_NAMES)
     rows = [(table, ident) for table in sorted(found) for ident in sorted(found[table])]
     names = {table: REFERENCE_NAMES[table](reads) for table in found}
     return {
