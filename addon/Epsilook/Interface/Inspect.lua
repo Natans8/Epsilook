@@ -429,12 +429,6 @@ end
 -- from its label; such a tooltip reads better as plain lines.
 local ROW_LIMIT = 40
 
---- The properties a tooltip leaves out.
--- TODO: empty this once the words for these are settled; until then they
--- are carried by the pack and shown nowhere.
-local WITHHELD =
-	{ every = true, hops = true, unimplemented = true, nostack = true, chainfirst = true }
-
 --- The types whose value of one says nothing: drawn at its own size, played
 -- at its own speed.
 local NEUTRAL = { multiplier = true, pace = true }
@@ -519,10 +513,15 @@ local PAYLOAD_KINDS = {
 	creature_template = { summon = true, morph = true },
 	gameobject_template = { object = true },
 	ScreenEffect = { screen = true },
+	SpellVisualScreenEffect = { screen = true },
+	SpellShapeshiftForm = { shapeshift = true },
 	Vehicle = { vehicle = true },
 	FactionTemplate = { faction = true },
-	ShapeshiftForm = { shapeshift = true },
-	SoundKit = { sound = true },
+	SpellChainEffects = { chain = true },
+	DissolveEffect = { dissolve = true },
+	ShadowyEffect = { shadowy = true },
+	EdgeGlowEffect = { glow = true },
+	BarrageEffect = { barrage = true },
 }
 
 --- The columns a payload is looked for on. A misc value with a route is lifted
@@ -616,12 +615,21 @@ function Inspect.FillTooltip(tooltip, part, spellID)
 	if kind and kind.hint and kind.hint ~= "" then
 		tooltip:AddLine(kind.hint, 0.62, 0.62, 0.62)
 	end
-	local values, rows = Inspect.Values(part), {}
+	local values, rows, flags = Inspect.Values(part), {}, {}
 	for _, value in ipairs(values) do
-		local silent = WITHHELD[value.name] or (NEUTRAL[value.type] and value.text == UNCHANGED)
-		if not silent then
-			row(rows, value.label, value.type ~= "flag" and detailed(value) or nil)
+		-- A size or a speed of one says nothing: drawn at its own size, played at
+		-- its own speed.
+		local silent = NEUTRAL[value.type] and value.text == UNCHANGED
+		if value.type == "flag" and not silent then
+			-- A flag is its word and nothing else, and a row with three of them
+			-- would be three lines saying one thing, so they share a line.
+			flags[#flags + 1] = value.label
+		elseif not silent then
+			row(rows, value.label, detailed(value))
 		end
+	end
+	if #flags > 0 then
+		row(rows, table.concat(flags, ", "), nil)
 	end
 	for _, value in ipairs(payloadValues(payloadOf(spellID, part))) do
 		row(rows, value.label, detailed(value))

@@ -280,15 +280,16 @@ def test_a_creatures_tooltip_reads_down_to_what_it_looks_like(engine: LuaRuntime
 
 
 def test_a_tooltip_says_only_what_says_something(engine: LuaRuntime) -> None:
-    """A size of one is left out, a flag is its word alone, and a property whose word is unsettled is absent."""
+    """A size of one is left out, and a flag is its word alone rather than a word and a number."""
     api = lua_table(engine, b"Epsilook")
     attached = tooltip_lines(engine, 116, b"model", part_index(api, 116, b"model", "attach"))
     assert not [line for line in attached if line.startswith(("scale", "built"))]
     assert "point Head - 20" in attached
     sound = tooltip_lines(engine, 116, b"sound", 1)
     assert "loop" in sound and not [line for line in sound if line.startswith("loop ")]
+    # A flag is its word alone, and several share one line rather than taking one each.
     effect = tooltip_lines(engine, 116, b"mech", part_index(api, 116, b"mech", "effect"))
-    assert not [line for line in effect if line.startswith("chainfirst")]
+    assert "chainfirst" in effect
 
 
 def test_a_tooltip_of_short_rows_is_two_columns_and_one_with_a_path_is_lines(engine: LuaRuntime) -> None:
