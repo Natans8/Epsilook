@@ -131,8 +131,9 @@ local function build(pinned)
 		frame.model:SetScript("OnMouseUp", function()
 			frame.turning = nil
 		end)
-		-- ⛔ Where it is facing is kept here rather than asked for: this client
-		-- has SetFacing and no GetFacing, so asking would error every frame.
+		-- Where it is facing is kept here rather than asked back, so that turning
+		-- it is arithmetic on a number this frame owns rather than a round trip
+		-- through the model on every frame.
 		frame.model:SetScript("OnUpdate", function(model)
 			if frame.turning then
 				local at = select(1, _G.GetCursorPosition())
