@@ -77,24 +77,29 @@ function Preview.ModelOf(part)
 end
 
 --- What can be looked at, and how, in the order a part is tried against them.
--- `from` is what the subject needs off a part and `draw` puts it on a model
--- frame; a part offers a preview when the first `from` resolves, so the order
--- is which reading of a part wins where it could be read two ways. Teaching
--- this one more subject is a row.
+-- `from` is what the subject needs off a part; a part offers a preview when the
+-- first `from` resolves, so the order is which reading of a part wins where it
+-- could be read two ways. Teaching this one more subject is a row.
 --
--- An animation is played on the player's own body, because that is whose
--- animation it is and whose body the person asking is looking at. A body that
--- has been morphed belongs to the larger readings -- a stage, a whole spell --
--- where something in the spell did the morphing, and those are not built.
+-- A subject then says what it IS, and the two answers are drawn differently.
+-- Something that happens to a body carries `stage`, which hands back one moment
+-- of a cast in the shape a spell's stages already have, and is played on a loop,
+-- because an animation runs through once in about a second and a thing that has
+-- already finished by the time the eye reaches it is not a preview. Something
+-- that simply IS carries `draw` and is put up once.
+--
+-- A creature is drawn as its display rather than as its model file, because a
+-- display is the model already wearing its textures, and the file alone is a
+-- grey shape. A part naming a creature names every display the creature wears,
+-- so the first is the one shown.
 Preview.SUBJECTS = {
 	{
 		word = "animkit",
 		from = function(part)
 			return part.axis == "anim" and stored(part, "id") or nil
 		end,
-		draw = function(model, kitID)
-			model:SetUnit("player")
-			pcall(model.PlayAnimKit, model, kitID)
+		stage = function(kitID)
+			return { stage = 0, kits = {}, animkits = { kitID }, anims = {} }
 		end,
 	},
 	{
@@ -102,9 +107,18 @@ Preview.SUBJECTS = {
 		from = function(part)
 			return part.axis == "anim" and stored(part, "anim") or nil
 		end,
-		draw = function(model, animation)
-			model:SetUnit("player")
-			pcall(model.SetAnimation, model, animation)
+		stage = function(animation)
+			return { stage = 0, kits = {}, animkits = {}, anims = { animation } }
+		end,
+	},
+	{
+		word = "creature",
+		from = function(part)
+			local displays = Epsilook:GetPartDisplays(part)
+			return displays[1] and displays[1].id or nil
+		end,
+		draw = function(model, displayID)
+			pcall(model.SetDisplayInfo, model, displayID)
 		end,
 	},
 	{
@@ -213,20 +227,94 @@ local function build(pinned)
 	return frame
 end
 
+--- How long one beat of a sequence is held, and how long the last of them
+-- stands before the body is cleared and it runs again.
+Preview.BEAT, Preview.REST = 1.2, 2
+
+--- Put everything one stage of a spell does on a body at once, since a stage is
+-- a moment rather than a list: the pose first, then what is drawn over it.
+-- @param model the model frame
+-- @param stage one entry of a sequence
+local function stand(model, stage)
+	for _, anim in ipairs(stage.anims) do
+		pcall(model.SetAnimation, model, anim)
+	end
+	for _, kit in ipairs(stage.animkits) do
+		pcall(model.PlayAnimKit, model, kit)
+	end
+	for _, kit in ipairs(stage.kits) do
+		-- Held rather than played once, so a stage with a loop in it keeps going
+		-- for as long as the stage lasts.
+		pcall(model.ApplySpellVisualKit, model, kit, false)
+	end
+end
+
+--- Run a sequence on a body, one beat at a time, over and over.
+--
+-- A spell is a sequence and not a picture, so this plays it as one: each stage
+-- goes on in cast order, layering the way it layers during a real cast. The
+-- whole spell at once would be every stage happening simultaneously, which is a
+-- thing the spell never does.
+--
+-- The last beat is held for the rest as well as its own turn, because for most
+-- spells the last stage is the aura -- what the spell LEAVES, which is what a
+-- reader is usually asking after. Then the body is cleared and it starts again.
+-- A single animation is a sequence of one, so it loops by the same clock.
+-- @param frame a look whose `sequence` is set
+local function play(frame)
+	frame.at, frame.due = 0, 0
+	frame:SetScript("OnUpdate", function(_, elapsed)
+		frame.due = frame.due - elapsed
+		if frame.due > 0 then
+			return
+		end
+		frame.at = frame.at + 1
+		local stage = frame.sequence and frame.sequence[frame.at]
+		if stage then
+			frame.due = Preview.BEAT
+			stand(frame.model, stage)
+		elseif frame.sequence and #frame.sequence > 1 and frame.at == #frame.sequence + 1 then
+			-- Only where there were stages to arrive at: a lone animation has no
+			-- final state to hold, so resting on it is dead time before the replay.
+			frame.due = Preview.REST
+		else
+			-- Setting the body again is what takes the applied visuals back off it.
+			-- ⛔ Not `RefreshUnit`, which is the same addon's path for a unit that is
+			-- not the player; for the player it sets the model by unit instead, and
+			-- this frame only ever shows the player.
+			frame.at, frame.due = 0, 0
+			frame.model:SetUnit("player")
+			frame.model:SetFacing(frame.facing or Preview.FACING)
+		end
+	end)
+end
+
 --- Put a subject on a frame, the same way whether it is hovered or pinned.
+--
+-- ⚠ The frame must already be SHOWN. A model frame applies nothing while it is
+-- hidden, so a model set first and shown after is a model the frame quietly
+-- drops -- and a `PlayerModel` that has ever held a unit puts the unit back up
+-- instead, which reads as every preview showing the player.
 local function draw(frame, part)
 	local subject, value = Preview.SubjectOf(part)
 	if not (frame and frame.model and subject) then
 		return false
 	end
-	-- A frame is reused, so whatever was running on it stops: a spell's sequence
-	-- left ticking would keep laying kits over whatever is drawn next.
-	frame.kits = nil
+	-- A frame is reused, so whatever was running on it stops: a sequence left
+	-- ticking would keep laying its own beats over whatever is drawn next.
+	frame.sequence = nil
 	frame:SetScript("OnUpdate", nil)
 	frame.model:ClearModel()
-	subject.draw(frame.model, value)
-	frame.model:SetPosition(0, 0, 0)
 	frame.facing = Preview.FACING
+	if subject.stage then
+		-- It happens to a body, so there has to be a body for it to happen to.
+		frame.model:SetUnit("player")
+		frame.sequence = { subject.stage(value) }
+		play(frame)
+	else
+		subject.draw(frame.model, value)
+	end
+	frame.model:SetPosition(0, 0, 0)
 	frame.model:SetFacing(frame.facing)
 	return true
 end
@@ -286,73 +374,63 @@ function Preview.Place(frame)
 	end
 end
 
---- The visual kits a spell draws, in the order the client plays them: by stage,
--- since a stage's stored number is its place in the cast, and by the order the
--- pack holds them within a stage.
+--- One id gathered against the stage it happens at, refusing a repeat. A row
+-- exists once per audience, so the same thing at the same stage arrives twice.
+local function gather(stages, order, stage, field, id, seen)
+	local once = stage .. ":" .. field .. ":" .. tostring(id)
+	if not id or seen[once] then
+		return
+	end
+	seen[once] = true
+	if not stages[stage] then
+		stages[stage] = { stage = stage, kits = {}, animkits = {}, anims = {} }
+		order[#order + 1] = stages[stage]
+	end
+	local into = stages[stage][field]
+	into[#into + 1] = id
+end
+
+--- What a spell does at each of its stages, in the order it is cast.
+--
+-- A spell is not a set of visual kits: at any stage the body is also holding a
+-- pose and playing an animation, and a cast read without them is a cast with
+-- the caster standing still through it. The anim axis carries both -- an anim
+-- kit, which is a sequence with a bone set and a speed, and a loose animation --
+-- and both are stamped with the same stage the visual kits are, so the three
+-- gather into one timeline without anything having to be matched up.
 -- @param spellID the spell
--- @return a list of `{id, stage}`, the first cast first
-function Preview.KitsOf(spellID)
-	local kits, seen = {}, {}
+-- @return a list of `{stage, kits, animkits, anims}`, the first cast first
+function Preview.SequenceOf(spellID)
+	local stages, order, seen = {}, {}, {}
 	for i = 1, Epsilook:GetNumParts(spellID, "fx") do
 		local part = Epsilook:GetPartDataByIndex(spellID, "fx", i)
 		if part.kind == "visual" then
-			local id = stored(part, "id")
-			local stage = stored(part, "phase") or 0
-			-- A kit at two stages is played twice, which is what the spell does;
-			-- the same kit twice at one stage is one row per audience.
-			local once = stage .. ":" .. tostring(id)
-			if id and not seen[once] then
-				seen[once] = true
-				kits[#kits + 1] = { id = id, stage = stage, at = #kits + 1 }
-			end
+			gather(stages, order, stored(part, "phase") or 0, "kits", stored(part, "id"), seen)
 		end
 	end
-	table.sort(kits, function(a, b)
+	for i = 1, Epsilook:GetNumParts(spellID, "anim") do
+		local part = Epsilook:GetPartDataByIndex(spellID, "anim", i)
+		local stage = stored(part, "phase") or 0
+		-- An anim kit names its own animation as well, and playing both would be
+		-- the kit fighting the animation underneath it; the kit is the fuller
+		-- reading, so a row that has one contributes only that.
+		local kit = stored(part, "id")
+		if kit then
+			gather(stages, order, stage, "animkits", kit, seen)
+		else
+			gather(stages, order, stage, "anims", stored(part, "anim"), seen)
+		end
+	end
+	for at, each in ipairs(order) do
+		each.at = at
+	end
+	table.sort(order, function(a, b)
 		if a.stage ~= b.stage then
 			return a.stage < b.stage
 		end
 		return a.at < b.at
 	end)
-	return kits
-end
-
---- How long one stage is held before the next is laid over it, and how long the
--- whole cast stands before the body is cleared and it runs again.
-Preview.BEAT, Preview.REST = 1.2, 2
-
---- Run a spell's kits on a body, one stage at a time, over and over.
---
--- A spell is a sequence and not a picture, so this plays it as one: the kits go
--- on in cast order, layering the way they layer during a real cast, and at the
--- end the body is cleared and it starts again. That is the loop a reader is
--- actually asking to see, and it is what one frame can show honestly -- all of
--- them at once would be every stage of the spell happening simultaneously, which
--- is a thing the spell never does.
--- @param frame a look whose `kits` are set
-local function play(frame)
-	frame.at, frame.due = 0, 0
-	frame:SetScript("OnUpdate", function(_, elapsed)
-		frame.due = frame.due - elapsed
-		if frame.due > 0 then
-			return
-		end
-		frame.at = frame.at + 1
-		local kit = frame.kits and frame.kits[frame.at]
-		if not kit then
-			-- Setting the body again is what takes the applied visuals back off it.
-			-- ⛔ Not `RefreshUnit`, which is the same addon's path for a unit that
-			-- is not the player; for the player it sets the model by unit instead,
-			-- and this frame only ever shows the player.
-			frame.at, frame.due = 0, Preview.REST
-			frame.model:SetUnit("player")
-			frame.model:SetFacing(frame.facing or Preview.FACING)
-			return
-		end
-		frame.due = Preview.BEAT
-		-- Held rather than played once, so a stage with a loop in it keeps going
-		-- for as long as the stage lasts.
-		pcall(frame.model.ApplySpellVisualKit, frame.model, kit.id, false)
-	end)
+	return order
 end
 
 --- Show what a whole spell looks like, on the player's own body.
@@ -364,8 +442,8 @@ end
 -- @param spellID the spell
 -- @return whether there was anything to show
 function Preview.Spell(spellID)
-	local kits = Preview.KitsOf(spellID)
-	if #kits == 0 then
+	local sequence = Preview.SequenceOf(spellID)
+	if #sequence == 0 then
 		return false
 	end
 	if not hovered then
@@ -374,14 +452,14 @@ function Preview.Spell(spellID)
 	if not (hovered and hovered.model) then
 		return false
 	end
+	Preview.Place(hovered)
+	hovered:Show()
 	hovered.model:ClearModel()
 	hovered.model:SetUnit("player")
 	hovered.facing = Preview.FACING
 	hovered.model:SetFacing(hovered.facing)
-	hovered.kits = kits
+	hovered.sequence = sequence
 	play(hovered)
-	Preview.Place(hovered)
-	hovered:Show()
 	return true
 end
 
@@ -389,15 +467,18 @@ end
 -- @param part a PartData
 -- @return whether there was something to show
 function Preview.Hover(part)
+	if not Preview.Offers(part) then
+		return false
+	end
 	if not hovered then
 		hovered = build(false)
 	end
-	if not draw(hovered, part) then
+	if not (hovered and hovered.model) then
 		return false
 	end
 	Preview.Place(hovered)
 	hovered:Show()
-	return true
+	return draw(hovered, part)
 end
 
 --- Take the hovered look down. A pinned one is not touched.
@@ -412,8 +493,11 @@ end
 -- @param part a PartData
 -- @return whether it was pinned
 function Preview.Pin(part)
+	if not Preview.Offers(part) then
+		return false
+	end
 	local frame = build(true)
-	if not draw(frame, part) then
+	if not (frame and frame.model) then
 		return false
 	end
 	-- Where the hovered one was, but held to the screen rather than to a tooltip
@@ -434,7 +518,7 @@ function Preview.Pin(part)
 		oldest:Hide()
 	end
 	frame:Show()
-	return true
+	return draw(frame, part)
 end
 
 --- Close one pinned look. The others stay where the player put them.
