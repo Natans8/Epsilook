@@ -32,13 +32,6 @@ local MENU_FRAME = "ExampleMenuFrame"
 -- take, and the one thing under it.
 local TITLE, INSPECT = "Epsilook ...", "Inspect"
 
---- Say a line the way the rest of the addon says one.
-local function say(line)
-	if _G.DEFAULT_CHAT_FRAME then
-		_G.DEFAULT_CHAT_FRAME:AddMessage(line)
-	end
-end
-
 --- The entries this addon adds, in the shape the menu's own entries take: a
 -- rule, a title, then what sits under it indented as theirs are.
 -- @param spellOf a function answering which spell the menu stands open for
@@ -53,7 +46,11 @@ function Spellbook.Entries(spellOf)
 			func = function()
 				local spellID = spellOf()
 				if spellID then
-					Epsilook.Inspect.Print(spellID, say)
+					-- Through the command rather than straight to the dossier: the
+					-- command is the one door that loads the data and says what is
+					-- wrong where it cannot, and a menu click is only another way
+					-- of typing the spell's number.
+					Epsilook.Shell.Command(tostring(spellID))
 				end
 				if _G.CloseDropDownMenus then
 					_G.CloseDropDownMenus()

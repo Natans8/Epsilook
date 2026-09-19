@@ -169,7 +169,7 @@ Preview.SUBJECTS = {
 			return stored(part, "id")
 		end,
 		put = function(frame, kitID)
-			Preview.Loop(frame, "kits", kitID)
+			Preview.Loop(frame, "kits", kitID, true)
 		end,
 	},
 	{
@@ -237,9 +237,6 @@ local function build(pinned)
 	frame.scene = _G.CreateFrame("ModelScene", nil, frame)
 	frame.scene:SetPoint("TOPLEFT", 6, -6)
 	frame.scene:SetPoint("BOTTOMRIGHT", -6, 6)
-	if _G.Mixin and _G.ModelSceneMixin then
-		_G.Mixin(frame.scene, _G.ModelSceneMixin)
-	end
 	-- A scene draws nothing until it is told where to look from and what lights
 	-- it. There is no camera in the scene's own right and no default: these are
 	-- the numbers the addons on this client use for a figure filling a square.
@@ -314,11 +311,27 @@ Preview.BEAT, Preview.REST = 1.2, 2
 -- how a loop wipes what the last run applied to it.
 -- @param frame the look
 function Preview.Body(frame)
-	frame.rider:ClearModel()
-	frame.rider:Hide()
+	Preview.Clear(frame)
 	frame.body:SetModelByUnit("player")
 	frame.body:SetPosition(0, 0, 0)
 	frame.body:SetYaw(frame.facing or Preview.FACING)
+end
+
+--- Take everything off both actors: the models, and what was playing on them.
+--
+-- ⚠ What the client itself does to reset an actor, rather than relying on a new
+-- model to clear the old one's kits and animation. Loading a model is not
+-- documented to stop what was playing, and the client does not rely on it.
+-- @param frame the look
+function Preview.Clear(frame)
+	for _, actor in ipairs({ frame.body, frame.rider }) do
+		pcall(actor.StopAnimationKit, actor)
+		pcall(actor.SetSpellVisualKit, actor, nil)
+		pcall(actor.SetAnimation, actor, 0)
+		pcall(actor.SetScale, actor, 1)
+		actor:ClearModel()
+	end
+	frame.rider:Hide()
 end
 
 --- Seat the player on a mount, which is what the game's own mount list shows
@@ -331,15 +344,16 @@ end
 -- @param frame the look
 -- @param displayID the mount's creature display
 function Preview.Mount(frame, displayID)
-	frame.body:ClearModel()
-	frame.body:SetYaw(frame.facing or Preview.FACING)
-	frame.body:SetUseCenterForOrigin(false, false, false)
+	Preview.Clear(frame)
 	frame.body:SetPosition(0, 0, 0)
+	frame.body:SetYaw(frame.facing or Preview.FACING)
 	if not pcall(frame.body.SetModelByCreatureDisplayID, frame.body, displayID) then
 		return false
 	end
 	frame.body:SetAnimation(0)
 	frame.rider:Show()
+	-- The second argument sheathes the rider's weapons, which is how the client's
+	-- own list asks for it.
 	local seated, riding = pcall(frame.rider.SetModelByUnit, frame.rider, "player", true)
 	if not (seated and riding) then
 		-- The mount alone is still the answer to what the spell gives you, and
@@ -351,9 +365,6 @@ function Preview.Mount(frame, displayID)
 	if fitted and scale and scale ~= 0 then
 		frame.rider:SetScale(1 / scale)
 	end
-	frame.rider:SetYaw(0)
-	frame.rider:SetUseCenterForOrigin(false, false, false)
-	pcall(frame.rider.SheatheWeapon, frame.rider, true)
 	pcall(frame.body.AttachToMount, frame.body, frame.rider, 0)
 	return true
 end
@@ -364,16 +375,18 @@ end
 -- @param stage one entry of a sequence
 local function stand(frame, stage)
 	local actor = frame.body
-	for _, display in ipairs(stage.mounts) do
-		-- Before the plain displays, and instead of them: a body cannot both turn
-		-- into something and sit on it.
-		Preview.Mount(frame, display)
-	end
-	for _, display in ipairs(stage.displays) do
-		-- First, because it replaces the body the rest of this stage happens to:
-		-- a spell that turns its target into something and then has it move is
-		-- the something moving.
-		pcall(actor.SetModelByCreatureDisplayID, actor, display)
+	if stage.mounts[1] then
+		-- Instead of the plain displays rather than before them: a body cannot
+		-- both turn into something and sit on it, and a morph laid over a mount
+		-- leaves the rider seated on whatever the body became.
+		Preview.Mount(frame, stage.mounts[1])
+	else
+		for _, display in ipairs(stage.displays) do
+			-- First, because it replaces the body the rest of this stage happens
+			-- to: a spell that turns its target into something and then has it
+			-- move is the something moving.
+			pcall(actor.SetModelByCreatureDisplayID, actor, display)
+		end
 	end
 	for _, anim in ipairs(stage.anims) do
 		pcall(actor.SetAnimation, actor, anim)
@@ -400,7 +413,10 @@ end
 -- @param frame a look whose `sequence` is set
 local function play(frame)
 	frame.at, frame.due = 0, 0
-	frame:SetScript("OnUpdate", function(_, elapsed)
+	local function stop()
+		frame:SetScript("OnUpdate", nil)
+	end
+	local tick = function(_, elapsed)
 		frame.due = frame.due - elapsed
 		if frame.due > 0 then
 			return
@@ -422,7 +438,15 @@ local function play(frame)
 			frame.at, frame.due = 0, 0
 			Preview.Body(frame)
 		end
-	end)
+	end
+	-- ⚠ A clock runs every frame, so a fault in it faults every frame. It is
+	-- reported once and then stopped, which leaves a still look rather than an
+	-- error per frame for as long as the look is up.
+	local shell = Epsilook.Shell
+	if shell and shell.Safely then
+		tick = shell.Safely(tick, stop)
+	end
+	frame:SetScript("OnUpdate", tick)
 end
 
 --- Put one thing up and leave it there, which is every subject that is a thing
@@ -437,13 +461,20 @@ function Preview.Still(frame, method, id)
 end
 
 --- Play one thing on the player's own body, over and over, as a sequence of
--- one. A lone animation has no final state to hold, so it names no held beat.
+-- one.
+--
+-- Whether it rests is the subject's to say. An animation runs through in about
+-- a second and has no final state, so resting after it is dead air before the
+-- replay; a visual kit often runs longer than a beat, and wiping it at the
+-- beat's end shows only its opening.
 -- @param frame the look
 -- @param field which of a beat's lists it belongs in
 -- @param id the id
-function Preview.Loop(frame, field, id)
+-- @param rests whether the one beat is held through the rest
+function Preview.Loop(frame, field, id, rests)
 	Preview.Body(frame)
-	frame.sequence, frame.hold = { beat(nil, nil, { [field] = id }) }, nil
+	frame.sequence = { beat(nil, nil, { [field] = id }) }
+	frame.hold = rests and 1 or nil
 	play(frame)
 end
 
@@ -545,15 +576,21 @@ end
 -- what an aura does here. It stays reachable on its own row, like any other
 -- visual kit.
 Preview.ORDER = {
-	precast = 1,
-	cast = 2,
-	channel = 3,
-	launch = 4,
-	travel = 5,
-	travelend = 6,
-	impact = 7,
-	aura = 8,
-	auraend = 9,
+	none = 1,
+	precast = 2,
+	precastend = 3,
+	cast = 4,
+	channel = 5,
+	channelend = 6,
+	launch = 7,
+	travel = 8,
+	travelend = 9,
+	impact = 10,
+	trigger = 11,
+	triggerend = 12,
+	oneshot = 13,
+	aura = 14,
+	auraend = 15,
 }
 Preview.HELD = "aura"
 Preview.ENDED = "auraend"
@@ -584,6 +621,9 @@ local BODIES = { morph = "own", shapeshift = "own", mount = "held" }
 -- part that names no stage is one moment of its own, before every named one.
 local function phaseOf(part)
 	local at, word = stored(part, "phase")
+	if word == "" then
+		word = nil
+	end
 	return at or 0, word
 end
 
@@ -621,12 +661,15 @@ end
 -- @return a list of `{stage, kits, animkits, anims}`, the first cast first
 function Preview.SequenceOf(spellID)
 	local stages, order, seen = {}, {}, {}
-	for _, axis in ipairs({ "fx", "mech", "model" }) do
+	for _, axis in ipairs({ "fx", "model" }) do
 		for i = 1, Epsilook:GetNumParts(spellID, axis) do
+			-- A row of a kind this reader does not know, from a newer pack, comes
+			-- back as nothing and is stepped over.
 			local part = Epsilook:GetPartDataByIndex(spellID, axis, i)
-			if part.kind == "visual" then
+			local kind = part and part.kind
+			if kind == "visual" then
 				gather(stages, order, { phaseOf(part) }, "kits", stored(part, "id"), seen)
-			elseif BODIES[part.kind] then
+			elseif BODIES[kind] then
 				-- ⛔ These two kinds by name, not anything that names a creature: a
 				-- summon names one too, and putting the summoned creature on the
 				-- caster's body says the caster turned into what they called up.
@@ -634,7 +677,7 @@ function Preview.SequenceOf(spellID)
 				local first = displays[1] and displays[1].id or nil
 				local at, word = phaseOf(part)
 				local field = "displays"
-				if BODIES[part.kind] == "held" then
+				if BODIES[kind] == "held" then
 					-- A mount names no stage of its own, and does not need to: being
 					-- mounted is what the spell LEAVES, which is the stage held anyway.
 					word, field = Preview.HELD, "mounts"
@@ -645,15 +688,17 @@ function Preview.SequenceOf(spellID)
 	end
 	for i = 1, Epsilook:GetNumParts(spellID, "anim") do
 		local part = Epsilook:GetPartDataByIndex(spellID, "anim", i)
-		local at = { phaseOf(part) }
-		-- An anim kit names its own animation as well, and playing both would be
-		-- the kit fighting the animation underneath it; the kit is the fuller
-		-- reading, so a row that has one contributes only that.
-		local kit = stored(part, "id")
-		if kit then
-			gather(stages, order, at, "animkits", kit, seen)
-		else
-			gather(stages, order, at, "anims", stored(part, "anim"), seen)
+		if part then
+			local at = { phaseOf(part) }
+			-- An anim kit names its own animation as well, and playing both would
+			-- be the kit fighting the animation underneath it; the kit is the
+			-- fuller reading, so a row that has one contributes only that.
+			local kit = stored(part, "id")
+			if kit then
+				gather(stages, order, at, "animkits", kit, seen)
+			else
+				gather(stages, order, at, "anims", stored(part, "anim"), seen)
+			end
 		end
 	end
 	-- The cast, and no further. See `ENDED` above.
@@ -671,19 +716,25 @@ function Preview.SequenceOf(spellID)
 		end
 		return a.at < b.at
 	end)
+	-- ⛔ Last by construction rather than by where `ORDER` put it. A stage no
+	-- word here names sorts after every one that is named, and left there it is
+	-- what the loop would settle on, which is the one thing the loop promises it
+	-- will not settle on.
+	for at, each in ipairs(order) do
+		if each.word == Preview.HELD then
+			table.remove(order, at)
+			order[#order + 1] = each
+			break
+		end
+	end
 	return order
 end
 
---- Which beat of a sequence the loop settles on: the aura where the spell has
--- one, and otherwise wherever it ends up.
+--- Which beat of a sequence the loop settles on: the last, which is the aura
+-- whenever the spell has one, since SequenceOf puts it there.
 -- @param sequence as SequenceOf gives it
 -- @return the index to hold
 function Preview.HoldOf(sequence)
-	for at, stage in ipairs(sequence) do
-		if stage.word == Preview.HELD then
-			return at
-		end
-	end
 	return #sequence
 end
 
@@ -708,9 +759,6 @@ function Preview.Spell(spellID)
 	end
 	Preview.Place(hovered)
 	hovered:Show()
-	hovered.body:ClearModel()
-	hovered.rider:ClearModel()
-	hovered.rider:Hide()
 	hovered.facing = Preview.FACING
 	Preview.Body(hovered)
 	hovered.sequence, hovered.hold = sequence, Preview.HoldOf(sequence)
@@ -743,6 +791,61 @@ function Preview.Leave()
 	end
 end
 
+--- Closed looks, kept for the next one to be pinned.
+--
+-- ⚠ The client never frees a frame, so a look built per pin and hidden when
+-- closed is a look that stays in memory for the session, still holding its
+-- models. Forty pins would be forty scenes with four on screen.
+local spare = {}
+
+--- Put a look down: its clock stopped, its models released, and the frame
+-- kept for reuse.
+local function release(frame)
+	frame:SetScript("OnUpdate", nil)
+	frame.sequence, frame.distance, frame.turning = nil, nil, nil
+	-- A reused look opens where a new one would, not where its last owner left
+	-- the camera.
+	frame.scene:SetCameraPosition(Preview.DISTANCE, 0, 0)
+	Preview.Clear(frame)
+	frame:Hide()
+	spare[#spare + 1] = frame
+end
+
+--- Where a newly pinned look goes: at the pointer the first time, and after
+-- that a step past the look pinned last, in the direction that keeps it on
+-- the screen and off the link that was clicked.
+--
+-- Off the last look's own position rather than off how many are up. A count
+-- repeats itself once the oldest starts being closed, and a new look landing
+-- exactly on the one before it reads as the click having done nothing.
+local function placed(frame)
+	local x, y = cursor()
+	local mine = x and sides(x, y) or "CENTER"
+	local last = pinned[#pinned]
+	frame:ClearAllPoints()
+	if last and last:IsShown() and last:GetLeft() then
+		local across = Preview.GAP
+		if mine:find("RIGHT") then
+			across = -across
+		end
+		local down = -Preview.GAP
+		if mine:find("BOTTOM") then
+			down = Preview.GAP
+		end
+		frame:SetPoint(
+			"BOTTOMLEFT",
+			_G.UIParent,
+			"BOTTOMLEFT",
+			last:GetLeft() + across,
+			last:GetBottom() + down
+		)
+	elseif x then
+		frame:SetPoint(mine, _G.UIParent, "BOTTOMLEFT", x, y)
+	else
+		frame:SetPoint("CENTER")
+	end
+end
+
 --- Keep a look until it is closed. The oldest goes when there are too many, so
 -- that a click always shows something rather than quietly doing nothing.
 -- @param part a PartData
@@ -751,26 +854,14 @@ function Preview.Pin(part)
 	if not Preview.Offers(part) then
 		return false
 	end
-	local frame = build(true)
+	local frame = table.remove(spare) or build(true)
 	if not (frame and frame.body) then
 		return false
 	end
-	-- Where the hovered one was, but held to the screen rather than to a tooltip
-	-- that is about to go away, and offset by however many are already up so the
-	-- newest is visibly its own rather than landing on the one before it.
-	local step = #pinned * Preview.GAP
-	local x, y = cursor()
-	frame:ClearAllPoints()
-	if x then
-		local mine = sides(x, y)
-		frame:SetPoint(mine, _G.UIParent, "BOTTOMLEFT", x + step, y - step)
-	else
-		frame:SetPoint("CENTER", _G.UIParent, "CENTER", step, step)
-	end
+	placed(frame)
 	table.insert(pinned, frame)
 	while #pinned > Preview.MOST do
-		local oldest = table.remove(pinned, 1)
-		oldest:Hide()
+		release(table.remove(pinned, 1))
 	end
 	frame:Show()
 	return draw(frame, part)
@@ -784,7 +875,7 @@ function Preview.Unpin(frame)
 			break
 		end
 	end
-	frame:Hide()
+	release(frame)
 end
 
 --- How many looks are pinned, which is what a test asks.

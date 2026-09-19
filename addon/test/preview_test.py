@@ -188,15 +188,35 @@ def test_a_visual_kit_is_previewed_on_its_own(engine: LuaRuntime) -> None:
     assert value(engine, code) == "visual"
 
 
-def test_the_loop_settles_on_the_aura_rather_than_the_last_stage(engine: LuaRuntime) -> None:
-    """A stage's number is not its running order, and the aura is not always last."""
+def test_the_loop_settles_on_the_aura_whatever_else_the_spell_carries(engine: LuaRuntime) -> None:
+    """The aura is played last by construction, not by where a list happens to put it.
+
+    A stage no word in the running order names sorts after every named one, and
+    left there it would be what the loop settles on. So across a spread of real
+    spells, wherever a sequence has an aura, the aura is its last beat.
+    """
     # language=Lua
     code = b"""
-        local sequence = { { word = "cast" }, { word = "aura" }, { word = "travel" } }
-        local bare = { { word = "cast" }, { word = "impact" } }
-        return Epsilook.Preview.HoldOf(sequence) .. ":" .. Epsilook.Preview.HoldOf(bare)
+        local held, wrong = 0, {}
+        for i = 1, 3000 do
+            local spell = Epsilook:GetSpellDataByIndex(i)
+            if spell then
+                local sequence = Epsilook.Preview.SequenceOf(spell.id)
+                for at, stage in ipairs(sequence) do
+                    if stage.word == Epsilook.Preview.HELD then
+                        held = held + 1
+                        if at ~= #sequence then
+                            wrong[#wrong + 1] = spell.id
+                        end
+                    end
+                end
+            end
+        end
+        return held, #wrong, wrong[1]
     """
-    assert value(engine, code) == "2:2", "the aura, and otherwise wherever it ends up"
+    held, wrong, first = cast(tuple[int, int, object], engine.execute(code))
+    assert held > 100, "enough spells carry an aura for the check to mean something"
+    assert wrong == 0, f"spell {first} settles somewhere after its aura"
 
 
 def test_the_aura_ending_is_not_part_of_the_run(engine: LuaRuntime) -> None:

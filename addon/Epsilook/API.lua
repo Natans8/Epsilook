@@ -65,9 +65,9 @@ function Epsilook:LoadData()
 	if self:IsDataLoaded() then
 		return true
 	end
-	local ok, reason = Data.Load()
+	local ok, reason, problem = Data.Load()
 	if not ok then
-		return false, reason
+		return false, reason, problem
 	end
 	ok, reason = Schema.Load(Data.GetSchema())
 	if not ok then
@@ -85,6 +85,18 @@ local function mounted(self)
 	if not ok then
 		error("Epsilook: " .. tostring(reason), 3)
 	end
+end
+
+--- What stands between this reader and its data, found out without loading
+-- the data: whether it is installed, whether it may load, and whether the two
+-- halves came from the same download. Cheap enough to ask at login, since the
+-- data loads on demand and is most of the addon's weight.
+-- @return nil where nothing does, or a problem record: `code` one of
+--   "missing", "disabled", "unloadable", "layout", "release"; `hard` where
+--   the data cannot be read at all; `reason` the client's own code where it
+--   gave one; `data` and `reader` what each side declares where they differ
+function Epsilook:GetDataProblem()
+	return Data.Problem()
 end
 
 --- What the payload holds and where it came from.

@@ -38,6 +38,14 @@ TAG_PREFIX = "addon-v"
 
 VERSION_LINE = re.compile(r"^## Version:\s*(\S+)\s*$", re.MULTILINE)
 
+RELEASE_FIELD = "X-Epsilook-Release"
+"""The field the data's toc names its release in, so the reader can tell data from another download.
+
+The reader's own release is its version. The data's version is the pack it was built from, which two
+releases can share, so the release goes in a field of its own. Only a packaged download carries it: a data
+built for development has none, and the reader never calls that mismatched.
+"""
+
 
 def run(*command: str) -> str:
     """Run a command from the repository root and return what it printed, exiting on failure."""
@@ -64,8 +72,21 @@ def data_line() -> str:
     return f"{pack.group(1) if pack else 'unknown pack'}, built {built.group(1) if built else 'unknown'}"
 
 
+def stamped_data_toc(text: str, version: str) -> str:
+    """The data's toc with the release written into it, replacing any the build left there."""
+    lines = [line for line in text.splitlines() if not line.startswith(f"## {RELEASE_FIELD}:")]
+    # After the last header line, so the field reads as one of them rather than as a file to load.
+    last = max((i for i, line in enumerate(lines) if line.startswith("## ")), default=-1)
+    lines.insert(last + 1, f"## {RELEASE_FIELD}: {version}")
+    return "\n".join(lines) + "\n"
+
+
 def archive(version: str) -> Path:
-    """Write the release archive and return its path."""
+    """Write the release archive and return its path.
+
+    Both tocs carry the release: the reader's as its version and the data's in its own field, which is
+    what lets a reader say it has been handed data from another download.
+    """
     OUT.mkdir(parents=True, exist_ok=True)
     target = OUT / f"Epsilook-{version}.zip"
     with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as bundle:
@@ -75,6 +96,8 @@ def archive(version: str) -> Path:
                 if path == CODE / "Epsilook.toc":
                     stamped = VERSION_LINE.sub(f"## Version: {version}", path.read_text(encoding="utf-8"), count=1)
                     bundle.writestr(name, stamped)
+                elif path == DATA / "Epsilook_Data.toc":
+                    bundle.writestr(name, stamped_data_toc(path.read_text(encoding="utf-8"), version))
                 else:
                     bundle.write(path, name)
     return target

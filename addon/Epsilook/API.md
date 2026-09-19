@@ -42,14 +42,22 @@ entry's text; any other is the stored number. `FormatPartValue` writes any of th
 
 ## Loading
 
-| call                           | returns                    | notes                                         |
-|--------------------------------|----------------------------|-----------------------------------------------|
-| `Epsilook:IsDataLoaded()`      | `true` or `false`          |                                               |
-| `Epsilook:LoadData()`          | `true`, or `false, reason` | explicit door; every other call does the same |
-| `Epsilook:GetDataInfo(target)` | `DataInfo`, or `nil`       | which pack, when built, which format          |
+| call                           | returns                             | notes                                           |
+|--------------------------------|-------------------------------------|-------------------------------------------------|
+| `Epsilook:IsDataLoaded()`      | `true` or `false`                   |                                                 |
+| `Epsilook:LoadData()`          | `true`, or `false, reason, Problem` | explicit door; every other call does the same   |
+| `Epsilook:GetDataProblem()`    | `Problem`, or `nil`                 | never loads the data, so cheap enough for login |
+| `Epsilook:GetDataInfo(target)` | `DataInfo`, or `nil`                | which pack, when built, which format            |
 
 `DataInfo.pack` is the build the data describes, `9.2.7-epsilon.45745` for the shipped pack. `homes` lists where each
 column is mounted from, in order; today the shipped data only.
+
+A `Problem` is what stands between the reader and its data. `code` is one of `missing`, `disabled`, `unloadable`,
+`layout` or `release`; `hard` is true where the data cannot be read at all; `reason` is the client's own code where it
+gave one; `data` and `reader` are what each side declares where the two disagree. `layout` is fatal, since a reader
+cannot read bytes laid out for another. `release` is not: one download's reader reading another's data mostly works,
+because a section it looks for and does not find reads as empty. `reason` is in a developer's words; a player's are
+the interface's to choose.
 
 ## Spells
 

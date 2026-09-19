@@ -544,6 +544,58 @@ function Shell.LoneSpell(message)
 	return id and tonumber(id) or nil
 end
 
+--- What a player is told for each thing that can stand between the reader and
+-- its data, keyed by the problem's code. Written for the person holding the
+-- two folders rather than for whoever wrote them: what is wrong, and the one
+-- thing to do about it.
+Shell.PROBLEMS = {
+	missing = "Epsilook_Data is missing. Unzip both folders from the download into Interface\\AddOns, then /reload.",
+	disabled = "Epsilook_Data is turned off. Turn it on in the AddOns list at character select.",
+	unloadable = "Epsilook_Data could not load: %s.",
+	newer = "Epsilook_Data is newer than this Epsilook and cannot be read. Update Epsilook from the same download.",
+	older = "Epsilook_Data is older than this Epsilook and cannot be read. Update Epsilook_Data from the same download.",
+	release = "Epsilook %s is running with Epsilook_Data from %s. Most of it will work; for all of it, "
+		.. "install both folders from the same download.",
+}
+
+--- What a player is shown for a problem, as lines.
+--
+-- A problem the data cannot be read through leads in red, and one it can is
+-- said in grey, since the addon goes on working through it and the player
+-- should not be alarmed into thinking it has not.
+-- @param problem as GetDataProblem gives it, or nil
+-- @return a list of lines, empty for nil
+function Shell.ProblemLines(problem)
+	if not problem then
+		return {}
+	end
+	local text
+	if problem.code == "layout" then
+		-- Which folder is behind decides which to update, and a data too old to
+		-- declare a layout at all is the older one.
+		local ahead = tonumber(problem.data)
+			and tonumber(problem.reader)
+			and tonumber(problem.data) > tonumber(problem.reader)
+		text = ahead and Shell.PROBLEMS.newer or Shell.PROBLEMS.older
+	elseif problem.code == "unloadable" then
+		-- The client's own words for why an addon will not load, which is what its
+		-- AddOns list shows beside the name, and the code where it has none.
+		local reason = problem.reason and _G["ADDON_" .. tostring(problem.reason)]
+		if type(reason) ~= "string" then
+			reason = tostring(problem.reason or "unknown")
+		end
+		text = Shell.PROBLEMS.unloadable:format(reason)
+	elseif problem.code == "release" then
+		text = Shell.PROBLEMS.release:format(tostring(problem.reader), tostring(problem.data))
+	else
+		text = Shell.PROBLEMS[problem.code] or tostring(problem.code)
+	end
+	if problem.hard then
+		return { Shell.Said(RED .. text .. END) }
+	end
+	return { Shell.Said(GREY .. text .. END) }
+end
+
 --- The subcommand a message opens with, and the rest of it.
 -- Only a leading word that is a subcommand is taken; everything else is the
 -- query, untouched, because quotes and symbols are the query's own grammar.
@@ -1156,17 +1208,15 @@ function Shell.Command(message)
 		Shell.SUBCOMMANDS.help("")
 		return
 	end
-	local ok, reason = Epsilook:LoadData()
+	local ok, reason, problem = Epsilook:LoadData()
 	if not ok then
-		say(
-			Shell.Said(
-				RED
-					.. "no data: "
-					.. tostring(reason)
-					.. END
-					.. " (is Epsilook_Data installed and enabled?)"
-			)
-		)
+		-- A problem the data layer could not name is still a problem, and its
+		-- reason is the most that can be said about it.
+		local lines =
+			Shell.ProblemLines(problem or { code = "unloadable", hard = true, reason = reason })
+		for _, line in ipairs(lines) do
+			say(line)
+		end
 		return
 	end
 	local spellID = Shell.LoneSpell(message)
@@ -1323,8 +1373,14 @@ function Shell.OnHyperlinkEnter(frame, link)
 		-- A spell's own link, which is the name on a result line and the only
 		-- thing a reader sees before they inspect anything. The client shows the
 		-- tooltip for it; what it cannot show is what the spell looks like.
+		--
+		-- ⛔ Only once the data is already up. This fires for every spell link
+		-- in every chat frame, and the data loads on demand and is most of the
+		-- addon's weight: a mouse crossing a spell in trade chat would otherwise
+		-- load the whole pack, or, where it cannot load, fail on every crossing.
+		-- Anyone who has searched has it up, and the results are where it counts.
 		local spellID = tonumber(link:match("^spell:(%d+)"))
-		if spellID and Epsilook.Preview then
+		if spellID and Epsilook.Preview and Epsilook:IsDataLoaded() then
 			Epsilook.Preview.Spell(spellID)
 		end
 		return
@@ -1333,6 +1389,7 @@ function Shell.OnHyperlinkEnter(frame, link)
 		return
 	end
 	tooltip:SetOwner(frame, "ANCHOR_CURSOR")
+	local part
 	local action = spellAction(verb)
 	local hint = action and action.hint
 	if verb == SITE.key then
@@ -1343,13 +1400,7 @@ function Shell.OnHyperlinkEnter(frame, link)
 		Epsilook.Inspect.FillAxisTooltip(tooltip, id, axis)
 		hint = Epsilook.Inspect.HintOf(axis, verb)
 	elseif axis then
-		local part = Epsilook:GetPartDataByIndex(id, axis, n)
-		if part and verb == Epsilook.Inspect.PART and Epsilook.Preview then
-			-- Resting on a part's own link shows it beside the tooltip. On its own
-			-- link and not on its actions, which is the same rule the click follows:
-			-- an action word answers for the verb it names.
-			Epsilook.Preview.Hover(part)
-		end
+		part = Epsilook:GetPartDataByIndex(id, axis, n)
 		if part and (verb == Epsilook.Inspect.GROUP or verb == Epsilook.Inspect.COPYGROUP) then
 			Epsilook.Inspect.FillGroupTooltip(tooltip, part)
 		elseif part then
@@ -1363,6 +1414,16 @@ function Shell.OnHyperlinkEnter(frame, link)
 		tooltip:AddLine(hint, 0.44, 0.84, 1)
 	end
 	tooltip:Show()
+	if part and verb == Epsilook.Inspect.PART and Epsilook.Preview then
+		-- Resting on a part's own link shows it beside the tooltip. On its own
+		-- link and not on its actions, which is the same rule the click follows:
+		-- an action word answers for the verb it names.
+		--
+		-- After the tooltip is shown, since the look is placed beside it: placed
+		-- before, the tooltip was still hidden from the last link and the look
+		-- fell back to the pointer, where the tooltip then opened on top of it.
+		Epsilook.Preview.Hover(part)
+	end
 end
 
 --- The tooltip taken down as the mouse leaves one of this addon's links.
@@ -1373,6 +1434,73 @@ function Shell.OnHyperlinkLeave(_, link)
 	local tooltip = _G.GameTooltip
 	if tooltip and link:sub(1, #Shell.LINK + 1) == Shell.LINK .. ":" then
 		tooltip:Hide()
+	end
+end
+
+--- The faults already reported this session, by their text.
+local reported = {}
+
+--- Report a fault once: to the client's own error handler, which shows it with
+-- its stack and is what an error-collecting addon listens to, and once to chat,
+-- since most players have the client's error display turned off and would
+-- otherwise see a feature quietly stop working.
+--
+-- Called at the site of the fault, which is what keeps the stack a report is
+-- read by. Repeats of one fault are dropped, so a broken row reports once
+-- rather than every time the mouse crosses it.
+local function report(fault)
+	local text = tostring(fault)
+	if reported[text] then
+		return
+	end
+	reported[text] = true
+	local handler = _G.geterrorhandler and _G.geterrorhandler()
+	if handler then
+		pcall(handler, fault)
+	end
+	pcall(
+		say,
+		Shell.Said(
+			RED
+				.. "something went wrong."
+				.. END
+				.. " /elo info, sent with the error, helps get it fixed."
+		)
+	)
+end
+
+--- A function the client calls into this addon, made safe for it to call: a
+-- fault inside is reported once and goes no further.
+--
+-- ⛔ Every door the client opens onto this addon goes through here. They run
+-- inside the client's own scripts, where a fault is not contained: one in a
+-- hover handler fires on every movement of the mouse across the line, and one
+-- in a chat frame's script can leave the frame half-drawn.
+-- @param fn the function
+-- @param onFault what to do besides reporting, such as stopping a clock that
+--   would otherwise fault again on the next frame
+-- @return the function, guarded
+function Shell.Safely(fn, onFault)
+	return function(...)
+		local given, args = select("#", ...), { ... }
+		local ok = xpcall(function()
+			return fn(unpack(args, 1, given))
+		end, report)
+		if not ok and onFault then
+			pcall(onFault)
+		end
+	end
+end
+
+--- Say once, at login, anything that stands between the reader and its data.
+--
+-- Asked of the data's table of contents rather than of the data, which loads
+-- on demand: everyone would otherwise pay for the whole pack to be told all is
+-- well. Said at login because a broken install is otherwise silent until the
+-- first command, which is the worst moment for a player to find out.
+function Shell.CheckInstall()
+	for _, line in ipairs(Shell.ProblemLines(Epsilook:GetDataProblem())) do
+		say(line)
 	end
 end
 
@@ -1405,26 +1533,35 @@ local function install()
 		end
 	end
 	if claimed > 0 then
-		_G.SlashCmdList["EPSILOOK"] = Shell.Command
+		_G.SlashCmdList["EPSILOOK"] = Shell.Safely(Shell.Command)
 	end
+	local enter, leave = Shell.Safely(Shell.OnHyperlinkEnter), Shell.Safely(Shell.OnHyperlinkLeave)
 	for i = 1, (_G.NUM_CHAT_WINDOWS or 0) do
 		local frame = _G["ChatFrame" .. i]
 		if frame and frame.HookScript then
-			frame:HookScript("OnHyperlinkEnter", Shell.OnHyperlinkEnter)
-			frame:HookScript("OnHyperlinkLeave", Shell.OnHyperlinkLeave)
+			frame:HookScript("OnHyperlinkEnter", enter)
+			frame:HookScript("OnHyperlinkLeave", leave)
 		end
 	end
-	_G.hooksecurefunc("SetItemRef", function(link)
-		local id, verb, axis, n = Shell.ParseLink(link)
-		if not id then
-			return
-		end
-		if _G.IsModifiedClick and _G.IsModifiedClick("CHATLINK") then
-			Shell.Clip(id, verb, axis, n)
-		else
-			Shell.Execute(id, verb, axis, n)
-		end
-	end)
+	if _G.CreateFrame then
+		local login = _G.CreateFrame("Frame")
+		login:RegisterEvent("PLAYER_LOGIN")
+		login:SetScript("OnEvent", Shell.Safely(Shell.CheckInstall))
+	end
+	_G.hooksecurefunc(
+		"SetItemRef",
+		Shell.Safely(function(link)
+			local id, verb, axis, n = Shell.ParseLink(link)
+			if not id then
+				return
+			end
+			if _G.IsModifiedClick and _G.IsModifiedClick("CHATLINK") then
+				Shell.Clip(id, verb, axis, n)
+			else
+				Shell.Execute(id, verb, axis, n)
+			end
+		end)
+	)
 end
 
 install()

@@ -77,24 +77,126 @@ function Data.IsLoaded()
 	return shipped() ~= nil and Epsilook.index ~= nil and Epsilook.schema ~= nil
 end
 
+--- The reader's own addon, whose version is the release it came from.
+Data.READER_ADDON = "Epsilook"
+
+--- Why a load failed, in a developer's words: the record a player is shown is
+-- worded elsewhere, from the same record.
+local SAID = {
+	missing = "Epsilook_Data is not installed",
+	disabled = "Epsilook_Data is disabled",
+	unloadable = "Epsilook_Data cannot load",
+	layout = "the data is laid out for another reader",
+	release = "the data comes from another release",
+}
+
+--- A problem as a developer reads it, one line.
+local function said(problem)
+	local text = SAID[problem.code] or problem.code
+	if problem.reason then
+		text = text .. ": " .. tostring(problem.reason)
+	end
+	if problem.data or problem.reader then
+		text = text
+			.. " (data "
+			.. tostring(problem.data)
+			.. ", reader "
+			.. tostring(problem.reader)
+			.. ")"
+	end
+	return text
+end
+
+--- One field of an addon's table of contents, or nil.
+local function declared(addon, field)
+	local read = _G.GetAddOnMetadata or (_G.C_AddOns and _G.C_AddOns.GetAddOnMetadata)
+	if not read then
+		return nil
+	end
+	local ok, value = pcall(read, addon, field)
+	if ok then
+		return value
+	end
+	return nil
+end
+
+--- What stands between this reader and its data, asked of the data addon's own
+-- table of contents without loading it.
+--
+-- The data loads on demand and is most of the addon's weight, so whether it
+-- will load cannot be found out by loading it: a player told at login that all
+-- is well would have paid for the answer with the whole pack. The client
+-- answers from the table of contents alone -- whether the addon is there,
+-- whether it may load, and the two things written into it for this question --
+-- so everything here is asked of that.
+--
+-- Two sides of one download can drift apart in two ways. The layout is how
+-- the bytes are laid out, and a reader cannot read another; that is fatal. The
+-- release is which download the data came from, and one release's reader
+-- reading another's data will mostly work, since a section it looks for and
+-- does not find reads as empty; that is worth saying and not worth stopping
+-- for. A release is only written into a packaged download, so a data built
+-- for development carries none and is never called mismatched.
+-- @return nil where nothing stands in the way, or a record:
+--   `code`   "missing", "disabled", "unloadable", "layout" or "release"
+--   `hard`   true where the data cannot be read at all
+--   `reason` the client's own code, where it gave one
+--   `data`, `reader` what each side declares, where the two disagree
+function Data.Problem()
+	local info = _G.GetAddOnInfo or (_G.C_AddOns and _G.C_AddOns.GetAddOnInfo)
+	if not info then
+		return nil
+	end
+	local found, name, _, _, loadable, reason = pcall(info, Data.DATA_ADDON)
+	if not found or not name or reason == "MISSING" then
+		return { code = "missing", hard = true }
+	end
+	if reason == "DISABLED" then
+		return { code = "disabled", hard = true }
+	end
+	if not loadable and reason ~= "DEMAND_LOADED" then
+		return { code = "unloadable", hard = true, reason = reason }
+	end
+	local layout = tonumber(declared(Data.DATA_ADDON, "X-Epsilook-Format"))
+	if layout and layout ~= Data.FORMAT then
+		return { code = "layout", hard = true, data = layout, reader = Data.FORMAT }
+	end
+	local release = declared(Data.DATA_ADDON, "X-Epsilook-Release")
+	local reader = declared(Data.READER_ADDON, "Version")
+	if release and reader and release ~= reader then
+		return { code = "release", hard = false, data = release, reader = reader }
+	end
+	return nil
+end
+
 --- Load the shipped data addon, once.
--- @return true, or false and a reason in the client's own words
+-- @return true, or false with a reason in a developer's words and the problem
+--   as Data.Problem describes it
 function Data.Load()
 	if Data.IsLoaded() then
 		return true
 	end
+	local problem = Data.Problem()
+	if problem and problem.hard then
+		return false, said(problem), problem
+	end
 	local load = _G.LoadAddOn or (_G.C_AddOns and _G.C_AddOns.LoadAddOn)
 	if not load then
-		return false, "no addon loader"
+		problem = { code = "unloadable", hard = true, reason = "no addon loader" }
+		return false, said(problem), problem
 	end
 	local ok, reason = load(Data.DATA_ADDON)
 	if not ok then
-		return false, tostring(reason)
+		problem = { code = "unloadable", hard = true, reason = reason }
+		return false, said(problem), problem
 	end
+	-- The table of contents can be edited by hand and the files cannot, so the
+	-- layout the loaded data declares is the one that decides.
 	local index = Epsilook.index
 	if not index or index.format ~= Data.FORMAT then
-		return false,
-			"data format " .. tostring(index and index.format) .. ", reader expects " .. Data.FORMAT
+		problem =
+			{ code = "layout", hard = true, data = index and index.format, reader = Data.FORMAT }
+		return false, said(problem), problem
 	end
 	-- The pieces each blob was joined from and the parser's own constants are
 	-- garbage the moment the files finish loading; without a collect the addon
