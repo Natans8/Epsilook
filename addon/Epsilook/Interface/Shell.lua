@@ -688,12 +688,24 @@ function Shell.ColumnLines(key)
 	return lines
 end
 
---- The help text: what the command takes, then the language read off the
--- declarations so it cannot fall behind them -- the columns with what each
--- holds, the other head words, the operators, and how terms combine -- and
--- a few queries to start from.
+--- The topics the help is divided into, and the order they are offered in.
+-- The whole of it runs to some thirty lines, which is a wall rather than an
+-- answer, so what a reader is most likely to want -- what can be typed -- comes
+-- alone, and the language waits behind a word.
+Shell.HELP_TOPICS = {
+	{ topic = "columns", hint = "what a spell can be searched by" },
+	{ topic = "syntax", hint = "how a query is written" },
+}
+
+--- The help, read off the declarations so it cannot fall behind them.
+--
+-- Asked for nothing it says what the command takes and which topics there are.
+-- Asked for a topic it says that topic alone: the columns with what each holds
+-- and the other head words, or the operators, how terms combine and how an
+-- answer is ordered.
+-- @param topic which topic to say, or nil for the commands
 -- @return a list of lines
-function Shell.HelpLines()
+function Shell.HelpLines(topic)
 	local help = Epsilook:GetQueryHelp()
 	local grammar = Epsilook.Schema.grammar
 	local function title(text)
@@ -707,40 +719,54 @@ function Shell.HelpLines()
 	local function row(left, right, tone)
 		return "  " .. Shell.Cell((tone or GOLD) .. left .. END, COMMAND) .. right
 	end
-	local lines = {
-		title("Epsilook") .. GREY .. " searches Epsilon's spells from chat" .. END,
-		row("/elo <query>", "search; a page of " .. Shell.Page()),
-		row("/elo <id or spell link>", "inspect one spell"),
-		row("/elo next", "the next page"),
-		row("/elo count <query>", "how many match, a walk over every spell"),
-		row("/elo test", "the self-test"),
-		row("/elo options", "settings"),
-		title("Columns")
+	local lines = {}
+	if not topic then
+		lines[#lines + 1] = title("Epsilook")
+			.. GREY
+			.. " searches Epsilon's spells from chat"
+			.. END
+		lines[#lines + 1] = row("/elo <query>", "search; a page of " .. Shell.Page())
+		lines[#lines + 1] = row("/elo <id or spell link>", "inspect one spell")
+		lines[#lines + 1] = row("/elo next", "the next page")
+		lines[#lines + 1] = row("/elo count <query>", "how many match")
+		lines[#lines + 1] = row("/elo test", "check the install")
+		lines[#lines + 1] = row("/elo options", "settings")
+		for _, each in ipairs(Shell.HELP_TOPICS) do
+			lines[#lines + 1] = row("/elo help " .. each.topic, each.hint)
+		end
+		lines[#lines + 1] = GREY .. "Epsilook  " .. END .. Shell.Link(0, SITE.key, SITE.label)
+		return lines
+	end
+
+	if topic == "columns" then
+		lines[#lines + 1] = title("Columns")
 			.. GREY
 			.. " a head word, a colon, a value: model"
 			.. grammar.bind
 			.. "fire"
-			.. END,
-	}
-	for _, column in ipairs(help.columns) do
-		lines[#lines + 1] = row(column.key, column.hint, Shell.AXIS_COLOURS[column.key])
-	end
-	-- Each door wears its column's tone, the one its parts' labels wear in
-	-- the dossier, so the help and the dossier colour one axis one way.
-	local doors = {}
-	for _, head in ipairs(help.heads) do
-		if head.role ~= "column" then
-			local tone = Shell.AXIS_COLOURS[head.column]
-			doors[#doors + 1] = tone and tone .. head.word .. END or head.word
+			.. END
+		for _, column in ipairs(help.columns) do
+			lines[#lines + 1] = row(column.key, column.hint, Shell.AXIS_COLOURS[column.key])
 		end
+		-- Each door wears its column's tone, the one its parts' labels wear in
+		-- the dossier, so the help and the dossier colour one axis one way.
+		local doors = {}
+		for _, head in ipairs(help.heads) do
+			if head.role ~= "column" then
+				local tone = Shell.AXIS_COLOURS[head.column]
+				doors[#doors + 1] = tone and tone .. head.word .. END or head.word
+			end
+		end
+		lines[#lines + 1] = title("Other heads")
+			.. GREY
+			.. " reached the same way: scale"
+			.. grammar.bind
+			.. "+50%"
+			.. END
+		lines[#lines + 1] = "  " .. table.concat(doors, ", ")
+		return lines
 	end
-	lines[#lines + 1] = title("Other heads")
-		.. GREY
-		.. " reached the same way: scale"
-		.. grammar.bind
-		.. "+50%"
-		.. END
-	lines[#lines + 1] = "  " .. table.concat(doors, ", ")
+
 	local ops = {}
 	for _, op in ipairs(help.operators) do
 		ops[#ops + 1] = op.symbol
@@ -791,7 +817,6 @@ function Shell.HelpLines()
 		.. grammar.scope.close
 		.. "; a kind word alone asks for any of it, and a column word alone prints its doors"
 		.. END
-	lines[#lines + 1] = GREY .. "Epsilook  " .. END .. Shell.Link(0, SITE.key, SITE.label)
 	return lines
 end
 
@@ -1001,8 +1026,17 @@ Shell.SUBCOMMANDS = {
 		end
 		Epsilook.Inspect.Print(spellID, say)
 	end,
-	help = function()
-		for _, line in ipairs(Shell.HelpLines()) do
+	help = function(rest)
+		local wanted = rest ~= "" and rest:lower() or nil
+		local known = wanted == nil
+		for _, each in ipairs(Shell.HELP_TOPICS) do
+			known = known or each.topic == wanted
+		end
+		if not known then
+			say(Shell.Said("no help on " .. rest .. "; try /elo help"))
+			return
+		end
+		for _, line in ipairs(Shell.HelpLines(wanted)) do
 			say(line)
 		end
 	end,

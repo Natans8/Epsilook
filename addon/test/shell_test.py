@@ -153,10 +153,28 @@ def test_the_dossier_prints_every_axis_the_spell_has(engine: LuaRuntime) -> None
     assert "no spell" in dossier(engine, 0)
 
 
-def test_help_comes_from_the_declarations(engine: LuaRuntime) -> None:
-    lines = cast(LuaTable, lua_function(engine, b"Epsilook.Shell.HelpLines")())
-    text = "\n".join(str(cast(bytes, lines[i]).decode()) for i in range(1, len(list(lines.keys())) + 1))
-    assert "model" in text and "cast" in text and ">=" in text
+def test_help_answers_what_was_asked_and_not_everything(engine: LuaRuntime) -> None:
+    """The commands alone, then a topic at a time, each read off the declarations.
+
+    What a reader most often wants is what they can type, and thirty lines of
+    language piled on top of it is a wall rather than an answer.
+    """
+    help_lines = lua_function(engine, b"Epsilook.Shell.HelpLines")
+
+    def said(topic: bytes | None = None) -> list[str]:
+        lines = cast(LuaTable, help_lines(topic))
+        return [cast(bytes, lines[i]).decode() for i in range(1, len(list(lines.keys())) + 1)]
+
+    commands = said()
+    # Short enough to read at a glance, and it says where the rest of it is.
+    assert len(commands) <= 12
+    assert any("/elo help columns" in line for line in commands)
+    assert not any(">=" in line for line in commands), "the language is not in the command list"
+    # Each topic carries its own half, off the declarations rather than a copy.
+    columns = "\n".join(said(b"columns"))
+    assert "model" in columns and "mech" in columns
+    syntax = "\n".join(said(b"syntax"))
+    assert ">=" in syntax and "cast" in syntax
 
 
 def test_the_spell_text_record_holds_the_pools(engine: LuaRuntime) -> None:
