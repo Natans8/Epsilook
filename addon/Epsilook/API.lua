@@ -96,6 +96,48 @@ function Epsilook:GetDataInfo(target)
 	return Data.GetInfo(target)
 end
 
+--- When a spell's effects land, where they do not all land at the cast.
+--
+-- Three numbers, any of which may be absent. `launch` is how long after the cast
+-- the server runs the effects that wait for it. A spell whose payload travels
+-- carries either a `velocity` in yards a second, the missile's own speed, or a
+-- `delay` in seconds, a flat wait the server takes instead; which of the two it
+-- is was decided when the pack was built, so a reader takes whichever is there
+-- rather than choosing.
+-- @param spellID the spell
+-- @return a record of launch, velocity and delay, or nil where the spell has
+--   no clock of its own and everything lands at the cast
+function Epsilook:GetSpellClock(spellID)
+	mounted(self)
+	local node, blob = Data.GetColumn("mech", "spellTimeline", "spellIds")
+	local row = node and Reader.rowOf(blob, node, spellID)
+	if not row then
+		return nil
+	end
+	local function at(column, scale)
+		local held, bytes = Data.GetColumn("mech", "spellTimeline", column)
+		if not held then
+			return nil
+		end
+		-- A column is stored as whatever suits its values, so the reader is the
+		-- one the node asks for rather than the one a number suggests.
+		local read = Reader.number
+		if held.kind ~= "int" then
+			read = Reader.value
+		end
+		local value = read(bytes, held, row)
+		if not value or value == 0 then
+			return nil
+		end
+		return value / scale
+	end
+	return {
+		launch = at("launchMs", 1000),
+		delay = at("delayMs", 1000),
+		velocity = at("velocity", 1),
+	}
+end
+
 --- Every axis the payload is split across, in the order it ships them.
 -- These are files, not questions: some carry a spell's parts and some carry
 -- the spell itself. `GetPartAxes` is the one a dossier walks.
@@ -424,7 +466,12 @@ function Epsilook:GetSelectorReads(table, column, value)
 	-- is the same on every pack, so the caller judges it against the pack.
 	for i = 1, #values do
 		if tables[i] == table and columns[i] == column and values[i] == value then
-			out[#out + 1] = { column = slotColumns[i], holds = holds[i], into = intos[i], ["until"] = untils[i] or "" }
+			out[#out + 1] = {
+				column = slotColumns[i],
+				holds = holds[i],
+				into = intos[i],
+				["until"] = untils[i] or "",
+			}
 		end
 	end
 	return out

@@ -1303,6 +1303,40 @@ function Inspect.PrintAxis(spellID, axis, say)
 	end
 end
 
+--- When the spell's effects land, as a line, or nil where they all land at the
+-- cast. The spell's own clock is not a part of it and has no column of its own,
+-- so it is said under the head where the rest of what the spell is goes.
+-- @param spellID the spell
+-- @return the line, or nil
+function Inspect.ClockLine(spellID)
+	local clock = Epsilook:GetSpellClock(spellID)
+	if not clock then
+		return nil
+	end
+	local said = {}
+	if clock.launch then
+		said[#said + 1] = GREY .. "launches after " .. END .. Inspect.Seconds(clock.launch)
+	end
+	if clock.velocity then
+		said[#said + 1] = GREY .. "travels at " .. END .. clock.velocity .. GREY .. " yd/s" .. END
+	end
+	if clock.delay then
+		said[#said + 1] = GREY .. "lands after " .. END .. Inspect.Seconds(clock.delay)
+	end
+	if #said == 0 then
+		return nil
+	end
+	return MARGIN .. table.concat(said, Shell.DASH)
+end
+
+--- A number of seconds as it is written: whole where it is whole.
+function Inspect.Seconds(seconds)
+	if seconds == math.floor(seconds) then
+		return seconds .. GREY .. "s" .. END
+	end
+	return string.format("%.2f", seconds):gsub("0+$", ""):gsub("%.$", "") .. GREY .. "s" .. END
+end
+
 --- Print a spell's dossier through `say`, one line at a time.
 -- @param spellID the spell
 -- @param say the function that prints a line
@@ -1319,6 +1353,10 @@ function Inspect.Print(spellID, say)
 		end
 		printed = true
 		say(Inspect.HeadLine(spell))
+		local clock = Inspect.ClockLine(spellID)
+		if clock then
+			say(clock)
+		end
 		for _, axis in ipairs(Epsilook:GetPartAxes()) do
 			Inspect.PrintAxis(spellID, axis, say)
 		end

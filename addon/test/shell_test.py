@@ -165,6 +165,21 @@ def test_the_info_line_says_what_is_loaded(engine: LuaRuntime) -> None:
     assert cast(bytes, thousands(280180)).decode() == "280,180"
 
 
+def test_a_spell_says_when_its_effects_land(engine: LuaRuntime) -> None:
+    """The spell's own clock, which shipped with the pack and had no reader at all.
+
+    It is not a part and has no column in the dossier, so it is said under the
+    head; a spell whose effects all land at the cast has none and says nothing.
+    """
+    api = lua_table(engine, b"Epsilook")
+    clock = cast(dict[str, object], unwrap(method(api, b"GetSpellClock")(api, 116)))
+    assert clock["velocity"] == 35, "Frostbolt's missile travels"
+    assert method(api, b"GetSpellClock")(api, 6603) is None, "Auto Attack lands at once"
+    line = cast(bytes, lua_function(engine, b"Epsilook.Inspect.ClockLine")(116)).decode()
+    assert "travels at" in line and "35" in line
+    assert lua_function(engine, b"Epsilook.Inspect.ClockLine")(6603) is None
+
+
 def test_the_debug_report_says_what_it_could_not_measure(engine: LuaRuntime) -> None:
     """A report of the numbers a layout was computed from, honest where there are none.
 
