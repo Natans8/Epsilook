@@ -40,6 +40,10 @@ Epsilook.Preview = Preview
 -- pointer near the foot of the screen has only the floor to be drawn in.
 Preview.SIZE, Preview.GAP, Preview.MOST = 300, 24, 4
 
+--- Which way a model is turned when it is first drawn, a little off straight on
+-- so that it reads as a thing rather than a silhouette.
+Preview.FACING = 0.6
+
 --- What can be looked at, and how. `from` is what the subject needs off a part;
 -- `draw` puts it on a model frame. A part offers a preview when its `from`
 -- resolves, so teaching this one more subject is a row.
@@ -91,15 +95,14 @@ local function build(pinned)
 	frame.model:SetPoint("BOTTOMRIGHT", -6, 6)
 	-- A model frame lights nothing by default, and a dark model in the dark is
 	-- not a preview. The light is in front and a little above, as a viewer's is.
-	if frame.model.SetLight and _G.CreateVector3D and _G.CreateColor then
-		pcall(frame.model.SetLight, frame.model, true, {
-			omnidirectional = false,
-			point = _G.CreateVector3D(0, 0.8, -1),
-			ambientIntensity = 1,
-			ambientColor = _G.CreateColor(1, 1, 1),
-			diffuseIntensity = 0.3,
-			diffuseColor = _G.CreateColor(1, 1, 1),
-		})
+	--
+	-- ⛔ Flat arguments, not the table this client's successors take. The table
+	-- form is what the current transmogrification browser uses, and handing it
+	-- to this client crashes the game outright rather than erroring: the native
+	-- code reads a boolean and twelve numbers off what it was given. The four
+	-- places 9.2.7 calls this itself all pass them flat.
+	if frame.model.SetLight then
+		frame.model:SetLight(true, false, 0, 0.8, -1, 1, 1, 1, 1, 0.3, 1, 1, 1)
 	end
 	if pinned then
 		-- What the client's own pinned chat link is: movable, above its fellows
@@ -128,10 +131,13 @@ local function build(pinned)
 		frame.model:SetScript("OnMouseUp", function()
 			frame.turning = nil
 		end)
+		-- ⛔ Where it is facing is kept here rather than asked for: this client
+		-- has SetFacing and no GetFacing, so asking would error every frame.
 		frame.model:SetScript("OnUpdate", function(model)
 			if frame.turning then
 				local at = select(1, _G.GetCursorPosition())
-				model:SetFacing((model:GetFacing() or 0) + (at - frame.turning) / 80)
+				frame.facing = (frame.facing or Preview.FACING) + (at - frame.turning) / 80
+				model:SetFacing(frame.facing)
 				frame.turning = at
 			end
 		end)
@@ -149,7 +155,8 @@ local function draw(frame, part)
 	frame.model:ClearModel()
 	subject.draw(frame.model, value)
 	frame.model:SetPosition(0, 0, 0)
-	frame.model:SetFacing(0.6)
+	frame.facing = Preview.FACING
+	frame.model:SetFacing(frame.facing)
 	return true
 end
 
