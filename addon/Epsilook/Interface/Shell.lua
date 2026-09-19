@@ -804,7 +804,8 @@ function Shell.HelpLines(topic)
 			.. " searches Epsilon's spells from chat"
 			.. END
 		lines[#lines + 1] = row("/elo <query>", "search; a page of " .. Shell.Page())
-		lines[#lines + 1] = row("/elo <id or spell link>", "inspect one spell")
+		lines[#lines + 1] = row("/elo <id or spell link>", "what a spell is made of")
+		lines[#lines + 1] = row("/elo timeline <id>", "what a spell does, in order")
 		lines[#lines + 1] = row("/elo next", "the next page")
 		lines[#lines + 1] = row("/elo count <query>", "how many match")
 		lines[#lines + 1] = row("/elo info", "what is loaded")
@@ -1121,6 +1122,14 @@ Shell.SUBCOMMANDS = {
 	info = function()
 		say(Shell.InfoLine())
 	end,
+	timeline = function(rest)
+		local spellID = Shell.LoneSpell(rest)
+		if not spellID then
+			say(Shell.Said("which spell? /elo timeline <id or spell link>"))
+			return
+		end
+		Epsilook.Inspect.PrintTimeline(spellID, say)
+	end,
 	debug = function()
 		for _, line in ipairs(Shell.DebugLines()) do
 			say(line)
@@ -1322,6 +1331,11 @@ function Shell.OnHyperlinkEnter(frame, link)
 		hint = Epsilook.Inspect.HintOf(axis, verb)
 	elseif axis then
 		local part = Epsilook:GetPartDataByIndex(id, axis, n)
+		-- A model is looked at rather than read, so a part that names one shows
+		-- it beside the tooltip in a frame of this addon's own.
+		if part and Epsilook.Preview then
+			Epsilook.Preview.ShowModel(Epsilook.Inspect.FileOf(part))
+		end
 		if part and (verb == Epsilook.Inspect.GROUP or verb == Epsilook.Inspect.COPYGROUP) then
 			Epsilook.Inspect.FillGroupTooltip(tooltip, part)
 		elseif part then
@@ -1339,6 +1353,9 @@ end
 
 --- The tooltip taken down as the mouse leaves one of this addon's links.
 function Shell.OnHyperlinkLeave(_, link)
+	if Epsilook.Preview then
+		Epsilook.Preview.Hide()
+	end
 	local tooltip = _G.GameTooltip
 	if tooltip and link:sub(1, #Shell.LINK + 1) == Shell.LINK .. ":" then
 		tooltip:Hide()

@@ -380,6 +380,14 @@ local function pathFid(values)
 	return nil
 end
 
+--- The file a part names, by the id the client loads a model with, or nil
+-- where the part names no file. The one door to it, so that a reader wanting
+-- to draw a part does not have to know how a path is stored.
+-- @param part a PartData
+function Inspect.FileOf(part)
+	return pathFid(Inspect.Values(part))
+end
+
 --- The subject of a list of values: the first that names something, moved
 -- to the front -- a bare id yields to a name beside it, so a kit shows by
 -- its animation rather than its number, and a blank name yields to the id
@@ -1335,6 +1343,76 @@ function Inspect.Seconds(seconds)
 		return seconds .. GREY .. "s" .. END
 	end
 	return string.format("%.2f", seconds):gsub("0+$", ""):gsub("%.$", "") .. GREY .. "s" .. END
+end
+
+--- Print a spell as it happens, one heading per moment.
+--
+-- The other reading groups a spell by what its parts are, which is the shape
+-- the pack stores them in and answers what a spell is made of. This one groups
+-- them by when they happen, which answers what a spell does, and they are
+-- different questions: a model, a sound, an animation and an effect that all
+-- land at the impact belong together for one reader and apart for the other.
+--
+-- The order comes from the data rather than from a list here. A phase is an
+-- enum whose stored numbers run in the order the client plays them -- precast
+-- before cast before travel before impact -- so sorting by the number is the
+-- running order, and a phase nobody has shipped yet falls into place unasked.
+--
+-- A part with no phase of its own happens whenever the spell does and is said
+-- last, under its own heading, rather than being forced into a moment it does
+-- not belong to.
+-- @param spellID the spell
+-- @param say the function that prints a line
+function Inspect.PrintTimeline(spellID, say)
+	local spell = Epsilook:GetSpellDataByID(spellID)
+	if not spell then
+		say(Shell.Said(RED .. "no spell " .. tostring(spellID) .. " in this pack" .. END))
+		return
+	end
+	say(Inspect.HeadLine(spell))
+	local clock = Inspect.ClockLine(spellID)
+	if clock then
+		say(clock)
+	end
+	local moments, at = {}, {}
+	for _, axis in ipairs(Epsilook:GetPartAxes()) do
+		local said = {}
+		for i = 1, Epsilook:GetNumParts(spellID, axis) do
+			local part = Epsilook:GetPartDataByIndex(spellID, axis, i)
+			local group = groupOf(part)
+			local value = part.values.phase
+			local order = Epsilook.Data.GetStored(axis, part.kind, part.slot, "phase")
+			local word = type(value) == "table" and value.text or value
+			-- A phase nothing names sorts after everything that has one.
+			local key = order or math.huge
+			-- A kit is one thing happening, not one thing per file it plays, so a
+			-- group is said once at each moment it happens and its files are left
+			-- to the reading that is about what a spell is made of.
+			local id = group and part.values[group.prop]
+			local held = type(id) == "table" and id.id or id
+			local already = held ~= nil and said[tostring(key) .. "/" .. tostring(held)]
+			if not restated(spellID, part) and not already then
+				if held ~= nil then
+					said[tostring(key) .. "/" .. tostring(held)] = true
+				end
+				if not moments[key] then
+					moments[key] = { word = word, lines = {} }
+					at[#at + 1] = key
+				end
+				local drawn = group and Inspect.GroupLine(spellID, part, i)
+					or Inspect.PartLine(spellID, part, i)
+				table.insert(moments[key].lines, drawn)
+			end
+		end
+	end
+	table.sort(at)
+	for _, key in ipairs(at) do
+		local moment = moments[key]
+		say(GOLD .. (moment.word or "whenever it is cast") .. END)
+		for _, drawn in ipairs(moment.lines) do
+			say(drawn)
+		end
+	end
 end
 
 --- Print a spell's dossier through `say`, one line at a time.

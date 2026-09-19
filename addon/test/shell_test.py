@@ -180,6 +180,31 @@ def test_a_spell_says_when_its_effects_land(engine: LuaRuntime) -> None:
     assert lua_function(engine, b"Epsilook.Inspect.ClockLine")(6603) is None
 
 
+def test_the_timeline_reads_a_spell_in_the_order_it_happens(engine: LuaRuntime) -> None:
+    """The other reading of a spell: grouped by when, not by what.
+
+    The order is the phase enum's own, whose stored numbers run as the client
+    plays them, so a phase nobody has shipped yet falls into place unasked.
+    """
+    # language=Lua
+    engine.execute(b"""
+                   function TIMELINE(id)
+                       local out = {}
+                       Epsilook.Inspect.PrintTimeline(id, function(line) out[#out + 1] = line end)
+                       return table.concat(out, "\\n")
+                   end
+                   """)
+    text = cast(bytes, lua_function(engine, b"TIMELINE")(116)).decode()
+    plain = [re.sub(r"\|c[0-9a-f]{8}|\|r|\|H[^|]*\|h|\|h", "", line) for line in text.split("\n")]
+    # A heading is a moment's word alone: unindented, and one word, which the
+    # head line naming the spell is not.
+    headings = [line for line in plain if line and not line.startswith(" ") and " " not in line]
+    assert headings == ["precast", "cast", "travel", "impact", "aura"], headings
+    # The missile is under travel and not under the cast that launched it.
+    travel = plain.index("travel")
+    assert "missile:" in plain[travel + 1]
+
+
 def test_the_debug_report_says_what_it_could_not_measure(engine: LuaRuntime) -> None:
     """A report of the numbers a layout was computed from, honest where there are none.
 
