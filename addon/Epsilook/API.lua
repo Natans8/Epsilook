@@ -644,6 +644,25 @@ local function file(fid)
 	return { id = fid, text = type(path) == "string" and path or "" }
 end
 
+--- The displays one section pairs against the id it is keyed on. Every
+-- section of the kind holds the same three columns, so the section and its
+-- key are the whole of what tells one from another.
+-- @param section the section's name
+-- @param keys the column it is keyed on
+-- @param id the id to look up
+local function wears(section, keys, id)
+	local out = {}
+	local displays, blob = Data.GetColumn("model", section, "displayIds")
+	local fids = Data.GetColumn("model", section, "fids")
+	for _, row in ipairs(Data.RowsOf("model", section, keys, id)) do
+		out[#out + 1] = {
+			id = Reader.value(blob, displays, row),
+			file = file(Reader.value(blob, fids, row)),
+		}
+	end
+	return out
+end
+
 --- The displays a creature wears, by creature id, where the pack carries
 -- the pairs: what a morph or a summon stores is the creature, what the
 -- game shows and what `.morph` and its kin take is a display. A creature
@@ -654,16 +673,18 @@ end
 --   { id, text }, in slot order; empty where the creature is unknown here
 function Epsilook:GetDisplaysByCreature(creatureID)
 	mounted(self)
-	local out = {}
-	local displays, blob = Data.GetColumn("model", "creatureDisplays", "displayIds")
-	local fids = Data.GetColumn("model", "creatureDisplays", "fids")
-	for _, row in ipairs(Data.RowsOf("model", "creatureDisplays", "creatureIds", creatureID)) do
-		out[#out + 1] = {
-			id = Reader.value(blob, displays, row),
-			file = file(Reader.value(blob, fids, row)),
-		}
-	end
-	return out
+	return wears("creatureDisplays", "creatureIds", creatureID)
+end
+
+--- The displays a shapeshift form wears, by form id. A form is stored as a
+-- number into the forms and shown as a name, which says what the caster
+-- turns into without saying what that looks like; this is the rest of the
+-- way, and the pack has carried it since the form names were shipped.
+-- @param formID the shapeshift form id
+-- @return a list of { id, file }, as GetDisplaysByCreature gives them
+function Epsilook:GetDisplaysByForm(formID)
+	mounted(self)
+	return wears("shapeshiftDisplays", "formIds", formID)
 end
 
 --- The display a creature wears first, by creature id: the one a command
@@ -694,7 +715,13 @@ end
 -- wears one, stored under a vocabulary of creatures, or the display
 -- itself, stored under a vocabulary of displays or as a kind's own id.
 Epsilook.DISPLAY_SOURCES = {
-	creatures = { morphs = true, creatures = true },
+	-- A vocabulary of things that WEAR a display, to the reader that finds the
+	-- ones it wears. Teaching this one more is a row rather than a branch.
+	worn = {
+		morphs = "GetDisplaysByCreature",
+		creatures = "GetDisplaysByCreature",
+		shapeshifts = "GetDisplaysByForm",
+	},
 	displays = { mounts = true },
 	kinds = { ["model.display"] = "id" },
 }
@@ -721,8 +748,9 @@ function Epsilook:GetPartDisplays(part)
 		local stored = Schema.Stored(part.axis, part.kind, part.slot, prop)
 		local vocab = Data.GetVocabName(part.axis, part.kind, prop.name)
 		if stored ~= nil and stored ~= 0 then
-			if self.DISPLAY_SOURCES.creatures[vocab] then
-				for _, worn in ipairs(self:GetDisplaysByCreature(stored)) do
+			local reader = self.DISPLAY_SOURCES.worn[vocab]
+			if reader then
+				for _, worn in ipairs(self[reader](self, stored)) do
 					display(worn.id, worn.file)
 				end
 			elseif self.DISPLAY_SOURCES.displays[vocab] or prop.name == own then

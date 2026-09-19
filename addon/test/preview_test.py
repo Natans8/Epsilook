@@ -229,3 +229,54 @@ def test_a_mount_is_shown_at_the_stage_the_spell_leaves(engine: LuaRuntime) -> N
         return held.word .. ":" .. #held.displays
     """
     assert value(engine, code) == "aura:1", "the horse, held"
+
+
+def test_a_shapeshift_form_reads_down_to_what_it_looks_like(engine: LuaRuntime) -> None:
+    """A form is stored as a number and shown as a name, which says what the
+    caster turns into without saying what that looks like.
+
+    The pack has carried the rest of the way since the form names shipped, so
+    this is a reader rather than a route.
+    """
+    # language=Lua
+    code = b"""
+        local worn = Epsilook:GetDisplaysByForm(16)
+        if #worn == 0 then
+            return "the ghost wolf wears nothing"
+        end
+        return worn[1].id
+    """
+    assert value(engine, code) == 55287
+
+
+def test_a_shapeshift_is_the_body_for_the_rest_of_the_run(engine: LuaRuntime) -> None:
+    """Ghost Wolf leaves the caster a wolf, which is the whole of what it does."""
+    # language=Lua
+    code = b"""
+        local sequence = Epsilook.Preview.SequenceOf(2645)
+        local held = sequence[Epsilook.Preview.HoldOf(sequence)]
+        if not held then
+            return "nothing held"
+        end
+        return held.word .. ":" .. tostring(held.displays[1])
+    """
+    assert value(engine, code) == "aura:55287"
+
+
+def test_a_shapeshift_row_is_previewed_on_its_own(engine: LuaRuntime) -> None:
+    """Resting on the form's own line shows the form, not nothing."""
+    # language=Lua
+    code = b"""
+        for i = 1, Epsilook:GetNumParts(2645, "fx") do
+            local part = Epsilook:GetPartDataByIndex(2645, "fx", i)
+            if part.kind == "shapeshift" then
+                local subject, worn = Epsilook.Preview.SubjectOf(part)
+                if not subject then
+                    return "the form offered nothing"
+                end
+                return subject.word .. ":" .. tostring(worn)
+            end
+        end
+        return "no shapeshift row"
+    """
+    assert value(engine, code) == "creature:55287"

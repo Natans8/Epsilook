@@ -463,12 +463,13 @@ local function rank(stage)
 end
 
 --- The kinds that put a creature on the caster's own body, and where each one
--- happens: a morph at the stage it names, a mount at the stage the loop holds,
--- since a mount carries no stage and being mounted is what the spell leaves.
+-- happens: a morph or a shapeshift at the stage it names, a mount at the stage
+-- the loop holds, since a mount carries no stage and being mounted is what the
+-- spell leaves.
 --
 -- ⚠ A mount is drawn as the mount alone, the way the client's own mount list
 -- draws one. A rider on it wants two actors and one model frame has one.
-local BODIES = { morph = "own", mount = "held" }
+local BODIES = { morph = "own", shapeshift = "own", mount = "held" }
 
 --- The stage a part happens at, as the pack stores it and as it is spelled. A
 -- part that names no stage is one moment of its own, before every named one.
