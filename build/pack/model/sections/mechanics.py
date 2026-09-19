@@ -30,11 +30,16 @@ def selectors(reads: Reads) -> SectionColumns:
 
     What a raw value on a mechanics row is an id into: the row's own effect
     or aura picks the meaning, and this table says which table or vocabulary
-    each of its columns then indexes. Shipped rather than left in the build,
-    because the mechanics rows carry both misc values raw and a reader with
-    this can resolve them. Flat rather than a list per selector, so both
-    media carry it as plain columns; a selector reading several columns is
+    each of its columns then indexes. Flat rather than a list per selector, so
+    both media carry it as plain columns; a selector reading several columns is
     several rows agreeing on the first three.
+
+    It is a dictionary, and it is keyed by the selector rather than by the
+    spell. A row does not carry its misc values raw: where a selector has a
+    route the value is lifted onto a kind that can name it, so a summon ships
+    its creature and a morph its display, and where it has none the effect's
+    own name is all that ships. So this resolves what a value would mean, and
+    what it is must come from a kind that named it.
     """
     del reads  # a declaration, the same on every build
     rows = [
