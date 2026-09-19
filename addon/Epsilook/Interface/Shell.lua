@@ -1150,7 +1150,10 @@ Shell.SUBCOMMANDS = {
 function Shell.Command(message)
 	message = (message or ""):match("^%s*(.-)%s*$")
 	if message == "" then
-		Shell.SUBCOMMANDS.help()
+		-- The rest of a message is always a string to a subcommand, and here it
+		-- is an empty one; handed nothing, help read a name off nil and the bare
+		-- command, the first thing anyone types, threw.
+		Shell.SUBCOMMANDS.help("")
 		return
 	end
 	local ok, reason = Epsilook:LoadData()

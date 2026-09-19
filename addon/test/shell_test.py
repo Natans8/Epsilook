@@ -699,3 +699,15 @@ def test_a_count_tooltip_drops_an_extension_that_says_nothing(engine: LuaRuntime
     assert ".m2" not in models.lower(), models
     sounds = cast(bytes, tip(133, b"sound")).decode()
     assert ".ogg" in sounds.lower(), "a sound's format is what a reader wants to know"
+
+
+def test_the_bare_command_answers_rather_than_throwing(engine: LuaRuntime) -> None:
+    """`/elo` alone is the first thing anyone types.
+
+    It reached help through a door that handed it nothing, and help read a name
+    off that nothing. The help lines were tested and the door was not, so the
+    test drives the command itself, in every shape a person types it empty.
+    """
+    command = lua_function(engine, b"Epsilook.Shell.Command")
+    for typed in (b"", b"   ", b"\t", None):
+        command(typed)
