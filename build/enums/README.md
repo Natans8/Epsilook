@@ -53,7 +53,7 @@ code change.
 | `effect_name_overlay.json` | our own effect names, read ahead of both sources | Effect |
 | `aura_name_overlay.json` | our own aura names, read ahead of both sources | EffectAura |
 | `spell_aura_handlers.json` | `SpellEffect.EffectAura` handlers on the Epsilon core, `implemented` false where the handler is null or unused; the pair of `spell_effect_handlers.json` | EffectAura |
-| `spell_effect_slots.json` | what each `SpellEffect.Effect` value's misc columns hold, read mechanically, with the evidence and the RP family | Effect |
+| `spell_effect_slots.json` | what each `SpellEffect.Effect` value's misc and points columns hold, an amount with its unit, read mechanically, with the evidence and the RP family | Effect |
 | `spell_aura_slots.json` | the same for each `SpellEffect.EffectAura` value | EffectAura |
 | `spell_schools.json` | the seven spell schools as mask bits, which a `mask` slot over `spell_schools` combines | school mask bit |
 | `power_types.json` | the core's power types, health as -2 | Powers |
@@ -64,8 +64,11 @@ code change.
 | `languages.json` | the client's language names | Languages.ID |
 | `stealth_types.json` | the core's stealth types, what a Stealth aura grants and Stealth Detection sees through | StealthType |
 | `invisibility_types.json` | the core's invisibility types, what an Invisibility aura hides its target in and Invisibility Detection sees into | InvisibilityType |
+| `combat_rating_mask.json` | the core's combat ratings as mask bits, which the rating auras test their misc columns against | combat rating mask bit |
+| `stat_mask.json` | the four stats as mask bits, which a total-stat aura tests its second misc column against | stat mask bit |
+| `power_mask.json` | the power types as mask bits, which a power-cost aura tests its second misc column against | power mask bit |
 
-**The last two are a matched pair and the whole point is that they are DIFFERENT.** `SpellInterrupts` carries three
-interrupt columns and only two of them share an enum; reading all three with one decode is a mistake already made
-once here, and it reported the breaks-on-movement channel population 4.4× too low. Check which column you are
-decoding before you reach for either file.
+**The two interrupt files are a matched pair and the whole point is that they are DIFFERENT.** `SpellInterrupts` carries
+three interrupt columns and only two of them share an enum; reading all three with one decode is a mistake already made
+once here, and it reported the breaks-on-movement channel population 4.4× too low. Check which column you are decoding
+before you reach for either file.

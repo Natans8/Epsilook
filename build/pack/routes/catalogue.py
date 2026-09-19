@@ -1078,6 +1078,79 @@ class Faction(Table):
     ReputationRaceMasks3 = Column("ReputationRaceMasks3", array=True)
 
 
+class SkillLine(Table):
+    """The client's ``SkillLine``."""
+
+    ID = Column("ID")
+    CategoryID = Column("CategoryID")
+    DisplayName_lang = Column("DisplayName_lang")
+    Description_lang = Column("Description_lang")
+    SpellIconID = Column("SpellIconID")
+    AlternateVerb_lang = Column("AlternateVerb_lang")
+    CanLink = Column("CanLink")
+    ParentSkillLineID = Column("ParentSkillLineID")
+    Flags = Column("Flags")
+    HordeDisplayName_lang = Column("HordeDisplayName_lang")
+    ParentTierIndex = Column("ParentTierIndex")
+    SpellIconFileID = Column("SpellIconFileID")
+    SkillCostsID = Column("SkillCostsID")
+    RaceMask = Column("RaceMask")
+    ClassMask = Column("ClassMask")
+    ExcludeRace = Column("ExcludeRace")
+    ExcludeClass = Column("ExcludeClass")
+    SkillType = Column("SkillType")
+    MinCharLevel = Column("MinCharLevel")
+    MaxRank = Column("MaxRank")
+    Abandonable = Column("Abandonable")
+    NeutralDisplayName = Column("NeutralDisplayName")
+    SpellBookSpellID = Column("SpellBookSpellID")
+    ExpansionNameSharedStringID = Column("ExpansionNameSharedStringID")
+    HordeExpansionNameSharedStringID = Column("HordeExpansionNameSharedStringID")
+
+
+class SpellItemEnchantment(Table):
+    """The client's ``SpellItemEnchantment``."""
+
+    ID = Column("ID")
+    Charges = Column("Charges")
+    Effect = Column("Effect", array=True)
+    EffectPointsMin = Column("EffectPointsMin", array=True)
+    EffectArg = Column("EffectArg", array=True)
+    Name_lang = Column("Name_lang")
+    ItemVisual = Column("ItemVisual")
+    Flags = Column("Flags")
+    Src_itemID = Column("Src_itemID")
+    Condition_ID = Column("Condition_ID")
+    RequiredSkillID = Column("RequiredSkillID")
+    RequiredSkillRank = Column("RequiredSkillRank")
+    MinLevel = Column("MinLevel")
+    MaxLevel = Column("MaxLevel")
+    ItemLevel = Column("ItemLevel")
+    ScalingClass = Column("ScalingClass")
+    ScalingClassRestricted = Column("ScalingClassRestricted")
+    EffectScalingPoints = Column("EffectScalingPoints", array=True)
+    HordeName_lang = Column("HordeName_lang")
+    IconFileDataID = Column("IconFileDataID")
+    TransmogCost = Column("TransmogCost")
+    TransmogUnlockConditionID = Column("TransmogUnlockConditionID")
+    TransmogUseConditionID = Column("TransmogUseConditionID")
+    EffectPointsMax = Column("EffectPointsMax", array=True)
+    ItemLevelMin = Column("ItemLevelMin")
+    ItemLevelMax = Column("ItemLevelMax")
+    Field_5_0_1_15464_015 = Column("Field_5_0_1_15464_015")
+    Field_5_0_1_15464_016 = Column("Field_5_0_1_15464_016", array=True)
+    GemItemID = Column("GemItemID")
+    Duration = Column("Duration")
+    Field_4_4_0_53750_011 = Column("Field_4_4_0_53750_011")
+    Field_4_4_0_53750_017 = Column("Field_4_4_0_53750_017")
+    Field_4_4_0_53750_018 = Column("Field_4_4_0_53750_018")
+    Field_4_4_0_53750_020 = Column("Field_4_4_0_53750_020")
+    Field_4_4_0_53750_021 = Column("Field_4_4_0_53750_021")
+    Field_1_15_3_55112_018 = Column("Field_1_15_3_55112_018")
+    Field_1_15_3_55112_020 = Column("Field_1_15_3_55112_020")
+    Field_1_15_3_55112_021 = Column("Field_1_15_3_55112_021")
+
+
 class LightSkybox(Table):
     """The client's ``LightSkybox``."""
 

@@ -23,6 +23,8 @@ from pack.routes.effects import (
     EFFECT_PLAY_SOUND,
     EFFECT_SPAWN_OBJECT,
     EFFECT_SUMMON,
+    VALUE_MULTIPLIER_AURAS,
+    VALUE_MULTIPLIER_EFFECTS,
     EffectRow,
     SpellEffectRows,
 )
@@ -56,15 +58,27 @@ def effect_rows(*rows: str) -> str:
 
     A row may leave the trailing effect index off, and then it is nought; the
     period, the chain count and the attribute bits follow it and default to
-    nought as well.
+    nought as well. The numbers an effect carries beyond those follow, in the
+    header's order from the difficulty on, and each one a row leaves off is
+    the table's own default.
     """
     header = (
         "SpellID,Effect,EffectAura,EffectMiscValue_0,EffectMiscValue_1,"
         "ImplicitTarget_0,ImplicitTarget_1,EffectBasePoints,"
         "EffectBasePointsF,EffectTriggerSpell,EffectIndex,"
-        "EffectAuraPeriod,EffectChainTargets,EffectAttributes\n"
+        "EffectAuraPeriod,EffectChainTargets,EffectAttributes,"
+        "DifficultyID,EffectMechanic,EffectItemType,EffectRadiusIndex_0,EffectRadiusIndex_1,"
+        "EffectPos_facing,EffectChainAmplitude,EffectBonusCoefficient,BonusCoefficientFromAP,"
+        "EffectRealPointsPerLevel,EffectPointsPerResource,PvpMultiplier,Variance,EffectAmplitude\n"
     )
-    return header + "".join(row + ",0" * (13 - row.count(",")) + "\n" for row in rows)
+    defaults = ["0", "0", "0", "0", "0", "0", "1", "0", "0", "0", "0", "1", "0", "0"]
+
+    def full(row: str) -> str:
+        fields = row.split(",")
+        head, numbers = fields[:14], fields[14:]
+        return ",".join(head + ["0"] * (14 - len(head)) + numbers + defaults[len(numbers) :])
+
+    return header + "".join(full(row) + "\n" for row in rows)
 
 
 ROSTERS = {"screens": frozenset({50}), "keybinds": frozenset({60})}
@@ -475,6 +489,23 @@ def test_a_stable_spawn_effect_is_read_on_every_build(tables: BuildTables) -> No
 
     assert read(tables, fixture, WRATH).objects.ids == {100: {7000}}
     assert read(tables, fixture, MODERN).objects.ids == {100: {7000}}
+
+
+def test_the_value_multiplier_lands_only_where_the_core_reads_it(tables: BuildTables) -> None:
+    """A summon's column holds a sentinel no reader takes for a multiplier, and
+    a heroic copy of a drain is not the row a player reads."""
+    drain, shield = min(VALUE_MULTIPLIER_EFFECTS), max(VALUE_MULTIPLIER_AURAS)
+    unchanged = "0,0,0,0,0,1,0,0,0,0,1,0"
+    rows = read(
+        tables,
+        effect_rows(
+            f"100,{EFFECT_SUMMON},0,500,0,1,0,0,0,0,0,0,0,0,0,{unchanged},1e17",
+            f"100,{drain},0,0,0,1,0,0,0,0,1,0,0,0,0,{unchanged},2",
+            f"100,{drain},0,0,0,1,0,0,0,0,1,0,0,0,1,{unchanged},9",
+            f"200,{EFFECT_APPLY_AURA},{shield},127,0,1,0,0,0,0,0,0,0,0,0,{unchanged},0.5",
+        ),
+    )
+    assert rows.multipliers == {(100, 1): 2.0, (200, 0): 0.5}
 
 
 def test_the_selectors_table_ships_a_column_as_the_source_spells_it() -> None:

@@ -500,12 +500,15 @@ end
 -- @param table the source table, "SpellEffect" for a mechanics part
 -- @param column the selector column, "Effect" or "EffectAura"
 -- @param value the selector's value, the effect or aura id
--- @return a list of { column, holds, into }, each what one column holds
+-- @return a list of { column, holds, into, scale }, each what one column holds
 --   under this meaning: a reference into `into`, a value or a mask of values
---   the vocabulary `into` names, an amount, a parameter another slot
+--   the vocabulary `into` names, an amount in the unit `into` names where it
+--   has one (a word the descriptions write after a number: "percent",
+--   "seconds", "yards", "degrees" and the like), a parameter another slot
 --   decides, an argument the spell's own server script reads, or a column
 --   the server never reads; empty where the pack declares nothing for the
---   value
+--   value. `scale` is what an amount is divided by before it reads in its
+--   unit: a thousand for milliseconds read as seconds, one where it is not scaled
 function Epsilook:GetSelectorReads(table, column, value)
 	mounted(self)
 	local tables = Data.ReadAll("mech", "selectors", "tables") or {}
@@ -514,6 +517,7 @@ function Epsilook:GetSelectorReads(table, column, value)
 	local slotColumns = Data.ReadAll("mech", "selectors", "slotColumns") or {}
 	local holds = Data.ReadAll("mech", "selectors", "holds") or {}
 	local intos = Data.ReadAll("mech", "selectors", "intos") or {}
+	local scales = Data.ReadAll("mech", "selectors", "scales") or {}
 	local untils = Data.ReadAll("mech", "selectors", "untils") or {}
 	local out = {}
 	-- One row per slot, so a selector reading several columns is several
@@ -526,6 +530,7 @@ function Epsilook:GetSelectorReads(table, column, value)
 				column = slotColumns[i],
 				holds = holds[i],
 				into = intos[i],
+				scale = scales[i] or 1,
 				["until"] = untils[i] or "",
 			}
 		end
@@ -552,8 +557,13 @@ function Epsilook:GetSlotWords(into, holds, value)
 			local named
 			if holds == "mask" then
 				-- A mask vocabulary's values are single bits, so arithmetic
-				-- answers whether one is set without a bit library.
-				named = value >= 0 and math.floor(value / key) % 2 == 1
+				-- answers whether one is set without a bit library; a negative
+				-- mask is read as the 32 bits it stores, so -1 sets every one.
+				local bits = value
+				if bits < 0 then
+					bits = bits + 4294967296
+				end
+				named = math.floor(bits / key) % 2 == 1
 			else
 				named = key == value
 			end
@@ -585,6 +595,90 @@ function Epsilook:GetReferenceName(into, id)
 		end
 	end
 	return nil
+end
+
+--- The rows of a "mech" section sorted by spell that belong to one spell.
+-- A binary search over the payload, so nothing is read into a table.
+-- @return the first row and the last, counted from nought; the first is past
+--   the last where the section carries nothing for the spell
+local function spellRows(section, spellID)
+	local node, blob = Data.GetColumn("mech", section, "spellIds")
+	if not node then
+		return 0, -1
+	end
+	local first = 0
+	local before = Reader.rowAtMost(blob, node, spellID - 1)
+	if before then
+		first = before + 1
+	end
+	local last = first - 1
+	while last + 1 < Reader.size(node) and Reader.number(blob, node, last + 1) == spellID do
+		last = last + 1
+	end
+	return first, last
+end
+
+--- The numbers each of a spell's effects carries beyond its mechanics part.
+-- The amount is resolved at the build's level cap, the way the spell's own
+-- description prints it, and its unit is the one GetSelectorReads gives the
+-- effect's "EffectBasePoints" column.
+-- @param spellID the spell
+-- @return a list of records in effect order: `index` counts from nought as a
+--   mechanics part does; `amount`; `radius` and `maxRadius` in yards;
+--   `facing` in degrees; `chain` and `pvp`, what each further chained target
+--   and a player target multiply the amount by, one where unchanged;
+--   `spellPower` and `attackPower`, the shares of each the amount adds;
+--   `perLevel` and `perResource`, what it gains per caster level and per
+--   spent combo point; `spread`, the fraction the amount rolls within half of
+--   either way; `multiplier`, the value multiplier, nought except on the
+--   drains, burns, leeches, health funnels, mana shields and jumps the core
+--   reads it for;
+--   `mechanic`, a "spell_mechanics" value; `item`, the id of an item the
+--   effect creates. Empty where the spell carries none
+function Epsilook:GetEffectAmounts(spellID)
+	mounted(self)
+	local out = {}
+	local first, last = spellRows("effectAmounts", spellID)
+	for row = first, last do
+		-- Each column ships in the fixed point its scale undoes.
+		local function at(column, scale)
+			return cell("effectAmounts", column, row, 0) / scale
+		end
+		out[#out + 1] = {
+			index = at("orders", 1),
+			amount = at("amounts", 10),
+			radius = at("radii", 10),
+			maxRadius = at("maxRadii", 10),
+			facing = at("facings", 10),
+			chain = at("chains", 100),
+			pvp = at("pvps", 100),
+			spellPower = at("spellPowers", 1000),
+			attackPower = at("attackPowers", 1000),
+			perLevel = at("perLevels", 10),
+			perResource = at("perResources", 10),
+			spread = at("spreads", 1000),
+			multiplier = at("multipliers", 100),
+			mechanic = at("mechanics", 1),
+			item = at("items", 1),
+		}
+	end
+	return out
+end
+
+--- The cone or line a spell's area takes in front of its caster.
+-- @param spellID the spell
+-- @return { degrees, width }, the cone's angle and the line's width in yards,
+--   either nought where the area is not that shape; nil where it is neither
+function Epsilook:GetSpellCone(spellID)
+	mounted(self)
+	local row, last = spellRows("spellCones", spellID)
+	if row > last then
+		return nil
+	end
+	return {
+		degrees = cell("spellCones", "degrees", row, 0) / 10,
+		width = cell("spellCones", "widths", row, 0) / 10,
+	}
 end
 
 --- The two kits a music set or an ambience plays, by day and by night.

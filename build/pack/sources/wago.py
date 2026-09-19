@@ -101,6 +101,10 @@ TABLES = [
     # apart. Both predate every rostered build.
     "FactionTemplate",
     "Faction",
+    # What a reference column names by id and nothing else: the skill line an
+    # effect teaches or raises, and the enchantment it applies. Read for names.
+    "SkillLine",
+    "SpellItemEnchantment",
     # The sky. A LightSkybox is the dome's model, a LightParams the preset that
     # picks one and colours the day around it, and LightData the preset's ramp,
     # one row per moment of the 2,880-half-minute day.
@@ -172,6 +176,8 @@ LOCALIZED_TABLES = [
     "SpellShapeshiftForm",
     "JournalEncounterSection",
     "Faction",
+    "SkillLine",
+    "SpellItemEnchantment",
 ]
 """The tables above a route reads a translated column from.
 

@@ -164,6 +164,9 @@ def test_a_build_read_in_another_language_keeps_everything_else() -> None:
         forms=ShapeshiftForms(),
         areas=AreaGates(),
         factions=(),
+        faction_names={},
+        skill_names={},
+        enchantment_names={},
         prose=context.prose,
     )
     russian = context.spoken_in(said)

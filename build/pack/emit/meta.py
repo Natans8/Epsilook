@@ -20,8 +20,21 @@ from ..derive import DeriveContext
 from ..model import SECTIONS, CountFamily, Section, SectionColumns
 from ..progress import detail
 
-PACK_FORMAT = 67
+PACK_FORMAT = 68
 """What shape the artifact is in.
+
+68 gives an effect its numbers. `effectAmounts` carries, per spell and effect
+index, the amount resolved at the build's level cap, both radii, the facing,
+the chain and PvP multipliers, the two power coefficients, the variance, the
+value multiplier where the core reads it, what the amount gains per level and
+per spent resource, the mechanic and the item the effect creates, each in the
+fixed point its doc names. `spellCones` carries the cone or line a spell's area
+takes.
+`selectors` types the points column of every effect and aura in use, an
+amount's `into` naming its unit and `scales` what the stored number is divided
+by to read in it, and a misc column the core tests bit by bit is a mask over
+combat ratings, stats or power types as well as schools and creature types.
+`referenceNames` names factions, skill lines, enchantments and created items.
 
 67 names what a reference column points at. `referenceNames` carries, per build
 and per language, the name of every creature, object, item, spell, shapeshift

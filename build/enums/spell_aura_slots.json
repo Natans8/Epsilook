@@ -1,8 +1,8 @@
 {
  "enum": "SpellEffect.EffectAura slot typing",
- "description": "What each aura value's misc columns hold on the rows it selects: a reference into a table, a vocabulary or mask a vendored vocabulary names, an amount, a scripted argument, or unread by the server. Read mechanically, never by hand, so it can be held against the build's own payloads: `by` names the evidence. declared is not used here; measured means the slot's distinct values resolve into one id space far beyond the space's density over their range; named means the selector's name points at the table and the values fit it; core means the Epsilon core's handler reads the value as that vocabulary, or, for unread, that neither the handler nor any read of the aura in the core asks for it; scripted means the number is an argument the spell's own server script reads; shaped means an amount by name or by round values. A slot no evidence types is listed under unresolved. family is the selector's RP family, the ranking's axis.",
+ "description": "What each aura value's misc columns and points column hold on the rows it selects: a reference into a table, a vocabulary or mask a vendored vocabulary names, an amount, a scripted argument, or unread by the server. Read mechanically, never by hand, so it can be held against the build's own payloads: `by` names the evidence. declared is not used here; measured means the slot's distinct values resolve into one id space far beyond the space's density over their range; named means the selector's name points at the table and the values fit it, or, for the points, that Wowhead's name marks the value a percentage; core means the Epsilon core reads the value as that vocabulary: a handler or a walk of the selector's rows tests it bit by bit against the vocabulary's values, builds a mask from it, or casts it to an enum, which makes it an id of that enum; or, for unread, that neither the handler nor any read of the aura in the core asks for it; scripted means the number is an argument the spell's own server script reads; shaped means an amount by name or by round values; templated means the spell descriptions quote the effect's points, bare or divided, with one unit and scale after at least 70% of three or more quotes; column means the points are an amount whose unit nothing decided. An amount's `into` is its unit, one of the words the 9.2.7 descriptions write after an effect's points: percent, seconds, minutes, hours, yards, degrees or count, empty for a plain amount of whatever the misc columns or the effect name; its `scale`, omitted where it is one, is what the stored number is divided by before it reads in that unit, a thousand for milliseconds read as seconds. A slot no evidence types is listed under unresolved. family is the selector's RP family, the ranking's axis.",
  "source": [
-  "the 9.2.7 SpellEffect rows, the id spaces of every table the exploration database holds, the Epsilon core's SpellAuraEffects.cpp and SpellEffects.cpp",
+  "the 9.2.7 SpellEffect rows, the id spaces of every table the exploration database holds, the Epsilon core's SpellAuraEffects.cpp and SpellEffects.cpp, and the reads of aura rows across its Unit, Player, Creature, Object, Spell, SpellAuras, SpellInfo, SpellMgr, StatSystem and MovementHandler sources",
   "https://github.com/EpsilonRP/TrinityCore"
  ],
  "keys": "EffectAura",
@@ -15,12 +15,26 @@
   "2": {
    "name": "Possess",
    "family": "control",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "3": {
    "name": "Periodic Damage",
    "family": "combat",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_0",
     "EffectMiscValue_1"
@@ -41,6 +55,12 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "scripted",
+     "into": "",
+     "by": "scripted"
     }
    ]
   },
@@ -53,6 +73,12 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
@@ -65,6 +91,12 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
     }
    ]
   },
@@ -83,13 +115,26 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
   "8": {
    "name": "Periodic Heal",
    "family": "combat",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_0"
    ]
@@ -103,6 +148,12 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
@@ -115,13 +166,26 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
   "11": {
    "name": "Taunt",
    "family": "control",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "12": {
    "name": "Stun",
@@ -138,15 +202,31 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
   "13": {
    "name": "Mod Damage Done",
    "family": "combat",
-   "reads": [],
-   "unresolved": [
-    "EffectMiscValue_0"
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "mask",
+     "into": "spell_schools",
+     "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
+    }
    ]
   },
   "14": {
@@ -158,13 +238,26 @@
      "holds": "mask",
      "into": "spell_schools",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
     }
    ]
   },
   "15": {
    "name": "Damage shield",
    "family": "combat",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_0"
    ]
@@ -178,6 +271,12 @@
      "holds": "vocabulary",
      "into": "stealth_types",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
@@ -190,6 +289,12 @@
      "holds": "vocabulary",
      "into": "stealth_types",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
@@ -208,6 +313,12 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
@@ -220,6 +331,12 @@
      "holds": "vocabulary",
      "into": "invisibility_types",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
@@ -232,6 +349,12 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
@@ -244,6 +367,12 @@
      "holds": "vocabulary",
      "into": "power_types",
      "by": "named"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
@@ -255,14 +384,27 @@
      "column": "EffectMiscValue_0",
      "holds": "mask",
      "into": "spell_schools",
-     "by": "named"
+     "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
     }
    ]
   },
   "23": {
    "name": "Periodically trigger spell",
    "family": "scripted",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_0",
     "EffectMiscValue_1"
@@ -277,6 +419,12 @@
      "holds": "vocabulary",
      "into": "power_types",
      "by": "named"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
     }
    ]
   },
@@ -289,6 +437,12 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
@@ -301,6 +455,12 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
@@ -313,6 +473,12 @@
      "holds": "mask",
      "into": "spell_schools",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
@@ -325,6 +491,12 @@
      "holds": "mask",
      "into": "spell_schools",
      "by": "named"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
@@ -337,6 +509,12 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
     }
    ],
    "unresolved": [
@@ -346,7 +524,14 @@
   "30": {
    "name": "Mod Skill - Temporary",
    "family": "world",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_0"
    ]
@@ -366,6 +551,12 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
@@ -378,6 +569,12 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
@@ -396,6 +593,12 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
@@ -408,6 +611,12 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
     }
    ]
   },
@@ -420,6 +629,12 @@
      "holds": "vocabulary",
      "into": "power_types",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
     }
    ]
   },
@@ -438,6 +653,12 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
@@ -447,8 +668,8 @@
    "reads": [
     {
      "column": "EffectMiscValue_0",
-     "holds": "unread",
-     "into": "",
+     "holds": "vocabulary",
+     "into": "wowhead_effect_names",
      "by": "core"
     },
     {
@@ -456,6 +677,12 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
@@ -465,8 +692,8 @@
    "reads": [
     {
      "column": "EffectMiscValue_0",
-     "holds": "unread",
-     "into": "",
+     "holds": "vocabulary",
+     "into": "wowhead_aura_names",
      "by": "core"
     },
     {
@@ -474,15 +701,31 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
   "39": {
    "name": "Immunity",
    "family": "control",
-   "reads": [],
-   "unresolved": [
-    "EffectMiscValue_0"
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "mask",
+     "into": "spell_schools",
+     "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
    ]
   },
   "40": {
@@ -491,9 +734,15 @@
    "reads": [
     {
      "column": "EffectMiscValue_0",
-     "holds": "unread",
-     "into": "",
+     "holds": "mask",
+     "into": "spell_schools",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
@@ -506,13 +755,26 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
   "42": {
    "name": "Proc Trigger Spell",
    "family": "combat",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_0"
    ]
@@ -526,6 +788,12 @@
      "holds": "reference",
      "into": "Spell",
      "by": "named"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
     }
    ]
   },
@@ -538,6 +806,12 @@
      "holds": "mask",
      "into": "creature_types",
      "by": "named"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
@@ -558,13 +832,26 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
   "48": {
    "name": "One Periodic Spell",
    "family": "scripted",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "49": {
    "name": "Mod Dodge %",
@@ -575,6 +862,12 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
@@ -587,6 +880,12 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "named"
     }
    ]
   },
@@ -599,6 +898,12 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
@@ -611,13 +916,26 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
   "53": {
    "name": "Periodically Leech Health",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
+    }
+   ]
   },
   "54": {
    "name": "Mod Melee & Ranged Hit Chance %",
@@ -634,13 +952,26 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
   "55": {
    "name": "Mod Spell Hit Chance %",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
+    }
+   ]
   },
   "56": {
    "name": "Change Model",
@@ -657,6 +988,12 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
@@ -669,6 +1006,12 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
@@ -681,6 +1024,12 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
@@ -692,7 +1041,13 @@
      "column": "EffectMiscValue_0",
      "holds": "mask",
      "into": "creature_types",
-     "by": "named"
+     "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
@@ -705,6 +1060,12 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ],
    "unresolved": [
@@ -726,13 +1087,26 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
   "62": {
    "name": "Periodically Transfer Health",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
+    }
+   ]
   },
   "63": {
    "name": "Mod Additional Power Cost",
@@ -743,6 +1117,12 @@
      "holds": "vocabulary",
      "into": "power_types",
      "by": "named"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
@@ -755,6 +1135,12 @@
      "holds": "vocabulary",
      "into": "power_types",
      "by": "named"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
     }
    ]
   },
@@ -773,6 +1159,12 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
@@ -785,6 +1177,12 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
@@ -797,38 +1195,74 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
   "68": {
    "name": "Stalked",
    "family": "other",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "69": {
    "name": "Absorb Damage",
    "family": "combat",
    "reads": [
     {
+     "column": "EffectMiscValue_0",
+     "holds": "mask",
+     "into": "spell_schools",
+     "by": "core"
+    },
+    {
      "column": "EffectMiscValue_1",
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
     }
-   ],
-   "unresolved": [
-    "EffectMiscValue_0"
    ]
   },
   "70": {
    "name": "Periodic Damage",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
+    }
+   ]
   },
   "71": {
    "name": "Mod Spell Crit %",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "named"
+    }
+   ]
   },
   "72": {
    "name": "Mod Mana Cost %",
@@ -838,13 +1272,19 @@
      "column": "EffectMiscValue_0",
      "holds": "mask",
      "into": "spell_schools",
-     "by": "named"
+     "by": "core"
     },
     {
      "column": "EffectMiscValue_1",
+     "holds": "mask",
+     "into": "power_mask",
+     "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
      "holds": "amount",
-     "into": "",
-     "by": "shaped"
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
@@ -856,13 +1296,19 @@
      "column": "EffectMiscValue_0",
      "holds": "mask",
      "into": "spell_schools",
-     "by": "named"
+     "by": "core"
     },
     {
      "column": "EffectMiscValue_1",
-     "holds": "vocabulary",
-     "into": "power_types",
+     "holds": "mask",
+     "into": "power_mask",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
     }
    ]
   },
@@ -875,6 +1321,12 @@
      "holds": "mask",
      "into": "spell_schools",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
@@ -887,6 +1339,12 @@
      "holds": "vocabulary",
      "into": "languages",
      "by": "named"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ],
    "unresolved": [
@@ -902,6 +1360,12 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
@@ -914,6 +1378,12 @@
      "holds": "vocabulary",
      "into": "spell_mechanics",
      "by": "named"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
@@ -950,6 +1420,12 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
@@ -962,6 +1438,12 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "named"
     }
    ]
   },
@@ -971,15 +1453,21 @@
    "reads": [
     {
      "column": "EffectMiscValue_0",
-     "holds": "amount",
-     "into": "",
-     "by": "shaped"
+     "holds": "mask",
+     "into": "spell_schools",
+     "by": "core"
     },
     {
      "column": "EffectMiscValue_1",
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
@@ -998,6 +1486,12 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
@@ -1010,13 +1504,26 @@
      "holds": "mask",
      "into": "spell_schools",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
     }
    ]
   },
   "84": {
    "name": "Health Regen",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "85": {
    "name": "Power Regen",
@@ -1027,13 +1534,26 @@
      "holds": "vocabulary",
      "into": "power_types",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
     }
    ]
   },
   "86": {
    "name": "Create Item on Death",
    "family": "world",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "87": {
    "name": "Mod % Damage Taken",
@@ -1044,6 +1564,12 @@
      "holds": "mask",
      "into": "spell_schools",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
@@ -1056,6 +1582,12 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
@@ -1068,6 +1600,12 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
@@ -1079,7 +1617,14 @@
   "91": {
    "name": "Mod Aggro Range",
    "family": "other",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "yards",
+     "by": "templated"
+    }
+   ]
   },
   "92": {
    "name": "Cannot Flee",
@@ -1095,18 +1640,38 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
   "94": {
    "name": "Interrupt Power Decay",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "95": {
    "name": "Ghost",
    "family": "appearance",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "96": {
    "name": "Magnet",
@@ -1121,7 +1686,13 @@
      "column": "EffectMiscValue_0",
      "holds": "mask",
      "into": "spell_schools",
-     "by": "named"
+     "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
     }
    ]
   },
@@ -1134,6 +1705,12 @@
      "holds": "reference",
      "into": "SkillLine",
      "by": "named"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
     }
    ]
   },
@@ -1146,6 +1723,12 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
     }
    ]
   },
@@ -1160,18 +1743,34 @@
    "reads": [
     {
      "column": "EffectMiscValue_0",
+     "holds": "mask",
+     "into": "spell_schools",
+     "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
      "holds": "amount",
-     "into": "",
-     "by": "shaped"
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
   "102": {
    "name": "Mod Melee Attack Power vs Creature",
    "family": "combat",
-   "reads": [],
-   "unresolved": [
-    "EffectMiscValue_0"
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "mask",
+     "into": "creature_types",
+     "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
+    }
    ]
   },
   "103": {
@@ -1183,6 +1782,12 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
@@ -1201,6 +1806,12 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
@@ -1219,6 +1830,12 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
@@ -1231,13 +1848,26 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
   "107": {
    "name": "Add Modifier - Flat",
    "family": "other",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_0",
     "EffectMiscValue_1"
@@ -1258,13 +1888,26 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
   "109": {
    "name": "Proc Spell on Target",
    "family": "combat",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_0"
    ]
@@ -1284,13 +1927,26 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
   "111": {
    "name": "Intercept % of all Melee & Ranged Attacks",
    "family": "other",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "named"
+    }
+   ]
   },
   "112": {
    "name": "Override Class Script",
@@ -1298,6 +1954,12 @@
    "reads": [
     {
      "column": "EffectMiscValue_0",
+     "holds": "scripted",
+     "into": "",
+     "by": "scripted"
+    },
+    {
+     "column": "EffectBasePoints",
      "holds": "scripted",
      "into": "",
      "by": "scripted"
@@ -1325,6 +1987,12 @@
      "holds": "mask",
      "into": "spell_schools",
      "by": "named"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
@@ -1337,13 +2005,26 @@
      "holds": "mask",
      "into": "spell_schools",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
     }
    ]
   },
   "116": {
    "name": "Allow % of Health Regeneration to Continue in Combat",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "named"
+    }
+   ]
   },
   "117": {
    "name": "Give % Chance to Resist Mechanic",
@@ -1354,6 +2035,12 @@
      "holds": "vocabulary",
      "into": "spell_mechanics",
      "by": "named"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
@@ -1366,6 +2053,12 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
@@ -1383,6 +2076,12 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
@@ -1394,7 +2093,14 @@
   "122": {
    "name": "Mod Off-Hand Damage Done %",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
+    }
+   ]
   },
   "123": {
    "name": "Reduce Target Resistances - Flat",
@@ -1405,6 +2111,12 @@
      "holds": "mask",
      "into": "spell_schools",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
     }
    ]
   },
@@ -1417,23 +2129,50 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
   "126": {
    "name": "Mod Melee Damage Taken - %",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
+    }
+   ]
   },
   "127": {
    "name": "Mod Attacker Ranged Attack Power",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
+    }
+   ]
   },
   "128": {
    "name": "MOD_FIXATE",
    "family": "other",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_0"
    ]
@@ -1447,6 +2186,12 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
@@ -1459,6 +2204,12 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
@@ -1468,9 +2219,15 @@
    "reads": [
     {
      "column": "EffectMiscValue_0",
+     "holds": "mask",
+     "into": "creature_types",
+     "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
      "holds": "amount",
      "into": "",
-     "by": "shaped"
+     "by": "column"
     }
    ]
   },
@@ -1489,6 +2246,12 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
@@ -1507,13 +2270,26 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
   "134": {
    "name": "Allow % of Mana Regeneration to Continue in Combat",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
+    }
+   ]
   },
   "135": {
    "name": "Mod Healing Power",
@@ -1524,6 +2300,12 @@
      "holds": "mask",
      "into": "spell_schools",
      "by": "named"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
     }
    ]
   },
@@ -1542,6 +2324,12 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
@@ -1557,9 +2345,15 @@
     },
     {
      "column": "EffectMiscValue_1",
+     "holds": "mask",
+     "into": "stat_mask",
+     "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
      "holds": "amount",
-     "into": "",
-     "by": "shaped"
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
@@ -1572,6 +2366,12 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
@@ -1584,6 +2384,12 @@
      "holds": "reference",
      "into": "Faction",
      "by": "measured"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
@@ -1596,6 +2402,12 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
@@ -1617,9 +2429,15 @@
    "reads": [
     {
      "column": "EffectMiscValue_0",
+     "holds": "mask",
+     "into": "spell_schools",
+     "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
      "holds": "amount",
-     "into": "",
-     "by": "shaped"
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
@@ -1638,6 +2456,12 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
@@ -1650,6 +2474,12 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "named"
     }
    ]
   },
@@ -1662,13 +2492,26 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
   "146": {
    "name": "Allow Exotic Pets Taming",
    "family": "other",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_0"
    ]
@@ -1678,17 +2521,20 @@
    "family": "control",
    "reads": [
     {
-     "column": "EffectMiscValue_0",
-     "holds": "mask",
-     "into": "creature_types",
-     "by": "named"
-    },
-    {
      "column": "EffectMiscValue_1",
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
+   ],
+   "unresolved": [
+    "EffectMiscValue_0"
    ]
   },
   "148": {
@@ -1700,6 +2546,12 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "named"
     }
    ]
   },
@@ -1718,38 +2570,86 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
   "150": {
    "name": "Modify Block Value - %",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
+    }
+   ]
   },
   "151": {
    "name": "Track Hidden",
    "family": "appearance",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "152": {
    "name": "Mod Aggro Range of Mobs Against You",
    "family": "other",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "yards",
+     "by": "templated"
+    }
+   ]
   },
   "153": {
    "name": "Mod Auto Attack Range",
    "family": "other",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "154": {
    "name": "Mod Stealth Effectiveness",
    "family": "appearance",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "155": {
    "name": "Underwater Breathing",
    "family": "other",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "156": {
    "name": "Mod All Reputation Gained by %",
@@ -1766,13 +2666,26 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
   "157": {
    "name": "Mod All Pet Damage Taken",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "158": {
    "name": "Modify Block Value",
@@ -1790,7 +2703,14 @@
   "161": {
    "name": "Regen Health - Works in Combat",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
+    }
+   ]
   },
   "162": {
    "name": "Power Burn",
@@ -1801,6 +2721,12 @@
      "holds": "vocabulary",
      "into": "power_types",
      "by": "named"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
     }
    ]
   },
@@ -1810,9 +2736,15 @@
    "reads": [
     {
      "column": "EffectMiscValue_0",
+     "holds": "mask",
+     "into": "spell_schools",
+     "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
      "holds": "amount",
-     "into": "",
-     "by": "shaped"
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
@@ -1824,7 +2756,14 @@
   "165": {
    "name": "Marked by a Guard",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "166": {
    "name": "Mod Melee Attack Power - %",
@@ -1835,6 +2774,12 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
@@ -1847,6 +2792,12 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
@@ -1858,7 +2809,13 @@
      "column": "EffectMiscValue_0",
      "holds": "mask",
      "into": "creature_types",
-     "by": "named"
+     "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
@@ -1870,7 +2827,14 @@
   "170": {
    "name": "Make a Certain Object Visible",
    "family": "world",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_0"
    ]
@@ -1878,7 +2842,14 @@
   "171": {
    "name": "Mod Mounted Speed % - Stacks",
    "family": "appearance",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
+    }
+   ]
   },
   "172": {
    "name": "Mod Mounted Speed % - Doesn't Stack with Anything",
@@ -1889,6 +2860,12 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
@@ -1901,6 +2878,12 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "named"
     }
    ]
   },
@@ -1910,15 +2893,21 @@
    "reads": [
     {
      "column": "EffectMiscValue_0",
-     "holds": "amount",
-     "into": "",
-     "by": "shaped"
+     "holds": "mask",
+     "into": "spell_schools",
+     "by": "core"
     },
     {
      "column": "EffectMiscValue_1",
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "named"
     }
    ]
   },
@@ -1930,6 +2919,12 @@
      "column": "EffectMiscValue_0",
      "holds": "vocabulary",
      "into": "primary_stats",
+     "by": "named"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
      "by": "named"
     }
    ]
@@ -1948,6 +2943,12 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
@@ -1960,6 +2961,12 @@
      "holds": "vocabulary",
      "into": "power_types",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "named"
     }
    ]
   },
@@ -1972,6 +2979,12 @@
      "holds": "vocabulary",
      "into": "power_types",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "named"
     }
    ]
   },
@@ -1984,6 +2997,12 @@
      "holds": "mask",
      "into": "creature_types",
      "by": "named"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
     }
    ]
   },
@@ -1996,6 +3015,12 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "named"
     }
    ]
   },
@@ -2020,6 +3045,12 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "named"
     }
    ]
   },
@@ -2032,6 +3063,12 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
@@ -2044,6 +3081,12 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "named"
     }
    ]
   },
@@ -2053,28 +3096,58 @@
    "reads": [
     {
      "column": "EffectMiscValue_0",
+     "holds": "mask",
+     "into": "spell_schools",
+     "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
      "holds": "amount",
-     "into": "",
-     "by": "shaped"
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
   "187": {
    "name": "Mod Attacker Melee Crit Chance - %",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "named"
+    }
+   ]
   },
   "188": {
    "name": "Mod Attacker Ranged Crit Chance - %",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "named"
+    }
+   ]
   },
   "189": {
    "name": "Mod Rating",
    "family": "combat",
-   "reads": [],
-   "unresolved": [
-    "EffectMiscValue_0"
+   "reads": [
+    {
+     "column": "EffectMiscValue_0",
+     "holds": "mask",
+     "into": "combat_rating_mask",
+     "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
+    }
    ]
   },
   "190": {
@@ -2086,6 +3159,12 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "named"
     }
    ]
   },
@@ -2098,6 +3177,12 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "named"
     }
    ]
   },
@@ -2110,6 +3195,12 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
@@ -2128,6 +3219,12 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
@@ -2140,6 +3237,12 @@
      "holds": "mask",
      "into": "spell_schools",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
@@ -2152,13 +3255,26 @@
      "holds": "reference",
      "into": "Spell",
      "by": "named"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
   "196": {
    "name": "Increase All Cooldowns",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "seconds",
+     "by": "templated"
+    }
+   ]
   },
   "197": {
    "name": "Mod Chance to be Critically Hit %",
@@ -2169,6 +3285,12 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
@@ -2178,15 +3300,21 @@
    "reads": [
     {
      "column": "EffectMiscValue_0",
-     "holds": "amount",
-     "into": "",
-     "by": "shaped"
+     "holds": "mask",
+     "into": "combat_rating_mask",
+     "by": "core"
     },
     {
      "column": "EffectMiscValue_1",
+     "holds": "mask",
+     "into": "combat_rating_mask",
+     "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
      "holds": "amount",
-     "into": "",
-     "by": "shaped"
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
@@ -2199,13 +3327,26 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "named"
     }
    ]
   },
   "200": {
    "name": "Mod Experience Gained % (mob kills only)",
    "family": "world",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
+    }
+   ]
   },
   "201": {
    "name": "Cannot dodge, block or parry",
@@ -2216,13 +3357,26 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
   "203": {
    "name": "Mod Melee Crit Damage Taken by %",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "named"
+    }
+   ]
   },
   "204": {
    "name": "Mod Ranged Crit Damage Taken by %",
@@ -2238,33 +3392,74 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "named"
     }
    ]
   },
   "206": {
    "name": "Mod Flight Speed % - Stacks",
    "family": "appearance",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
+    }
+   ]
   },
   "207": {
    "name": "Mod Flight Speed %",
    "family": "appearance",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
+    }
+   ]
   },
   "208": {
    "name": "Mod Flight Speed %",
    "family": "appearance",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "named"
+    }
+   ]
   },
   "209": {
    "name": "Mod Mounted Speed %",
    "family": "appearance",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "named"
+    }
+   ]
   },
   "210": {
    "name": "Mod Flight Speed %",
    "family": "appearance",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
+    }
+   ]
   },
   "211": {
    "name": "Mod Mounted Speed % (ground + flying)",
@@ -2275,6 +3470,12 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "named"
     }
    ]
   },
@@ -2287,18 +3488,38 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
   "213": {
    "name": "Mod Rage % Generated From Damage Dealt",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
+    }
+   ]
   },
   "214": {
    "name": "Tamed Pet Passive",
    "family": "other",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "215": {
    "name": "Arena Preparation",
@@ -2314,13 +3535,26 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
   "217": {
    "name": "Mod Speed %",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "named"
+    }
+   ]
   },
   "218": {
    "name": "Add Modifier - % (Label)",
@@ -2337,13 +3571,26 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
   "219": {
    "name": "Add Modifier - Flat (Label)",
    "family": "other",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_0",
     "EffectMiscValue_1"
@@ -2358,6 +3605,12 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "named"
     }
    ]
   },
@@ -2403,6 +3656,12 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "yards",
+     "by": "templated"
     }
    ]
   },
@@ -2421,18 +3680,38 @@
      "holds": "scripted",
      "into": "",
      "by": "scripted"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "scripted",
+     "into": "",
+     "by": "scripted"
     }
    ]
   },
   "227": {
    "name": "Periodically Trigger Spell with Value",
    "family": "scripted",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
+    }
+   ]
   },
   "228": {
    "name": "Stealth Detection (Always)",
    "family": "appearance",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_0"
    ]
@@ -2443,21 +3722,41 @@
    "reads": [
     {
      "column": "EffectMiscValue_0",
+     "holds": "mask",
+     "into": "spell_schools",
+     "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
      "holds": "amount",
-     "into": "",
-     "by": "shaped"
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
   "230": {
    "name": "Mod Max Health",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
+    }
+   ]
   },
   "231": {
    "name": "Proc Trigger Spell With Value",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "232": {
    "name": "Mod Mechanic Duration %",
@@ -2468,13 +3767,26 @@
      "holds": "vocabulary",
      "into": "spell_mechanics",
      "by": "named"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
   "233": {
    "name": "Change Model of Every Humanoid Seen",
    "family": "appearance",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_0",
     "EffectMiscValue_1"
@@ -2489,6 +3801,12 @@
      "holds": "vocabulary",
      "into": "spell_mechanics",
      "by": "named"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
@@ -2512,6 +3830,12 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
     }
    ]
   },
@@ -2524,6 +3848,12 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "named"
     }
    ]
   },
@@ -2554,18 +3884,38 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "named"
     }
    ]
   },
   "240": {
    "name": "Mod Expertise",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "241": {
    "name": "Force Move Forward",
    "family": "world",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "243": {
    "name": "Faction Override",
@@ -2582,6 +3932,12 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
@@ -2606,13 +3962,26 @@
      "holds": "vocabulary",
      "into": "dispel_types",
      "by": "named"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
   "246": {
    "name": "Mod Debuffs Duration %",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "named"
+    }
+   ]
   },
   "247": {
    "name": "Clone",
@@ -2629,6 +3998,12 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
@@ -2646,18 +4021,38 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
   "250": {
    "name": "Increase Max Health - Stacks",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
+    }
+   ]
   },
   "251": {
    "name": "Mod Enemy Dodge %",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
+    }
+   ]
   },
   "252": {
    "name": "Mod Melee, Ranged & Spell Haste by %",
@@ -2668,6 +4063,12 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
@@ -2680,6 +4081,12 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "named"
     }
    ]
   },
@@ -2692,6 +4099,12 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
@@ -2704,6 +4117,12 @@
      "holds": "vocabulary",
      "into": "spell_mechanics",
      "by": "named"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
@@ -2733,6 +4152,12 @@
      "holds": "mask",
      "into": "spell_schools",
      "by": "named"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
@@ -2745,6 +4170,12 @@
      "holds": "reference",
      "into": "ScreenEffect",
      "by": "measured"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ],
    "unresolved": [
@@ -2766,13 +4197,26 @@
      "holds": "reference",
      "into": "Phase",
      "by": "measured"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
   "262": {
    "name": "Ignore Aura State",
    "family": "other",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_0"
    ]
@@ -2780,12 +4224,26 @@
   "263": {
    "name": "Allows Spells",
    "family": "other",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "264": {
    "name": "Disable Attack",
    "family": "other",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "265": {
    "name": "Detect Azerite",
@@ -2795,7 +4253,14 @@
   "266": {
    "name": "Set Vignette",
    "family": "other",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_0"
    ]
@@ -2809,6 +4274,12 @@
      "holds": "mask",
      "into": "spell_schools",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "named"
     }
    ]
   },
@@ -2821,6 +4292,12 @@
      "holds": "vocabulary",
      "into": "primary_stats",
      "by": "named"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
@@ -2830,9 +4307,15 @@
    "reads": [
     {
      "column": "EffectMiscValue_0",
+     "holds": "mask",
+     "into": "spell_schools",
+     "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
      "holds": "amount",
-     "into": "",
-     "by": "shaped"
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
@@ -2845,6 +4328,12 @@
      "holds": "mask",
      "into": "spell_schools",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
@@ -2857,13 +4346,26 @@
      "holds": "mask",
      "into": "spell_schools",
      "by": "named"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
   "272": {
    "name": "Modify Block %",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
+    }
+   ]
   },
   "273": {
    "name": "X-ray Vision",
@@ -2876,7 +4378,14 @@
   "274": {
    "name": "Consume No Ammo",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
+    }
+   ]
   },
   "275": {
    "name": "Allow Affected Spells to be Used in Any Stance",
@@ -2887,6 +4396,12 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
@@ -2899,6 +4414,12 @@
      "holds": "vocabulary",
      "into": "spell_mechanics",
      "by": "named"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
@@ -2916,18 +4437,38 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
   "279": {
    "name": "Spawn Effect",
    "family": "world",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "280": {
    "name": "Mod Armor Penetration %",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "named"
+    }
+   ]
   },
   "281": {
    "name": "Mod All Honor Gain %",
@@ -2944,7 +4485,14 @@
   "282": {
    "name": "Mod Base Health %",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "named"
+    }
+   ]
   },
   "283": {
    "name": "Mod All Healing Done % by Caster",
@@ -2955,6 +4503,12 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
@@ -2967,23 +4521,50 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
   "285": {
    "name": "Mod Attack Power for every 'School' Resistance Point",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
+    }
+   ]
   },
   "286": {
    "name": "Allow Dot to Crit",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "287": {
    "name": "Deflect Spells",
    "family": "other",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_0"
    ]
@@ -2991,12 +4572,26 @@
   "288": {
    "name": "Ignore Hit Direction",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "289": {
    "name": "Prevent Durability Loss",
    "family": "scripted",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "290": {
    "name": "Mod Crit Chance % - All",
@@ -3007,6 +4602,12 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
@@ -3019,6 +4620,12 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
@@ -3031,6 +4638,12 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ],
    "unresolved": [
@@ -3040,7 +4653,14 @@
   "294": {
    "name": "Aura of Despair",
    "family": "combat",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_0",
     "EffectMiscValue_1"
@@ -3055,6 +4675,12 @@
      "holds": "mask",
      "into": "spell_schools",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "named"
     }
    ]
   },
@@ -3073,13 +4699,26 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
   "297": {
    "name": "Mod Root Disable Gravity",
    "family": "world",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "298": {
    "name": "Mod Stun Disable Gravity",
@@ -3096,6 +4735,12 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
@@ -3110,9 +4755,15 @@
    "reads": [
     {
      "column": "EffectMiscValue_0",
+     "holds": "mask",
+     "into": "spell_schools",
+     "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
      "holds": "amount",
-     "into": "",
-     "by": "shaped"
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
@@ -3122,15 +4773,21 @@
    "reads": [
     {
      "column": "EffectMiscValue_0",
-     "holds": "amount",
-     "into": "",
-     "by": "shaped"
+     "holds": "mask",
+     "into": "spell_schools",
+     "by": "core"
     },
     {
      "column": "EffectMiscValue_1",
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
     }
    ]
   },
@@ -3143,6 +4800,12 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
@@ -3155,6 +4818,12 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
@@ -3167,18 +4836,38 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
   "306": {
    "name": "Mod Crit Chance From Caster %",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
+    }
+   ]
   },
   "307": {
    "name": "Cast While Moving (Spell Label)",
    "family": "other",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_0"
    ]
@@ -3192,13 +4881,26 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
   "309": {
    "name": "Mod Resillience",
    "family": "other",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "310": {
    "name": "Mod Pet AOE Damage Avoidance",
@@ -3209,13 +4911,26 @@
      "holds": "mask",
      "into": "spell_schools",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
   "311": {
    "name": "Ignore Combat",
    "family": "other",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_0"
    ]
@@ -3229,6 +4944,12 @@
      "holds": "reference",
      "into": "AnimReplacementSet",
      "by": "measured"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
@@ -3255,7 +4976,14 @@
   "315": {
    "name": "Underwater Walking",
    "family": "appearance",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "316": {
    "name": "Absorb Overkill Damage",
@@ -3265,13 +4993,19 @@
      "column": "EffectMiscValue_0",
      "holds": "mask",
      "into": "spell_schools",
-     "by": "named"
+     "by": "core"
     },
     {
      "column": "EffectMiscValue_1",
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
@@ -3284,6 +5018,12 @@
      "holds": "mask",
      "into": "spell_schools",
      "by": "named"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
@@ -3296,6 +5036,12 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
@@ -3308,6 +5054,12 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
@@ -3320,6 +5072,12 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
@@ -3332,13 +5090,26 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
   "322": {
    "name": "Interfere Targeting",
    "family": "other",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_0"
    ]
@@ -3351,7 +5122,14 @@
   "324": {
    "name": "Override Unlocked Azerite Essense Rank",
    "family": "appearance",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "325": {
    "name": "Learn PvP Talent",
@@ -3383,6 +5161,12 @@
      "holds": "reference",
      "into": "Phase",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
@@ -3406,6 +5190,12 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
@@ -3418,13 +5208,26 @@
      "holds": "vocabulary",
      "into": "power_types",
      "by": "named"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
   "330": {
    "name": "Allows Cast while Moving",
    "family": "other",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_0"
    ]
@@ -3438,6 +5241,12 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ],
    "unresolved": [
@@ -3453,6 +5262,12 @@
      "holds": "reference",
      "into": "Spell",
      "by": "named"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ],
    "unresolved": [
@@ -3468,6 +5283,12 @@
      "holds": "reference",
      "into": "Spell",
      "by": "named"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ],
    "unresolved": [
@@ -3477,12 +5298,26 @@
   "334": {
    "name": "Mod Auto Attack Crit Chance %",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "named"
+    }
+   ]
   },
   "335": {
    "name": "Unknown Aura #335",
    "family": "other",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "336": {
    "name": "Mount Restrictions",
@@ -3495,7 +5330,14 @@
   "338": {
    "name": "Mod Durability Loss",
    "family": "progression",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_0"
    ]
@@ -3503,7 +5345,14 @@
   "339": {
    "name": "Mod Crit Chance From Caster %",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "named"
+    }
+   ]
   },
   "340": {
    "name": "Mod Resurrected Health %",
@@ -3514,6 +5363,12 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "named"
     }
    ]
   },
@@ -3526,6 +5381,13 @@
      "holds": "reference",
      "into": "SpellCategory",
      "by": "measured"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "seconds",
+     "by": "templated",
+     "scale": 1000
     }
    ]
   },
@@ -3538,23 +5400,50 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
   "343": {
    "name": "Mod Melee Damage From Caster %",
    "family": "other",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "named"
+    }
+   ]
   },
   "344": {
    "name": "Mod Auto Attack Damage %",
    "family": "other",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
+    }
+   ]
   },
   "345": {
    "name": "Ignore Armor %",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
+    }
+   ]
   },
   "346": {
    "name": "Enable Alt Power",
@@ -3565,6 +5454,12 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ],
    "unresolved": [
@@ -3585,6 +5480,12 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
@@ -3597,13 +5498,26 @@
      "holds": "reference",
      "into": "CurrencyTypes",
      "by": "measured"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
   "350": {
    "name": "Mod Material Gain %",
    "family": "other",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "named"
+    }
+   ]
   },
   "351": {
    "name": "Mod Currency Category Gain %",
@@ -3614,6 +5528,12 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "named"
     }
    ]
   },
@@ -3637,7 +5557,14 @@
   "355": {
    "name": "Mod Casting Speed %",
    "family": "world",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
+    }
+   ]
   },
   "356": {
    "name": "Mod Spell Damage Done %",
@@ -3662,12 +5589,26 @@
   "358": {
    "name": "Worgen Altered Form",
    "family": "other",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "359": {
    "name": "Mod Healing Done Versus Aura State",
    "family": "combat",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_0"
    ]
@@ -3675,7 +5616,14 @@
   "360": {
    "name": "Proc Duplicate Spells",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "361": {
    "name": "Triggers AoE",
@@ -3686,6 +5634,12 @@
      "holds": "reference",
      "into": "Spell",
      "by": "named"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ],
    "unresolved": [
@@ -3722,6 +5676,12 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "named"
     }
    ]
   },
@@ -3734,13 +5694,26 @@
      "holds": "reference",
      "into": "Spell",
      "by": "named"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
   "368": {
    "name": "Copy Weapons",
    "family": "appearance",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_0"
    ]
@@ -3766,13 +5739,26 @@
      "holds": "reference",
      "into": "SpellOverrideName",
      "by": "named"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
   "371": {
    "name": "Disable Player Auto Attack",
    "family": "other",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "372": {
    "name": "Override Mount From Set",
@@ -3785,7 +5771,14 @@
   "373": {
    "name": "Mod Speed % and Unable to Control Character",
    "family": "world",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "named"
+    }
+   ]
   },
   "374": {
    "name": "Mod Falling Damage %",
@@ -3796,6 +5789,12 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
@@ -3808,6 +5807,12 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "named"
     }
    ]
   },
@@ -3826,6 +5831,12 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "named"
     }
    ]
   },
@@ -3837,22 +5848,50 @@
   "378": {
    "name": "Mod Possess Pet",
    "family": "control",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "379": {
    "name": "Mod Mana Regen %",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
+    }
+   ]
   },
   "380": {
    "name": "Mod Damage Taken From Caster %",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "named"
+    }
+   ]
   },
   "381": {
    "name": "Mod Damage Taken From Caster Pet %",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "named"
+    }
+   ]
   },
   "382": {
    "name": "Mod Pet Stat %",
@@ -3869,13 +5908,26 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "named"
     }
    ]
   },
   "383": {
    "name": "Ignore Spell Cooldown",
    "family": "combat",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_0"
    ]
@@ -3883,7 +5935,14 @@
   "384": {
    "name": "Unknown Aura #384",
    "family": "other",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "385": {
    "name": "Listening to survivor's tale",
@@ -3899,13 +5958,26 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "named"
     }
    ]
   },
   "393": {
    "name": "Block Spells From Front",
    "family": "combat",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_0"
    ]
@@ -3937,6 +6009,12 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
@@ -3955,6 +6033,12 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
     }
    ]
   },
@@ -3969,7 +6053,14 @@
   "398": {
    "name": "Battleground Player Position",
    "family": "world",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_0"
    ]
@@ -3977,7 +6068,14 @@
   "399": {
    "name": "Mod Time Rate %",
    "family": "other",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
+    }
+   ]
   },
   "400": {
    "name": "Mod Skill",
@@ -3988,6 +6086,12 @@
      "holds": "reference",
      "into": "SkillLine",
      "by": "named"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
     }
    ]
   },
@@ -4002,7 +6106,14 @@
   "402": {
    "name": "Mod Override Power Display",
    "family": "combat",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_0"
    ]
@@ -4016,6 +6127,12 @@
      "holds": "reference",
      "into": "Spell",
      "by": "named"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ],
    "unresolved": [
@@ -4025,7 +6142,14 @@
   "404": {
    "name": "Attack Power equals Spell Power %",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "named"
+    }
+   ]
   },
   "405": {
    "name": "Mod Secondary Stat %",
@@ -4033,9 +6157,15 @@
    "reads": [
     {
      "column": "EffectMiscValue_0",
+     "holds": "mask",
+     "into": "combat_rating_mask",
+     "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
      "holds": "amount",
-     "into": "",
-     "by": "shaped"
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
@@ -4054,18 +6184,38 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
   "408": {
    "name": "Set Action Button Spell Count",
    "family": "other",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "409": {
    "name": "Slow Fall",
    "family": "appearance",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "411": {
    "name": "Modifies Charges",
@@ -4076,13 +6226,26 @@
      "holds": "reference",
      "into": "SpellCategory",
      "by": "measured"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
     }
    ]
   },
   "413": {
    "name": "Mod Ranged Attack Deflect Chance %",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
+    }
+   ]
   },
   "414": {
    "name": "Mod Ranged Attack Block Chance From Front %",
@@ -4093,6 +6256,12 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "named"
     }
    ]
   },
@@ -4104,7 +6273,14 @@
   "416": {
    "name": "Modifies Cooldown by Haste",
    "family": "combat",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_0"
    ]
@@ -4112,7 +6288,14 @@
   "417": {
    "name": "Modifies Global Cooldown by Haste",
    "family": "combat",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_0"
    ]
@@ -4126,6 +6309,12 @@
      "holds": "vocabulary",
      "into": "power_types",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
@@ -4144,13 +6333,26 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "named"
     }
    ]
   },
   "420": {
    "name": "Mod Battle Pet XP Gain %",
    "family": "progression",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
+    }
+   ]
   },
   "421": {
    "name": "Mod Absorb Done %",
@@ -4160,6 +6362,12 @@
      "column": "EffectMiscValue_0",
      "holds": "mask",
      "into": "spell_schools",
+     "by": "named"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
      "by": "named"
     }
    ]
@@ -4173,13 +6381,26 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "named"
     }
    ]
   },
   "423": {
    "name": "Mod Mana Cost %",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "named"
+    }
+   ]
   },
   "424": {
    "name": "Caster Ignore Line Of Sight",
@@ -4201,7 +6422,14 @@
   "427": {
    "name": "Scale Player Level",
    "family": "appearance",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "428": {
    "name": "Linked Summon",
@@ -4212,6 +6440,12 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
@@ -4224,6 +6458,12 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
@@ -4236,6 +6476,12 @@
      "holds": "reference",
      "into": "SceneScriptPackage",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
@@ -4250,7 +6496,14 @@
   "434": {
    "name": "Attack Nearby Enemies",
    "family": "other",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_0",
     "EffectMiscValue_1"
@@ -4259,12 +6512,26 @@
   "436": {
    "name": "Mod Environmental Damage Taken %",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "named"
+    }
+   ]
   },
   "437": {
    "name": "Mod Movement Speed %",
    "family": "world",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
+    }
+   ]
   },
   "438": {
    "name": "Preload Personal Phase",
@@ -4282,7 +6549,14 @@
   "443": {
    "name": "Mod Leech %",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
+    }
+   ]
   },
   "447": {
    "name": "Mod XP Gain From Creature Type",
@@ -4293,13 +6567,26 @@
      "holds": "mask",
      "into": "creature_types",
      "by": "named"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
   "448": {
    "name": "Mod Crit Healing %",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "named"
+    }
+   ]
   },
   "450": {
    "name": "Character Upgrade Spell Tier",
@@ -4320,6 +6607,13 @@
      "holds": "reference",
      "into": "SpellCategory",
      "by": "measured"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "seconds",
+     "by": "templated",
+     "scale": 1000
     }
    ]
   },
@@ -4332,13 +6626,26 @@
      "holds": "reference",
      "into": "SpellCategory",
      "by": "measured"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
   "455": {
    "name": "Root",
    "family": "world",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "457": {
    "name": "Charge Recovery Affected By Haste Regen",
@@ -4349,18 +6656,38 @@
      "holds": "reference",
      "into": "SpellCategory",
      "by": "measured"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
   "458": {
    "name": "Ignore Dual Wield Hit Penalty",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "459": {
    "name": "Ignore Movement Forces",
    "family": "world",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "460": {
    "name": "Reset Cooldowns On Duel Start",
@@ -4370,17 +6697,38 @@
   "463": {
    "name": "Converts one stat into another %",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
+    }
+   ]
   },
   "465": {
    "name": "Mod Armor Bonus",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
+    }
+   ]
   },
   "466": {
    "name": "Mod Armor Bonus %",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
+    }
+   ]
   },
   "467": {
    "name": "Mod Stat Bonus %",
@@ -4390,6 +6738,12 @@
      "column": "EffectMiscValue_0",
      "holds": "vocabulary",
      "into": "primary_stats",
+     "by": "named"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
      "by": "named"
     }
    ]
@@ -4403,6 +6757,12 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
@@ -4433,13 +6793,26 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
   "471": {
    "name": "Mod Versatility %",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
+    }
+   ]
   },
   "472": {
    "name": "Fixate",
@@ -4472,7 +6845,14 @@
   "475": {
    "name": "Allow Objects Interaction While Mounted",
    "family": "appearance",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "476": {
    "name": "Mod Currency Gain %",
@@ -4483,6 +6863,12 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "named"
     }
    ]
   },
@@ -4494,7 +6880,14 @@
   "479": {
    "name": "Test Scaling Aura",
    "family": "scripted",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "482": {
    "name": "Selfie",
@@ -4511,7 +6904,14 @@
   "483": {
    "name": "Suppress Transforms",
    "family": "appearance",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_1"
    ]
@@ -4519,7 +6919,14 @@
   "484": {
    "name": "Allow Interrupt Spell",
    "family": "control",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_0"
    ]
@@ -4527,12 +6934,26 @@
   "485": {
    "name": "Mod Resist Forced Movement %",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "named"
+    }
+   ]
   },
   "486": {
    "name": "Obscured",
    "family": "other",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "487": {
    "name": "Set Mount Model",
@@ -4567,12 +6988,26 @@
   "491": {
    "name": "Mod Honor Gain %",
    "family": "progression",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
+    }
+   ]
   },
   "492": {
    "name": "Mod Dodge Chance %",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "named"
+    }
+   ]
   },
   "493": {
    "name": "Hunter Animal Companion",
@@ -4600,6 +7035,12 @@
      "holds": "unread",
      "into": "",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
@@ -4623,6 +7064,12 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "named"
     }
    ]
   },
@@ -4641,13 +7088,26 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
   "499": {
    "name": "Mod Reduce Rested XP Consumption %",
    "family": "progression",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "named"
+    }
+   ]
   },
   "500": {
    "name": "Ignore Spell Charge Cooldown",
@@ -4658,33 +7118,74 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
   "501": {
    "name": "Mod Critical Damage Taken From Caster %",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "named"
+    }
+   ]
   },
   "502": {
    "name": "Mod Versatility Damage Done Benefit",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "503": {
    "name": "Mod Versatility Healing Done Benefit",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "504": {
    "name": "Mod Increase Healing Done %",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
+    }
+   ]
   },
   "505": {
    "name": "Anima Power Rerolls Per Run",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "506": {
    "name": "Disable Inertia",

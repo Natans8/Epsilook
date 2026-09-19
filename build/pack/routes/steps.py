@@ -420,7 +420,8 @@ class Holds(Enum):
     naming fire and frost at once."""
 
     AMOUNT = "amount"
-    """A number that is itself the value."""
+    """A number that is itself the value, in the unit `into` names where it
+    has one: `percent`, `yards`, `seconds` or `minutes`."""
 
     SCRIPTED = "scripted"
     """A number the spell's own server script reads, which nothing in the
@@ -441,10 +442,15 @@ class Slot:
     column: str
     holds: Holds
     into: str = ""
-    """The table or vocabulary named, empty for an amount or a parameter."""
+    """The table or vocabulary named, an amount's unit where it has one, empty
+    for a parameter."""
 
     zero_is_a_value: bool = False
     """Whether nought is data here rather than the absence of a reference."""
+
+    scale: int = 1
+    """What an amount is divided by before it reads in its unit: a thousand for
+    milliseconds read as seconds, ten for rage stored in tenths."""
 
 
 def reference(column: str | Column, table: str | type[Table], *, zero_is_a_value: bool = False) -> Slot:
@@ -461,9 +467,9 @@ def vocabulary(column: str | Column, name: str, *, zero_is_a_value: bool = False
     return Slot(column_name(column), Holds.VOCABULARY, name, zero_is_a_value)
 
 
-def amount(column: str | Column) -> Slot:
-    """A column that is a number under this selector."""
-    return Slot(column_name(column), Holds.AMOUNT)
+def amount(column: str | Column, unit: str = "", scale: int = 1) -> Slot:
+    """A column that is a number under this selector, in ``unit`` once divided by ``scale``."""
+    return Slot(column_name(column), Holds.AMOUNT, unit, scale=scale)
 
 
 def parameter(column: str | Column, *, zero_is_a_value: bool = False) -> Slot:

@@ -1,8 +1,8 @@
 {
  "enum": "SpellEffect.Effect slot typing",
- "description": "What each effect value's misc columns hold on the rows it selects: a reference into a table, a vocabulary or mask a vendored vocabulary names, an amount, a scripted argument, or unread by the server. Read mechanically, never by hand, so it can be held against the build's own payloads: `by` names the evidence. declared is not used here; measured means the slot's distinct values resolve into one id space far beyond the space's density over their range; named means the selector's name points at the table and the values fit it; core means the Epsilon core's handler reads the value as that vocabulary, or, for unread, that neither the handler nor any read of the aura in the core asks for it; scripted means the number is an argument the spell's own server script reads; shaped means an amount by name or by round values. A slot no evidence types is listed under unresolved. family is the selector's RP family, the ranking's axis.",
+ "description": "What each effect value's misc columns and points column hold on the rows it selects: a reference into a table, a vocabulary or mask a vendored vocabulary names, an amount, a scripted argument, or unread by the server. Read mechanically, never by hand, so it can be held against the build's own payloads: `by` names the evidence. declared is not used here; measured means the slot's distinct values resolve into one id space far beyond the space's density over their range; named means the selector's name points at the table and the values fit it, or, for the points, that Wowhead's name marks the value a percentage; core means the Epsilon core reads the value as that vocabulary: a handler or a walk of the selector's rows tests it bit by bit against the vocabulary's values, builds a mask from it, or casts it to an enum, which makes it an id of that enum; or, for unread, that neither the handler nor any read of the effect in the core asks for it; scripted means the number is an argument the spell's own server script reads; shaped means an amount by name or by round values; templated means the spell descriptions quote the effect's points, bare or divided, with one unit and scale after at least 70% of three or more quotes; column means the points are an amount whose unit nothing decided. An amount's `into` is its unit, one of the words the 9.2.7 descriptions write after an effect's points: percent, seconds, minutes, hours, yards, degrees or count, empty for a plain amount of whatever the misc columns or the effect name; its `scale`, omitted where it is one, is what the stored number is divided by before it reads in that unit, a thousand for milliseconds read as seconds. A slot no evidence types is listed under unresolved. family is the selector's RP family, the ranking's axis.",
  "source": [
-  "the 9.2.7 SpellEffect rows, the id spaces of every table the exploration database holds, the Epsilon core's SpellAuraEffects.cpp and SpellEffects.cpp",
+  "the 9.2.7 SpellEffect rows, the id spaces of every table the exploration database holds, the Epsilon core's SpellAuraEffects.cpp and SpellEffects.cpp, and the reads of aura rows across its Unit, Player, Creature, Object, Spell, SpellAuras, SpellInfo, SpellMgr, StatSystem and MovementHandler sources",
   "https://github.com/EpsilonRP/TrinityCore"
  ],
  "keys": "Effect",
@@ -10,17 +10,38 @@
   "0": {
    "name": "",
    "family": "other",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "1": {
    "name": "Instakill",
    "family": "world",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "2": {
    "name": "School Damage",
    "family": "combat",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_0",
     "EffectMiscValue_1"
@@ -41,6 +62,12 @@
      "holds": "scripted",
      "into": "",
      "by": "scripted"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "scripted",
+     "into": "",
+     "by": "scripted"
     }
    ]
   },
@@ -52,7 +79,14 @@
   "6": {
    "name": "Apply Aura",
    "family": "other",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_0"
    ]
@@ -60,7 +94,14 @@
   "7": {
    "name": "Environment Damage",
    "family": "other",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "8": {
    "name": "Drain Power",
@@ -71,23 +112,50 @@
      "holds": "vocabulary",
      "into": "power_types",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
     }
    ]
   },
   "9": {
    "name": "Drain Health",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
+    }
+   ]
   },
   "10": {
    "name": "Heal",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
+    }
+   ]
   },
   "11": {
    "name": "Bind",
    "family": "world",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_0"
    ]
@@ -95,7 +163,14 @@
   "12": {
    "name": "Portal",
    "family": "world",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_0"
    ]
@@ -103,7 +178,14 @@
   "13": {
    "name": "Ritual Base",
    "family": "world",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_0"
    ]
@@ -117,6 +199,12 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
@@ -129,6 +217,12 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ],
    "unresolved": [
@@ -144,6 +238,12 @@
      "holds": "reference",
      "into": "QuestV2",
      "by": "measured"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
     }
    ]
   },
@@ -155,12 +255,26 @@
   "18": {
    "name": "Resurrect with % Health/Mana",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
+    }
+   ]
   },
   "19": {
    "name": "Add Extra Attacks",
    "family": "other",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
+    }
+   ]
   },
   "20": {
    "name": "Can Dodge",
@@ -171,6 +285,12 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
@@ -183,6 +303,12 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
@@ -195,6 +321,12 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
@@ -207,13 +339,26 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
   "24": {
    "name": "Create Item",
    "family": "progression",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_0",
     "EffectMiscValue_1"
@@ -222,7 +367,14 @@
   "25": {
    "name": "Can Use Weapon",
    "family": "other",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "26": {
    "name": "Knows Defense Skill",
@@ -232,7 +384,14 @@
   "27": {
    "name": "Persistent Area Aura",
    "family": "world",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "28": {
    "name": "Summon",
@@ -249,13 +408,26 @@
      "holds": "reference",
      "into": "SummonProperties",
      "by": "measured"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
     }
    ]
   },
   "29": {
    "name": "Blink",
    "family": "world",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "30": {
    "name": "Give Power",
@@ -266,6 +438,12 @@
      "holds": "vocabulary",
      "into": "power_types",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
     }
    ]
   },
@@ -284,18 +462,38 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
     }
    ]
   },
   "32": {
    "name": "Trigger Missile",
    "family": "scripted",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
+    }
+   ]
   },
   "33": {
    "name": "Open Object",
    "family": "world",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_0"
    ]
@@ -303,7 +501,14 @@
   "34": {
    "name": "Transform Item",
    "family": "appearance",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "35": {
    "name": "Apply Area Aura",
@@ -313,7 +518,14 @@
   "36": {
    "name": "Learn Spell",
    "family": "progression",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "37": {
    "name": "Knows Spell Defense (Obsolete)",
@@ -323,7 +535,14 @@
   "38": {
    "name": "Dispel",
    "family": "control",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_0"
    ]
@@ -360,6 +579,12 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
     }
    ]
   },
@@ -378,13 +603,26 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
     }
    ]
   },
   "43": {
    "name": "Teleport Target to Caster",
    "family": "world",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "44": {
    "name": "Learn Skill Step",
@@ -395,6 +633,12 @@
      "holds": "reference",
      "into": "SkillLine",
      "by": "measured"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
@@ -407,13 +651,26 @@
      "holds": "reference",
      "into": "Movie",
      "by": "measured"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
   "46": {
    "name": "Spawn Effect",
    "family": "world",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
+    }
+   ]
   },
   "47": {
    "name": "Trade Skill",
@@ -439,6 +696,12 @@
      "holds": "reference",
      "into": "gameobject_template",
      "by": "measured"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ],
    "unresolved": [
@@ -448,7 +711,14 @@
   "52": {
    "name": "Set Max Battle Pet Count",
    "family": "progression",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "53": {
    "name": "Enchant Item",
@@ -459,6 +729,12 @@
      "holds": "reference",
      "into": "SpellItemEnchantment",
      "by": "measured"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ],
    "unresolved": [
@@ -474,13 +750,26 @@
      "holds": "reference",
      "into": "SpellItemEnchantment",
      "by": "measured"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
   "55": {
    "name": "Tame Creature",
    "family": "other",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "56": {
    "name": "Summon Pet",
@@ -491,6 +780,12 @@
      "holds": "reference",
      "into": "creature_template",
      "by": "measured"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
     }
    ],
    "unresolved": [
@@ -505,7 +800,14 @@
   "58": {
    "name": "Deal Weapon Damage",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
+    }
+   ]
   },
   "59": {
    "name": "Open Item & Fast Loot",
@@ -516,6 +818,12 @@
      "holds": "reference",
      "into": "Item",
      "by": "named"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
     }
    ]
   },
@@ -533,6 +841,12 @@
      "holds": "scripted",
      "into": "",
      "by": "scripted"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "scripted",
+     "into": "",
+     "by": "scripted"
     }
    ]
   },
@@ -545,13 +859,26 @@
      "holds": "vocabulary",
      "into": "power_types",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
     }
    ]
   },
   "63": {
    "name": "Threat",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "64": {
    "name": "Trigger Spell",
@@ -562,6 +889,12 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ],
    "unresolved": [
@@ -576,32 +909,74 @@
   "66": {
    "name": "Create or Recharge Item",
    "family": "world",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "67": {
    "name": "Heal to Full",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "68": {
    "name": "Interrupt Cast",
    "family": "control",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "69": {
    "name": "Distract",
    "family": "other",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "seconds",
+     "by": "templated"
+    }
+   ]
   },
   "70": {
    "name": "Distract Move",
    "family": "world",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "71": {
    "name": "Pickpocket",
    "family": "other",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "72": {
    "name": "Far Sight",
@@ -624,7 +999,14 @@
   "75": {
    "name": "Heal Mechanic",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "76": {
    "name": "Summon Object - Temporary",
@@ -635,6 +1017,12 @@
      "holds": "reference",
      "into": "gameobject_template",
      "by": "measured"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ],
    "unresolved": [
@@ -656,6 +1044,12 @@
      "holds": "scripted",
      "into": "",
      "by": "scripted"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "scripted",
+     "into": "",
+     "by": "scripted"
     }
    ]
   },
@@ -667,12 +1061,26 @@
   "79": {
    "name": "Abort All Pending Attacks",
    "family": "other",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "80": {
    "name": "MODIFY_FOLLOWER_ITEM_LEVEL",
    "family": "progression",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_0"
    ]
@@ -720,23 +1128,50 @@
      "holds": "reference",
      "into": "AnimKit",
      "by": "measured"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
     }
    ]
   },
   "87": {
    "name": "Siege Damage",
    "family": "world",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
+    }
+   ]
   },
   "88": {
    "name": "Repair Building",
    "family": "world",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "89": {
    "name": "Siege Building Action",
    "family": "world",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_0"
    ]
@@ -750,13 +1185,26 @@
      "holds": "reference",
      "into": "creature_template",
      "by": "measured"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
     }
    ]
   },
   "91": {
    "name": "Threat All",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "92": {
    "name": "Enchant Held Item (OBSOLETE)",
@@ -767,13 +1215,26 @@
      "holds": "reference",
      "into": "SpellItemEnchantment",
      "by": "named"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
   "93": {
    "name": "Force Deselect",
    "family": "other",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "94": {
    "name": "Self Resurrect",
@@ -784,13 +1245,26 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
   "95": {
    "name": "Skin Mob",
    "family": "other",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_0"
    ]
@@ -804,6 +1278,12 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
@@ -831,6 +1311,12 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
     }
    ]
   },
@@ -842,12 +1328,26 @@
   "100": {
    "name": "Inebriate",
    "family": "other",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "101": {
    "name": "Feed Pet",
    "family": "other",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "102": {
    "name": "Dismiss Pet",
@@ -863,6 +1363,12 @@
      "holds": "reference",
      "into": "Faction",
      "by": "measured"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
     }
    ]
   },
@@ -892,7 +1398,14 @@
   "106": {
    "name": "Change Raid Marker",
    "family": "other",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "107": {
    "name": "Show Corpse Loot",
@@ -908,18 +1421,38 @@
      "holds": "vocabulary",
      "into": "spell_mechanics",
      "by": "named"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
   "109": {
    "name": "Resurrect Dead Pet",
    "family": "world",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "111": {
    "name": "Durability Damage",
    "family": "progression",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_0"
    ]
@@ -938,13 +1471,26 @@
      "holds": "reference",
      "into": "Conversation",
      "by": "named, server-side"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
   "114": {
    "name": "Taunt",
    "family": "control",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "115": {
    "name": "Durability Damage %",
@@ -955,6 +1501,12 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "named"
     }
    ]
   },
@@ -966,7 +1518,14 @@
   "117": {
    "name": "AoE Resurrect With % Health",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "named"
+    }
+   ]
   },
   "118": {
    "name": "Learn Skill",
@@ -977,6 +1536,12 @@
      "holds": "reference",
      "into": "SkillLine",
      "by": "measured"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
@@ -988,17 +1553,38 @@
   "120": {
    "name": "Teleport to Closest Graveyard",
    "family": "world",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "121": {
    "name": "Normalized Weapon Damage",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
+    }
+   ]
   },
   "122": {
    "name": "Faction Reputation Reward Cap",
    "family": "identity",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_0"
    ]
@@ -1006,7 +1592,14 @@
   "123": {
    "name": "Take Flight Path",
    "family": "appearance",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_0"
    ]
@@ -1020,13 +1613,26 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
   "125": {
    "name": "Modify Threat Percent",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "named"
+    }
+   ]
   },
   "126": {
    "name": "Spell Steal",
@@ -1037,13 +1643,26 @@
      "holds": "vocabulary",
      "into": "dispel_types",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
   "127": {
    "name": "Prospect",
    "family": "progression",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "130": {
    "name": "Transfer Threat Done %",
@@ -1054,6 +1673,12 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "named"
     }
    ]
   },
@@ -1066,6 +1691,12 @@
      "holds": "reference",
      "into": "SoundKit",
      "by": "named"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
@@ -1095,6 +1726,12 @@
      "holds": "reference",
      "into": "creature_template",
      "by": "measured"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ],
    "unresolved": [
@@ -1104,12 +1741,26 @@
   "135": {
    "name": "Call Pet",
    "family": "other",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "136": {
    "name": "Heal for % of Total Health",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
+    }
+   ]
   },
   "137": {
    "name": "Give % of Total Power",
@@ -1120,6 +1771,12 @@
      "holds": "vocabulary",
      "into": "power_types",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "named"
     }
    ]
   },
@@ -1138,6 +1795,12 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
@@ -1150,18 +1813,38 @@
      "holds": "reference",
      "into": "QuestV2",
      "by": "measured"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
   "140": {
    "name": "Trigger Spell from Target with Caster as Target",
    "family": "scripted",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "141": {
    "name": "Force Cast with Value",
    "family": "other",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "142": {
    "name": "Trigger Spell with Value",
@@ -1178,6 +1861,12 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
     }
    ]
   },
@@ -1201,6 +1890,12 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
     }
    ]
   },
@@ -1213,13 +1908,26 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
   "146": {
    "name": "Activate Rune",
    "family": "progression",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_1"
    ]
@@ -1233,18 +1941,38 @@
      "holds": "reference",
      "into": "QuestV2",
      "by": "named"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
   "148": {
    "name": "Trigger Missile Spell with Value",
    "family": "scripted",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "149": {
    "name": "Charge to Object",
    "family": "world",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
+    }
+   ]
   },
   "150": {
    "name": "Quest Start",
@@ -1255,6 +1983,12 @@
      "holds": "reference",
      "into": "QuestV2",
      "by": "named"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
@@ -1289,6 +2023,12 @@
      "holds": "reference",
      "into": "TaxiNodes",
      "by": "measured"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
@@ -1309,6 +2049,12 @@
      "holds": "reference",
      "into": "SpellItemEnchantment",
      "by": "named"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
@@ -1321,6 +2067,12 @@
      "holds": "reference",
      "into": "Item",
      "by": "named"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
     }
    ],
    "unresolved": [
@@ -1330,7 +2082,14 @@
   "158": {
    "name": "Milling",
    "family": "progression",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "159": {
    "name": "Rename Pet",
@@ -1340,17 +2099,38 @@
   "160": {
    "name": "Force Cast 2",
    "family": "other",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "161": {
    "name": "Change Talent Specialization Count",
    "family": "progression",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "162": {
    "name": "Activate Talent Specialization",
    "family": "progression",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "163": {
    "name": "Obliterate Item",
@@ -1360,7 +2140,14 @@
   "164": {
    "name": "Cancel Aura",
    "family": "other",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "165": {
    "name": "Damage From Max Health Pct",
@@ -1371,6 +2158,12 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
@@ -1383,6 +2176,12 @@
      "holds": "reference",
      "into": "CurrencyTypes",
      "by": "measured"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
     }
    ],
    "unresolved": [
@@ -1392,7 +2191,14 @@
   "167": {
    "name": "Update Player Phase",
    "family": "world",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_0"
    ]
@@ -1405,12 +2211,26 @@
   "169": {
    "name": "Destroy Item",
    "family": "progression",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "170": {
    "name": "Update Player Auras",
    "family": "world",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "171": {
    "name": "Summon Object",
@@ -1421,6 +2241,12 @@
      "holds": "reference",
      "into": "gameobject_template",
      "by": "named"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ],
    "unresolved": [
@@ -1430,22 +2256,50 @@
   "172": {
    "name": "Mass Resurrection",
    "family": "world",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
+    }
+   ]
   },
   "173": {
    "name": "Unlock Guild Bank Slot",
    "family": "identity",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "175": {
    "name": "Unknown Effect #175",
    "family": "other",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "176": {
    "name": "Sanctuary 2",
    "family": "other",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "177": {
    "name": "Despawn Persistent Area Aura",
@@ -1466,6 +2320,12 @@
      "holds": "reference",
      "into": "AreaTriggerCreateProperties",
      "by": "named, server-side"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ],
    "unresolved": [
@@ -1485,7 +2345,14 @@
   "182": {
    "name": "Despawn Area Trigger",
    "family": "world",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "183": {
    "name": "Ground Effect",
@@ -1498,7 +2365,14 @@
   "184": {
    "name": "Give Reputation",
    "family": "identity",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_0"
    ]
@@ -1530,7 +2404,14 @@
   "187": {
    "name": "Randomize Archaeology Digsites",
    "family": "progression",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_0"
    ]
@@ -1538,7 +2419,14 @@
   "188": {
    "name": "Summon Multiple Hunter Pets",
    "family": "world",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "189": {
    "name": "Push Loot",
@@ -1549,6 +2437,12 @@
      "holds": "reference",
      "into": "Item",
      "by": "named"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
     }
    ],
    "unresolved": [
@@ -1558,7 +2452,14 @@
   "190": {
    "name": "Change Party Members",
    "family": "other",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_0"
    ]
@@ -1615,6 +2516,12 @@
      "holds": "reference",
      "into": "SceneScriptPackage",
      "by": "core"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
@@ -1627,6 +2534,12 @@
      "holds": "reference",
      "into": "creature_template",
      "by": "named"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ],
    "unresolved": [
@@ -1636,7 +2549,14 @@
   "200": {
    "name": "Heal Battle Pet Pct",
    "family": "combat",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "201": {
    "name": "Enable Battle Pets",
@@ -1649,12 +2569,26 @@
   "203": {
    "name": "Cancel Aura",
    "family": "other",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "percent",
+     "by": "templated"
+    }
+   ]
   },
   "204": {
    "name": "Change Battle Pet Quality",
    "family": "progression",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_0"
    ]
@@ -1662,7 +2596,14 @@
   "205": {
    "name": "Launch Quest Choice",
    "family": "scripted",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_0"
    ]
@@ -1670,7 +2611,14 @@
   "206": {
    "name": "Alter Item",
    "family": "progression",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "207": {
    "name": "Launch Quest Task",
@@ -1681,13 +2629,26 @@
      "holds": "reference",
      "into": "QuestV2",
      "by": "named"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
   "208": {
    "name": "Set Reputation",
    "family": "identity",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_0"
    ]
@@ -1747,6 +2708,12 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
@@ -1761,12 +2728,26 @@
   "215": {
    "name": "Upgrade Character Spells",
    "family": "other",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "216": {
    "name": "Create Shipment",
    "family": "progression",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_0"
    ]
@@ -1774,7 +2755,14 @@
   "217": {
    "name": "Upgrade Garrison",
    "family": "progression",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_0"
    ]
@@ -1812,6 +2800,12 @@
      "holds": "reference",
      "into": "GarrFollower",
      "by": "named"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ],
    "unresolved": [
@@ -1846,6 +2840,12 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
     }
    ]
   },
@@ -1861,7 +2861,14 @@
   "225": {
    "name": "Grant Battle Pet Level",
    "family": "progression",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_0"
    ]
@@ -1869,7 +2876,14 @@
   "226": {
    "name": "Trigger Action Set",
    "family": "scripted",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_0"
    ]
@@ -1883,6 +2897,12 @@
      "holds": "reference",
      "into": "LFGDungeons",
      "by": "measured"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ],
    "unresolved": [
@@ -1897,7 +2917,14 @@
   "229": {
    "name": "Set Follower Quality",
    "family": "progression",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_1"
    ]
@@ -1926,6 +2953,12 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
     }
    ]
   },
@@ -1938,6 +2971,12 @@
      "holds": "reference",
      "into": "Phase",
      "by": "named"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
@@ -1965,7 +3004,14 @@
   "236": {
    "name": "Give XP",
    "family": "progression",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_0",
     "EffectMiscValue_1"
@@ -1974,7 +3020,14 @@
   "237": {
    "name": "Give Rested Experience Bonus",
    "family": "progression",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   },
   "238": {
    "name": "Give Skill Points",
@@ -1991,6 +3044,12 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
     }
    ]
   },
@@ -2005,7 +3064,14 @@
   "240": {
    "name": "Give Artifact Power",
    "family": "combat",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_0",
     "EffectMiscValue_1"
@@ -2020,6 +3086,12 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
@@ -2038,7 +3110,14 @@
   "244": {
    "name": "Teach Follower Ability",
    "family": "progression",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_0",
     "EffectMiscValue_1"
@@ -2060,7 +3139,14 @@
   "247": {
    "name": "Add Garrison Mission Set",
    "family": "progression",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_0"
    ]
@@ -2068,7 +3154,14 @@
   "248": {
    "name": "Finish Shipment",
    "family": "other",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_0"
    ]
@@ -2082,6 +3175,12 @@
      "holds": "reference",
      "into": "Item",
      "by": "named"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
@@ -2108,13 +3207,26 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
   "252": {
    "name": "Teleport Units",
    "family": "world",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_0",
     "EffectMiscValue_1"
@@ -2123,7 +3235,15 @@
   "253": {
    "name": "Give Honor",
    "family": "progression",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated",
+     "scale": 100
+    }
+   ]
   },
   "254": {
    "name": "Jump Charge",
@@ -2134,6 +3254,12 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
     }
    ]
   },
@@ -2148,7 +3274,14 @@
   "258": {
    "name": "Modify Keystone",
    "family": "other",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_0",
     "EffectMiscValue_1"
@@ -2178,6 +3311,12 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
@@ -2213,6 +3352,12 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
@@ -2225,6 +3370,12 @@
      "holds": "reference",
      "into": "Conversation",
      "by": "named, server-side"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ],
    "unresolved": [
@@ -2251,6 +3402,12 @@
      "holds": "amount",
      "into": "",
      "by": "shaped"
+    },
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
     }
    ]
   },
@@ -2306,7 +3463,14 @@
   "279": {
    "name": "Learn Garr Talent",
    "family": "progression",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_0",
     "EffectMiscValue_1"
@@ -2335,7 +3499,14 @@
   "283": {
    "name": "Complete Quest Campaign",
    "family": "scripted",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_0"
    ]
@@ -2360,7 +3531,14 @@
   "286": {
    "name": "Grant Battle Pet Experience",
    "family": "progression",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "templated"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_0"
    ]
@@ -2368,7 +3546,14 @@
   "287": {
    "name": "Set Garrison Follower Level",
    "family": "progression",
-   "reads": [],
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ],
    "unresolved": [
     "EffectMiscValue_1"
    ]
@@ -2376,7 +3561,14 @@
   "289": {
    "name": "Modify Cast Stacks",
    "family": "other",
-   "reads": []
+   "reads": [
+    {
+     "column": "EffectBasePoints",
+     "holds": "amount",
+     "into": "",
+     "by": "column"
+    }
+   ]
   }
  }
 }

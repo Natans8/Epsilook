@@ -223,6 +223,13 @@ def test_a_value_the_client_cannot_read_back_is_refused() -> None:
             Blob().column([0.5, value])
 
 
+def test_a_whole_column_past_a_double_s_precision_is_refused() -> None:
+    """One sentinel near 10**19 would read every other member back wrong by thousands."""
+    with pytest.raises(ValueError, match="exactly"):
+        Blob().numbers([150, -9_999_999_843_067_494_400])
+    assert Blob().numbers([2**52, -(2**52)])["base"] == -(2**52)
+
+
 def test_a_payload_holding_an_opening_bracket_still_loads(lua: Any) -> None:
     """The nesting the client refuses is chosen around, not escaped.
 

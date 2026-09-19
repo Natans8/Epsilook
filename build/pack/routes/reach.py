@@ -17,6 +17,7 @@ the self-only band.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import NamedTuple
 
 MELEE = 1 << 0
 """The reach is the caster's own combat reach rather than the band's distance.
@@ -36,6 +37,17 @@ under a name nothing here can give it."""
 YARD_DIGITS = 1
 """Places a distance keeps. The source is float32, so a whole number of yards
 arrives with a tail that would otherwise make every value distinct."""
+
+
+class Cone(NamedTuple):
+    """The shape a spell's area takes in front of its caster, from `SpellTargetRestrictions`."""
+
+    spell: int
+    degrees: float
+    """The cone's angle, or nought where the area is no cone."""
+    width: float
+    """The width in yards of a line the area runs along, or nought."""
+
 
 UNLIMITED = 50_000.0
 """The distance the client uses for a band with no far edge.

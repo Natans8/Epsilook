@@ -11,8 +11,10 @@ from ..declarations import Declarations
 from ..routes import (
     Ambience,
     AreaGates,
+    Cone,
     CreatureModels,
     Delivery,
+    DescriptionValues,
     FactionTemplateRow,
     FxPayloads,
     GameObjectData,
@@ -123,6 +125,24 @@ class DeriveContext:
     areas: AreaGates = field(default_factory=AreaGates)
     factions: Sequence[FactionTemplateRow] = ()
     """The faction templates some spell sets, each named through its faction."""
+
+    faction_names: Mapping[int, str] = field(default_factory=dict)
+    """Every faction's name, by faction id."""
+
+    skill_names: Mapping[int, str] = field(default_factory=dict)
+    """Every skill line's name, by skill line id."""
+
+    enchantment_names: Mapping[int, str] = field(default_factory=dict)
+    """Every enchantment's name, by enchantment id."""
+
+    spell_radii: Mapping[int, float] = field(default_factory=dict)
+    """Every radius id's distance in yards."""
+
+    spell_cones: Sequence[Cone] = ()
+    """The cone or line each spell's area takes, where it takes one."""
+
+    values: DescriptionValues = field(default_factory=DescriptionValues)
+    """The numbers a description asks for, resolved once for the build at its level cap."""
 
     missiles: Mapping[int, VisualMissiles] = field(default_factory=dict)
     motions: Mapping[int, MissileMotion] = field(default_factory=dict)
@@ -251,6 +271,15 @@ class Spoken:
 
     factions: Sequence[FactionTemplateRow]
     """Faction names, through the templates the auras set."""
+
+    faction_names: Mapping[int, str]
+    """Faction names, by faction id."""
+
+    skill_names: Mapping[int, str]
+    """Skill line names."""
+
+    enchantment_names: Mapping[int, str]
+    """Enchantment names."""
 
     prose: CookedText
     """The templates cooked with this language's own wording."""

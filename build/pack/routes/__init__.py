@@ -13,7 +13,7 @@ from .assets import resolve_paths
 from .attributes import attribute_bit, read_spell_attributes
 from .creatures import CreatureModels
 from .delivery import Delivery
-from .effects import EffectRow, MaskedIds, SpellEffectRows, implicit_target_bits
+from .effects import EffectNumbers, EffectRow, MaskedIds, SpellEffectRows, implicit_target_bits
 from . import flows as _flows
 from .factions import FactionTemplateRow
 from .fx import ChainEffect, FxPayloads, ScreenRow
@@ -26,7 +26,7 @@ from .missiles import Missile, MissileMotion, VisualMissiles
 from .mounts import MountData
 from .names import SpellNames
 from .procedures import ProcEffects
-from .reach import Reach
+from .reach import Cone, Reach
 from .route import ROUTES, Route, route
 from .shapeshifts import ShapeshiftForms
 from .skies import (
@@ -50,6 +50,7 @@ from .visuals import KitEvent, VisualGraph, phase_words
 del _registry, _flows  # imported for the adapters and the declarations they register
 
 __all__ = [
+    "Cone",
     "Ambience",
     "Area",
     "AreaGates",
@@ -59,6 +60,7 @@ __all__ = [
     "CreatureModels",
     "Delivery",
     "DescriptionValues",
+    "EffectNumbers",
     "EffectRow",
     "FactionTemplateRow",
     "flat_ramp",

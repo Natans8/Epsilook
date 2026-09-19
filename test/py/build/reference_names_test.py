@@ -8,6 +8,7 @@ from pack.derive.context import DeriveContext, Reads
 from pack.derive.rows import MechanicRow, PackRows
 from pack.model.section import SectionColumns
 from pack.model.sections.mechanics import REFERENCE_NAMES_TABLE, reference_names
+from pack.routes import EffectNumbers, SpellEffectRows
 from pack.routes.creatures import CreatureModels
 from pack.routes.factions import FactionTemplateRow
 from pack.routes.fx import FxPayloads, ScreenRow
@@ -37,18 +38,25 @@ CONTEXT = replace(
             mechanic(APPLY_AURA, aura=260, misc_a=40),
             mechanic(APPLY_AURA, aura=243, misc_a=35),
             mechanic(131, misc_a=3000),
+            mechanic(103, misc_a=72),
+            mechanic(44, misc_a=164),
+            mechanic(53, misc_a=1897),
             mechanic(28, misc_a=599),
             mechanic(APPLY_AURA, aura=18, misc_a=6),
         ]
     ),
     creatures=CreatureModels(names={500: "Imp", 501: "Murloc"}),
     objects=GameObjectData(name={700: "Campfire"}),
-    items=ItemModels(names={800: ItemName("Hearthstone", 1)}),
+    items=ItemModels(names={800: ItemName("Hearthstone", 1), 801: ItemName("Linen Cloth", 1)}),
     names=SpellNames(names={116: "Frostbolt"}),
     forms=ShapeshiftForms(names={3: "Travel Form"}),
     fx=FxPayloads(screens={40: ScreenRow(name="Drunk Blur")}),
     factions=(FactionTemplateRow(35, 7, 1, "Stormwind"),),
     kit_names=((3000, "Bell Toll"),),
+    faction_names={72: "Stormwind"},
+    skill_names={164: "Blacksmithing"},
+    enchantment_names={1897: "+5 Weapon Damage"},
+    effects=SpellEffectRows(numbers=[EffectNumbers(1, 4, item=801)]),
 )
 
 
@@ -69,17 +77,21 @@ def test_every_reference_the_rows_carry_is_named_through_its_table() -> None:
         ("creature_template", 599): "",
         ("gameobject_template", 700): "Campfire",
         ("Item", 800): "Hearthstone",
+        ("Item", 801): "Linen Cloth",
         ("SpellShapeshiftForm", 3): "Travel Form",
         ("Spell", 116): "Frostbolt",
         ("ScreenEffect", 40): "Drunk Blur",
         ("FactionTemplate", 35): "Stormwind",
         ("SoundKit", 3000): "Bell Toll",
+        ("Faction", 72): "Stormwind",
+        ("SkillLine", 164): "Blacksmithing",
+        ("SpellItemEnchantment", 1897): "+5 Weapon Damage",
     }
 
 
 def test_the_ids_do_not_depend_on_the_names() -> None:
     """A language that names fewer things must still line its column up with
     the same ids, since the two ship in different modules joined by position."""
-    unnamed = produced(replace(CONTEXT, creatures=CreatureModels(), items=ItemModels()))
+    unnamed = produced(replace(CONTEXT, creatures=CreatureModels(), items=ItemModels(), skill_names={}))
     whole = produced(CONTEXT)
     assert (unnamed["tables"], unnamed["ids"]) == (whole["tables"], whole["ids"])

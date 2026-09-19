@@ -12,17 +12,19 @@ vocabulary module of their own.
 
 from __future__ import annotations
 
+import math
 from collections import defaultdict
 from collections.abc import Callable, Iterable, Mapping
 
 from ...derive import Reads
 from ...derive.rows import MechanicRow
-from ...routes import interrupt_words
+from ...routes import EffectNumbers, interrupt_words
 from ...routes.flow import Holds, export_name
 from ...routes.selectors import SELECTORS, WORDS
+from ...routes.values import FIRST_EFFECT_INDEX
 from ...targets import IMPLICIT_PREFIX
 from ..registry import register
-from ..section import Layout, Scope, Section, SectionColumns, size
+from ..section import Cardinality, Count, Layout, Scope, Section, SectionColumns, size
 
 
 def selectors(reads: Reads) -> SectionColumns:
@@ -56,6 +58,8 @@ def selectors(reads: Reads) -> SectionColumns:
         "slotColumns": [export_name(slot.column) for _table, _select, _value, slot in rows],
         "holds": [slot.holds.value for _table, _select, _value, slot in rows],
         "intos": [slot.into for _table, _select, _value, slot in rows],
+        # What an amount is divided by before it reads in its unit, one where it is read as stored.
+        "scales": [slot.scale for _table, _select, _value, slot in rows],
         # The first patch on which the value stopped meaning this, or empty.
         "untils": [chosen.until for _table, chosen, _value, _slot in rows],
     }
@@ -143,7 +147,7 @@ SELECTORS_TABLE = register(
         doc="What each column of a discriminated row is an id into, per selector value.",
         module="universal",
         produce=selectors,
-        columns=("tables", "columns", "values", "slotColumns", "holds", "intos", "untils"),
+        columns=("tables", "columns", "values", "slotColumns", "holds", "intos", "scales", "untils"),
         scope=Scope.UNIVERSAL,
         counts=(size("selectors", "values"),),
     )
@@ -187,15 +191,19 @@ REFERENCE_NAMES: Mapping[str, Callable[[Reads], Mapping[int, str]]] = {
     "ScreenEffect": lambda reads: {screen: row.name for screen, row in reads.fx.screens.items()},
     "FactionTemplate": lambda reads: {row.template: row.name for row in reads.factions},
     "SoundKit": lambda reads: dict(reads.kit_names),
+    "Faction": lambda reads: reads.faction_names,
+    "SkillLine": lambda reads: reads.skill_names,
+    "SpellItemEnchantment": lambda reads: reads.enchantment_names,
 }
 """The tables a reference slot points into whose names the build already reads, each as its whole id to name map."""
 
 
-def referenced(rows: Iterable[MechanicRow]) -> dict[str, set[int]]:
+def referenced(rows: Iterable[MechanicRow], numbers: Iterable[EffectNumbers] = ()) -> dict[str, set[int]]:
     """The ids the rows' reference slots point at, by the table they point into.
 
     An aura row is read under its aura and any other row under its effect, the
-    way the selector roster declares them.
+    way the selector roster declares them. The item an effect creates is one
+    more reference, held in its own column rather than a misc slot.
     """
     slots: dict[tuple[str, int], list[tuple[str, str]]] = defaultdict(list)
     for declared in SELECTORS:
@@ -212,6 +220,9 @@ def referenced(rows: Iterable[MechanicRow]) -> dict[str, set[int]]:
             value = row.misc_a if column.endswith("_0") else row.misc_b
             if value:
                 found[into].add(value)
+    for number in numbers:
+        if number.item:
+            found["Item"].add(number.item)
     return found
 
 
@@ -222,7 +233,7 @@ def reference_names(reads: Reads) -> SectionColumns:
     build cannot find is empty, so every language's column lines up with the
     same ids.
     """
-    found = referenced(reads.rows.mechanics)
+    found = referenced(reads.rows.mechanics, reads.effects.numbers)
     rows = [(table, ident) for table in sorted(found) for ident in sorted(found[table])]
     names = {table: REFERENCE_NAMES[table](reads) for table in found}
     return {
@@ -239,10 +250,151 @@ REFERENCE_NAMES_TABLE = register(
         module="core",
         produce=reference_names,
         columns=("tables", "ids", "names"),
-        reads=("rows", "creatures", "objects", "items", "names", "forms", "fx", "factions", "kit_names"),
+        reads=(
+            "rows",
+            "creatures",
+            "objects",
+            "items",
+            "names",
+            "forms",
+            "fx",
+            "factions",
+            "kit_names",
+            "faction_names",
+            "skill_names",
+            "enchantment_names",
+            "effects",
+        ),
         degraded_without=("creature_template", "gameobject_template"),
         counts=(size("referenceNames", "ids"),),
         localizable=("names",),
+    )
+)
+
+TENTHS = 10
+"""A distance, an amount and an angle ship in tenths, since a whole number is what both readers are fastest at."""
+
+HUNDREDTHS = 100
+"""A multiplier ships in hundredths, a hundred being unchanged."""
+
+THOUSANDTHS = 1000
+"""A coefficient ships in thousandths."""
+
+
+def effect_amounts(reads: Reads) -> SectionColumns:
+    """Every effect's numbers beyond what its mechanics row carries, one row per spell and effect index.
+
+    The amount is resolved at the build's level cap, the way a description
+    prints it, and reads in the unit and scale `selectors` gives the effect's
+    points column. The radii are in yards and the facing in degrees, each in
+    tenths; the chain and PvP multipliers in hundredths, a hundred being
+    unchanged; the two power coefficients and the variance in thousandths; the
+    value multiplier in hundredths, nought except where the core reads it;
+    what the amount gains per level and per spent resource in tenths. The
+    mechanic is a `spell_mechanics` value and the item the id of the item the
+    effect creates.
+    A row is kept where any of them differs from the table's own default, for
+    the spells the pack lists.
+    """
+    values = reads.values
+    radii = reads.spell_radii
+    listed = reads.names.names
+    numbers = {(row.spell, row.order): row for row in reads.effects.numbers}
+    multipliers = reads.effects.multipliers
+    keys = (
+        set(numbers)
+        | set(multipliers)
+        | {
+            (spell, number - FIRST_EFFECT_INDEX)
+            for spell, held in values.points.items()
+            if spell in listed
+            for number, value in held.items()
+            if value
+        }
+    )
+    rows = sorted(keys)
+    unchanged = EffectNumbers(0, 0)
+    held = [numbers.get(key, unchanged) for key in rows]
+
+    def scaled(value: float, factor: int) -> int:
+        return round(value * factor)
+
+    return {
+        "spellIds": [spell for spell, _order in rows],
+        "orders": [order for _spell, order in rows],
+        "amounts": [
+            scaled(values.points.get(spell, {}).get(order + FIRST_EFFECT_INDEX, 0), TENTHS) for spell, order in rows
+        ],
+        "radii": [scaled(radii.get(row.radius, 0), TENTHS) for row in held],
+        "maxRadii": [scaled(radii.get(row.max_radius, 0), TENTHS) for row in held],
+        "facings": [scaled(math.degrees(row.facing), TENTHS) for row in held],
+        "chains": [scaled(row.chain, HUNDREDTHS) for row in held],
+        "spellPowers": [scaled(row.spell_power, THOUSANDTHS) for row in held],
+        "attackPowers": [scaled(row.attack_power, THOUSANDTHS) for row in held],
+        "perLevels": [scaled(row.per_level, TENTHS) for row in held],
+        "perResources": [scaled(row.per_resource, TENTHS) for row in held],
+        "pvps": [scaled(row.pvp, HUNDREDTHS) for row in held],
+        "spreads": [scaled(row.variance, THOUSANDTHS) for row in held],
+        "multipliers": [scaled(multipliers.get(key, 0.0), HUNDREDTHS) for key in rows],
+        "mechanics": [row.mechanic for row in held],
+        "items": [row.item for row in held],
+    }
+
+
+EFFECT_DEFAULTS = {
+    "radii": 0,
+    "maxRadii": 0,
+    "facings": 0,
+    "chains": HUNDREDTHS,
+    "spellPowers": 0,
+    "attackPowers": 0,
+    "perLevels": 0,
+    "perResources": 0,
+    "pvps": HUNDREDTHS,
+    "spreads": 0,
+    "multipliers": 0,
+    "mechanics": 0,
+    "items": 0,
+}
+"""Each sparse column's default, which most rows carry and the encoding leaves out."""
+
+EFFECT_AMOUNTS = register(
+    Section(
+        name="effectAmounts",
+        doc="Each effect's resolved amount, radii, facing, multipliers, coefficients, mechanic and created item.",
+        module="core",
+        produce=effect_amounts,
+        columns=("spellIds", "orders", "amounts", *EFFECT_DEFAULTS),
+        reads=("values", "effects", "spell_radii", "names"),
+        cardinality=dict.fromkeys(EFFECT_DEFAULTS, Cardinality.PARTIAL),
+        absent=EFFECT_DEFAULTS,
+        counts=(
+            size("effectAmounts", "spellIds"),
+            Count("effectAmountLevel", lambda _columns, reads: reads.values.level),
+        ),
+    )
+)
+
+
+def spell_cones(reads: Reads) -> SectionColumns:
+    """The cone or line each spell's area takes in front of its caster, in tenths of a degree and of a yard."""
+    cones = reads.spell_cones
+    return {
+        "spellIds": [cone.spell for cone in cones],
+        "degrees": [round(cone.degrees * TENTHS) for cone in cones],
+        "widths": [round(cone.width * TENTHS) for cone in cones],
+    }
+
+
+SPELL_CONES = register(
+    Section(
+        name="spellCones",
+        doc="The angle of the cone or the width of the line a spell's area takes.",
+        module="core",
+        produce=spell_cones,
+        columns=("spellIds", "degrees", "widths"),
+        reads=("spell_cones",),
+        counts=(size("spellCones", "spellIds"),),
     )
 )
 

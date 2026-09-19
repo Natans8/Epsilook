@@ -71,14 +71,15 @@ def test_a_mask_names_a_vocabulary_keyed_by_its_bits() -> None:
     assert not offenders
 
 
-def test_each_selector_value_is_typed_once() -> None:
-    """The split's payloads win, and a typing file adds only the values they leave."""
-    seen: set[tuple[str, str, int]] = set()
+def test_each_selector_slot_is_typed_once() -> None:
+    """The split's payloads win for the columns they read, and a typing file adds only the columns they leave."""
+    seen: set[tuple[str, str, int, str]] = set()
     for declared in SELECTORS:
         for value in declared.select.values:
-            key = (declared.table, export_name(declared.select.on), value)
-            assert key not in seen, key
-            seen.add(key)
+            for slot in declared.select.slots:
+                key = (declared.table, export_name(declared.select.on), value, export_name(slot.column))
+                assert key not in seen, key
+                seen.add(key)
 
 
 def test_the_roster_types_hundreds_of_selectors_beyond_the_payloads() -> None:

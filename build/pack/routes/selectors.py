@@ -33,7 +33,12 @@ def _slot(record: Mapping[str, Any]) -> Slot:
     `Any` because a checked-in enum's value is whatever the file holds, a name
     or a record, and the loader hands it back unparsed.
     """
-    return Slot(str(record["column"]), Holds(str(record["holds"])), str(record.get("into", "")))
+    return Slot(
+        str(record["column"]),
+        Holds(str(record["holds"])),
+        str(record.get("into", "")),
+        scale=int(record.get("scale", 1)),
+    )
 
 
 def _from_enum(table: str, on: str, enum: str) -> list[Declared]:
@@ -59,15 +64,31 @@ def _from_enum(table: str, on: str, enum: str) -> list[Declared]:
 PAYLOADS: tuple[Declared, ...] = tuple(Declared("SpellEffect", chosen) for chosen in Routes.effects.selectors)
 """The selectors the effects split reads, which a typing file never overrides."""
 
-CLAIMED = frozenset(
-    (export_name(declared.select.on), value) for declared in PAYLOADS for value in declared.select.values
-)
-"""The (column, value) pairs a payload already reads, which a typing file leaves alone."""
+
+def _claims() -> dict[tuple[str, int], frozenset[str]]:
+    """The columns a payload already reads, by selector column and value."""
+    claims: dict[tuple[str, int], frozenset[str]] = {}
+    for declared in PAYLOADS:
+        read = frozenset(export_name(slot.column) for slot in declared.select.slots)
+        for value in declared.select.values:
+            key = (export_name(declared.select.on), value)
+            claims[key] = claims.get(key, frozenset()) | read
+    return claims
+
+
+CLAIMED = _claims()
+"""The columns a payload already reads under each selector value, which a typing file leaves alone."""
 
 
 def _unclaimed(declared: Sequence[Declared]) -> list[Declared]:
-    """The typings of values no payload of the split already declares."""
-    return [each for each in declared if (export_name(each.select.on), each.select.values[0]) not in CLAIMED]
+    """The typings' slots no payload of the split already reads; a value keeps the rest."""
+    kept: list[Declared] = []
+    for each in declared:
+        taken = CLAIMED.get((export_name(each.select.on), each.select.values[0]), frozenset())
+        slots = tuple(slot for slot in each.select.slots if export_name(slot.column) not in taken)
+        if slots:
+            kept.append(Declared(each.table, When(each.select.on, each.select.values, slots)))
+    return kept
 
 
 SELECTORS: tuple[Declared, ...] = (

@@ -59,6 +59,9 @@ BASE = len(DIGITS)
 DIGIT_BYTES = DIGITS.encode("ascii")
 """The alphabet as bytes, so spelling a column never builds text first."""
 
+EXACT = 2**53
+"""The largest whole number a double holds exactly, and every Lua 5.1 number is a double."""
+
 LINE_LIMIT = 262_144
 """How many bytes of blob may sit on one line of the emitted source.
 
@@ -92,7 +95,8 @@ AXES: Mapping[str, str] = {
         "mechRows spellTimeline spellDelivery spellRanges areas keybinds "
         "linkKindNames effectNames auraNames implicitTargetNames "
         "implicitTargetBits targetNames speedModeNames spellAttrs "
-        "selectors selectorVocabularies referenceNames factionNames interruptNames"
+        "selectors selectorVocabularies referenceNames effectAmounts spellCones "
+        "factionNames interruptNames"
     ),
     "spell": "spells expansions iconNames iconFids",
     # The sky is not reached through a query at all: nothing about a spell
@@ -298,10 +302,18 @@ class Blob:
         Values are shifted by the column's own minimum, so a column of large
         or of negative numbers costs the width of its span rather than of its
         largest member.
+
+        Raises:
+            ValueError: a value, or the column's span, is past what the
+                client's numbers hold exactly. Lua 5.1 reads every number as a
+                double, so a column with one member near 10**19 would read
+                back every other member wrong by the thousands, silently.
         """
         if not values:
             return {"kind": "int", "at": self.at + 1, "n": 0, "width": 1, "base": 0}
         low, high = min(values), max(values)
+        if max(-low, high, high - low) > EXACT:
+            raise ValueError(f"a column spanning {low} to {high} does not read back exactly as the client's numbers")
         width = digits_for(high - low)
         start = self.append(b"".join(spelled(value - low, width) for value in values))
         return {"kind": "int", "at": start, "n": len(values), "width": width, "base": low}

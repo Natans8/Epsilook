@@ -57,6 +57,8 @@ REGISTERED_ORDER = (
     "selectors",
     "selectorVocabularies",
     "referenceNames",
+    "effectAmounts",
+    "spellCones",
     "interruptNames",
     "implicitTargetBits",
     "missileMotions",

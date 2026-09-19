@@ -43,6 +43,9 @@ from .effects import (
     MISC1,
     SCALE_AURAS,
     SPEED_AURAS,
+    VALUE_MULTIPLIER_AURAS,
+    VALUE_MULTIPLIER_EFFECTS,
+    EffectNumbers,
     EffectRow,
     SpellEffectRows,
     as_masked,
@@ -145,7 +148,7 @@ from .procedures import (
     standwalk,
     tint,
 )
-from .reach import REACH_FLAGS, YARD_DIGITS, Reach
+from .reach import REACH_FLAGS, YARD_DIGITS, Cone, Reach
 from .route import Declarations
 from .shapeshifts import FormRow, ShapeshiftForms
 from .sounds import Ambience, ZoneMusic
@@ -392,6 +395,22 @@ class Routes(Declarations):
         flow("what the server calls each creature")
         .read(T.creature_template)
         .into(as_map(T.creature_template.entry, word(T.creature_template.name)))
+    )
+
+    faction_names = (
+        flow("what every faction is called").read(T.Faction).into(as_map(T.Faction.ID, word(T.Faction.Name_lang)))
+    )
+
+    skill_names = (
+        flow("what every skill line is called")
+        .read(T.SkillLine)
+        .into(as_map(T.SkillLine.ID, word(T.SkillLine.DisplayName_lang)))
+    )
+
+    enchantment_names = (
+        flow("what every enchantment is called")
+        .read(T.SpellItemEnchantment)
+        .into(as_map(T.SpellItemEnchantment.ID, word(T.SpellItemEnchantment.Name_lang)))
     )
 
     creature_displays = first_available(
@@ -1256,23 +1275,71 @@ class Routes(Declarations):
         .when(T.SpellEffect.Effect, sorted(EFFECT_PLAYS_SOUND), [reference(MISC0, T.SoundKit)])
         .into(as_map((T.SpellEffect.SpellID, MISC0), c.mask, reduce=or_)),
         speeds=flow("speeds")
-        .when(T.SpellEffect.EffectAura, sorted(SPEED_AURAS), [amount(AMOUNT)])
+        .when(T.SpellEffect.EffectAura, sorted(SPEED_AURAS), [amount(AMOUNT, "percent")])
         .where(c.amount != 0)
         .lookup(T.SpellEffect.EffectAura, SPEED_AURAS, into="movement")
         .into(as_sets(T.SpellEffect.SpellID, text(c.movement), real(c.amount))),
         speed_targets=flow("speed targets")
-        .when(T.SpellEffect.EffectAura, sorted(SPEED_AURAS), [amount(AMOUNT)])
+        .when(T.SpellEffect.EffectAura, sorted(SPEED_AURAS), [amount(AMOUNT, "percent")])
         .where(c.amount != 0)
         .lookup(T.SpellEffect.EffectAura, SPEED_AURAS, into="movement")
         .into(as_map((T.SpellEffect.SpellID, text(c.movement), real(c.amount)), c.mask, reduce=or_)),
         scales=flow("scales")
-        .when(T.SpellEffect.EffectAura, sorted(SCALE_AURAS), [amount(AMOUNT)])
+        .when(T.SpellEffect.EffectAura, sorted(SCALE_AURAS), [amount(AMOUNT, "percent")])
         .where(c.amount != 0)
         .into(as_sets(T.SpellEffect.SpellID, real(c.amount))),
         scale_targets=flow("scale targets")
-        .when(T.SpellEffect.EffectAura, sorted(SCALE_AURAS), [amount(AMOUNT)])
+        .when(T.SpellEffect.EffectAura, sorted(SCALE_AURAS), [amount(AMOUNT, "percent")])
         .where(c.amount != 0)
         .into(as_map((T.SpellEffect.SpellID, real(c.amount)), c.mask, reduce=or_)),
+        numbers=flow("numbers")
+        .where(
+            BASE
+            & (
+                (T.SpellEffect.EffectMechanic != 0)
+                | (T.SpellEffect.EffectItemType != 0)
+                | (T.SpellEffect.EffectRadiusIndex[0] != 0)
+                | (T.SpellEffect.EffectRadiusIndex[1] != 0)
+                | (T.SpellEffect.EffectPos_facing != 0)
+                | (T.SpellEffect.EffectChainAmplitude != 1)
+                | (T.SpellEffect.EffectBonusCoefficient != 0)
+                | (T.SpellEffect.BonusCoefficientFromAP != 0)
+                | (T.SpellEffect.EffectRealPointsPerLevel != 0)
+                | (T.SpellEffect.EffectPointsPerResource != 0)
+                | (T.SpellEffect.PvpMultiplier != 1)
+                | (T.SpellEffect.Variance != 0)
+            )
+        )
+        .into(
+            as_rows(
+                EffectNumbers,
+                T.SpellEffect.SpellID,
+                T.SpellEffect.EffectIndex,
+                T.SpellEffect.EffectMechanic,
+                T.SpellEffect.EffectItemType,
+                T.SpellEffect.EffectRadiusIndex[0],
+                T.SpellEffect.EffectRadiusIndex[1],
+                real(T.SpellEffect.EffectPos_facing),
+                real(T.SpellEffect.EffectChainAmplitude),
+                real(T.SpellEffect.EffectBonusCoefficient),
+                real(T.SpellEffect.BonusCoefficientFromAP),
+                real(T.SpellEffect.EffectRealPointsPerLevel),
+                real(T.SpellEffect.EffectPointsPerResource),
+                real(T.SpellEffect.PvpMultiplier),
+                real(T.SpellEffect.Variance),
+                sort=True,
+            )
+        ),
+        multipliers=flow("value multipliers")
+        .where(
+            BASE
+            & (T.SpellEffect.EffectAmplitude != 0)
+            & (
+                T.SpellEffect.Effect.among(VALUE_MULTIPLIER_EFFECTS)
+                | T.SpellEffect.EffectAura.among(VALUE_MULTIPLIER_AURAS)
+            )
+        )
+        .into(as_map((T.SpellEffect.SpellID, T.SpellEffect.EffectIndex), real(T.SpellEffect.EffectAmplitude))),
         links=flow("links")
         .where((T.SpellEffect.EffectTriggerSpell != 0) & (T.SpellEffect.EffectTriggerSpell != T.SpellEffect.SpellID))
         .narrow(T.SpellEffect.EffectTriggerSpell, "names.names")
@@ -1320,6 +1387,28 @@ class Routes(Declarations):
     each half flagged where a branch landed it, so a value whose payload was
     dropped stays raw and unflagged. The link through the trigger column selects
     nothing: every row carries it."""
+
+    spell_radii = (
+        flow("how far each radius reaches")
+        .read(T.SpellRadius, optional=True)
+        .into(as_map(T.SpellRadius.ID, real(T.SpellRadius.Radius)))
+    )
+
+    spell_cones = (
+        flow("the cone or line a spell's area takes")
+        .read(TargetRestrictions, optional=True)
+        .where(BASE & ((TargetRestrictions.ConeDegrees != 0) | (TargetRestrictions.Width != 0)))
+        .narrow(TargetRestrictions.SpellID, "names.names")
+        .into(
+            as_rows(
+                Cone,
+                TargetRestrictions.SpellID,
+                real(TargetRestrictions.ConeDegrees),
+                real(TargetRestrictions.Width),
+                sort=True,
+            )
+        )
+    )
 
     # The numbers a description asks for, read from the client's own tables and
     # never the server's revisions: a hotfix prints a float at six significant

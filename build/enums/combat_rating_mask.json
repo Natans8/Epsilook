@@ -1,0 +1,42 @@
+{
+  "enum": "CombatRating (as a mask)",
+  "description": "A set of combat ratings, one bit each (1 << rating), as the core's HandleModRating, HandleModRatingPct and Player::UpdateRating test a misc column: 2 Defense Skill, 4 Dodge, 1 << 25 Mastery.",
+  "source": [
+    "https://github.com/EpsilonRP/TrinityCore/blob/master/src/server/game/Entities/Unit/Unit.h"
+  ],
+  "keys": "combat rating mask bit",
+  "values": {
+    "1": "Amplify",
+    "2": "Defense Skill",
+    "4": "Dodge",
+    "8": "Parry",
+    "16": "Block",
+    "32": "Hit Melee",
+    "64": "Hit Ranged",
+    "128": "Hit Spell",
+    "256": "Crit Melee",
+    "512": "Crit Ranged",
+    "1024": "Crit Spell",
+    "2048": "Corruption",
+    "4096": "Corruption Resistance",
+    "8192": "Speed",
+    "16384": "Resilience Crit Taken",
+    "32768": "Resilience Player Damage",
+    "65536": "Lifesteal",
+    "131072": "Haste Melee",
+    "262144": "Haste Ranged",
+    "524288": "Haste Spell",
+    "1048576": "Avoidance",
+    "2097152": "Sturdiness",
+    "4194304": "Unused 7",
+    "8388608": "Expertise",
+    "16777216": "Armor Penetration",
+    "33554432": "Mastery",
+    "67108864": "Pvp Power",
+    "134217728": "Cleave",
+    "268435456": "Versatility Damage Done",
+    "536870912": "Versatility Healing Done",
+    "1073741824": "Versatility Damage Taken",
+    "2147483648": "Unused 12"
+  }
+}

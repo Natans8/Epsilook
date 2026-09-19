@@ -1,0 +1,14 @@
+{
+  "enum": "Stats (as a mask)",
+  "description": "A set of the four stats, one bit each (1 << stat), as the core's HandleModTotalPercentStat tests the second misc column; nought there means every stat.",
+  "source": [
+    "https://github.com/EpsilonRP/TrinityCore/blob/master/src/server/game/Miscellaneous/SharedDefines.h"
+  ],
+  "keys": "stat mask bit",
+  "values": {
+    "1": "Strength",
+    "2": "Agility",
+    "4": "Stamina",
+    "8": "Intellect"
+  }
+}

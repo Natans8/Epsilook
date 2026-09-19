@@ -1,0 +1,30 @@
+{
+  "enum": "Powers (as a mask)",
+  "description": "A set of power types, one bit each (1 << power), as the core's HandleModPowerCost tests the second misc column: 1 Mana, 2 Rage, 8 Energy.",
+  "source": [
+    "https://github.com/EpsilonRP/TrinityCore/blob/master/src/server/game/Miscellaneous/SharedDefines.h"
+  ],
+  "keys": "power mask bit",
+  "values": {
+    "1": "Mana",
+    "2": "Rage",
+    "4": "Focus",
+    "8": "Energy",
+    "16": "Combo Points",
+    "32": "Runes",
+    "64": "Runic Power",
+    "128": "Soul Shards",
+    "256": "Lunar Power",
+    "512": "Holy Power",
+    "1024": "Alternate",
+    "2048": "Maelstrom",
+    "4096": "Chi",
+    "8192": "Insanity",
+    "16384": "Burning Embers (Obsolete)",
+    "32768": "Demonic Fury (Obsolete)",
+    "65536": "Arcane Charges",
+    "131072": "Fury",
+    "262144": "Pain",
+    "524288": "Essence"
+  }
+}

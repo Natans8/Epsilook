@@ -22,6 +22,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from typing import NamedTuple
 
 from ..sources import load_local_enum, read_enum_names
 from ..targets import NO_TARGET, implicit_target_bit
@@ -35,6 +36,33 @@ EFFECT_ACTIVATE_OBJECT = 86
 """What the spell does to a gameobject: misc0 the action, misc1 the action's own parameter."""
 EFFECT_SUMMON = 28
 """Summons a creature: misc0 is the creature, misc1 its `SummonProperties`."""
+
+VALUE_MULTIPLIER_EFFECTS = frozenset(
+    {
+        8,  # POWER_DRAIN, the power gained per point drained
+        9,  # HEALTH_LEECH, the health healed per point leeched
+        41,  # JUMP, the jump's speed
+        42,  # JUMP_DEST
+        62,  # POWER_BURN, the damage per point burned
+        213,  # JUMP_DEST_2
+    }
+)
+"""The effects whose handler on the Epsilon core reads the value multiplier."""
+
+VALUE_MULTIPLIER_AURAS = frozenset(
+    {
+        53,  # PERIODIC_LEECH
+        62,  # PERIODIC_HEALTH_FUNNEL
+        64,  # PERIODIC_MANA_LEECH
+        97,  # MANA_SHIELD, the mana spent per point absorbed
+        162,  # POWER_BURN
+    }
+)
+"""The auras whose tick or absorb on the Epsilon core reads the value multiplier.
+
+Every other row's value is unread, and some hold sentinels near 10**17 that
+no reader could take for a multiplier.
+"""
 
 EFFECT_PLAY_SOUND = 131
 EFFECT_PLAY_MUSIC = 132
@@ -313,6 +341,42 @@ def as_masked(spell: str | Column, payload: str | Column, mask: str | Column) ->
     return AsMasked(column_name(spell), column_name(payload), column_name(mask))
 
 
+class EffectNumbers(NamedTuple):
+    """What one effect carries beyond its amount and its misc columns, as the table stores it.
+
+    Each default is the table's own, so an effect built from its key alone is
+    one that carries nothing.
+    """
+
+    spell: int
+    order: int
+    """The effect's `EffectIndex`, from nought, as a mechanics row counts it."""
+    mechanic: int = 0
+    """A `SpellMechanic` id, or nought."""
+    item: int = 0
+    """The item the effect creates, or nought."""
+    radius: int = 0
+    """The `SpellRadius` id of the effect's radius, or nought."""
+    max_radius: int = 0
+    """The `SpellRadius` id of its maximum radius, or nought."""
+    facing: float = 0.0
+    """The facing an effect places something at, in radians."""
+    chain: float = 1.0
+    """What each further chained target's amount is multiplied by, one where it keeps the whole."""
+    spell_power: float = 0.0
+    """The share of spell power the amount adds."""
+    attack_power: float = 0.0
+    """The share of attack power the amount adds."""
+    per_level: float = 0.0
+    """What the amount gains per caster level."""
+    per_resource: float = 0.0
+    """What the amount gains per combo point or other spent resource."""
+    pvp: float = 1.0
+    """What the amount is multiplied by against players, one where it is unchanged."""
+    variance: float = 0.0
+    """How far the amount strays: a roll within half this fraction of it either way, nought where fixed."""
+
+
 @dataclass
 class SpellEffectRows:
     """Everything one pass over `SpellEffect` produces.
@@ -395,6 +459,15 @@ class SpellEffectRows:
     triggering effect aimed at. Keyed on the pair alone, because a spell
     reached two ways is one chip whose icons are the union.
     """
+    numbers: list[EffectNumbers] = field(default_factory=list)
+    """What each base-difficulty effect carries beyond its amount and its misc
+    columns, sorted; an effect whose every value is the table's own default is
+    left out."""
+    multipliers: dict[tuple[int, int], float] = field(default_factory=dict)
+    """Spell and effect index to the value multiplier, on the base-difficulty
+    rows whose effect or aura the core reads it for: a drain's or a leech's
+    return per point, a burn's damage per point, a mana shield's mana per point
+    absorbed, a jump's speed."""
     mechanics: set[EffectRow] = field(default_factory=set)
     """Every distinct effect the spell has: the mechanics column's rows.
 
