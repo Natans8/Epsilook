@@ -32,11 +32,12 @@ Epsilook.Preview = Preview
 --- How large a look is, how far the next one is offset from the last, and how
 -- many may be pinned at once.
 --
--- It does not follow the pointer. A chat frame sits near the foot of the screen
--- and a look pinned to the pointer there has only the room left between the two
--- to be drawn in, which is not enough of a model to be worth looking at. So it
--- opens above the chat, where the whole height of the screen is, and is as
--- large as that allows rather than as small as the pointer allows.
+-- It opens beside what was hovered, on whichever side of it has room: past the
+-- middle of the screen it opens to the left, below the middle it grows upward.
+-- That is how the transmogrification browser on this client does it, and it is
+-- right for the reason a fixed corner is wrong -- a look far from the thing it
+-- is of makes a reader watch two places at once -- while a look fixed to the
+-- pointer near the foot of the screen has only the floor to be drawn in.
 Preview.SIZE, Preview.GAP, Preview.MOST = 300, 24, 4
 
 --- What can be looked at, and how. `from` is what the subject needs off a part;
@@ -88,6 +89,18 @@ local function build(pinned)
 	frame.model = _G.CreateFrame("PlayerModel", nil, frame)
 	frame.model:SetPoint("TOPLEFT", 6, -6)
 	frame.model:SetPoint("BOTTOMRIGHT", -6, 6)
+	-- A model frame lights nothing by default, and a dark model in the dark is
+	-- not a preview. The light is in front and a little above, as a viewer's is.
+	if frame.model.SetLight and _G.CreateVector3D and _G.CreateColor then
+		pcall(frame.model.SetLight, frame.model, true, {
+			omnidirectional = false,
+			point = _G.CreateVector3D(0, 0.8, -1),
+			ambientIntensity = 1,
+			ambientColor = _G.CreateColor(1, 1, 1),
+			diffuseIntensity = 0.3,
+			diffuseColor = _G.CreateColor(1, 1, 1),
+		})
+	end
 	if pinned then
 		-- What the client's own pinned chat link is: movable, above its fellows
 		-- when clicked, and closed with a button.
@@ -101,6 +114,26 @@ local function build(pinned)
 		frame.close:SetPoint("TOPRIGHT", 2, 2)
 		frame.close:SetScript("OnClick", function()
 			Preview.Unpin(frame)
+		end)
+		-- A pinned look is looked at, so it turns and it zooms.
+		frame:EnableMouseWheel(true)
+		frame:SetScript("OnMouseWheel", function(_, direction)
+			frame.zoom = math.max(0, math.min(1, (frame.zoom or 0) + direction * 0.1))
+			frame.model:SetPortraitZoom(frame.zoom)
+		end)
+		frame.model:EnableMouse(true)
+		frame.model:SetScript("OnMouseDown", function()
+			frame.turning = select(1, _G.GetCursorPosition())
+		end)
+		frame.model:SetScript("OnMouseUp", function()
+			frame.turning = nil
+		end)
+		frame.model:SetScript("OnUpdate", function(model)
+			if frame.turning then
+				local at = select(1, _G.GetCursorPosition())
+				model:SetFacing((model:GetFacing() or 0) + (at - frame.turning) / 80)
+				frame.turning = at
+			end
 		end)
 	end
 	frame:Hide()
@@ -126,19 +159,35 @@ local hovered
 --- The looks that have been pinned, oldest first.
 local pinned = {}
 
---- Put a look where there is room for it: standing on the chat frame it belongs
--- to, which leaves it the height of the screen to be drawn in, and falling back
--- to the middle where there is no chat frame to stand on.
--- @param frame the look
--- @param step how far to offset it, for a look that is not the first
-local function place(frame, step)
-	frame:ClearAllPoints()
-	local chat = _G.DEFAULT_CHAT_FRAME
-	if chat and chat.GetName and chat:GetName() then
-		frame:SetPoint("BOTTOMLEFT", chat, "TOPLEFT", step, Preview.GAP + step)
-	else
-		frame:SetPoint("CENTER", _G.UIParent, "CENTER", step, step)
+--- Which corner of a look should meet which corner of what it opens beside, so
+-- that it grows into the screen rather than off it. Past halfway across, it
+-- opens to the left of its owner; past halfway down, it grows upward.
+-- @param x, y where on the screen the thing being opened beside is
+-- @return the look's own point, and the point on its owner to meet
+local function sides(x, y)
+	local width = _G.GetScreenWidth and _G.GetScreenWidth() or 1
+	local height = _G.GetScreenHeight and _G.GetScreenHeight() or 1
+	local mine, theirs = "LEFT", "RIGHT"
+	if width > 0 and x / width > 0.5 then
+		mine, theirs = "RIGHT", "LEFT"
 	end
+	if height > 0 and y / height > 0.5 then
+		return "TOP" .. mine, "TOP" .. theirs
+	end
+	return "BOTTOM" .. mine, "BOTTOM" .. theirs
+end
+
+--- Where the pointer is, in the units a frame is placed in.
+local function cursor()
+	local x, y
+	if _G.GetCursorPosition then
+		x, y = _G.GetCursorPosition()
+	end
+	local scale = _G.UIParent and _G.UIParent:GetEffectiveScale()
+	if not (x and y and scale and scale > 0) then
+		return nil
+	end
+	return x / scale, y / scale
 end
 
 --- Show a part while it is hovered, above the chat where there is room.
@@ -151,7 +200,20 @@ function Preview.Hover(part)
 	if not draw(hovered, part) then
 		return false
 	end
-	place(hovered, 0)
+	-- Beside the tooltip that is already up for the same link, so the words and
+	-- the look are read in one place.
+	local owner = _G.GameTooltip
+	local x, y = cursor()
+	hovered:ClearAllPoints()
+	if owner and owner.IsShown and owner:IsShown() and x then
+		local mine, theirs = sides(x, y)
+		hovered:SetPoint(mine, owner, theirs, 0, 0)
+	elseif x then
+		local mine = sides(x, y)
+		hovered:SetPoint(mine, _G.UIParent, "BOTTOMLEFT", x, y)
+	else
+		hovered:SetPoint("CENTER")
+	end
 	hovered:Show()
 	return true
 end
@@ -172,9 +234,18 @@ function Preview.Pin(part)
 	if not draw(frame, part) then
 		return false
 	end
-	-- Offset by however many are already up, so the newest is visibly its own
-	-- rather than landing exactly on the one before it.
-	place(frame, (#pinned + 1) * Preview.GAP)
+	-- Where the hovered one was, but held to the screen rather than to a tooltip
+	-- that is about to go away, and offset by however many are already up so the
+	-- newest is visibly its own rather than landing on the one before it.
+	local step = #pinned * Preview.GAP
+	local x, y = cursor()
+	frame:ClearAllPoints()
+	if x then
+		local mine = sides(x, y)
+		frame:SetPoint(mine, _G.UIParent, "BOTTOMLEFT", x + step, y - step)
+	else
+		frame:SetPoint("CENTER", _G.UIParent, "CENTER", step, step)
+	end
 	table.insert(pinned, frame)
 	while #pinned > Preview.MOST do
 		local oldest = table.remove(pinned, 1)
