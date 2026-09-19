@@ -25,10 +25,25 @@ local Epsilook = _G.Epsilook
 local Shell = {}
 Epsilook.Shell = Shell
 
---- How many result lines one page prints: the player's own setting.
+--- How many lines one result prints, and how many a page prints besides its
+-- results: the line that says what is being searched, and the one that counts
+-- what was shown and offers the next page.
+local RESULT_LINES, PAGE_OVERHEAD = 2, 2
+
+--- How many results one page prints: the player's own setting, held to what
+-- the chat frame will remember.
 -- @return the page size
 function Shell.Page()
-	return Epsilook.Config.Get("page")
+	local want = Epsilook.Config.Get("page")
+	local kept = Shell.Kept()
+	if not kept then
+		return want
+	end
+	-- A chat frame remembers a fixed number of lines and forgets the oldest to
+	-- make room. A result takes two of them, so a page as large as the setting
+	-- allows would push everything before it out of the frame's memory and leave
+	-- nothing to scroll back to. Half the memory is kept for what came before.
+	return math.max(1, math.min(want, math.floor((kept / 2 - PAGE_OVERHEAD) / RESULT_LINES)))
 end
 
 --- The link type this addon owns. A click on a chat link reaches `SetItemRef`,
@@ -132,6 +147,204 @@ local SITE = { key = "website", label = "Website", hint = "Copy the address" }
 --- How tall an icon draws on a line, in pixels.
 Shell.ICON = 16
 
+--- A texture the client ships that draws nothing. Chat has no columns, and a
+-- run of spaces cannot make one, because the chat font is proportional and a
+-- space is narrower than a digit; a gap of an exact number of pixels is a
+-- transparent texture that many pixels wide.
+local SPACER = "Interface/Common/Spacer"
+
+--- A gap of an exact number of pixels, and nothing at all below one.
+function Shell.Gap(pixels)
+	pixels = math.floor(tonumber(pixels) or 0)
+	if pixels < 1 then
+		return ""
+	end
+	return "|T" .. SPACER .. ":1:" .. pixels .. "|t"
+end
+
+--- The frame every width is measured for, and the string it is measured with.
+-- Nothing here is assumed about the player's interface: the frame is asked for
+-- its own font every time, and the string measuring it belongs to it, so a
+-- window the player has scaled answers at the size it is drawn rather than at
+-- the size the screen would have drawn it.
+local ruler, ruledFor
+
+--- The chat frame this addon prints to, or nothing under a bare interpreter.
+local function chatFrame()
+	local frame = _G.DEFAULT_CHAT_FRAME
+	if not (frame and frame.GetFont and frame.CreateFontString) then
+		return nil
+	end
+	return frame
+end
+
+--- The chat frame's own font, or nothing where there is no frame to ask.
+local function chatFont()
+	local frame = chatFrame()
+	if not frame then
+		return nil
+	end
+	return frame:GetFont()
+end
+
+--- How wide text draws in the chat frame's own font, in pixels, or nil where
+-- nothing can measure it. A bare interpreter has neither frames nor fonts, and
+-- there a line is simply not padded.
+-- @param text the text, markup and all
+function Shell.Width(text)
+	local frame = chatFrame()
+	local file, height, flags = chatFont()
+	if not file then
+		return nil
+	end
+	if not ruler or ruledFor ~= frame then
+		ruler = frame:CreateFontString(nil, "ARTWORK")
+		ruler:Hide()
+		ruledFor = frame
+	end
+	ruler:SetFont(file, height, flags)
+	ruler:SetText(text)
+	return ruler:GetStringWidth()
+end
+
+--- The gap kept after a column: half a line's height, so that it holds its
+-- proportion when the player makes the chat font larger.
+local function gutter(height)
+	return math.floor((height or 12) * 0.5)
+end
+
+--- A column's width, from the widest thing it must hold. Measured rather than
+-- declared in pixels, so a column follows the player's own chat font instead
+-- of fighting it, and measured once per font rather than once per line.
+local widths, measuredFor = {}, nil
+local function columnWidth(reference)
+	local file, height = chatFont()
+	if not file then
+		return nil
+	end
+	local signature = file .. ":" .. tostring(height)
+	if signature ~= measuredFor then
+		widths, measuredFor = {}, signature
+	end
+	if widths[reference] == nil then
+		widths[reference] = (Shell.Width(reference) or 0) + gutter(height)
+	end
+	return widths[reference]
+end
+
+--- Text set in a column, padded to the column's width. Text wider than its
+-- column is left as it is, so an overlong cell loses its own alignment and no
+-- other; where nothing can measure, one space stands in for the whole column.
+-- @param text the cell, markup and all
+-- @param reference the widest thing the column must hold
+function Shell.Cell(text, reference)
+	local width, drawn = columnWidth(reference), Shell.Width(text)
+	if not width or not drawn then
+		return text .. " "
+	end
+	return text .. Shell.Gap(width - drawn)
+end
+
+--- Text set at the right of its column, which is how a number reads: the
+-- digits end together however many of them there are.
+function Shell.RightCell(text, reference)
+	local width, drawn = columnWidth(reference), Shell.Width(text)
+	if not width or not drawn then
+		return text .. " "
+	end
+	local _, height = chatFont()
+	return Shell.Gap(width - drawn - gutter(height)) .. text .. Shell.Gap(gutter(height))
+end
+
+--- How many lines the chat frame remembers, or nil where there is no frame to
+-- ask. A player who raises it with an addon raises what a page may print.
+function Shell.Kept()
+	local frame = chatFrame()
+	local kept = frame and frame.GetMaxLines and frame:GetMaxLines()
+	if not kept or kept <= 0 then
+		return nil
+	end
+	return kept
+end
+
+--- How wide a line may draw before the chat frame wraps it, or nil where there
+-- is no frame to ask. The inset is what the frame keeps for itself and the
+-- text never draws into.
+local function chatRoom()
+	local frame = chatFrame()
+	local width = frame and frame.GetWidth and frame:GetWidth()
+	if not width or width <= 0 then
+		return nil
+	end
+	return width - 10
+end
+
+--- What stands in a name's place where it was cut.
+local ELLIPSIS = "..."
+
+--- Text cut to a width, with an ellipsis standing where it was cut, or text
+-- as it is where it already fits or nothing can measure it. Nothing is lost by
+-- the cut: a name is drawn inside the game's own spell link, so the whole of it
+-- is one hover away.
+-- @param text the text
+-- @param width how wide it may draw, in pixels
+function Shell.Trimmed(text, width)
+	if not width then
+		return text
+	end
+	local drawn = Shell.Width(text)
+	if not drawn or drawn <= width then
+		return text
+	end
+	-- The ellipsis is part of what a cut costs, so the guess is made against the
+	-- room left once it is allowed for, and walked back from there: a long name
+	-- costs two or three measurements rather than one per letter it loses.
+	local room = math.max(0, width - (Shell.Width(ELLIPSIS) or 0))
+	local n = math.min(#text, math.max(1, math.floor(#text * room / drawn)))
+	while n > 0 do
+		-- Never cut inside a letter: the tail bytes of one draw as nothing good.
+		while n > 0 and text:byte(n) >= 0x80 and text:byte(n) < 0xC0 do
+			n = n - 1
+		end
+		local candidate = text:sub(1, n) .. ELLIPSIS
+		if (Shell.Width(candidate) or 0) <= width then
+			return candidate
+		end
+		n = n - 1
+	end
+	return ELLIPSIS
+end
+
+--- The widest id a result column must hold. Epsilon's own spells run past a
+-- million, and a column sized for them is the same column on every page, so
+-- one search's results line up with the next search's in the same scrollback.
+Shell.ID_COLUMN = "1000000"
+
+--- The column an icon takes on a line, whether or not there is an icon to fill
+-- it, so that what follows stands in the same place either way.
+function Shell.IconGap()
+	return Shell.Gap(Shell.ICON)
+end
+
+--- How wide a result's name may draw: what the frame has, less everything else
+-- the line carries. What follows the name is measured rather than guessed at,
+-- because it is not the same on every line -- a spell the player knows says so,
+-- and a spell with no aura offers one word fewer -- and because the brackets a
+-- name is drawn inside are part of what it costs. A frame too narrow to give a
+-- name anything keeps a floor, and there the line wraps rather than the name
+-- disappear.
+-- @param rest what the line carries after the name, markup and all
+local function nameRoom(rest)
+	local room = chatRoom()
+	if not room then
+		return nil
+	end
+	local taken = (columnWidth(Shell.ID_COLUMN) or 0)
+		+ Shell.ICON
+		+ (Shell.Width(Shell.Iconed("", nil) .. rest) or 0)
+	return math.max(room - taken, 60)
+end
+
 --- A bracketed word led by an icon where there is one, the icon against
 -- the bracket.
 -- @param label the word
@@ -139,7 +352,7 @@ Shell.ICON = 16
 function Shell.Iconed(label, icon)
 	local shown = "[" .. label .. "]"
 	if icon then
-		shown = "|T" .. icon .. ":" .. Shell.ICON .. "|t" .. shown
+		return "|T" .. icon .. ":" .. Shell.ICON .. "|t" .. shown
 	end
 	return shown
 end
@@ -194,9 +407,16 @@ end
 --- The game's own link to a spell, as `.lookup` prints one, its icon inside
 -- the link against the name.
 -- @param spell a SpellData, or any record with the spell's id, name and icon
-function Shell.SpellLink(spell)
+-- @param width how wide the name may draw before it is cut, or nil to leave it
+function Shell.SpellLink(spell, width)
 	local name, icon = Shell.Shown(spell)
-	return WHITE .. "|Hspell:" .. spell.id .. "|h" .. Shell.Iconed(name, icon) .. "|h" .. END
+	local shown = Shell.Iconed(Shell.Trimmed(name, width), icon)
+	if not icon then
+		-- A spell with no icon keeps the column one would take, so that every
+		-- name in a list begins at the same place.
+		shown = Shell.IconGap() .. shown
+	end
+	return WHITE .. "|Hspell:" .. spell.id .. "|h" .. shown .. "|h" .. END
 end
 
 --- The separator between a link and its buttons, and between buttons, as
@@ -228,22 +448,39 @@ function Shell.SpellActionLinks(spellID, where)
 	return table.concat(links, Shell.DASH)
 end
 
---- One result for a spell, as two lines: the spell, then its actions.
+--- One result for a spell, as two lines: the spell with its actions, then
+-- what it is made of.
 -- A result wraps in a chat frame more often than not, so the wrap is designed
--- in rather than suffered: the first line is the id, the game's own spell
--- link, the known mark where the player knows it as `.lookup` marks it, and
--- what the spell is made of, each count a link that lists the parts on hover
--- and prints them on a click; the second, indented, is the actions, which
--- then sit at the same place on every result.
+-- in rather than suffered. The first line is the spell and what can be done
+-- with it: the id set at the right of a column wide enough for any id, the
+-- game's own spell link led by its icon, and the actions. Nothing marks a
+-- spell the player already knows, because the actions say it: the one offered
+-- is unlearn rather than learn. The second begins under the name
+-- and carries the counts, each a link that lists the parts on hover and prints
+-- them on a click. Neither line holds a field whose place depends on how long
+-- the field before it ran, so nothing a long name does can move a column: a
+-- name too long for the room left by the id, the icon and the actions is cut
+-- with an ellipsis, and the whole of it is a hover away in the game's own
+-- tooltip.
 -- @param spell a SpellData
 -- @param counts the spell's part counts by axis, or nil to leave them off
 -- @param axes the axes to report, in order
--- @return the two lines
+-- @return the spell's line, and what it is made of, which may be empty
 function Shell.ResultLines(spell, counts, axes)
-	local head = GOLD .. spell.id .. END .. Shell.DASH .. Shell.SpellLink(spell)
-	if Shell.Known(spell.id) then
-		head = head .. " " .. GOLD .. "[known]" .. END
+	-- What follows the name is built first, because how long it runs is what
+	-- decides how much name there is room for.
+	-- Nothing marks a spell the player already knows: the actions say it, since
+	-- the one offered is unlearn rather than learn.
+	local rest = ""
+	local actions = Shell.SpellActionLinks(spell.id, "result")
+	if actions ~= "" then
+		-- The actions sit beside the spell, because that is the thing they act on.
+		rest = rest .. Shell.DASH .. actions
 	end
+	local head = Shell.RightCell(GOLD .. spell.id .. END, Shell.ID_COLUMN)
+		.. Shell.SpellLink(spell, nameRoom(rest))
+		.. rest
+	local below = ""
 	if counts and axes then
 		local made = {}
 		for _, axis in ipairs(axes) do
@@ -261,10 +498,10 @@ function Shell.ResultLines(spell, counts, axes)
 			end
 		end
 		if #made > 0 then
-			head = head .. Shell.DASH .. table.concat(made, " ")
+			below = Shell.Cell("", Shell.ID_COLUMN) .. Shell.IconGap() .. table.concat(made, " ")
 		end
 	end
-	return head, "      " .. Shell.SpellActionLinks(spell.id, "result")
+	return head, below
 end
 
 --- The addon's own prefix on a line it prints about itself, rather than about a spell.
@@ -621,7 +858,11 @@ local function page(tree, text, fromIndex)
 	-- cannot give; the sort's other direction brings that end to the front.
 	local limit = tree.limit
 	if limit and limit < 0 then
-		say(Shell.Said("first:-" .. -limit .. " lists the end; turn the sort round and list the front"))
+		say(
+			Shell.Said(
+				"first:-" .. -limit .. " lists the end; turn the sort round and list the front"
+			)
+		)
 		return
 	end
 	-- The answer to the command comes first, before the job does anything,
@@ -653,9 +894,11 @@ local function page(tree, text, fromIndex)
 			else
 				Epsilook:GetSpellDataByIndex(at, spell)
 				Epsilook:GetPartCounts(spellID, counts)
-				local head, actions = Shell.ResultLines(spell, counts, axes)
+				local head, below = Shell.ResultLines(spell, counts, axes)
 				say(head)
-				say(actions)
+				if below ~= "" then
+					say(below)
+				end
 				shown, resume = shown + 1, after
 			end
 		end

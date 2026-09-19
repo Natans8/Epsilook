@@ -894,33 +894,65 @@ local function actionsFor(axis, verb)
 	return rest
 end
 
---- One line: an indent, a cyan label where there is one, the subject as a
--- link where a shift-click has something to hand over and as plain text
--- otherwise, the other values beside a plain subject, and the actions.
+--- The margin every line of a dossier begins at. The same characters on every
+-- line, so they need no measuring to meet.
+local MARGIN = "  "
+
+--- The widest label a section of an axis can print: every kind the axis
+-- declares, and the word a group's line uses. It comes from the schema rather
+-- than from the spell in front of us, so one spell's sections line up with
+-- another's in the same scrollback, and the widest is chosen by letter count
+-- once while its width in pixels is measured per font.
+local labelReferences = {}
+local function labelReference(axis)
+	if labelReferences[axis] == nil then
+		local widest = ""
+		for _, kind in ipairs(Epsilook.Schema.KindsOf(axis)) do
+			local word = kind.id:match("%.(.+)$") or kind.id
+			if #word > #widest then
+				widest = word
+			end
+		end
+		local group = Inspect.GROUPS[axis]
+		local word = group and (group.kind or group.prop)
+		if word and #word > #widest then
+			widest = word
+		end
+		labelReferences[axis] = widest .. ":"
+	end
+	return labelReferences[axis]
+end
+
+--- One line: the section's margin, the label in its own column so that every
+-- subject in a section begins at one place, the subject as a link where a
+-- shift-click has something to hand over and as plain text otherwise, the
+-- other values beside a plain subject, and the actions. A line under a group
+-- carries no label and begins where a labelled line's subject does, so that
+-- the files of a kit read as the kit's own.
 -- @param spellID the spell
 -- @param part a PartData
 -- @param n the part's row on its axis
--- @param indent the indent
--- @param label the label, or nil
+-- @param label the label, or nil for a line that sits under a group's
 -- @param verb the link's verb, which also says which values and actions
 -- @return the line
-local function line(spellID, part, n, indent, label, verb)
+local function line(spellID, part, n, label, verb)
 	local values, actions = valuesFor(part, verb), actionsFor(part.axis, verb)
-	local out = indent
 	local subject = values[1]
 	local extras = Epsilook:GetPartExtras(part)
 	local named = extras[1] and extras[1].text ~= ""
+	local cell = ""
 	if label then
 		local tone = Shell.AXIS_COLOURS[part.axis] or CYAN
 		if subject or named then
 			-- A label with a subject after it takes a colon.
-			out = out .. tone .. label .. ":" .. END .. " "
+			cell = tone .. label .. ":" .. END
 		else
 			-- A label on its own names a part that is nothing but its kind, and
 			-- is the part's link, so its tooltip can say what the kind means.
-			out = out .. Shell.Link(spellID, verb, label, part.axis, n, tone)
+			cell = Shell.Link(spellID, verb, label, part.axis, n, tone)
 		end
 	end
+	local out = MARGIN .. Shell.Cell(cell, labelReference(part.axis))
 	local vocab = subject and Epsilook.Data.GetVocabName(part.axis, part.kind, subject.name)
 	-- An item's name may be blank and yield the lead to its id; the item is
 	-- still an item, so the items reading looks past the subject.
@@ -1010,7 +1042,7 @@ end
 
 --- One part's line on its own: its kind as the label and everything it has.
 function Inspect.PartLine(spellID, part, n)
-	return line(spellID, part, n, "  ", part.kind, Inspect.PART)
+	return line(spellID, part, n, part.kind, Inspect.PART)
 end
 
 --- A group's line: the property as the label, its value as the subject, the
@@ -1020,12 +1052,12 @@ end
 -- @param n that part's row
 function Inspect.GroupLine(spellID, part, n)
 	local group = groupOf(part)
-	return line(spellID, part, n, "  ", group and (group.kind or group.prop), Inspect.GROUP)
+	return line(spellID, part, n, group and (group.kind or group.prop), Inspect.GROUP)
 end
 
 --- A part's line under its group: no label, the values but the group's.
 function Inspect.MemberLine(spellID, part, n)
-	return line(spellID, part, n, "    ", nil, Inspect.PART)
+	return line(spellID, part, n, nil, Inspect.PART)
 end
 
 --- The action a part takes under a key, or nil. A key may be declared more

@@ -22,21 +22,60 @@ def result(engine: LuaRuntime, spell_id: int) -> tuple[str, str]:
     spell = method(api, b"GetSpellDataByID")(api, spell_id)
     counts = method(api, b"GetPartCounts")(api, spell_id)
     axes = method(api, b"GetPartAxes")(api)
-    head, actions = cast(tuple[bytes, bytes], lua_function(engine, b"Epsilook.Shell.ResultLines")(spell, counts, axes))
-    return head.decode(), actions.decode()
+    head, below = cast(tuple[bytes, bytes], lua_function(engine, b"Epsilook.Shell.ResultLines")(spell, counts, axes))
+    return head.decode(), below.decode()
 
 
-def test_a_result_is_the_spell_then_its_actions(engine: LuaRuntime) -> None:
-    head, actions = result(engine, 133)
+def test_a_result_is_the_spell_with_its_actions_then_what_it_is_made_of(engine: LuaRuntime) -> None:
+    head, below = result(engine, 133)
     # Under a bare interpreter there is no client to ask, so the pack's name and
     # icon stand in; the icon leads the game's own spell link.
-    assert head.startswith("|cffffd100133|r - |cffffffff|Hspell:133|h|T135812:16|t[Fireball]|h|r")
-    # Each count is a link that lists the axis on hover and prints it on a click.
-    assert "|Hgarrmission:epsilook:133:list:model:0|h[5 model]|h" in head
-    assert "12 sound" in head
-    assert actions.startswith("      ")
+    assert head.startswith("|cffffd100133|r |cffffffff|Hspell:133|h|T135812:16|t[Fireball]|h|r")
+    # The actions sit beside the spell, where the thing they act on is named.
     for verb, label in (("learn", "Learn"), ("cast", "Cast"), ("inspect", "Inspect")):
-        assert f"|Hgarrmission:epsilook:133:{verb}|h[{label}]|h" in actions
+        assert f"|Hgarrmission:epsilook:133:{verb}|h[{label}]|h" in head
+    # What the spell is made of goes below, each count a link that lists the axis
+    # on hover and prints it on a click, and the line begins under the name.
+    assert below.startswith(" |TInterface/Common/Spacer:1:16|t")
+    assert "|Hgarrmission:epsilook:133:list:model:0|h[5 model]|h" in below
+    assert "12 sound" in below
+
+
+def test_a_cell_is_padded_to_its_column_by_a_transparent_texture(engine: LuaRuntime) -> None:
+    """Chat has no columns, so a column is a gap of an exact number of pixels.
+
+    The widths come from a stub in which every character is ten pixels wide, so
+    what is under test is the arithmetic rather than any real font. The gap kept
+    after a column is half the line's height, six pixels of the stub's twelve.
+    """
+    # language=Lua
+    engine.execute(b"""
+                   _G.DEFAULT_CHAT_FRAME = {
+                       GetFont = function() return "F", 12, "" end,
+                       CreateFontString = function()
+                           local shown = ""
+                           return {
+                               SetFont = function() end,
+                               SetText = function(_, text) shown = text end,
+                               GetStringWidth = function() return #shown * 10 end,
+                               Hide = function() end,
+                           }
+                       end,
+                   }
+                   """)
+    try:
+        cell = cast(bytes, lua_function(engine, b"Epsilook.Shell.Cell")(b"ab", b"abcd")).decode()
+        right = cast(bytes, lua_function(engine, b"Epsilook.Shell.RightCell")(b"ab", b"abcd")).decode()
+        empty = cast(bytes, lua_function(engine, b"Epsilook.Shell.Cell")(b"", b"abcd")).decode()
+        # The column holds four characters and the gap after it: 40 + 6.
+        assert cell == "ab|TInterface/Common/Spacer:1:26|t"
+        # Set at the right, the digits end together and the gap follows them.
+        assert right == "|TInterface/Common/Spacer:1:20|tab|TInterface/Common/Spacer:1:6|t"
+        assert empty == "|TInterface/Common/Spacer:1:46|t"
+        # A cell wider than its column loses its own alignment and no other.
+        assert cast(bytes, lua_function(engine, b"Epsilook.Shell.Cell")(b"abcdefg", b"abcd")).decode() == "abcdefg"
+    finally:
+        engine.execute(b"_G.DEFAULT_CHAT_FRAME = nil")
 
 
 def test_a_lone_spell_is_an_inspection(engine: LuaRuntime) -> None:
@@ -110,7 +149,7 @@ def test_the_dossier_prints_every_axis_the_spell_has(engine: LuaRuntime) -> None
     assert "[Fireball]" in text and "5 Models" in text and "12 Sounds" in text and "1 Mechanics" in text
     # Sounds are grouped under their kit: the kit's line, then its files indented.
     assert "|cff3ddc84kit:|r" in text
-    assert "\n    |cffffffff|Hgarrmission:epsilook:133:part:sound:1|h[fx_fire_magic_loop_medium_01.ogg]|h" in text
+    assert "\n   |cffffffff|Hgarrmission:epsilook:133:part:sound:1|h[fx_fire_magic_loop_medium_01.ogg]|h" in text
     assert "no spell" in dossier(engine, 0)
 
 
@@ -295,7 +334,7 @@ def test_an_anim_kits_animations_group_under_the_kit(engine: LuaRuntime) -> None
         "|cff71d5ff|Hgarrmission:epsilook:133:animKit:anim:1|h[Kit]|h|r"
     )
     assert kit_line in printed
-    assert "\n    |cffffffff|Hgarrmission:epsilook:133:part:anim:1|h[SpellCastDirected]|h" in printed
+    assert "\n   |cffffffff|Hgarrmission:epsilook:133:part:anim:1|h[SpellCastDirected]|h" in printed
     printed = dossier(engine, 5106)
     assert "\n  |cffc77dffloose:|r " in printed
     # A valueless kind's label is its own link, so its tooltip can explain it.
@@ -308,8 +347,8 @@ def test_the_aura_word_is_offered_only_where_an_aura_is_applied(engine: LuaRunti
     # Kneel 317228 applies an aura; Fireball 133 does not.
     assert has(api, 317228, b"mech", b"aura") is True
     assert has(api, 133, b"mech", b"aura") is False
-    assert "[Aura]" not in result(engine, 133)[1]
-    assert "[Aura]" in result(engine, 317228)[1]
+    assert "[Aura]" not in result(engine, 133)[0]
+    assert "[Aura]" in result(engine, 317228)[0]
 
 
 def test_every_part_tooltip_fills_on_every_axis(engine: LuaRuntime) -> None:
