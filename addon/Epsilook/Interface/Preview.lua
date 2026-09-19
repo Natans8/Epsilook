@@ -12,10 +12,13 @@
 -- of them beside each other -- two morphs, the same spell at two stages -- and
 -- a look that vanishes when the pointer moves cannot be compared with anything.
 --
--- Pinned looks stack beside the chat rather than floating over it, and they are
--- arranged rather than dragged: dragging means overlap, an order to keep and
--- positions to remember, which is a window manager and belongs to the interface
--- that has not been built yet. Closing one moves the rest up.
+-- A pinned look is a window the player places, which is what every pinned thing
+-- in this client is: the client's own pinned chat link, ItemRefTooltip, is
+-- movable, toplevel, and closed with a button. So one appears where it was
+-- asked for, is dragged wherever it is wanted, and rises above its fellows when
+-- it is clicked. Nothing arranges them, because nothing in this interface
+-- arranges anything and a column of frames beside the chat is not a shape a
+-- player has ever seen here.
 --
 -- ⚠ Only a model is drawn today. What a subject is and how it is drawn is a row
 -- in `SUBJECTS`, so an animation, a creature or a spell's own visual is a row
@@ -27,10 +30,11 @@ local Epsilook = _G.Epsilook
 local Preview = {}
 Epsilook.Preview = Preview
 
---- How large a look is, how far the column sits from the chat, and how many
--- may be pinned. Beyond four they are too small to read, and somebody wanting
--- more than four at once wants the window rather than a column.
-Preview.SIZE, Preview.GAP, Preview.MOST = 180, 16, 4
+--- How large a look is, how far the next one is offset from the last, and how
+-- many may be pinned at once. They are offset rather than stacked so that a
+-- second one does not land exactly on the first and read as though nothing
+-- happened.
+Preview.SIZE, Preview.GAP, Preview.MOST = 180, 24, 4
 
 --- What can be looked at, and how. `from` is what the subject needs off a part;
 -- `draw` puts it on a model frame. A part offers a preview when its `from`
@@ -82,6 +86,14 @@ local function build(pinned)
 	frame.model:SetPoint("TOPLEFT", 6, -6)
 	frame.model:SetPoint("BOTTOMRIGHT", -6, 6)
 	if pinned then
+		-- What the client's own pinned chat link is: movable, above its fellows
+		-- when clicked, and closed with a button.
+		frame:SetMovable(true)
+		frame:EnableMouse(true)
+		frame:SetToplevel(true)
+		frame:RegisterForDrag("LeftButton")
+		frame:SetScript("OnDragStart", frame.StartMoving)
+		frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
 		frame.close = _G.CreateFrame("Button", nil, frame, "UIPanelCloseButton")
 		frame.close:SetPoint("TOPRIGHT", 2, 2)
 		frame.close:SetScript("OnClick", function()
@@ -111,23 +123,17 @@ local hovered
 --- The looks that have been pinned, oldest first.
 local pinned = {}
 
---- Lay the pinned looks out beside the chat, oldest at the top, so that closing
--- one moves the rest up rather than leaving a hole.
-local function arrange()
-	local anchor = _G.DEFAULT_CHAT_FRAME
-	for index, frame in ipairs(pinned) do
-		frame:ClearAllPoints()
-		if index == 1 then
-			if anchor and anchor.GetName and anchor:GetName() then
-				frame:SetPoint("BOTTOMLEFT", anchor, "BOTTOMRIGHT", Preview.GAP, 0)
-			else
-				frame:SetPoint("CENTER")
-			end
-		else
-			frame:SetPoint("BOTTOMLEFT", pinned[index - 1], "TOPLEFT", 0, Preview.GAP / 2)
-		end
-		frame:Show()
+--- Where the pointer is, in the coordinates a frame is placed in, or nothing.
+local function cursor()
+	local x, y
+	if _G.GetCursorPosition then
+		x, y = _G.GetCursorPosition()
 	end
+	local scale = _G.UIParent and _G.UIParent:GetEffectiveScale()
+	if not (x and y and scale and scale > 0) then
+		return nil
+	end
+	return x / scale, y / scale
 end
 
 --- Show a part beside the pointer while it is hovered.
@@ -141,19 +147,9 @@ function Preview.Hover(part)
 		return false
 	end
 	hovered:ClearAllPoints()
-	local x, y
-	if _G.GetCursorPosition then
-		x, y = _G.GetCursorPosition()
-	end
-	local scale = _G.UIParent and _G.UIParent:GetEffectiveScale()
-	if x and y and scale and scale > 0 then
-		hovered:SetPoint(
-			"BOTTOMLEFT",
-			_G.UIParent,
-			"BOTTOMLEFT",
-			x / scale + Preview.GAP,
-			y / scale
-		)
+	local x, y = cursor()
+	if x then
+		hovered:SetPoint("BOTTOMLEFT", _G.UIParent, "BOTTOMLEFT", x + Preview.GAP, y)
 	else
 		hovered:SetPoint("CENTER")
 	end
@@ -177,16 +173,26 @@ function Preview.Pin(part)
 	if not draw(frame, part) then
 		return false
 	end
+	local x, y = cursor()
+	frame:ClearAllPoints()
+	if x then
+		-- Offset by however many are already up, so the newest is visibly its own
+		-- rather than landing exactly on the one before it.
+		local step = #pinned * Preview.GAP
+		frame:SetPoint("BOTTOMLEFT", _G.UIParent, "BOTTOMLEFT", x + Preview.GAP + step, y - step)
+	else
+		frame:SetPoint("CENTER")
+	end
 	table.insert(pinned, frame)
 	while #pinned > Preview.MOST do
 		local oldest = table.remove(pinned, 1)
 		oldest:Hide()
 	end
-	arrange()
+	frame:Show()
 	return true
 end
 
---- Close one pinned look, and move the rest up.
+--- Close one pinned look. The others stay where the player put them.
 function Preview.Unpin(frame)
 	for index, each in ipairs(pinned) do
 		if each == frame then
@@ -195,7 +201,6 @@ function Preview.Unpin(frame)
 		end
 	end
 	frame:Hide()
-	arrange()
 end
 
 --- How many looks are pinned, which is what a test asks.
