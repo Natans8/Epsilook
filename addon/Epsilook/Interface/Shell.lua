@@ -688,6 +688,50 @@ function Shell.ColumnLines(key)
 	return lines
 end
 
+--- What is loaded, in one line: the addon's own version, the pack it is reading
+-- and the day that pack was built, and how many spells are in it. What somebody
+-- says when asked which version they are on, and the first thing to ask for when
+-- something looks wrong.
+-- @return the line
+function Shell.InfoLine()
+	local version = _G.GetAddOnMetadata and _G.GetAddOnMetadata("Epsilook", "Version")
+	local info = Epsilook:GetDataInfo()
+	if not info then
+		return Shell.Said("the data is not loaded (is Epsilook_Data installed and enabled?)")
+	end
+	local said = GOLD .. "Epsilook" .. END
+	if version then
+		said = said .. " " .. version
+	end
+	return said
+		.. GREY
+		.. "  pack "
+		.. END
+		.. info.pack
+		.. GREY
+		.. " "
+		.. info.variation
+		.. ", built "
+		.. info.built
+		.. ", "
+		.. Shell.Thousands(Epsilook:GetNumSpells())
+		.. " spells"
+		.. END
+end
+
+--- A number with its thousands parted, which is how a count of a quarter of a
+-- million reads as one.
+function Shell.Thousands(number)
+	local text = tostring(number)
+	while true do
+		local parted, count = text:gsub("^(%-?%d+)(%d%d%d)", "%1,%2")
+		text = parted
+		if count == 0 then
+			return text
+		end
+	end
+end
+
 --- The topics the help is divided into, and the order they are offered in.
 -- The whole of it runs to some thirty lines, which is a wall rather than an
 -- answer, so what a reader is most likely to want -- what can be typed -- comes
@@ -729,7 +773,7 @@ function Shell.HelpLines(topic)
 		lines[#lines + 1] = row("/elo <id or spell link>", "inspect one spell")
 		lines[#lines + 1] = row("/elo next", "the next page")
 		lines[#lines + 1] = row("/elo count <query>", "how many match")
-		lines[#lines + 1] = row("/elo test", "check the install")
+		lines[#lines + 1] = row("/elo info", "what is loaded")
 		lines[#lines + 1] = row("/elo options", "settings")
 		for _, each in ipairs(Shell.HELP_TOPICS) do
 			lines[#lines + 1] = row("/elo help " .. each.topic, each.hint)
@@ -1040,6 +1084,12 @@ Shell.SUBCOMMANDS = {
 			say(line)
 		end
 	end,
+	info = function()
+		say(Shell.InfoLine())
+	end,
+	-- Not offered in the help: it reads as a report to whoever wrote the addon
+	-- rather than as an answer, and a player told to run it learns nothing. It
+	-- stays because asking for it is the quickest way to see what is wrong.
 	test = function()
 		Epsilook:SelfTest()
 	end,

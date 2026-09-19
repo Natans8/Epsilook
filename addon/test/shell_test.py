@@ -153,6 +153,18 @@ def test_the_dossier_prints_every_axis_the_spell_has(engine: LuaRuntime) -> None
     assert "no spell" in dossier(engine, 0)
 
 
+def test_the_info_line_says_what_is_loaded(engine: LuaRuntime) -> None:
+    """What somebody answers with when asked which version they are on."""
+    line = cast(bytes, lua_function(engine, b"Epsilook.Shell.InfoLine")()).decode()
+    assert "9.2.7-epsilon.45745" in line and "full" in line
+    # A quarter of a million reads as a number rather than a run of digits.
+    assert "280,180 spells" in line
+    thousands = lua_function(engine, b"Epsilook.Shell.Thousands")
+    assert cast(bytes, thousands(7)).decode() == "7"
+    assert cast(bytes, thousands(1000)).decode() == "1,000"
+    assert cast(bytes, thousands(280180)).decode() == "280,180"
+
+
 def test_help_answers_what_was_asked_and_not_everything(engine: LuaRuntime) -> None:
     """The commands alone, then a topic at a time, each read off the declarations.
 
@@ -169,6 +181,9 @@ def test_help_answers_what_was_asked_and_not_everything(engine: LuaRuntime) -> N
     # Short enough to read at a glance, and it says where the rest of it is.
     assert len(commands) <= 12
     assert any("/elo help columns" in line for line in commands)
+    # The self-test is a report to whoever wrote the addon, so it is not offered.
+    assert not any("/elo test" in line for line in commands)
+    assert any("/elo info" in line for line in commands)
     assert not any(">=" in line for line in commands), "the language is not in the command list"
     # Each topic carries its own half, off the declarations rather than a copy.
     columns = "\n".join(said(b"columns"))
