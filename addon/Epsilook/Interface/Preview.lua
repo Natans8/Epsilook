@@ -44,11 +44,45 @@ Preview.SIZE, Preview.GAP, Preview.MOST = 300, 24, 4
 -- so that it reads as a thing rather than a silhouette.
 Preview.FACING = 0.6
 
---- What can be looked at, and how. `from` is what the subject needs off a part;
--- `draw` puts it on a model frame. A part offers a preview when its `from`
--- resolves, so teaching this one more subject is a row.
+--- One property of a part as the pack stores it, which for an id is the number
+-- the client takes.
+local function stored(part, prop)
+	return Epsilook:GetPartStored(part.axis, part.kind, part.slot, prop)
+end
+
+--- What can be looked at, and how, in the order a part is tried against them.
+-- `from` is what the subject needs off a part and `draw` puts it on a model
+-- frame; a part offers a preview when the first `from` resolves, so the order
+-- is which reading of a part wins where it could be read two ways. Teaching
+-- this one more subject is a row.
+--
+-- An animation is played on the player's own body, because that is whose
+-- animation it is and whose body the person asking is looking at. A body that
+-- has been morphed belongs to the larger readings -- a stage, a whole spell --
+-- where something in the spell did the morphing, and those are not built.
 Preview.SUBJECTS = {
-	model = {
+	{
+		word = "animkit",
+		from = function(part)
+			return part.axis == "anim" and stored(part, "id") or nil
+		end,
+		draw = function(model, kitID)
+			model:SetUnit("player")
+			pcall(model.PlayAnimKit, model, kitID)
+		end,
+	},
+	{
+		word = "anim",
+		from = function(part)
+			return part.axis == "anim" and stored(part, "anim") or nil
+		end,
+		draw = function(model, animation)
+			model:SetUnit("player")
+			pcall(model.SetAnimation, model, animation)
+		end,
+	},
+	{
+		word = "model",
 		from = function(part)
 			return Epsilook.Inspect.FileOf(part)
 		end,
@@ -65,7 +99,7 @@ Preview.SUBJECTS = {
 -- @param part a PartData
 -- @return the subject and its value, or nil
 function Preview.SubjectOf(part)
-	for _, subject in pairs(Preview.SUBJECTS) do
+	for _, subject in ipairs(Preview.SUBJECTS) do
 		local value = part and subject.from(part)
 		if value then
 			return subject, value
