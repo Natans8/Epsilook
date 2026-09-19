@@ -419,6 +419,22 @@ function Shell.SpellLink(spell, width)
 	return WHITE .. "|Hspell:" .. spell.id .. "|h" .. shown .. "|h" .. END
 end
 
+--- Whether two of a part's values stand for the same thing, either being
+-- absent. A value the pack resolved from an id is a record and a plain one is
+-- a number or a word, so the two are compared by what they were stored as.
+function Shell.Same(one, other)
+	if one == nil or other == nil then
+		return one == other
+	end
+	local function stored(value)
+		if type(value) == "table" then
+			return value.id ~= nil and value.id or value.text
+		end
+		return value
+	end
+	return stored(one) == stored(other)
+end
+
 --- The separator between a link and its buttons, and between buttons, as
 -- `.lookup` draws it.
 Shell.DASH = " - "
@@ -1181,7 +1197,7 @@ function Shell.OnHyperlinkEnter(frame, link)
 		if part and (verb == Epsilook.Inspect.GROUP or verb == Epsilook.Inspect.COPYGROUP) then
 			Epsilook.Inspect.FillGroupTooltip(tooltip, part)
 		elseif part then
-			Epsilook.Inspect.FillTooltip(tooltip, part)
+			Epsilook.Inspect.FillTooltip(tooltip, part, id)
 		end
 		hint = Epsilook.Inspect.HintOf(axis, verb, part)
 	else

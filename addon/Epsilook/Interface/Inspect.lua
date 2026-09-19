@@ -502,6 +502,99 @@ end
 --- The space kept between a row's label and its value.
 Inspect.GUTTER = 24
 
+--- Which table and column a kind's selector is read from: an effect row is
+-- discriminated by one of the two, and the selector table is keyed by both.
+local SELECTOR_OF = { effect = "Effect", aura = "EffectAura" }
+
+--- Which kinds carry the value a selector reads, by the table the selector
+-- reads it out of. A selector says what its misc slot points into, a kind says
+-- what it holds, and the two name the same thing differently, so this is the
+-- one place they are joined.
+--
+-- TODO: the build declares which kind each selector lands on, as the branches
+-- of the effect split in `routes/flows.py`; shipping that mapping would retire
+-- this table, make the answer exact where two kinds read one table, and let an
+-- effect with two payloads name both.
+local PAYLOAD_KINDS = {
+	creature_template = { summon = true, morph = true },
+	gameobject_template = { object = true },
+	ScreenEffect = { screen = true },
+	Vehicle = { vehicle = true },
+	FactionTemplate = { faction = true },
+	ShapeshiftForm = { shapeshift = true },
+	SoundKit = { sound = true },
+}
+
+--- The columns a payload is looked for on. A misc value with a route is lifted
+-- onto a kind that can name it, and those kinds live here.
+local PAYLOAD_AXES = { "fx", "mech" }
+
+--- The part carrying what an effect or aura actually does, or nil.
+--
+-- A row does not carry its misc values raw. Where a selector has a route the
+-- value is lifted onto a kind that can name it -- a summon's creature, a
+-- morph's display, a screen effect's colours -- and that kind is a row of its
+-- own on another column. So the effect is asked whether its selector reads a
+-- misc slot at all, and where it does the spell is asked for the row that
+-- landed at the same moment on the same audience, which is the row the same
+-- effect produced.
+--
+-- Two effects of one kind landing at one moment on one audience cannot be told
+-- apart, and the first is drawn for both.
+-- @param spellID the spell the part belongs to
+-- @param part the effect's or aura's part
+-- @return a PartData, or nil
+local function payloadOf(spellID, part)
+	local column = SELECTOR_OF[part.kind]
+	if not (spellID and column) then
+		return nil
+	end
+	-- The selector table is keyed by the number the game's own tables hold, and
+	-- the row's name is the word that number was read as, so the stored value is
+	-- what is asked for here.
+	local selector = Epsilook.Data.GetStored(part.axis, part.kind, part.slot, "name")
+	if type(selector) ~= "number" then
+		return nil
+	end
+	local wanted = {}
+	for _, read in ipairs(Epsilook:GetSelectorReads("SpellEffect", column, selector) or {}) do
+		for kind in pairs(PAYLOAD_KINDS[read.into] or {}) do
+			wanted[kind] = true
+		end
+	end
+	if not next(wanted) then
+		-- The selector reads nothing this can name, so the row says what it says.
+		return nil
+	end
+	for _, axis in ipairs(PAYLOAD_AXES) do
+		for i = 1, Epsilook:GetNumParts(spellID, axis) do
+			local other = Epsilook:GetPartDataByIndex(spellID, axis, i)
+			if
+				wanted[other.kind]
+				and Shell.Same(other.values.phase, part.values.phase)
+				and Shell.Same(other.values.target, part.values.target)
+			then
+				return other
+			end
+		end
+	end
+	return nil
+end
+
+--- The values a payload adds to the row that produced it: everything it has
+-- but when and on whom, which the effect said already.
+-- @param payload a PartData, or nil
+-- @return a list of values, empty where there is no payload
+local function payloadValues(payload)
+	local out = {}
+	for _, value in ipairs(payload and Inspect.Values(payload) or {}) do
+		if value.name ~= "target" and value.name ~= "phase" then
+			out[#out + 1] = value
+		end
+	end
+	return out
+end
+
 --- Fill a tooltip with a part: its kind as the title and what the kind
 -- means under it, then one row per value that says something, the label the
 -- word a query would use and the value beside it. A value of one on a size
@@ -515,7 +608,9 @@ Inspect.GUTTER = 24
 -- it looks like.
 -- @param tooltip the GameTooltip, already owned
 -- @param part a PartData
-function Inspect.FillTooltip(tooltip, part)
+-- @param spellID the spell the part belongs to, where an effect's resolved
+--   value is to be fetched from the kind that carries it
+function Inspect.FillTooltip(tooltip, part, spellID)
 	tooltip:SetText(part.kind, 1, 1, 1)
 	local kind = Epsilook.Schema.kindById[part.axis .. "." .. part.kind]
 	if kind and kind.hint and kind.hint ~= "" then
@@ -527,6 +622,9 @@ function Inspect.FillTooltip(tooltip, part)
 		if not silent then
 			row(rows, value.label, value.type ~= "flag" and detailed(value) or nil)
 		end
+	end
+	for _, value in ipairs(payloadValues(payloadOf(spellID, part))) do
+		row(rows, value.label, detailed(value))
 	end
 	for _, extra in ipairs(Epsilook:GetPartExtras(part)) do
 		row(rows, extra.name, extra.text ~= "" and extra.text or tostring(extra.value))
@@ -1033,6 +1131,11 @@ local function line(spellID, part, n, label, verb)
 			out = out .. Shell.Link(spellID, verb, extras[1].text, part.axis, n, WHITE)
 		end
 		links = Inspect.ActionLinks(spellID, part, n, actions, verb)
+	end
+	for _, value in ipairs(payloadValues(payloadOf(spellID, part))) do
+		-- What the effect does, beside the effect, the way Wowhead reads: the
+		-- name of the thing it summons or turns you into, not a column away.
+		out = out .. joined(value)
 	end
 	if links ~= "" then
 		out = out .. Shell.DASH .. links

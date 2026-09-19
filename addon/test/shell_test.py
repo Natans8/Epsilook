@@ -254,7 +254,7 @@ def tooltip_lines(engine: LuaRuntime, spell_id: int, axis: bytes, n: int) -> lis
                        function tip:AddLine(text)
                            out[#out + 1] = text
                        end
-                       Epsilook.Inspect.FillTooltip(tip, Epsilook:GetPartDataByIndex(id, axis, n))
+                       Epsilook.Inspect.FillTooltip(tip, Epsilook:GetPartDataByIndex(id, axis, n), id)
                        return table.concat(out, "\\n")
                    end
                    """)
@@ -301,7 +301,7 @@ def test_a_tooltip_of_short_rows_is_two_columns_and_one_with_a_path_is_lines(eng
                        function tip:SetText(text) out[#out + 1] = text end
                        function tip:AddLine(text) out[#out + 1] = text end
                        function tip:AddDoubleLine(left, right) out[#out + 1] = left .. "\\t" .. right end
-                       Epsilook.Inspect.FillTooltip(tip, Epsilook:GetPartDataByIndex(id, axis, n))
+                       Epsilook.Inspect.FillTooltip(tip, Epsilook:GetPartDataByIndex(id, axis, n), id)
                        return table.concat(out, "\\n")
                    end
                    """)
@@ -311,6 +311,34 @@ def test_a_tooltip_of_short_rows_is_two_columns_and_one_with_a_path_is_lines(eng
     long = re.sub(r"\|c[0-9a-f]{8}|\|r", "", cast(bytes, rows(116, b"sound", 1)).decode()).split("\n")
     assert "file SOUND/SPELLS/SPELL_MA_Revamp_Frostbolt_Precast_Loop_01.ogg" in long
     assert "phase precast - 1" in long and not [line for line in long if "\t" in line]
+
+
+def test_an_effect_says_what_it_does_and_a_bare_one_says_nothing(engine: LuaRuntime) -> None:
+    """A misc value with a route rides a kind that can name it, on another column.
+
+    The row that read it draws it beside itself, so an effect reads without going
+    to look; a row whose selector reads nothing nameable borrows nothing from the
+    rows it happens to land beside.
+    """
+    api = lua_table(engine, b"Epsilook")
+    lines = lua_function(engine, b"Epsilook.Inspect.PartLine")
+
+    def rows(spell: int) -> list[str]:
+        out = []
+        for n in range(1, cast(int, unwrap(method(api, b"GetNumParts")(api, spell, b"mech"))) + 1):
+            part = method(api, b"GetPartDataByIndex")(api, spell, b"mech", n)
+            text = cast(bytes, lines(spell, part, n)).decode()
+            out.append(re.sub(r"\|c[0-9a-f]{8}|\|r|\|H[^|]*\|h|\|h", "", text))
+        return out
+
+    # Eye of Kilrogg summons, and the creature is on the summoning row itself.
+    summons = [line for line in rows(126) if "Summon" in line]
+    assert summons and "Eye of Kilrogg" in summons[0]
+    # Polymorph turns the target into a sheep, on the row that does the turning.
+    changed = [line for line in rows(118) if "Eye of Kilrogg" in line or "Polymorphed Sheep" in line]
+    assert len(changed) == 1 and "Polymorphed Sheep" in changed[0]
+    # Every other row of that spell names nothing it did not read.
+    assert len([line for line in rows(118) if "Polymorphed Sheep" in line]) == 1
 
 
 def test_a_vocabulary_word_carries_its_number_in_the_tooltip(engine: LuaRuntime) -> None:
