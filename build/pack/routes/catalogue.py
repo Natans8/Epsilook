@@ -1780,6 +1780,30 @@ class ModelFileData(Table):
     GeoBox = Column("GeoBox", array=True)
 
 
+class ItemEffect(Table):
+    """The client's ``ItemEffect``."""
+
+    ID = Column("ID")
+    CategoryCoolDownMSec = Column("CategoryCoolDownMSec")
+    Charges = Column("Charges")
+    ChrSpecializationID = Column("ChrSpecializationID")
+    CoolDownMSec = Column("CoolDownMSec")
+    LegacySlotIndex = Column("LegacySlotIndex")
+    ParentItemID = Column("ParentItemID")
+    SpellCategoryID = Column("SpellCategoryID")
+    SpellID = Column("SpellID")
+    TriggerType = Column("TriggerType")
+    PlayerConditionID = Column("PlayerConditionID")
+
+
+class ItemXItemEffect(Table):
+    """The client's ``ItemXItemEffect``."""
+
+    ID = Column("ID")
+    ItemEffectID = Column("ItemEffectID")
+    ItemID = Column("ItemID")
+
+
 class SpellRadius(Table):
     """The client's ``SpellRadius``."""
 
@@ -1914,6 +1938,69 @@ class creature_template_model(Table):
     Idx = Column("Idx")
     CreatureDisplayID = Column("CreatureDisplayID")
     Probability = Column("Probability")
+
+
+class trainer_spell(Table):
+    """The server dump's ``trainer_spell``, the columns the build keeps."""
+
+    TrainerId = Column("TrainerId")
+    SpellId = Column("SpellId")
+
+
+class creature_trainer(Table):
+    """The server dump's ``creature_trainer``, the columns the build keeps."""
+
+    CreatureID = Column("CreatureID")
+    TrainerID = Column("TrainerID")
+
+
+class npc_vendor(Table):
+    """The server dump's ``npc_vendor``, the columns the build keeps."""
+
+    entry = Column("entry")
+    item = Column("item")
+
+
+class creature_loot_template(Table):
+    """The server dump's ``creature_loot_template``, the columns the build keeps."""
+
+    Entry = Column("Entry")
+    Item = Column("Item")
+    Reference = Column("Reference")
+    ItemType = Column("ItemType")
+
+
+class gameobject_loot_template(Table):
+    """The server dump's ``gameobject_loot_template``, the columns the build keeps."""
+
+    Entry = Column("Entry")
+    Item = Column("Item")
+    Reference = Column("Reference")
+    ItemType = Column("ItemType")
+
+
+class reference_loot_template(Table):
+    """The server dump's ``reference_loot_template``, the columns the build keeps."""
+
+    Entry = Column("Entry")
+    Item = Column("Item")
+    Reference = Column("Reference")
+    ItemType = Column("ItemType")
+
+
+class quest_template(Table):
+    """The server dump's ``quest_template``, the columns the build keeps."""
+
+    ID = Column("ID")
+    LogTitle = Column("LogTitle")
+    RewardSpell = Column("RewardSpell")
+    RewardDisplaySpell1 = Column("RewardDisplaySpell1")
+    RewardDisplaySpell2 = Column("RewardDisplaySpell2")
+    RewardDisplaySpell3 = Column("RewardDisplaySpell3")
+    RewardItem1 = Column("RewardItem1")
+    RewardItem2 = Column("RewardItem2")
+    RewardItem3 = Column("RewardItem3")
+    RewardItem4 = Column("RewardItem4")
 
 
 class gameobject_template(Table):

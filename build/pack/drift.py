@@ -60,6 +60,11 @@ OPTIONAL_TABLES = {
     "SpellTargetRestrictions": "max-target counts inside cooked descriptions",
     "SpellAuraOptions": "stack caps and proc chances inside cooked descriptions",
     "JournalEncounterSection": "dungeon-journal notes on a boss ability",
+    # The bridge from an item to its effect rows, which arrives in Shadowlands.
+    # Before it an effect row names its own item, and the column below is what
+    # a build reads instead.
+    "ItemXItemEffect": "the item an effect row belongs to, on the builds that split it out",
+    "ItemEffect": "what an item casts or teaches",
 }
 # (table, column) -> the value to use on builds that lack the column
 OPTIONAL_COLUMNS = {
@@ -89,6 +94,9 @@ OPTIONAL_COLUMNS = {
     ("ShadowyEffect", "AttachPos"): "-1",
     ("DissolveEffect", "AttachID"): "-1",
     ("BarrageEffect", "AttachmentPoint"): "-1",
+    # The item an effect row belongs to, named on the row itself until
+    # Shadowlands split it into ItemXItemEffect; a build has one or the other.
+    ("ItemEffect", "ParentItemID"): "0",
 }
 
 # Effect ids the game reused. Slots 2 to 4 of SUMMON_OBJECT spawn a gameobject
@@ -120,6 +128,10 @@ TDB_OPTIONAL_TABLES = {
     # showing the one display its summoned creature carries, which is what the
     # pack shipped before the table was read at all.
     "spell_totem_model": "per-race totem displays",
+    # The bridge from a trainer to the creature standing behind the counter,
+    # split out after Legion. Without it a trainer's spells are still listed
+    # and the creature teaching them is not.
+    "creature_trainer": "which creature a trainer's spell list belongs to",
 }
 TDB_OPTIONAL_COLUMNS = {
     # the legacy spelling, gone once creature_template_model took over
@@ -127,6 +139,19 @@ TDB_OPTIONAL_COLUMNS = {
     ("creature_template", "modelid2"): "0",
     ("creature_template", "modelid3"): "0",
     ("creature_template", "modelid4"): "0",
+    # A loot line's pool, spelled two ways: a column of its own until Midnight,
+    # and from there a flag marking the item column as a pool instead.
+    ("creature_loot_template", "Reference"): "0",
+    ("creature_loot_template", "ItemType"): "0",
+    ("gameobject_loot_template", "Reference"): "0",
+    ("gameobject_loot_template", "ItemType"): "0",
+    ("reference_loot_template", "Reference"): "0",
+    ("reference_loot_template", "ItemType"): "0",
+    # the quest's displayed reward spells, which the 3.3.5 branch has no column
+    # for; its RewardSpell carries the one spell a quest grants
+    ("quest_template", "RewardDisplaySpell1"): "0",
+    ("quest_template", "RewardDisplaySpell2"): "0",
+    ("quest_template", "RewardDisplaySpell3"): "0",
     # the rank, renamed between releases: older dumps write `rank` and newer
     # ones `Classification`, so a release has one of the two and never both
     ("creature_template", "rank"): "0",

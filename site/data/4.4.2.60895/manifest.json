@@ -1,13 +1,13 @@
 {
   "pack": "4.4.2.60895",
   "meta": {
-    "format": 70,
+    "format": 71,
     "version": "4.4.2.60895",
     "label": "Cataclysm Classic 4.4.2",
     "built": "2026-09-20",
     "listfileTag": "202609191859",
     "tdbTag": "",
-    "absentTables": ["BarrageEffect", "BeamEffect", "DissolveEffect", "EdgeGlowEffect", "FullScreenEffect", "ShadowyEffect", "SpellEffectEmission", "SpellKeyboundOverride", "SpellOverrideName", "SpellVisualScreenEffect", "WeaponTrail"],
+    "absentTables": ["BarrageEffect", "BeamEffect", "DissolveEffect", "EdgeGlowEffect", "FullScreenEffect", "ItemXItemEffect", "ShadowyEffect", "SpellEffectEmission", "SpellKeyboundOverride", "SpellOverrideName", "SpellVisualScreenEffect", "WeaponTrail"],
     "degradedSections": {
       "morphs": ["creature_template"],
       "summons": ["creature_template"],
@@ -194,7 +194,7 @@
   },
   "modules": {
     "core": {"file": "data/modules/core-d6a84f7b532c.json.gz", "bytes": 2160253},
-    "universal": {"file": "data/modules/universal-8154cade1ee2.json.gz", "bytes": 41489},
+    "universal": {"file": "data/modules/universal-8ecb6e95f11a.json.gz", "bytes": 41529},
     "sky": {"file": "data/modules/sky-3a598b74175a.json.gz", "bytes": 92803}
   },
   "locales": {
@@ -215,5 +215,5 @@
       "text": {"file": "data/modules/text-fec85e3ff346.json.gz", "bytes": 962879}
     }
   },
-  "absentSections": ["creatures", "dissolveTextures", "dissolves", "glows", "keybinds", "shadowies"]
+  "absentSections": ["creatures", "dissolveTextures", "dissolves", "glows", "keybinds", "questNames", "shadowies", "spellSources"]
 }

@@ -126,6 +126,34 @@ TDB_TABLES = {
             "faction",
         ],
         "creature_template_model": ["CreatureID", "Idx", "CreatureDisplayID", "Probability"],
+        # Where a spell comes from. A player is taught one by a trainer, given
+        # one by a quest, or given an item that teaches it, and that item is
+        # sold, dropped or handed over. None of it is client data: the tables
+        # below are the whole family, and they say what a stock server does
+        # rather than what Epsilon does, the footing the object types and the
+        # cast gates already stand on.
+        "trainer_spell": ["TrainerId", "SpellId"],
+        "creature_trainer": ["CreatureID", "TrainerID"],
+        "npc_vendor": ["entry", "item"],
+        "creature_loot_template": ["Entry", "Item", "Reference", "ItemType"],
+        "gameobject_loot_template": ["Entry", "Item", "Reference", "ItemType"],
+        # A loot row naming a pool draws from this table instead of carrying
+        # the item itself, so a drop is reachable only through it. The releases
+        # spell the pool two ways: a `Reference` column of its own on the older
+        # ones, and `ItemType` marking the `Item` as a pool on the newer.
+        "reference_loot_template": ["Entry", "Item", "Reference", "ItemType"],
+        "quest_template": [
+            "ID",
+            "LogTitle",
+            "RewardSpell",
+            "RewardDisplaySpell1",
+            "RewardDisplaySpell2",
+            "RewardDisplaySpell3",
+            "RewardItem1",
+            "RewardItem2",
+            "RewardItem3",
+            "RewardItem4",
+        ],
         # A spawn effect's misc0 is a gameobject_template entry. The client's
         # GameObjects.db2 uses a different keying, so the name and displayId
         # live only here. `type` is the GAMEOBJECT_TYPE enum (3 CHEST, 5
@@ -260,13 +288,20 @@ class TableWriter(NamedTuple):
 def tdb_column_index(table: str, column: str, schema: list[str]) -> int | None:
     """Find a column's position in a TDB table.
 
+    Matched without regard to case, because a MySQL column name is
+    case-insensitive and the releases spell the same key both ways --
+    `creature_trainer.CreatureID` became `CreatureId`. Declaring both spellings
+    instead would give one distilled table two columns that differ only in
+    case, which the SQL reader cannot tell apart at all.
+
     Returns:
         The index, or None when the column is declared in TDB_OPTIONAL_COLUMNS
         and this release does not carry it; the distiller then writes the
         declared default instead.
     """
-    if column in schema:
-        return schema.index(column)
+    folded = [name.lower() for name in schema]
+    if column.lower() in folded:
+        return folded.index(column.lower())
     if (table, column) in TDB_OPTIONAL_COLUMNS:
         return None
     sys.exit(

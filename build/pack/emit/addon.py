@@ -96,6 +96,7 @@ AXES: Mapping[str, str] = {
         "linkKindNames effectNames auraNames implicitTargetNames "
         "implicitTargetBits targetNames speedModeNames spellAttrs "
         "selectors selectorVocabularies referenceNames effectAmounts spellCones "
+        "spellSources questNames sourceKindNames "
         "factionNames interruptNames"
     ),
     "spell": "spells expansions iconNames iconFids",

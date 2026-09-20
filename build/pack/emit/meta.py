@@ -20,8 +20,18 @@ from ..derive import DeriveContext
 from ..model import SECTIONS, CountFamily, Section, SectionColumns
 from ..progress import detail
 
-PACK_FORMAT = 70
+PACK_FORMAT = 71
 """What shape the artifact is in.
+
+71 says where a spell comes from. `spellSources` carries, per spell, who
+teaches it, what quest grants it, and who sells, drops or holds the item that
+carries it, with the item beside the source and a count of how many sources of
+that kind the spell has in all; `sourceKindNames` ships the five words and
+`questNames` the title of every quest a row points at. A few sources of each
+kind are kept rather than all of them, because one recipe's learn spell is
+reached by eighty thousand loot lines. The columns are the server's world
+tables, so they say what a stock world does; `referenceNames` grows to name the
+creatures, objects and items the rows point at.
 
 70 says what a creature is. `creatures` carries, per creature the pack names,
 the type the server bills it as, its rank from normal up to world boss, and

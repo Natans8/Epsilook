@@ -13,6 +13,8 @@ from ..routes import (
     AreaGates,
     Cone,
     CreatureKind,
+    LootRow,
+    QuestRewards,
     CreatureModels,
     Delivery,
     DescriptionValues,
@@ -41,6 +43,7 @@ from .displays import ResolvedDisplays
 from .icons import IconIndex
 from .prose import CookedText
 from .references import References
+from .sources import SpellSource
 from .rows import PackRows
 from .walk import SpellVisuals
 
@@ -138,6 +141,30 @@ class DeriveContext:
 
     creature_kinds: Sequence[CreatureKind] = ()
     """What the server bills each creature as, sorted by creature."""
+
+    spell_trainers: Mapping[int, set[int]] = field(default_factory=dict)
+    """Spell -> the creatures that teach it."""
+
+    quest_rewards: Mapping[int, QuestRewards] = field(default_factory=dict)
+    """Quest -> what completing it grants, by quest id."""
+
+    item_spells: Mapping[int, set[int]] = field(default_factory=dict)
+    """Spell -> the items that cast or teach it."""
+
+    item_vendors: Mapping[int, set[int]] = field(default_factory=dict)
+    """Item -> the creatures that sell it."""
+
+    spell_sources: Sequence[SpellSource] = ()
+    """Every way a spell is come by, a few per kind, sorted."""
+
+    creature_drops: Sequence[LootRow] = ()
+    """Every creature loot line, item or pool."""
+
+    object_drops: Sequence[LootRow] = ()
+    """Every gameobject loot line, item or pool."""
+
+    loot_references: Sequence[LootRow] = ()
+    """Every pooled loot line, which the two above draw from."""
 
     spell_radii: Mapping[int, float] = field(default_factory=dict)
     """Every radius id's distance in yards."""

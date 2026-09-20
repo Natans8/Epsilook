@@ -1,13 +1,13 @@
 {
   "pack": "2.5.6.69110",
   "meta": {
-    "format": 70,
+    "format": 71,
     "version": "2.5.6.69110",
     "label": "TBC Classic 2.5.6",
     "built": "2026-09-20",
     "listfileTag": "202609191859",
     "tdbTag": "",
-    "absentTables": ["BarrageEffect", "BeamEffect", "DissolveEffect", "EdgeGlowEffect", "FullScreenEffect", "JournalEncounterSection", "Mount", "MountXDisplay", "ShadowyEffect", "SpellDescriptionVariables", "SpellEffectEmission", "SpellKeyboundOverride", "SpellOverrideName", "SpellVisualScreenEffect", "SpellXDescriptionVariables", "TextureBlendSet", "Vehicle", "VehicleSeat", "WeaponTrail", "ZoneLight"],
+    "absentTables": ["BarrageEffect", "BeamEffect", "DissolveEffect", "EdgeGlowEffect", "FullScreenEffect", "ItemXItemEffect", "JournalEncounterSection", "Mount", "MountXDisplay", "ShadowyEffect", "SpellDescriptionVariables", "SpellEffectEmission", "SpellKeyboundOverride", "SpellOverrideName", "SpellVisualScreenEffect", "SpellXDescriptionVariables", "TextureBlendSet", "Vehicle", "VehicleSeat", "WeaponTrail", "ZoneLight"],
     "degradedSections": {
       "morphs": ["creature_template"],
       "summons": ["creature_template"],
@@ -232,7 +232,7 @@
   },
   "modules": {
     "core": {"file": "data/modules/core-6e618c9a89da.json.gz", "bytes": 802661},
-    "universal": {"file": "data/modules/universal-8154cade1ee2.json.gz", "bytes": 41489},
+    "universal": {"file": "data/modules/universal-8ecb6e95f11a.json.gz", "bytes": 41529},
     "sky": {"file": "data/modules/sky-cf2bd0bc1255.json.gz", "bytes": 41380}
   },
   "locales": {
@@ -253,5 +253,5 @@
       "text": {"file": "data/modules/text-5aecb9d40ec5.json.gz", "bytes": 386714}
     }
   },
-  "absentSections": ["creatures", "dissolveTextures", "dissolves", "glows", "keybinds", "mounts", "shadowies", "spellVehicleAnimKits", "spellVehicleAnims", "vehicleSeats", "vehicles"]
+  "absentSections": ["creatures", "dissolveTextures", "dissolves", "glows", "keybinds", "mounts", "questNames", "shadowies", "spellSources", "spellVehicleAnimKits", "spellVehicleAnims", "vehicleSeats", "vehicles"]
 }

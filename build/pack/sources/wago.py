@@ -145,6 +145,12 @@ TABLES = [
     "ItemAppearance",
     "ItemDisplayInfo",
     "ModelFileData",
+    # What an item does: an effect row carries the spell, and on this era it
+    # does not name its own item, so the bridge is what reaches it. This is how
+    # a toy, a mount or a recipe reaches the spell it teaches, and it is the
+    # first half of where a spell comes from.
+    "ItemEffect",
+    "ItemXItemEffect",
     # The description route: Spell.Description_lang is a template and these fill
     # it in. None of their values ship — the cooker substitutes them and
     # the pack carries the cooked prose. SpellRadius and SpellRange are index

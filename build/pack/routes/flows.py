@@ -151,6 +151,7 @@ from .procedures import (
 from .reach import REACH_FLAGS, YARD_DIGITS, Cone, Reach
 from .route import Declarations
 from .shapeshifts import FormRow, ShapeshiftForms
+from .sources import LootRow, quest_rewards_of
 from .sounds import Ambience, ZoneMusic
 from .spells import PropertiesRow, SpellProperties
 from .text import assignments
@@ -415,6 +416,114 @@ class Routes(Declarations):
     )
     """Every creature the server dump describes rather than only the ones a
     spell reaches: which of them the pack lists is the section's question."""
+
+    # Where a spell comes from. The two halves are apart: a spell reaches an
+    # item, and an item reaches whoever hands it over.
+
+    spell_trainers = (
+        flow("the creatures that teach each spell")
+        .read(T.creature_trainer, optional=True)
+        .where(T.creature_trainer.CreatureID != 0)
+        .join(T.creature_trainer.TrainerID, T.trainer_spell, by=T.trainer_spell.TrainerId, many=True)
+        .where(T.trainer_spell.SpellId != 0)
+        .narrow(T.trainer_spell.SpellId, "names.names")
+        .into(as_sets(T.trainer_spell.SpellId, T.creature_trainer.CreatureID))
+    )
+    """Read from the creature rather than from the spell, because a trainer's
+    list is often shared and the join then takes every creature standing behind
+    one."""
+
+    quest_rewards = (
+        flow("what each quest grants")
+        .read(T.quest_template, optional=True)
+        .where(
+            (T.quest_template.RewardSpell != 0)
+            | (T.quest_template.RewardDisplaySpell1 != 0)
+            | (T.quest_template.RewardItem1 != 0)
+        )
+        .into(
+            as_records(
+                T.quest_template.ID,
+                quest_rewards_of,
+                T.quest_template.ID,
+                word(T.quest_template.LogTitle),
+                T.quest_template.RewardSpell,
+                T.quest_template.RewardDisplaySpell1,
+                T.quest_template.RewardDisplaySpell2,
+                T.quest_template.RewardDisplaySpell3,
+                T.quest_template.RewardItem1,
+                T.quest_template.RewardItem2,
+                T.quest_template.RewardItem3,
+                T.quest_template.RewardItem4,
+                first=True,
+            )
+        )
+    )
+    """A quest's rewards as one record, since its spells and its items sit in
+    columns rather than in rows of their own."""
+
+    item_spells = (
+        flow("the spell each item casts or teaches")
+        .read(T.ItemEffect, optional=True)
+        .join(T.ItemEffect.ID, T.ItemXItemEffect, by=T.ItemXItemEffect.ItemEffectID, many=True)
+        .map("item", coalesce(T.ItemEffect.ParentItemID, T.ItemXItemEffect.ItemID))
+        .where(c.item != 0)
+        .narrow(T.ItemEffect.SpellID, "names.names")
+        .into(as_sets(T.ItemEffect.SpellID, c.item))
+    )
+    """Shadowlands split the item off the effect row into a bridge table, so a
+    build carries one spelling or the other and the row reads whichever."""
+
+    item_vendors = (
+        flow("the creatures that sell each item")
+        .read(T.npc_vendor, optional=True)
+        .where(T.npc_vendor.item != 0)
+        .into(as_sets(T.npc_vendor.item, T.npc_vendor.entry))
+    )
+
+    creature_drops = (
+        flow("the creatures that drop each item")
+        .read(T.creature_loot_template, optional=True)
+        .into(
+            as_rows(
+                LootRow,
+                T.creature_loot_template.Entry,
+                T.creature_loot_template.Item,
+                T.creature_loot_template.Reference,
+                T.creature_loot_template.ItemType,
+            )
+        )
+    )
+
+    object_drops = (
+        flow("the gameobjects that hold each item")
+        .read(T.gameobject_loot_template, optional=True)
+        .into(
+            as_rows(
+                LootRow,
+                T.gameobject_loot_template.Entry,
+                T.gameobject_loot_template.Item,
+                T.gameobject_loot_template.Reference,
+                T.gameobject_loot_template.ItemType,
+            )
+        )
+    )
+
+    loot_references = (
+        flow("the items each pooled loot list holds")
+        .read(T.reference_loot_template, optional=True)
+        .into(
+            as_rows(
+                LootRow,
+                T.reference_loot_template.Entry,
+                T.reference_loot_template.Item,
+                T.reference_loot_template.Reference,
+                T.reference_loot_template.ItemType,
+            )
+        )
+    )
+    """A loot row naming a reference draws from this pool rather than carrying
+    an item, so a drop is reachable only by following it."""
 
     faction_names = (
         flow("what every faction is called").read(T.Faction).into(as_map(T.Faction.ID, word(T.Faction.Name_lang)))

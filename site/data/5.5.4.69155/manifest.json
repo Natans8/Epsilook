@@ -1,13 +1,13 @@
 {
   "pack": "5.5.4.69155",
   "meta": {
-    "format": 70,
+    "format": 71,
     "version": "5.5.4.69155",
     "label": "MoP Classic 5.5.4",
     "built": "2026-09-20",
     "listfileTag": "202609191859",
     "tdbTag": "",
-    "absentTables": ["BarrageEffect", "FullScreenEffect", "ShadowyEffect", "SpellOverrideName", "SpellVisualScreenEffect", "WeaponTrail"],
+    "absentTables": ["BarrageEffect", "FullScreenEffect", "ItemXItemEffect", "ShadowyEffect", "SpellOverrideName", "SpellVisualScreenEffect", "WeaponTrail"],
     "degradedSections": {
       "morphs": ["creature_template"],
       "summons": ["creature_template"],
@@ -178,7 +178,7 @@
   },
   "modules": {
     "core": {"file": "data/modules/core-fbd3963a6779.json.gz", "bytes": 3210456},
-    "universal": {"file": "data/modules/universal-8154cade1ee2.json.gz", "bytes": 41489},
+    "universal": {"file": "data/modules/universal-8ecb6e95f11a.json.gz", "bytes": 41529},
     "sky": {"file": "data/modules/sky-c39a251cf174.json.gz", "bytes": 115876}
   },
   "locales": {
@@ -199,5 +199,5 @@
       "text": {"file": "data/modules/text-58efc2739684.json.gz", "bytes": 1278689}
     }
   },
-  "absentSections": ["creatures", "shadowies"]
+  "absentSections": ["creatures", "questNames", "shadowies", "spellSources"]
 }

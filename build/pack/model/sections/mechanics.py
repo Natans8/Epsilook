@@ -17,6 +17,7 @@ from collections.abc import Callable, Mapping
 
 from ...derive import Reads
 from ...derive.references import referenced
+from ...derive.sources import source_references
 from ...routes import EffectNumbers, interrupt_words
 from ...routes.flow import export_name
 from ...routes.selectors import SELECTORS, WORDS
@@ -205,6 +206,10 @@ def reference_names(reads: Reads) -> SectionColumns:
     same ids.
     """
     found = referenced(reads.rows.mechanics, reads.effects.numbers, into=REFERENCE_NAMES)
+    # The creatures, objects and items a spell is come by through are named the
+    # same way as everything else a row points at.
+    for table, ids in source_references(reads.spell_sources).items():
+        found[table].update(ids)
     rows = [(table, ident) for table in sorted(found) for ident in sorted(found[table])]
     names = {table: REFERENCE_NAMES[table](reads) for table in found}
     return {
@@ -235,6 +240,7 @@ REFERENCE_NAMES_TABLE = register(
             "skill_names",
             "enchantment_names",
             "effects",
+            "spell_sources",
         ),
         degraded_without=("creature_template", "gameobject_template"),
         counts=(size("referenceNames", "ids"),),

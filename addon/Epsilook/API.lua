@@ -665,6 +665,69 @@ function Epsilook:GetEffectAmounts(spellID)
 	return out
 end
 
+--- Which table names the entity a source of each kind points at.
+local SOURCE_TABLES = {
+	trainer = "creature_template",
+	vendor = "creature_template",
+	drop = "creature_template",
+	container = "gameobject_template",
+}
+
+--- The title of a quest, by id.
+local function questTitle(questID)
+	local node, blob = Data.GetColumn("mech", "questNames", "ids")
+	local row = node and Reader.rowOf(blob, node, questID)
+	if not row then
+		return ""
+	end
+	return cell("questNames", "titles", row, "")
+end
+
+--- Where a spell comes from: who teaches it, what grants it, and what carries it.
+-- The world tables of a stock server, so a trainer Epsilon has moved or a drop
+-- it has changed is not visible here; what a spell IS comes from the client and
+-- this is the one family that does not.
+-- @param spellID the spell
+-- @return a list of records: `kind`, { id, text }, one of trainer, quest,
+--   vendor, drop or container; `source`, { id, text }, the creature, the
+--   gameobject or the quest it names; `item`, { id, text }, the item that
+--   carries the spell where one does, its id nought where the spell is come by
+--   directly; and `of`, how many sources of that kind the spell has, which may
+--   be more than the few kept. Empty where nothing hands the spell over
+function Epsilook:GetSpellSources(spellID)
+	mounted(self)
+	local out = {}
+	local first, last = spellRows("spellSources", spellID)
+	for row = first, last do
+		local kind = cell("spellSources", "kinds", row, 0)
+		local word = ""
+		local ids, bytes = Data.GetColumn("mech", "sourceKindNames", "ids")
+		local at = ids and Reader.rowOf(bytes, ids, kind)
+		if at then
+			word = cell("sourceKindNames", "words", at, "")
+		end
+		local source = cell("spellSources", "ids", row, 0)
+		local item = cell("spellSources", "itemIds", row, 0)
+		local named = ""
+		if word == "quest" then
+			named = questTitle(source)
+		elseif SOURCE_TABLES[word] then
+			named = self:GetReferenceName(SOURCE_TABLES[word], source) or ""
+		end
+		local carried = ""
+		if item ~= 0 then
+			carried = self:GetReferenceName("Item", item) or ""
+		end
+		out[#out + 1] = {
+			kind = { id = kind, text = word },
+			source = { id = source, text = named },
+			item = { id = item, text = carried },
+			of = cell("spellSources", "counts", row, 0),
+		}
+	end
+	return out
+end
+
 --- The cone or line a spell's area takes in front of its caster.
 -- @param spellID the spell
 -- @return { degrees, width }, the cone's angle and the line's width in yards,
