@@ -209,6 +209,8 @@ def reference_names(reads: Reads) -> SectionColumns:
     # The creatures, objects and items a spell is come by through are named the
     # same way as everything else a row points at.
     for table, ids in source_references(reads.spell_sources).items():
+        if table not in REFERENCE_NAMES:
+            raise KeyError(f"a spell source names {table!r}, which REFERENCE_NAMES cannot name")
         found[table].update(ids)
     rows = [(table, ident) for table in sorted(found) for ident in sorted(found[table])]
     names = {table: REFERENCE_NAMES[table](reads) for table in found}

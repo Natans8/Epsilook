@@ -439,7 +439,12 @@ class Routes(Declarations):
         .where(
             (T.quest_template.RewardSpell != 0)
             | (T.quest_template.RewardDisplaySpell1 != 0)
+            | (T.quest_template.RewardDisplaySpell2 != 0)
+            | (T.quest_template.RewardDisplaySpell3 != 0)
             | (T.quest_template.RewardItem1 != 0)
+            | (T.quest_template.RewardItem2 != 0)
+            | (T.quest_template.RewardItem3 != 0)
+            | (T.quest_template.RewardItem4 != 0)
         )
         .into(
             as_records(
@@ -477,7 +482,7 @@ class Routes(Declarations):
     item_vendors = (
         flow("the creatures that sell each item")
         .read(T.npc_vendor, optional=True)
-        .where(T.npc_vendor.item != 0)
+        .where(T.npc_vendor.item > 0)
         .into(as_sets(T.npc_vendor.item, T.npc_vendor.entry))
     )
 

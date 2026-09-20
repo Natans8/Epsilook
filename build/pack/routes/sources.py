@@ -106,6 +106,19 @@ class SourceKind:
     """A gameobject holds the item: a chest, a herb, a vein."""
 
 
+SOURCE_TABLES = {
+    SourceKind.TRAINER: "creature_template",
+    SourceKind.VENDOR: "creature_template",
+    SourceKind.DROP: "creature_template",
+    SourceKind.CONTAINER: "gameobject_template",
+}
+"""Which table a kind's source id is named through, empty for a quest.
+
+A quest is named by its own section rather than through the reference names,
+since nothing else in the pack points at one. This ships beside the words, so
+a reader is told which table to ask rather than spelling the mapping itself.
+"""
+
 SOURCE_WORDS = {
     SourceKind.TRAINER: "trainer",
     SourceKind.QUEST: "quest",

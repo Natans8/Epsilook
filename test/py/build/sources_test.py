@@ -9,7 +9,14 @@ from __future__ import annotations
 
 from pack.derive.sources import TOP_SOURCES, collect_sources, droppers, pooled, source_references
 from pack.routes import LootRow, QuestRewards, SourceKind
+from pack.routes.flows import Routes
 from pack.routes.names import SpellNames
+from support import BuildTables
+
+QUEST_TEMPLATE = """ID,LogTitle,RewardSpell,RewardDisplaySpell1,RewardDisplaySpell2,RewardDisplaySpell3,RewardItem1,RewardItem2,RewardItem3,RewardItem4
+9,A Later Slot,0,0,555,0,0,0,0,0
+10,Nothing At All,0,0,0,0,0,0,0,0
+"""
 
 NAMES = SpellNames(names={100: "Summon Ram", 200: "Teach Fire"})
 
@@ -66,6 +73,51 @@ def test_a_quest_grants_a_spell_only_where_the_pack_lists_it() -> None:
         loot_references=[],
     )
     assert [(row.spell, row.kind, row.source) for row in rows] == [(100, SourceKind.QUEST, 9)]
+
+
+def test_a_quest_is_read_whichever_reward_slot_it_fills(tables: BuildTables) -> None:
+    """The reward columns are four of each and the slots are not always filled
+    in order, so a route testing only the first drops the quest whole."""
+    read = Routes.quest_rewards.run(tables(quest_template=QUEST_TEMPLATE))
+    assert set(read) == {9}
+    assert read[9].spells == (555,)
+
+
+def test_a_quest_granting_through_a_later_slot_is_still_read() -> None:
+    """The reward columns are four of each, and a route testing only the first
+    would drop a quest whose slots are filled out of order."""
+    quest = QuestRewards(quest=9, title="A Later Slot", spells=(100,), items=(10,))
+    rows = collect_sources(
+        names=NAMES,
+        spell_trainers={},
+        quest_rewards={9: quest},
+        item_spells={200: {10}},
+        item_vendors={},
+        creature_drops=[],
+        object_drops=[],
+        loot_references=[],
+    )
+    assert {(row.spell, row.kind, row.source) for row in rows} == {
+        (100, SourceKind.QUEST, 9),
+        (200, SourceKind.QUEST, 9),
+    }
+
+
+def test_one_quest_granting_a_spell_two_ways_counts_once() -> None:
+    """A quest that grants the spell and hands over an item carrying it is one
+    quest, whatever the rows say."""
+    quest = QuestRewards(quest=9, title="Both Ways", spells=(100,), items=(10,))
+    rows = collect_sources(
+        names=NAMES,
+        spell_trainers={},
+        quest_rewards={9: quest},
+        item_spells={100: {10}},
+        item_vendors={},
+        creature_drops=[],
+        object_drops=[],
+        loot_references=[],
+    )
+    assert {row.of for row in rows} == {1}
 
 
 def test_a_spell_keeps_a_few_sources_and_counts_them_all() -> None:

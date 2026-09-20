@@ -232,7 +232,7 @@
   },
   "modules": {
     "core": {"file": "data/modules/core-6e618c9a89da.json.gz", "bytes": 802661},
-    "universal": {"file": "data/modules/universal-8ecb6e95f11a.json.gz", "bytes": 41529},
+    "universal": {"file": "data/modules/universal-1edd241fb00e.json.gz", "bytes": 41556},
     "sky": {"file": "data/modules/sky-cf2bd0bc1255.json.gz", "bytes": 41380}
   },
   "locales": {

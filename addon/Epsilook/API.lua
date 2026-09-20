@@ -665,13 +665,19 @@ function Epsilook:GetEffectAmounts(spellID)
 	return out
 end
 
---- Which table names the entity a source of each kind points at.
-local SOURCE_TABLES = {
-	trainer = "creature_template",
-	vendor = "creature_template",
-	drop = "creature_template",
-	container = "gameobject_template",
-}
+--- The word and the naming table of each source kind, read once.
+-- The kind's table travels with its word rather than being spelled here, so a
+-- kind added to the pack needs no edit in the addon.
+local function sourceKinds()
+	local held = {}
+	local ids = Data.ReadAll("mech", "sourceKindNames", "ids") or {}
+	local words = Data.ReadAll("mech", "sourceKindNames", "words") or {}
+	local tables = Data.ReadAll("mech", "sourceKindNames", "tables") or {}
+	for at = 1, #ids do
+		held[ids[at]] = { word = words[at], into = tables[at] }
+	end
+	return held
+end
 
 --- The title of a quest, by id.
 local function questTitle(questID)
@@ -698,28 +704,27 @@ function Epsilook:GetSpellSources(spellID)
 	mounted(self)
 	local out = {}
 	local first, last = spellRows("spellSources", spellID)
+	if first > last then
+		return out
+	end
+	local kinds = sourceKinds()
 	for row = first, last do
 		local kind = cell("spellSources", "kinds", row, 0)
-		local word = ""
-		local ids, bytes = Data.GetColumn("mech", "sourceKindNames", "ids")
-		local at = ids and Reader.rowOf(bytes, ids, kind)
-		if at then
-			word = cell("sourceKindNames", "words", at, "")
-		end
+		local held = kinds[kind] or { word = "", into = "" }
 		local source = cell("spellSources", "ids", row, 0)
 		local item = cell("spellSources", "itemIds", row, 0)
 		local named = ""
-		if word == "quest" then
+		if held.into ~= "" then
+			named = self:GetReferenceName(held.into, source) or ""
+		elseif held.word == "quest" then
 			named = questTitle(source)
-		elseif SOURCE_TABLES[word] then
-			named = self:GetReferenceName(SOURCE_TABLES[word], source) or ""
 		end
 		local carried = ""
 		if item ~= 0 then
 			carried = self:GetReferenceName("Item", item) or ""
 		end
 		out[#out + 1] = {
-			kind = { id = kind, text = word },
+			kind = { id = kind, text = held.word },
 			source = { id = source, text = named },
 			item = { id = item, text = carried },
 			of = cell("spellSources", "counts", row, 0),

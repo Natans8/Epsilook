@@ -16,16 +16,16 @@ from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
 from typing import NamedTuple
 
-from ..routes import LootRow, QuestRewards, SourceKind
+from ..routes import SOURCE_TABLES, LootRow, QuestRewards, SourceKind
 from ..routes.names import SpellNames
 from ..routes.route import route
 
-POOL_HOPS = 2
-"""How far a loot line's pool reference is followed.
+POOL_LEVELS = 3
+"""How many levels of pool a loot line is followed through.
 
-A pool may name another pool. Two hops is what the world tables use; following
-them unbounded would hang on a cycle, and stopping at one drops the
-second-level pools the profession drops sit in.
+A pool may name another pool. Three levels is what the world tables use;
+following them unbounded would hang on a cycle, and stopping at one drops the
+nested pools the profession drops sit in.
 """
 
 TOP_SOURCES = 8
@@ -62,7 +62,7 @@ def pooled(references: Iterable[LootRow]) -> dict[int, set[int]]:
         items: set[int] = set()
         seen = {pool}
         edge = [pool]
-        for _hop in range(POOL_HOPS + 1):
+        for _level in range(POOL_LEVELS):
             following: list[int] = []
             for entry in edge:
                 for row in lines.get(entry, ()):
@@ -87,11 +87,18 @@ def droppers(loot: Iterable[LootRow], pools: Mapping[int, set[int]]) -> dict[int
 
 
 def kept(found: Mapping[tuple[int, int], set[tuple[int, int]]]) -> list[SpellSource]:
-    """The first few sources of each kind, each row carrying the whole count."""
+    """The first few sources of each kind, each row carrying the whole count.
+
+    The count is of SOURCES rather than of the pairs they appear in: a quest
+    that both grants a spell and hands over an item carrying it is one quest,
+    and telling a reader it is two would be a lie about the world rather than
+    about the rows.
+    """
     rows: list[SpellSource] = []
     for (spell, kind), sources in sorted(found.items()):
         listed = sorted(sources)
-        rows += [SpellSource(spell, kind, source, item, len(listed)) for source, item in listed[:TOP_SOURCES]]
+        total = len({source for source, _item in listed})
+        rows += [SpellSource(spell, kind, source, item, total) for source, item in listed[:TOP_SOURCES]]
     return rows
 
 
@@ -131,19 +138,6 @@ def collect_sources(
             for kind, where in handed:
                 found[(spell, kind)].update((source, item) for source in where.get(item, ()))
     return kept({key: sources for key, sources in found.items() if sources})
-
-
-SOURCE_TABLES = {
-    SourceKind.TRAINER: "creature_template",
-    SourceKind.VENDOR: "creature_template",
-    SourceKind.DROP: "creature_template",
-    SourceKind.CONTAINER: "gameobject_template",
-}
-"""Which table a row's source id belongs to, for the kinds that name an entity.
-
-A quest is not here: it is named by its own section rather than through the
-reference names, since nothing else in the pack points at one.
-"""
 
 
 def source_references(rows: Iterable[SpellSource]) -> dict[str, set[int]]:

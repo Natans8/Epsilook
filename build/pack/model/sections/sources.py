@@ -8,7 +8,7 @@ columns.
 from __future__ import annotations
 
 from ...derive import Reads
-from ...routes import SOURCE_WORDS, SourceKind
+from ...routes import SOURCE_TABLES, SOURCE_WORDS, SourceKind
 from ..registry import register
 from ..section import Scope, Section, SectionColumns, size
 
@@ -29,10 +29,15 @@ def spell_sources(reads: Reads) -> SectionColumns:
 
 
 def source_kind_names(reads: Reads) -> SectionColumns:
-    """The word for each way a spell is come by."""
+    """The word for each way a spell is come by, and the table it names."""
     del reads  # a declaration, the same on every build
     listed = sorted(SOURCE_WORDS)
-    return {"ids": listed, "words": [SOURCE_WORDS[kind] for kind in listed]}
+    return {
+        "ids": listed,
+        "words": [SOURCE_WORDS[kind] for kind in listed],
+        # which reference table names the source, empty where its own section does
+        "tables": [SOURCE_TABLES.get(kind, "") for kind in listed],
+    }
 
 
 def quest_names(reads: Reads) -> SectionColumns:
@@ -76,10 +81,10 @@ QUEST_NAMES = register(
 SOURCE_KIND_NAMES = register(
     Section(
         name="sourceKindNames",
-        doc="The word for each way a spell is come by.",
+        doc="The word for each way a spell is come by, and the table that names its source.",
         module="universal",
         produce=source_kind_names,
-        columns=("ids", "words"),
+        columns=("ids", "words", "tables"),
         reads=(),
         scope=Scope.UNIVERSAL,
     )

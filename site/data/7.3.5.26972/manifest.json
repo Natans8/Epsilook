@@ -140,8 +140,8 @@
     }
   },
   "modules": {
-    "core": {"file": "data/modules/core-b13f7750e791.json.gz", "bytes": 6653439},
-    "universal": {"file": "data/modules/universal-8ecb6e95f11a.json.gz", "bytes": 41529},
+    "core": {"file": "data/modules/core-b58cfad92e55.json.gz", "bytes": 6653335},
+    "universal": {"file": "data/modules/universal-1edd241fb00e.json.gz", "bytes": 41556},
     "sky": {"file": "data/modules/sky-d5b271582932.json.gz", "bytes": 207479}
   },
   "locales": {

@@ -29,7 +29,7 @@ from .procedures import ProcEffects
 from .reach import Cone, Reach
 from .route import ROUTES, Route, route
 from .shapeshifts import ShapeshiftForms
-from .sources import SOURCE_WORDS, LootRow, QuestRewards, SourceKind
+from .sources import SOURCE_TABLES, SOURCE_WORDS, LootRow, QuestRewards, SourceKind
 from .skies import (
     CONDITIONS,
     RAMP_COLORS,
@@ -90,6 +90,7 @@ __all__ = [
     "route",
     "ScreenRow",
     "ShapeshiftForms",
+    "SOURCE_TABLES",
     "SOURCE_WORDS",
     "LootRow",
     "QuestRewards",
