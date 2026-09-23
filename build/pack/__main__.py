@@ -19,6 +19,7 @@ import json
 import os
 import sys
 import time
+from collections.abc import Mapping
 from pathlib import Path
 
 from . import pipeline
@@ -26,6 +27,7 @@ from .derive import locales_named
 from .emit import versions
 from .emit.manifest import carry_forward, rendered
 from .emit.module import Module
+from .emit.reference import document
 from .model import SECTIONS
 from .progress import log, phase, report
 
@@ -55,6 +57,24 @@ write those identical bytes once per pack and lose the saving.
 """
 
 ROSTER = DATA_DIR / "versions.json"
+
+REFERENCE = Path(__file__).resolve().parents[2] / "docs" / "reference" / "routes.md"
+"""Where the route reference lands.
+
+Written by the default pack's build, whose numbers it shows, so the build that
+changes a route or a count rewrites the page describing it. No other pack
+writes it: a roster build then writes it once rather than racing itself.
+"""
+
+
+def write_reference(counts: Mapping[str, int], pack: str) -> None:
+    """Write the route reference with one pack's numbers.
+
+    Bytes rather than text, so the file ends its lines the way the repository
+    does whatever the platform writing it.
+    """
+    REFERENCE.parent.mkdir(parents=True, exist_ok=True)
+    REFERENCE.write_bytes(document(pipeline.route_reference(counts, pack)).encode("utf-8"))
 
 
 PLACE_TIMEOUT = 5.0
@@ -261,6 +281,13 @@ def main() -> None:
     built = str(stated["built"])
     versions.update(ROSTER, versions.entry(pack_id, label, built, payload, hidden=args.hidden, default=args.is_default))
     log(f"Updated {ROSTER}")
+
+    if args.is_default:
+        counts = stated["counts"]
+        if not isinstance(counts, dict):
+            raise TypeError("the manifest's counts are not a mapping")
+        write_reference(counts, pack_id)
+        log(f"Wrote {REFERENCE}")
 
     if args.timing:
         report(time.perf_counter() - started)

@@ -2738,7 +2738,7 @@ def check_toolchain(rep: Report) -> None:
         rep,
         "routes",
         ["uv", "run", "python", "tools/routes.py", "--check"],
-        "docs/DATA_ROUTES.md carries the route table the registry prints",
+        "docs/reference/routes.md is what the registries write",
     )
     run_tool(
         rep,

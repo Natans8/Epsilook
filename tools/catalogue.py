@@ -63,9 +63,11 @@ def client_columns(table: str, fetch: bool) -> list[tuple[str, bool]] | None:
     return [(name, name in arrays) for name, column in definition.columns.items()]
 
 
-def rendered(name: str, doc: str, columns: list[tuple[str, bool]]) -> str:
-    """One table's class."""
+def rendered(name: str, doc: str, columns: list[tuple[str, bool]], source: str = "client") -> str:
+    """One table's class, declaring its source where it is not the client's own."""
     lines = [f"class {name}(Table):", f'    """{doc}"""', ""]
+    if source != "client":
+        lines += [f'    __source__ = "{source}"', ""]
     for column, array in columns:
         lines.append(
             f'    {column} = Column("{column}", array=True)' if array else f'    {column} = Column("{column}")'
@@ -85,10 +87,10 @@ def generated(fetch: bool) -> str | None:
         columns = client_columns(table, fetch)
         if columns is None:
             return None
-        classes.append(rendered(table, f"The pinned build's ``{table}``.", columns))
+        classes.append(rendered(table, f"The pinned build's ``{table}``.", columns, "pinned"))
     for table, kept in TDB_TABLES["world"].items():
         doc = f"The server dump's ``{table}``, the columns the build keeps."
-        classes.append(rendered(table, doc, [(column, False) for column in kept]))
+        classes.append(rendered(table, doc, [(column, False) for column in kept], "server"))
     return HEADER + "\n\n" + "\n\n".join(classes)
 
 

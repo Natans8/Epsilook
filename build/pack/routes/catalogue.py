@@ -1912,12 +1912,16 @@ class JournalEncounterSection(Table):
 class SoundKitName(Table):
     """The pinned build's ``SoundKitName``."""
 
+    __source__ = "pinned"
+
     ID = Column("ID")
     Name = Column("Name")
 
 
 class creature_template(Table):
     """The server dump's ``creature_template``, the columns the build keeps."""
+
+    __source__ = "server"
 
     entry = Column("entry")
     name = Column("name")
@@ -1934,6 +1938,8 @@ class creature_template(Table):
 class creature_template_model(Table):
     """The server dump's ``creature_template_model``, the columns the build keeps."""
 
+    __source__ = "server"
+
     CreatureID = Column("CreatureID")
     Idx = Column("Idx")
     CreatureDisplayID = Column("CreatureDisplayID")
@@ -1943,12 +1949,16 @@ class creature_template_model(Table):
 class trainer_spell(Table):
     """The server dump's ``trainer_spell``, the columns the build keeps."""
 
+    __source__ = "server"
+
     TrainerId = Column("TrainerId")
     SpellId = Column("SpellId")
 
 
 class creature_trainer(Table):
     """The server dump's ``creature_trainer``, the columns the build keeps."""
+
+    __source__ = "server"
 
     CreatureID = Column("CreatureID")
     TrainerID = Column("TrainerID")
@@ -1957,12 +1967,16 @@ class creature_trainer(Table):
 class npc_vendor(Table):
     """The server dump's ``npc_vendor``, the columns the build keeps."""
 
+    __source__ = "server"
+
     entry = Column("entry")
     item = Column("item")
 
 
 class creature_loot_template(Table):
     """The server dump's ``creature_loot_template``, the columns the build keeps."""
+
+    __source__ = "server"
 
     Entry = Column("Entry")
     Item = Column("Item")
@@ -1973,6 +1987,8 @@ class creature_loot_template(Table):
 class gameobject_loot_template(Table):
     """The server dump's ``gameobject_loot_template``, the columns the build keeps."""
 
+    __source__ = "server"
+
     Entry = Column("Entry")
     Item = Column("Item")
     Reference = Column("Reference")
@@ -1982,6 +1998,8 @@ class gameobject_loot_template(Table):
 class reference_loot_template(Table):
     """The server dump's ``reference_loot_template``, the columns the build keeps."""
 
+    __source__ = "server"
+
     Entry = Column("Entry")
     Item = Column("Item")
     Reference = Column("Reference")
@@ -1990,6 +2008,8 @@ class reference_loot_template(Table):
 
 class quest_template(Table):
     """The server dump's ``quest_template``, the columns the build keeps."""
+
+    __source__ = "server"
 
     ID = Column("ID")
     LogTitle = Column("LogTitle")
@@ -2006,6 +2026,8 @@ class quest_template(Table):
 class gameobject_template(Table):
     """The server dump's ``gameobject_template``, the columns the build keeps."""
 
+    __source__ = "server"
+
     entry = Column("entry")
     name = Column("name")
     displayId = Column("displayId")
@@ -2014,6 +2036,8 @@ class gameobject_template(Table):
 
 class spell_totem_model(Table):
     """The server dump's ``spell_totem_model``, the columns the build keeps."""
+
+    __source__ = "server"
 
     SpellID = Column("SpellID")
     RaceID = Column("RaceID")

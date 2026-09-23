@@ -138,6 +138,12 @@ class Table:
 
     __tablename__: ClassVar[str] = ""
 
+    __source__: ClassVar[str] = "client"
+    """Where the table comes from: ``client`` for the build's own tables,
+    ``pinned`` for one read from a fixed older build, ``server`` for the
+    server dump, whose rows describe stock TrinityCore rather than any
+    private server."""
+
     def __init_subclass__(cls) -> None:
         super().__init_subclass__()
         cls.__tablename__ = cls.__name__

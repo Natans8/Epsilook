@@ -44,8 +44,10 @@ from .drift import OPTIONAL_TABLES, TDB_OPTIONAL_TABLES
 from .emit.manifest import manifest
 from .emit.meta import gathered, meta
 from .emit.module import Module, absent_sections, assemble
+from .emit.reference import Reference, attribute_notes, reference
 from .encode import EMPTY_SLOT, FEWEST_BYTES, encode_column, encode_section, layout_for
 from .model import SECTIONS, Cardinality, Encoding, Section, SectionColumns
+from .model import sections as section_families
 from .progress import log, phase, step, timed
 from .routes import (
     ROUTES,
@@ -796,3 +798,19 @@ def modules(
     absent = absent_sections(selected(want), produced[DEFAULT_LOCALE])
     log(f"  {len(produced[DEFAULT_LOCALE])} sections in {len(assembled)} modules [{time.monotonic() - started:.1f}s]")
     return assembled, manifest(pack_id or version, assembled, header, absent=absent, location=location)
+
+
+def route_reference(counts: Mapping[str, int], pack: str) -> Reference:
+    """The route reference over every registry, with one pack's numbers.
+
+    Here because this is the module that has imported every route: a
+    computation registers where it is written, and the wiring's own is one of
+    them, so the registries are whole only once this module has loaded.
+
+    Args:
+        counts: the manifest counts of the pack whose numbers are shown.
+        pack: that pack's identity.
+    """
+    families = {name: getattr(section_families, name) for name in section_families.__all__}
+    notes = attribute_notes(flows, "Routes")
+    return reference(ROUTES, flows.Routes.fields, notes, SECTIONS, families, counts, pack)
