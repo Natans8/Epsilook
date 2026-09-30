@@ -4,8 +4,8 @@
     "format": 71,
     "version": "11.2.7.65299",
     "label": "The War Within 11.2.7",
-    "built": "2026-09-20",
-    "listfileTag": "202609191859",
+    "built": "2026-09-30",
+    "listfileTag": "202609301048",
     "tdbTag": "TDB1127.26011",
     "absentTables": [],
     "degradedSections": {},
@@ -102,7 +102,7 @@
     }
   },
   "modules": {
-    "core": {"file": "data/modules/core-d89b028f0ac0.json.gz", "bytes": 15922648},
+    "core": {"file": "data/modules/core-0c38e8ebf052.json.gz", "bytes": 15922645},
     "universal": {"file": "data/modules/universal-1edd241fb00e.json.gz", "bytes": 41556},
     "sky": {"file": "data/modules/sky-5c476a44963c.json.gz", "bytes": 385548}
   },

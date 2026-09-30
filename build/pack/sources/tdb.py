@@ -51,24 +51,22 @@ TDB_RELEASES: Mapping[str, Mapping[str, str]] = {
         "world": "TDB_full_world_1127.26011_2026_01_14.sql",
         "hotfixes": "TDB_full_hotfixes_1127.26011_2026_01_14.sql",
     },
-    # Midnight: TrinityCore's master branch dump, cut against the 12.0 client
-    # and keyed here to the 12.1.0 build the pack ships. Creature entries carry
-    # across a minor patch.
+    # Midnight: TrinityCore's master branch dump, cut against the 12.1 client.
     "12.1.0.69273": {
-        "tag": "TDB1200.26021",
-        "asset": "TDB_full_1200.26021_2026_02_06.7z",
-        "world": "TDB_full_world_1200.26021_2026_02_06.sql",
-        "hotfixes": "TDB_full_hotfixes_1200.26021_2026_02_06.sql",
+        "tag": "TDB1210.26091",
+        "asset": "TDB_full_1210.26091_2026_09_09.7z",
+        "world": "TDB_full_world_1210.26091_2026_09_09.sql",
+        "hotfixes": "TDB_full_hotfixes_1210.26091_2026_09_09.sql",
     },
-    # The second test slot, one minor patch further out than the first and
-    # reaching the same dump for the same reason. Keyed exactly rather than by
-    # patch, because no TDB is cut against 12.1 at all and a fallback would
-    # find nothing and empty every morph name without saying so.
-    "12.1.5.69594": {
-        "tag": "TDB1200.26021",
-        "asset": "TDB_full_1200.26021_2026_02_06.7z",
-        "world": "TDB_full_world_1200.26021_2026_02_06.sql",
-        "hotfixes": "TDB_full_hotfixes_1200.26021_2026_02_06.sql",
+    # The second test slot, one minor patch further out and reaching the same
+    # dump, since creature entries carry across a minor patch. Keyed exactly
+    # rather than by patch, because no TDB is cut against 12.1.5 and a fallback
+    # would find nothing and empty every morph name without saying so.
+    "12.1.5.70077": {
+        "tag": "TDB1210.26091",
+        "asset": "TDB_full_1210.26091_2026_09_09.7z",
+        "world": "TDB_full_world_1210.26091_2026_09_09.sql",
+        "hotfixes": "TDB_full_hotfixes_1210.26091_2026_09_09.sql",
     },
     "8.3.7.35662": {
         "tag": "TDB837.20101",
@@ -87,9 +85,16 @@ TDB_RELEASES: Mapping[str, Mapping[str, str]] = {
     # WotLK Classic: the 3.3.5 branch ships a world-only dump, and it targets
     # original 3.3.5a rather than the 3.4.x Classic client.
     "3.4.3.58936": {
-        "tag": "TDB335.25101",
-        "asset": "TDB_full_world_335.25101_2025_10_21.7z",
-        "world": "TDB_full_world_335.25101_2025_10_21.sql",
+        "tag": "TDB335.26091",
+        "asset": "TDB_full_world_335.26091_2026_09_09.7z",
+        "world": "TDB_full_world_335.26091_2026_09_09.sql",
+    },
+    # Cataclysm Classic: the cata_classic branch, cut against the 4.4.2 client.
+    "4.4.2.60895": {
+        "tag": "TDB442.26081",
+        "asset": "TDB_full_442.26081_2026_08_14.7z",
+        "world": "TDB_full_world_442.26081_2026_08_14.sql",
+        "hotfixes": "TDB_full_hotfixes_442.26081_2026_08_14.sql",
     },
 }
 TDB_ASSET_URL = "https://github.com/TrinityCore/TrinityCore/releases/download/{tag}/{asset}"

@@ -26,6 +26,7 @@ from pack.sources.cache import Pinned, Revalidated, Volatile, tracked_source
 from pack.sources.listfile import LISTFILE_ASSET, latest_release
 from pack.sources.source import Extracted, Fetch, Fetched, Gathered, Origin, Part, Source, each
 from pack.sources.tdb import TDB_TABLES, Distill
+from pack.sources.wago import tables_source
 from support import Network
 
 BODY = b"ID,Name\n1,Fireball\n"
@@ -394,6 +395,20 @@ def test_a_pinned_source_that_is_not_optional_raises_on_a_404(tmp_path: Path, ne
     network.bodies.clear()
     with pytest.raises(urllib.error.HTTPError):
         wired.fetch.get(wired.origin, wired.dest, False)
+
+
+def test_a_wago_table_this_build_predates_is_absent(tmp_path: Path, network: Network) -> None:
+    """wago answers a table the build lacks with a 400, and an optional table
+    reads that as absent while a required one still stops the build."""
+    network.missing = 400
+    source = tables_source("3.4.3.58936")
+    assert isinstance(source, Gathered)
+    optional = next(part for part in source.parts if part.name == "BeamEffect.csv")
+    required = next(part for part in source.parts if not part.optional)
+    assert optional.optional
+    assert not source.fetch.get(optional.origin, tmp_path / optional.name, False, optional.optional)
+    with pytest.raises(urllib.error.HTTPError):
+        source.fetch.get(required.origin, tmp_path / required.name, False, required.optional)
 
 
 def test_a_volatile_source_is_fetched_every_build(tmp_path: Path, network: Network) -> None:

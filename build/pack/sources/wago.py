@@ -23,6 +23,14 @@ from .cache import CACHE_DIR, Pinned
 from .source import Gathered, Origin, Part, Source
 
 WAGO_CSV_URL = "https://wago.tools/db2/{table}/csv?build={version}"
+
+EXPORTS = Pinned(absent=(400, 404))
+"""Getting a table export, where a 400 is how wago says a build lacks a table.
+
+Its body is `{"errors":"Table not found."}`. wago answers 400 for a build it
+does not know as well, which reads as absent only for a table declared
+optional; the first required table still fails the build.
+"""
 # The one cross-version source: no shipped build carries sound-kit names.
 # 8.3.0.32218 is the last build to contain `SoundKitName` at all, and kit ids
 # are stable across builds. Full record: docs/DECISIONS.md -> "Sound kit
@@ -257,7 +265,7 @@ def tables_source(version: str) -> Source:
     return Gathered(
         name=f"tables (wago.tools, build {version})",
         into=CACHE_DIR / version,
-        fetch=Pinned(),
+        fetch=EXPORTS,
         parts=[_export(table, version) for table in TABLES],
     )
 
@@ -272,7 +280,7 @@ def locale_tables_source(version: str, locale: str) -> Source:
     return Gathered(
         name=f"tables (wago.tools, build {version}, locale {locale})",
         into=locale_dir(version, locale),
-        fetch=Pinned(),
+        fetch=EXPORTS,
         parts=[_export(table, version, locale) for table in LOCALIZED_TABLES],
     )
 
@@ -288,6 +296,6 @@ def pinned_tables_source() -> Source:
     return Gathered(
         name=f"sound-kit names (wago.tools, pinned build {SOUNDKITNAME_BUILD})",
         into=CACHE_DIR / SOUNDKITNAME_BUILD,
-        fetch=Pinned(),
+        fetch=EXPORTS,
         parts=[_export("SoundKitName", SOUNDKITNAME_BUILD)],
     )

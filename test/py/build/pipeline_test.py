@@ -105,8 +105,9 @@ def test_the_clients_probed_absences_carry_over() -> None:
 
 
 def test_a_build_with_no_dump_lacks_every_world_table() -> None:
-    """The four Classic re-releases ship TDB-less, and that is what makes a
-    section naming a world table degrade there rather than nowhere."""
+    """A Classic re-release with no TrinityCore branch ships TDB-less, and that
+    is what makes a section naming a world table degrade there rather than
+    nowhere."""
     absent = unavailable_tables(a_build(), None)
     assert set(TDB_TABLES["world"]) <= absent
 

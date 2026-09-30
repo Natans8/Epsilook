@@ -109,6 +109,7 @@ IGNORED_PRODUCTS = {
     "wow_classic_era_ptr": "Classic Era PTR",
     "wow_classic_era_beta": "Classic Era beta",
     "wowz": "internal",
+    "wowf": "CDN configuration only; publishes no build",
 }
 
 # ⚠ BLIZZARD'S OWN SUMMARY LISTS THE INTERNAL LINES TOO, and there are far more
@@ -312,13 +313,7 @@ PACKS: tuple[Pack, ...] = (
     # The condition is the shared build, not the roster row: move one to a
     # build of its own and the modules diverge with it, needing no edit here.
     Pack("midnight-ptr", "Midnight PTR", "wowt", "12.1.0.69273", tracked=True),
-    # TODO: this pack does not build yet. wago exports SpellVisualMissile for
-    # 12.1.5.69594 with positional headers, because its copy of WoWDBDefs
-    # predates the definition upstream already carries. Declaring the missing
-    # column OPTIONAL would not help and would hurt: every column of that table
-    # is unnamed, so the pack would ship silently missing all missile data
-    # rather than failing. It builds the day wago picks the definition up.
-    Pack("midnight-ptr2", "Midnight PTR 2", "wowxptr", "12.1.5.69594", tracked=True),
+    Pack("midnight-ptr2", "Midnight PTR 2", "wowxptr", "12.1.5.70077", tracked=True),
     # Lines that moved on, and pinned retail. Historical artifacts: their build
     # is final, so untracked rather than polling a line that would answer
     # about a different expansion entirely.
