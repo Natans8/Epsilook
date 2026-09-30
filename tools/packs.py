@@ -101,11 +101,13 @@ IGNORED_PRODUCTS = {
     "wowt": "retail PTR",
     "wowxptr": "retail PTR 2",
     "wow_beta": "retail alpha/beta",
+    "wow_cn_beta": "China-exclusive beta",
     "wow_classic_ptr": "Classic PTR",
     "wow_classic_beta": "Classic beta",
     "wow_classic_era_ptr": "Classic Era PTR",
     "wow_classic_era_beta": "Classic Era beta",
     "wowz": "internal",
+    "wowf": "CDN configuration only; publishes no build",
 }
 
 # ⚠ BLIZZARD'S OWN SUMMARY LISTS THE INTERNAL LINES TOO, and there are far more

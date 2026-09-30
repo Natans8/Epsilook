@@ -421,6 +421,12 @@ TDB_RELEASES = {
         "world": "TDB_full_world_1127.26011_2026_01_14.sql",
         "hotfixes": "TDB_full_hotfixes_1127.26011_2026_01_14.sql",
     },
+    "12.1.0.69273": {
+        "tag": "TDB1210.26091",
+        "asset": "TDB_full_1210.26091_2026_09_09.7z",
+        "world": "TDB_full_world_1210.26091_2026_09_09.sql",
+        "hotfixes": "TDB_full_hotfixes_1210.26091_2026_09_09.sql",
+    },
     "8.3.7.35662": {
         "tag": "TDB837.20101",
         "asset": "TDB_full_837.20101_2020_10_20.7z",

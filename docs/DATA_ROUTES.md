@@ -102,7 +102,8 @@ unreachable the cached copy is used with a warning rather than failing the build
 produces a correct pack, it just names fewer files.
 
 **Every pack records the tag it was built against as `meta.listfileTag`**, which is what made the staleness above
-provable after the fact rather than a suspicion. All eleven currently read `202608081256`.
+provable after the fact rather than a suspicion. Shadowlands, Dragonflight, The War Within and Midnight read
+`202609301048`; the other seven read `202608081256`, since no later release changed a name they reference.
 
 ### The TDB release is matched on the PATCH, not the build id
 
@@ -955,7 +956,7 @@ flowchart LR
 
 **The client `GameObjects.db2` is NOT this table.** It holds world-PLACED doodads keyed by their own id — measured 2026-
 07-24 on 9.2.7: **0 of 1,429 spell-referenced entries appear in it**. The name and the displayId live only in the TDB
-world dump, which is why this route resolves on the six TDB packs and degrades to id-only on the four TDB-less Classic
+world dump, which is why this route resolves on the seven TDB packs and degrades to id-only on the four TDB-less Classic
 clients, exactly like morph/summon creature names.
 
 The pill: `( [wh]|[3d] | {target}{name or model base} | ⧉ id | .lo | .gob )`. `.gob` (`.gobject spawn {entry}`) ALWAYS

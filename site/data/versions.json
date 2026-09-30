@@ -52,29 +52,29 @@
     "id": "9.2.7.45745",
     "label": "Shadowlands 9.2.7",
     "file": "data/9.2.7.45745/spelldata.json.gz",
-    "built": "2026-09-04",
-    "hash": "6c00986ef0",
+    "built": "2026-09-30",
+    "hash": "c28a9334f9",
     "default": true
   },
   {
     "id": "10.2.7.55664",
     "label": "Dragonflight 10.2.7",
     "file": "data/10.2.7.55664/spelldata.json.gz",
-    "built": "2026-09-04",
-    "hash": "ec7038ad4f"
+    "built": "2026-09-30",
+    "hash": "50a4e98fc2"
   },
   {
     "id": "11.2.7.65299",
     "label": "The War Within 11.2.7",
     "file": "data/11.2.7.65299/spelldata.json.gz",
-    "built": "2026-09-04",
-    "hash": "f9a8eaac4e"
+    "built": "2026-09-30",
+    "hash": "582270986a"
   },
   {
     "id": "12.1.0.69273",
     "label": "Midnight 12.1.0",
     "file": "data/12.1.0.69273/spelldata.json.gz",
-    "built": "2026-09-04",
-    "hash": "86a4bcbd5b"
+    "built": "2026-09-30",
+    "hash": "400be0600d"
   }
 ]
