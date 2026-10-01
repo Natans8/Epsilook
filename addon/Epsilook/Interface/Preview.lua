@@ -42,10 +42,54 @@ Epsilook.Preview = Preview
 Preview.SIZE, Preview.GAP, Preview.MOST = 300, 24, 4
 
 --- Which way a body is turned when it is first drawn, a little off straight on
--- so that it reads as a thing rather than a silhouette, and where the camera
--- stands to see it.
+-- so that it reads as a thing rather than a silhouette, and how wide the camera
+-- sees. Where it stands is fitted to each model as it loads; `DISTANCE` is only
+-- where it waits until one has.
 Preview.FACING = 0.6
 Preview.DISTANCE, Preview.FIELD = 4, 1.2
+
+--- How much farther back than the least that holds a whole model the camera
+-- stands, so that a raised arm or a kit's flare is not the part cut off.
+Preview.ROOM = 1.1
+
+--- How far from a model the camera has to stand to hold all of it, or nil where
+-- the model has no size yet.
+--
+-- The body stands on the middle of its height and turns about its own upright
+-- axis (see `build`), so what must stay in view is a ball about that axis out to
+-- the model's farthest corner. A ball is the same width from every side, which
+-- is what keeps a model in view while it is turned, and the farthest corner
+-- rather than the box's middle is what keeps a model whose origin is not at its
+-- middle, a prop more often than a creature, from turning out of the frame.
+-- @param actor the actor drawn
+function Preview.Reach(actor)
+	local x1, y1, z1, x2, y2, z2 = actor:GetActiveBoundingBox()
+	if not (x1 and y1 and z1 and x2 and y2 and z2) then
+		return nil
+	end
+	local x = math.max(math.abs(x1), math.abs(x2))
+	local y = math.max(math.abs(y1), math.abs(y2))
+	local z = (z2 - z1) / 2
+	local radius = math.sqrt(x * x + y * y + z * z)
+	if radius <= 0 then
+		return nil
+	end
+	return Preview.ROOM * radius / math.sin(Preview.FIELD / 2)
+end
+
+--- Stand the camera where the model and the reader's own zoom put it.
+-- @param frame the look
+function Preview.Aim(frame)
+	local distance = (frame.reach or Preview.DISTANCE) * (frame.zoom or 1)
+	frame.scene:SetCameraPosition(distance, 0, 0)
+end
+
+--- Fit the camera to the model the body has just loaded.
+-- @param frame the look
+function Preview.Fit(frame)
+	frame.reach = Preview.Reach(frame.body)
+	Preview.Aim(frame)
+end
 
 --- One property of a part as the pack stores it, which for an id is the number
 -- the client takes, and as it is spelled; nil where the part does not carry it.
@@ -238,9 +282,8 @@ local function build(pinned)
 	frame.scene:SetPoint("TOPLEFT", 6, -6)
 	frame.scene:SetPoint("BOTTOMRIGHT", -6, 6)
 	-- A scene draws nothing until it is told where to look from and what lights
-	-- it. There is no camera in the scene's own right and no default: these are
-	-- the numbers the addons on this client use for a figure filling a square.
-	frame.scene:SetCameraPosition(Preview.DISTANCE, 0, 0)
+	-- it. There is no camera in the scene's own right and no default: it looks
+	-- along the level at the scene's origin, from as far off as `Fit` says.
 	frame.scene:SetCameraOrientationByYawPitchRoll(math.pi, 0, 0)
 	frame.scene:SetCameraFieldOfView(Preview.FIELD)
 	frame.scene:SetLightDiffuseColor(0.8, 0.8, 0.8)
@@ -249,6 +292,23 @@ local function build(pinned)
 	frame.scene:SetLightDirection(-1, 0, -1)
 	frame.scene:SetLightVisible(true)
 	frame.body = frame.scene:CreateActor(nil, "ModelSceneActorTemplate")
+	-- ⚠ Stood on the middle of its height rather than its feet. A model's origin
+	-- is at its feet and the camera looks at the origin, so a body left standing
+	-- on it fills the top half of the look and runs off the top. Upright only, so
+	-- that it still turns about its own axis rather than about the middle of its
+	-- box.
+	frame.body:SetUseCenterForOrigin(false, false, true)
+	-- How large a model is cannot be asked until it has loaded, so the camera is
+	-- fitted then, every time the body takes a new one.
+	local fit = function()
+		Preview.Fit(frame)
+	end
+	local shell = Epsilook.Shell
+	if shell and shell.Safely then
+		fit = shell.Safely(fit)
+	end
+	frame.body:SetOnModelLoadedCallback(fit)
+	Preview.Aim(frame)
 	frame.rider = frame.scene:CreateActor(nil, "ModelSceneActorTemplate")
 	frame.rider:Hide()
 	if pinned then
@@ -275,10 +335,11 @@ local function build(pinned)
 		frame:EnableMouseWheel(true)
 		frame:SetScript("OnMouseWheel", function(_, direction)
 			-- The camera walks in and out rather than the model growing, which is
-			-- the only zoom a scene has and the truer one anyway.
-			frame.distance =
-				math.max(1, math.min(20, (frame.distance or Preview.DISTANCE) - direction * 0.4))
-			frame.scene:SetCameraPosition(frame.distance, 0, 0)
+			-- the only zoom a scene has and the truer one anyway. It is kept as a
+			-- share of the fitted distance rather than a distance, because a loop
+			-- loads its body afresh on every run and is fitted again each time.
+			frame.zoom = math.max(0.25, math.min(5, (frame.zoom or 1) - direction * 0.1))
+			Preview.Aim(frame)
 		end)
 		frame.scene:EnableMouse(true)
 		frame.scene:SetScript("OnMouseDown", function()
@@ -802,10 +863,10 @@ local spare = {}
 -- kept for reuse.
 local function release(frame)
 	frame:SetScript("OnUpdate", nil)
-	frame.sequence, frame.distance, frame.turning = nil, nil, nil
+	frame.sequence, frame.reach, frame.zoom, frame.turning = nil, nil, nil, nil
 	-- A reused look opens where a new one would, not where its last owner left
 	-- the camera.
-	frame.scene:SetCameraPosition(Preview.DISTANCE, 0, 0)
+	Preview.Aim(frame)
 	Preview.Clear(frame)
 	frame:Hide()
 	spare[#spare + 1] = frame

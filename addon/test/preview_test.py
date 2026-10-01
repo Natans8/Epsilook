@@ -1,15 +1,18 @@
 """What a part can be looked at as, and in what order a spell plays.
 
-The drawing half needs the client's frames and is not here. What is here is the
-half that decides what gets handed to the client, which is the half that can be
-wrong quietly: a file id says nothing about what the file is, and the client
-loads whatever it is given as whatever it was asked for.
+The drawing half needs the client's frames and is not here, save where the
+camera stands, which is arithmetic on a box. What is here is the half that
+decides what gets handed to the client, which is the half that can be wrong
+quietly: a file id says nothing about what the file is, and the client loads
+whatever it is given as whatever it was asked for.
 """
 
 from __future__ import annotations
 
+import math
 from typing import cast
 
+import pytest
 from support import LuaRuntime, unwrap
 
 FROSTBOLT = 116
@@ -328,3 +331,80 @@ def test_a_mount_is_its_own_subject_so_a_rider_can_be_seated(engine: LuaRuntime)
         return "no mount row"
     """
     assert value(engine, code) == "mount:2404"
+
+
+Box = tuple[float, float, float, float, float, float]
+
+
+def camera_for(engine: LuaRuntime, box: Box | None) -> list[float]:
+    """Where the camera stands once a body with this bounding box has loaded."""
+    given = ", ".join(str(side) for side in box) if box else ""
+    # language=Lua
+    code = b"""
+        local box = { %s }
+        local placed
+        local frame = {
+            scene = { SetCameraPosition = function(_, x, y, z) placed = { x, y, z } end },
+            body = { GetActiveBoundingBox = function() return unpack(box) end },
+        }
+        Epsilook.Preview.Fit(frame)
+        return placed
+    """ % given.encode()
+    return cast(list[float], value(engine, code))
+
+
+def off_centre(camera: list[float], point: tuple[float, float, float]) -> float:
+    """How far off the line of sight a point is, as an angle, for a camera
+    looking back along the first axis at the scene's origin."""
+    seen = (point[0] - camera[0], point[1] - camera[1], point[2] - camera[2])
+    length = math.sqrt(sum(part * part for part in seen))
+    return math.acos(-seen[0] / length)
+
+
+FIGURE: Box = (-0.5, -0.55, 0.0, 0.5, 0.55, 2.1)
+DRAGON: Box = (-12.0, -6.0, 0.0, 12.0, 6.0, 9.0)
+PROP: Box = (0.0, 0.0, 0.0, 4.0, 3.0, 2.0)
+
+
+@pytest.mark.parametrize("box", [FIGURE, DRAGON, PROP], ids=["figure", "dragon", "prop"])
+def test_a_body_is_wholly_in_view_however_it_is_turned(engine: LuaRuntime, box: Box) -> None:
+    """A preview drew the model in the top half of its box and cut it off there.
+
+    The camera looked at the model's origin, which is at its feet. Every corner
+    of the model, stood on the middle of its height as the look stands it, has
+    to fall inside the field of view from where the camera is fitted, at every
+    turn a reader can drag it to: a dragon and a prop whose origin is a corner
+    as much as a figure.
+    """
+    camera = camera_for(engine, box)
+    half_field = cast(float, value(engine, b"return Epsilook.Preview.FIELD")) / 2
+    x1, y1, z1, x2, y2, z2 = box
+    middle = (z1 + z2) / 2
+    for step in range(16):
+        turn = step * math.tau / 16
+        for x in (x1, x2):
+            for y in (y1, y2):
+                for z in (z1, z2):
+                    point = (
+                        x * math.cos(turn) - y * math.sin(turn),
+                        x * math.sin(turn) + y * math.cos(turn),
+                        z - middle,
+                    )
+                    assert off_centre(camera, point) <= half_field
+
+
+def test_a_figure_fills_its_look_rather_than_shrinking_into_it(engine: LuaRuntime) -> None:
+    """In view is not the whole answer: a camera stood a mile off holds every
+    model and shows none of them. A standing figure is at least half the
+    height of its look."""
+    camera = camera_for(engine, FIGURE)
+    half_field = cast(float, value(engine, b"return Epsilook.Preview.FIELD")) / 2
+    top = (0.0, 0.0, (FIGURE[5] - FIGURE[2]) / 2)
+    assert off_centre(camera, top) >= half_field / 2
+
+
+def test_a_body_with_no_size_yet_keeps_the_camera_where_it_waits(engine: LuaRuntime) -> None:
+    """A model with no bounding box, an invisible one or one not yet read,
+    leaves the camera where it waits rather than nowhere."""
+    camera = camera_for(engine, None)
+    assert camera == [value(engine, b"return Epsilook.Preview.DISTANCE"), 0, 0]
