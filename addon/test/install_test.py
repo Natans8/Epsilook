@@ -12,6 +12,7 @@ these return exactly what the client's own addon list reads off them:
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from typing import cast
@@ -184,6 +185,51 @@ def test_a_fault_in_a_door_is_reported_once_and_goes_no_further(bare: LuaRuntime
     reports, stopped = cast(tuple[int, int], bare.execute(code))
     assert reports == 1, "reported once, not once per movement of the mouse"
     assert stopped == 5, "the caller's own clean-up runs every time"
+
+
+def test_a_fault_is_said_with_where_and_what_and_saved_with_its_stack(bare: LuaRuntime) -> None:
+    """A player with the client's error display off sees the chat line and nothing else.
+
+    So the line carries the file, the line and the message, and the record
+    carries the stack. The fault here names a value, as a read outside a column
+    names its row, and that is what once made one broken row report on every
+    hover: the words differed each time, so no two reports looked alike.
+    """
+    # language=Lua
+    code = b"""
+        local said, real = {}, _G.DEFAULT_CHAT_FRAME
+        _G.DEFAULT_CHAT_FRAME = { AddMessage = function(_, line) said[#said + 1] = line end }
+        _G[Epsilook.Shell.FAULTS] = nil
+        local door = Epsilook.Shell.Safely(function(row)
+            error("row " .. row .. " is outside a column of 3")
+        end)
+        for row = 4, 8 do
+            door(row)
+        end
+        _G.DEFAULT_CHAT_FRAME = real
+        local place, record = next(_G[Epsilook.Shell.FAULTS])
+        return #said, said[1], place, record.message, record.count, record.stack
+    """
+    count, line, place, message, times, stack = cast(tuple[int, bytes, bytes, bytes, int, bytes], bare.execute(code))
+    assert count == 1, "one place is said once, whatever value its words carry"
+    assert re.search(rb":\d+$", place), "a fault is keyed by the line it was raised on"
+    assert b"is outside a column of 3" in line and place in line, "the chat line says where and what"
+    assert message.endswith(b"row 8 is outside a column of 3"), "the record keeps the latest words"
+    assert times == 5, "every repeat is counted, said or not"
+    assert b"traceback" in stack or b"in function" in stack, "the record keeps the stack"
+
+
+def test_a_fault_line_drops_the_folders_above_the_addon(bare: LuaRuntime) -> None:
+    # language=Lua
+    code = rb"""
+        local line = Epsilook.Shell.FaultLine(
+            "Interface\\AddOns\\Epsilook\\Pack\\Reader.lua:54: row 9 is outside\nstack traceback:"
+        )
+        return line, Epsilook.Shell.FaultPlace(line)
+    """
+    line, place = cast(tuple[bytes, bytes], bare.execute(code))
+    assert line == rb"Epsilook\Pack\Reader.lua:54: row 9 is outside"
+    assert place == rb"Epsilook\Pack\Reader.lua:54"
 
 
 def test_a_door_that_does_not_fault_passes_its_arguments_through(bare: LuaRuntime) -> None:

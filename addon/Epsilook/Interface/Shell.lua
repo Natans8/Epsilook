@@ -1012,9 +1012,14 @@ local function run(job)
 				-- A search runs on after the command that began it has returned,
 				-- so the command's guard does not reach it. Reported the same way,
 				-- with the job's own stack, which is gone once it is thrown away.
-				local trace = debug and debug.traceback and debug.traceback(running, tostring(err))
-					or err
-				Shell.Report(trace)
+				-- Guarded, since a stack reader that refused a coroutine would
+				-- fault inside the reporting and lose the fault being reported.
+				local read = _G.debugstack or debug and debug.traceback
+				local got, trace = false, nil
+				if read then
+					got, trace = pcall(read, running)
+				end
+				Shell.Report(err, got and trace or tostring(err))
 				running = nil
 			end
 		end
@@ -1442,23 +1447,73 @@ function Shell.OnHyperlinkLeave(_, link)
 	end
 end
 
---- The faults already reported this session, by their text.
+--- The saved variable every fault is written to, with its stack, so that what
+-- went wrong can be read after the fact from the account's saved variables.
+Shell.FAULTS = "EpsilookFaults"
+
+--- The places that have already faulted this session.
 local reported = {}
 
---- Report a fault once: to the client's own error handler, which shows it with
--- its stack and is what an error-collecting addon listens to, and once to chat,
--- since most players have the client's error display turned off and would
--- otherwise see a feature quietly stop working.
+--- A fault's message on one line, with the client's folders above this addon
+-- left off its file: `Epsilook/Pack/Reader.lua:54: row 9 is outside ...`.
+-- @param fault what was raised, of whatever type
+-- @return the line
+function Shell.FaultLine(fault)
+	local line = tostring(fault):match("^[^\n]*")
+	return (line:gsub("^%.*[Ii]nterface[/\\][Aa]dd[Oo]ns[/\\]", ""))
+end
+
+--- Where a fault happened: the file and line that open its message, or the
+-- whole message where it names none. A message carries values, as in which row
+-- was outside a column, so it is the place and not the words that says two
+-- reports are the same fault.
+-- @param line the fault's line, from `Shell.FaultLine`
+-- @return the place
+function Shell.FaultPlace(line)
+	return line:match("^(.-:%d+):") or line
+end
+
+--- Write a fault into the saved variable, one record per place: its message
+-- and stack as last seen, how many times it has happened, and which version of
+-- the addon it happened in.
+local function keep(place, line, stack)
+	local store = _G[Shell.FAULTS]
+	if type(store) ~= "table" then
+		store = {}
+		_G[Shell.FAULTS] = store
+	end
+	local record = store[place] or {}
+	store[place] = record
+	record.message = line
+	record.stack = stack
+	record.count = (record.count or 0) + 1
+	record.version = _G.GetAddOnMetadata and _G.GetAddOnMetadata("Epsilook", "Version")
+	record.last = _G.date and _G.date("%Y-%m-%d %H:%M:%S")
+end
+
+--- Report a fault: saved with its stack every time, handed to the client's own
+-- error handler, which is what an error-collecting addon listens to, and said
+-- in chat with its file, line and message, since most players have the
+-- client's error display turned off and a line without them cannot be acted on.
 --
--- Called at the site of the fault, which is what keeps the stack a report is
--- read by. Repeats of one fault are dropped, so a broken row reports once
--- rather than every time the mouse crosses it.
-function Shell.Report(fault)
-	local text = tostring(fault)
-	if reported[text] then
+-- Called at the site of the fault, which is what keeps the stack. Chat hears of
+-- each place once a session, so a broken row is said once rather than every
+-- time the mouse crosses it; the saved record counts the rest.
+-- @param fault what was raised
+-- @param stack the stack it was raised in, where the caller already holds it;
+--   read here otherwise, which inside an error handler is the fault's own
+function Shell.Report(fault, stack)
+	local line = Shell.FaultLine(fault)
+	local place = Shell.FaultPlace(line)
+	if not stack then
+		stack = _G.debugstack and _G.debugstack(2)
+			or debug and debug.traceback and debug.traceback("", 2)
+	end
+	pcall(keep, place, line, stack)
+	if reported[place] then
 		return
 	end
-	reported[text] = true
+	reported[place] = true
 	local handler = _G.geterrorhandler and _G.geterrorhandler()
 	if handler then
 		pcall(handler, fault)
@@ -1467,9 +1522,12 @@ function Shell.Report(fault)
 		say,
 		Shell.Said(
 			RED
-				.. "something went wrong."
+				.. "something went wrong: "
 				.. END
-				.. " /elo info, sent with the error, helps get it fixed."
+				.. line
+				.. GREY
+				.. "  /elo info, sent with this line, helps get it fixed."
+				.. END
 		)
 	)
 end

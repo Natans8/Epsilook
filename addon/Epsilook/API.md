@@ -240,6 +240,10 @@ value the declaration does not admit, and a store written by hand keeps only wha
 `Epsilook.Options` draws the client's settings panel from those same declarations, so adding a setting is one row and
 one reader. Values are saved account-wide in `EpsilookSettings`; `/elo options` opens the panel.
 
+A fault inside any of the addon's doors is said in chat once per place it happened, with its file, line and message,
+and saved in `EpsilookFaults`, one record per place holding the message, the stack, a count and the addon's version.
+It reaches the saved variables file on the next `/reload` or logout.
+
 ## Raw data
 
 `Epsilook.data.<axis>` holds each axis file's payload as the emitter wrote it: a header describing columns and one long
