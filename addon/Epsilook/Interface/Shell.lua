@@ -1369,6 +1369,9 @@ function Shell.Send(text)
 	end
 end
 
+--- Whether the tooltip up now was taken for one of this addon's links.
+local holding = false
+
 --- The tooltip a link shows while the mouse is over it.
 -- A spell link shows the game's own spell tooltip, which on this client
 -- already carries what an aura says; a part's link shows everything the part
@@ -1399,6 +1402,7 @@ function Shell.OnHyperlinkEnter(frame, link)
 		return
 	end
 	tooltip:SetOwner(frame, "ANCHOR_CURSOR")
+	holding = true
 	local part
 	local action = spellAction(verb)
 	local hint = action and action.hint
@@ -1437,14 +1441,19 @@ function Shell.OnHyperlinkEnter(frame, link)
 end
 
 --- The tooltip taken down as the mouse leaves one of this addon's links.
-function Shell.OnHyperlinkLeave(_, link)
+--
+-- The client says only which frame the mouse left, never which link, so the
+-- tooltip is taken down on what entering the link left behind: whether this
+-- addon took the tooltip for it.
+function Shell.OnHyperlinkLeave()
 	if Epsilook.Preview then
 		Epsilook.Preview.Leave()
 	end
 	local tooltip = _G.GameTooltip
-	if tooltip and link:sub(1, #Shell.LINK + 1) == Shell.LINK .. ":" then
+	if holding and tooltip then
 		tooltip:Hide()
 	end
+	holding = false
 end
 
 --- The saved variable every fault is written to, with its stack, so that what

@@ -711,3 +711,31 @@ def test_the_bare_command_answers_rather_than_throwing(engine: LuaRuntime) -> No
     command = lua_function(engine, b"Epsilook.Shell.Command")
     for typed in (b"", b"   ", b"\t", None):
         command(typed)
+
+
+def test_leaving_a_link_takes_the_tooltip_down_from_the_frame_alone(bare: LuaRuntime) -> None:
+    """The client calls a leave handler with the frame and nothing else.
+
+    The handler read the link it was never given, so every mouse-out of every
+    chat link faulted, and the tooltip it existed to take down stayed up. The
+    calls below are the client's own shapes: enter with the link, leave without.
+    """
+    # language=Lua
+    code = b"""
+        local real, hidden = _G.GameTooltip, 0
+        _G.GameTooltip = {
+            SetOwner = function() end, SetText = function() end, AddLine = function() end,
+            Show = function() end, Hide = function() hidden = hidden + 1 end,
+        }
+        local shell = Epsilook.Shell
+        shell.OnHyperlinkEnter({}, "garrmission:epsilook:0:website")
+        shell.OnHyperlinkLeave({})
+        local ours = hidden
+        shell.OnHyperlinkEnter({}, "player:Nataari")
+        shell.OnHyperlinkLeave({})
+        _G.GameTooltip = real
+        return ours, hidden
+    """
+    ours, after = cast(tuple[int, int], bare.execute(code))
+    assert ours == 1, "leaving one of this addon's links takes its tooltip down"
+    assert after == 1, "leaving anyone else's link leaves their tooltip alone"
