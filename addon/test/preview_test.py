@@ -408,3 +408,42 @@ def test_a_body_with_no_size_yet_keeps_the_camera_where_it_waits(engine: LuaRunt
     leaves the camera where it waits rather than nowhere."""
     camera = camera_for(engine, None)
     assert camera == [value(engine, b"return Epsilook.Preview.DISTANCE"), 0, 0]
+
+
+def test_the_door_draws_nothing_where_there_is_nothing_to_play(engine: LuaRuntime) -> None:
+    """A spell with no visuals, and a client with no frames to draw in, both answer false."""
+    # language=Lua
+    answers = value(
+        engine,
+        b"""
+        local quiet
+        for i = 1, 400 do
+            local spell = Epsilook:GetSpellDataByIndex(i)
+            if spell and #Epsilook.Preview.SequenceOf(spell.id) == 0 then
+                quiet = spell.id
+                break
+            end
+        end
+        local parent = {}
+        local answers = { Epsilook:PreviewSpell(quiet, parent), Epsilook:PreviewSpell(116, parent) }
+        Epsilook:HidePreview(parent)
+        return answers
+        """,
+    )
+    assert answers == [False, False], "no visuals; then no CreateFrame in this tree"
+
+
+def test_the_door_shows_nothing_where_the_data_cannot_load(engine: LuaRuntime) -> None:
+    # language=Lua
+    shown = value(
+        engine,
+        b"""
+        local loaded, load = Epsilook.IsDataLoaded, Epsilook.LoadData
+        Epsilook.IsDataLoaded = function() return false end
+        Epsilook.LoadData = function() return false, "missing" end
+        local result = Epsilook:PreviewSpell(116, {})
+        Epsilook.IsDataLoaded, Epsilook.LoadData = loaded, load
+        return result
+        """,
+    )
+    assert shown is False

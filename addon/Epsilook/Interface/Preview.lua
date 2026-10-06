@@ -271,16 +271,28 @@ end
 --- Build one look. A frame is made when it is first wanted rather than at load,
 -- since a player who never hovers one never needs any.
 -- @param pinned whether it carries a close button
-local function build(pinned)
+-- @param parent where given, a frame of another addon's that the look fills,
+--   bare, in place of a bordered look of its own
+local function build(pinned, parent)
 	if not (_G.CreateFrame and _G.UIParent) then
 		return nil
 	end
-	local frame = _G.CreateFrame("Frame", nil, _G.UIParent, "TooltipBorderedFrameTemplate")
-	frame:SetSize(Preview.SIZE, Preview.SIZE)
-	frame:SetFrameStrata("TOOLTIP")
+	local frame
+	if parent then
+		frame = _G.CreateFrame("Frame", nil, parent)
+		frame:SetAllPoints()
+	else
+		frame = _G.CreateFrame("Frame", nil, _G.UIParent, "TooltipBorderedFrameTemplate")
+		frame:SetSize(Preview.SIZE, Preview.SIZE)
+		frame:SetFrameStrata("TOOLTIP")
+	end
 	frame.scene = _G.CreateFrame("ModelScene", nil, frame)
-	frame.scene:SetPoint("TOPLEFT", 6, -6)
-	frame.scene:SetPoint("BOTTOMRIGHT", -6, 6)
+	if parent then
+		frame.scene:SetAllPoints()
+	else
+		frame.scene:SetPoint("TOPLEFT", 6, -6)
+		frame.scene:SetPoint("BOTTOMRIGHT", -6, 6)
+	end
 	-- A scene draws nothing until it is told where to look from and what lights
 	-- it. There is no camera in the scene's own right and no default: it looks
 	-- along the level at the scene's origin, from as far off as `Fit` says.
@@ -799,6 +811,18 @@ function Preview.HoldOf(sequence)
 	return #sequence
 end
 
+--- Play a spell's sequence on a look, shown first, since a model frame applies
+-- nothing while it is hidden.
+-- @param frame the look
+-- @param sequence the spell's sequence, at least one beat
+local function cast(frame, sequence)
+	frame:Show()
+	frame.facing = Preview.FACING
+	Preview.Body(frame)
+	frame.sequence, frame.hold = sequence, Preview.HoldOf(sequence)
+	play(frame)
+end
+
 --- Show what a whole spell looks like, on the player's own body.
 --
 -- This is the one a reader wants most and the only one they can have without
@@ -819,11 +843,7 @@ function Preview.Spell(spellID)
 		return false
 	end
 	Preview.Place(hovered)
-	hovered:Show()
-	hovered.facing = Preview.FACING
-	Preview.Body(hovered)
-	hovered.sequence, hovered.hold = sequence, Preview.HoldOf(sequence)
-	play(hovered)
+	cast(hovered, sequence)
 	return true
 end
 
@@ -942,6 +962,45 @@ end
 --- How many looks are pinned, which is what a test asks.
 function Preview.Pinned()
 	return #pinned
+end
+
+--- The looks drawn inside frames other addons have handed over, by that frame.
+local inside = {}
+
+--- The door another addon previews a spell through: the spell played on the
+-- player's body, filling a frame of that addon's own, which keeps its own
+-- border, words and place. It stays as it is however the preview changes
+-- inside, because an addon that calls it is updated far less often than this
+-- one.
+-- @param spellID the spell
+-- @param parent the frame to draw in, shown
+-- @return whether there was anything to show
+function Epsilook:PreviewSpell(spellID, parent)
+	if not self:IsDataLoaded() and not self:LoadData() then
+		return false
+	end
+	local sequence = Preview.SequenceOf(spellID)
+	if #sequence == 0 then
+		return false
+	end
+	local frame = inside[parent] or build(false, parent)
+	if not (frame and frame.body) then
+		return false
+	end
+	inside[parent] = frame
+	cast(frame, sequence)
+	return true
+end
+
+--- Take down the spell `PreviewSpell` drew in a frame, and stop its clock.
+-- @param parent the frame it was drawn in
+function Epsilook:HidePreview(parent)
+	local frame = inside[parent]
+	if frame then
+		frame:SetScript("OnUpdate", nil)
+		Preview.Clear(frame)
+		frame:Hide()
+	end
 end
 
 return Preview
