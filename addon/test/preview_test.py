@@ -455,10 +455,10 @@ def test_spells_are_offered_to_glimpse_where_it_is_loaded(beside_glimpse: LuaRun
         beside_glimpse,
         b"""
         local spell = OFFERED.spell
-        return { type(spell.Show), type(spell.Hide), tostring(spell.Show({}, 116)) }
+        return { spell.name, type(spell.Show), type(spell.Hide), tostring(spell.Show({}, 116)) }
         """,
     )
-    assert offered == ["function", "function", "false"], "no data in this tree, so nothing shown"
+    assert offered == ["Epsilook", "function", "function", "false"], "no data here, so nothing shown"
 
 
 def test_a_fault_while_filling_glimpse_is_answered_as_an_empty_inside(

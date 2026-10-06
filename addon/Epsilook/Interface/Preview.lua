@@ -1010,6 +1010,7 @@ end
 local glimpse = _G.Glimpse
 if type(glimpse) == "table" and type(glimpse.Provide) == "function" then
 	glimpse.Provide("spell", {
+		name = "Epsilook",
 		Show = function(parent, spellID)
 			local ok, filled = xpcall(function()
 				return Preview.Lent(parent, spellID)

@@ -234,8 +234,9 @@ are handed one by a shift-click already.
 ## Previews in Glimpse
 
 Glimpse is an addon of its own that previews the lines `.lookup` prints. Where it is loaded, this addon offers it
-spells through `Glimpse.Provide("spell", provider)`, and Glimpse lends the inside of its hover frame and window, empty;
-a spell is played there on the player's body. Glimpse keeps the frame around that inside, and everything inside is
+spells through `Glimpse.Provide("spell", provider)`, naming itself, and Glimpse lends the inside of its hover frame and
+window, empty; a spell is played there on the player's body. Glimpse takes an offer of any kind of line it reads, so
+another kind is one more offer here. Glimpse keeps the frame around that inside, and everything inside is
 this addon's, so the preview may change in any way without Glimpse changing. The toc lists Glimpse in `OptionalDeps`
 so it has loaded before the offer is made. `Epsilook.Preview.Lent(parent, spellID)` fills an inside and answers
 whether it did, and `Epsilook.Preview.Unlent(parent)` empties it again.
