@@ -964,19 +964,19 @@ function Preview.Pinned()
 	return #pinned
 end
 
---- The looks drawn inside frames other addons have handed over, by that frame.
+--- The looks drawn inside frames Glimpse lends, by that frame.
 local inside = {}
 
---- The door another addon previews a spell through: the spell played on the
--- player's body, filling a frame of that addon's own, which keeps its own
--- border, words and place. It stays as it is however the preview changes
--- inside, because an addon that calls it is updated far less often than this
--- one.
+--- Fill a frame Glimpse lends with a spell played on the player's body.
+--
+-- Glimpse is an addon of its own that previews the lines `.lookup` prints. It
+-- keeps the frame around the inside it lends, and everything inside is ours, so
+-- what is drawn here may change in any way without Glimpse changing.
+-- @param parent the inside, shown and empty
 -- @param spellID the spell
--- @param parent the frame to draw in, shown
--- @return whether there was anything to show
-function Epsilook:PreviewSpell(spellID, parent)
-	if not self:IsDataLoaded() and not self:LoadData() then
+-- @return true where it was filled
+function Preview.Lent(parent, spellID)
+	if not Epsilook:IsDataLoaded() and not Epsilook:LoadData() then
 		return false
 	end
 	local sequence = Preview.SequenceOf(spellID)
@@ -992,15 +992,32 @@ function Epsilook:PreviewSpell(spellID, parent)
 	return true
 end
 
---- Take down the spell `PreviewSpell` drew in a frame, and stop its clock.
--- @param parent the frame it was drawn in
-function Epsilook:HidePreview(parent)
+--- Empty an inside `Lent` filled, and stop its clock.
+-- @param parent the inside
+function Preview.Unlent(parent)
 	local frame = inside[parent]
 	if frame then
 		frame:SetScript("OnUpdate", nil)
 		Preview.Clear(frame)
 		frame:Hide()
 	end
+end
+
+-- Offer spells to Glimpse where it is loaded, which the toc's `OptionalDeps`
+-- puts before this file. Glimpse calls what it is offered protected and drops
+-- it at the first fault, so a fault is reported here first and answered as an
+-- inside left empty.
+local glimpse = _G.Glimpse
+if type(glimpse) == "table" and type(glimpse.Provide) == "function" then
+	glimpse.Provide("spell", {
+		Show = function(parent, spellID)
+			local ok, filled = xpcall(function()
+				return Preview.Lent(parent, spellID)
+			end, Epsilook.Shell.Report)
+			return ok and filled
+		end,
+		Hide = Epsilook.Shell.Safely(Preview.Unlent),
+	})
 end
 
 return Preview

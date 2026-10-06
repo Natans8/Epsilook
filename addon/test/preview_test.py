@@ -410,7 +410,7 @@ def test_a_body_with_no_size_yet_keeps_the_camera_where_it_waits(engine: LuaRunt
     assert camera == [value(engine, b"return Epsilook.Preview.DISTANCE"), 0, 0]
 
 
-def test_the_door_draws_nothing_where_there_is_nothing_to_play(engine: LuaRuntime) -> None:
+def test_a_lent_inside_is_left_empty_where_there_is_nothing_to_play(engine: LuaRuntime) -> None:
     """A spell with no visuals, and a client with no frames to draw in, both answer false."""
     # language=Lua
     answers = value(
@@ -424,16 +424,16 @@ def test_the_door_draws_nothing_where_there_is_nothing_to_play(engine: LuaRuntim
                 break
             end
         end
-        local parent = {}
-        local answers = { Epsilook:PreviewSpell(quiet, parent), Epsilook:PreviewSpell(116, parent) }
-        Epsilook:HidePreview(parent)
+        local parent, Preview = {}, Epsilook.Preview
+        local answers = { Preview.Lent(parent, quiet), Preview.Lent(parent, 116) }
+        Preview.Unlent(parent)
         return answers
         """,
     )
     assert answers == [False, False], "no visuals; then no CreateFrame in this tree"
 
 
-def test_the_door_shows_nothing_where_the_data_cannot_load(engine: LuaRuntime) -> None:
+def test_a_lent_inside_is_left_empty_where_the_data_cannot_load(engine: LuaRuntime) -> None:
     # language=Lua
     shown = value(
         engine,
@@ -441,9 +441,35 @@ def test_the_door_shows_nothing_where_the_data_cannot_load(engine: LuaRuntime) -
         local loaded, load = Epsilook.IsDataLoaded, Epsilook.LoadData
         Epsilook.IsDataLoaded = function() return false end
         Epsilook.LoadData = function() return false, "missing" end
-        local result = Epsilook:PreviewSpell(116, {})
+        local result = Epsilook.Preview.Lent({}, 116)
         Epsilook.IsDataLoaded, Epsilook.LoadData = loaded, load
         return result
         """,
     )
     assert shown is False
+
+
+def test_spells_are_offered_to_glimpse_where_it_is_loaded(beside_glimpse: LuaRuntime) -> None:
+    # language=Lua
+    offered = value(
+        beside_glimpse,
+        b"""
+        local spell = OFFERED.spell
+        return { type(spell.Show), type(spell.Hide), tostring(spell.Show({}, 116)) }
+        """,
+    )
+    assert offered == ["function", "function", "false"], "no data in this tree, so nothing shown"
+
+
+def test_a_fault_while_filling_glimpse_is_answered_as_an_empty_inside(
+    beside_glimpse: LuaRuntime,
+) -> None:
+    # language=Lua
+    answer = value(
+        beside_glimpse,
+        b"""
+        Epsilook.Preview.Lent = function() error("broken") end
+        return tostring(OFFERED.spell.Show({}, 116))
+        """,
+    )
+    assert answer == "false"

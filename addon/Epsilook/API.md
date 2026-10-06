@@ -231,17 +231,14 @@ one. Epsilon's own commands parse a bare number and read a pasted link as its br
 number rather than a link; the three commands that do take a link -- `.gob spawn`, `.npc spawn` and `.additem` --
 are handed one by a shift-click already.
 
-## Previews for other addons
+## Previews in Glimpse
 
-| call                                     | returns                                 | notes                                                                        |
-|------------------------------------------|-----------------------------------------|------------------------------------------------------------------------------|
-| `Epsilook:PreviewSpell(spellID, parent)` | `true` where there was anything to show | plays the spell on the player's body, filling `parent`; loads the data first |
-| `Epsilook:HidePreview(parent)`           | nothing                                 | takes down what `PreviewSpell` drew in `parent`                              |
-
-These are the surface's one exception to performing nothing: a door for an addon that draws its own frames and
-wants a spell played inside one. `parent` is that addon's frame, shown before the call; the look fills it bare,
-so the border, the words and where it stands stay the other addon's. They stay as they are however the preview
-changes inside, because an addon calling them is updated far less often than this one.
+Glimpse is an addon of its own that previews the lines `.lookup` prints. Where it is loaded, this addon offers it
+spells through `Glimpse.Provide("spell", provider)`, and Glimpse lends the inside of its hover frame and window, empty;
+a spell is played there on the player's body. Glimpse keeps the frame around that inside, and everything inside is
+this addon's, so the preview may change in any way without Glimpse changing. The toc lists Glimpse in `OptionalDeps`
+so it has loaded before the offer is made. `Epsilook.Preview.Lent(parent, spellID)` fills an inside and answers
+whether it did, and `Epsilook.Preview.Unlent(parent)` empties it again.
 
 ## Settings
 

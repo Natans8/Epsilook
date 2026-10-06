@@ -60,14 +60,16 @@ def data_files() -> list[Path]:
     return out
 
 
-def bare_runtime() -> LuaRuntime:
+def bare_runtime(before: bytes = b"") -> LuaRuntime:
     """A Lua state with the addon's files loaded and no data.
 
     Strings cross as bytes rather than as text: the payload is addressed by
     byte offset, so a runtime that decoded it on the way out would be answering
-    about a different string than the one the offsets describe.
+    about a different string than the one the offsets describe. Lua in `before`
+    runs first, standing in for an addon the client loads before this one.
     """
     runtime = cast(LuaRuntime, lua51.LuaRuntime(encoding=None))
+    runtime.execute(before)
     for path in toc_files():
         runtime.execute(path.read_bytes())
     return runtime
@@ -76,6 +78,19 @@ def bare_runtime() -> LuaRuntime:
 @pytest.fixture(name="bare", scope="session")
 def bare_fixture() -> LuaRuntime:
     return bare_runtime()
+
+
+#: Glimpse's door, standing in for that addon: it keeps what it is offered in `OFFERED`.
+GLIMPSE = b"""
+    OFFERED = {}
+    Glimpse = { Provide = function(kind, provider) OFFERED[kind] = provider return true end }
+"""
+
+
+@pytest.fixture(name="beside_glimpse")
+def beside_glimpse_fixture() -> LuaRuntime:
+    """The addon without data, loaded after Glimpse as its toc's `OptionalDeps` loads it."""
+    return bare_runtime(GLIMPSE)
 
 
 @pytest.fixture(name="engine", scope="session")
