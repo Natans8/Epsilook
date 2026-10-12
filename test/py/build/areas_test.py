@@ -4,8 +4,6 @@ The map match is the part worth pinning. Both halves of it are load-bearing,
 and each one alone opens the wrong map for a real spell.
 """
 
-from __future__ import annotations
-
 from pack.routes.flows import Routes
 from pack.routes import flows
 from pack.routes.areas import AreaGates

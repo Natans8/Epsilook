@@ -1,7 +1,5 @@
 """The spine: what the two hops must get right, cycles included."""
 
-from __future__ import annotations
-
 from pack.routes.visuals import KitEvent, VisualGraph, phase_words
 from pack.targets import NO_TARGET, TARGET_CASTER, TARGET_TARGET
 from support import BuildTables, resolve

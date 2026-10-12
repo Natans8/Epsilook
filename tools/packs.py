@@ -56,8 +56,6 @@ which lines are PUBLIC and which is China-only, and Blizzard's version service
 (below) is the authority on the current build of one.
 """
 
-from __future__ import annotations
-
 import argparse
 import re
 import sys
@@ -615,7 +613,7 @@ def wago_has(build: str) -> bool | None:
         if exc.code == 404:
             return False
         return None
-    except (urllib.error.URLError, OSError):
+    except urllib.error.URLError, OSError:
         return None
 
 

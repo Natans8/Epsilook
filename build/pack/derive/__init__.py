@@ -9,8 +9,6 @@ input is what the routes produced, which is what keeps the split meaningful and
 makes every derivation here testable from plain values with no source at all.
 """
 
-from __future__ import annotations
-
 from . import registry as _registry
 from .context import CONTEXT_FIELDS, SPOKEN_FIELDS, DeriveContext, Reads, Spoken
 from .displays import Display, ResolvedDisplays, resolve_displays

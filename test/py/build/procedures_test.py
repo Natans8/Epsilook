@@ -1,7 +1,5 @@
 """One table, thirteen meanings: what the Type dispatch has to get right."""
 
-from __future__ import annotations
-
 from pack.routes.models import barrage_model, ground_model, trail_model
 from pack.routes.procedures import ProcEffects
 from support import BuildTables, resolve

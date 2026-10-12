@@ -1,7 +1,5 @@
 """Reading a db2 array field, whatever shape the build at hand exports it in."""
 
-from __future__ import annotations
-
 import sys
 
 from .provider import Tables

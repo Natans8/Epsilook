@@ -8,8 +8,6 @@ world cancels almost anything -- and they are not words a reader means, so
 they are left out here rather than by every reader of the column.
 """
 
-from __future__ import annotations
-
 from ..sources import load_local_enum
 from .attributes import bit_test, carries
 from .columns import to_int

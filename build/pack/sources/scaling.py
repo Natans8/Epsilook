@@ -12,8 +12,6 @@ below. A positive one names a player class, which a pack has no caster for and
 so cannot resolve.
 """
 
-from __future__ import annotations
-
 from collections.abc import Mapping
 from pathlib import Path
 

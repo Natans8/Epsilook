@@ -9,8 +9,6 @@ Whole tables, not samples: one late row differing is what a sample misses.
 Skipped when the cache is absent, which is every CI run.
 """
 
-from __future__ import annotations
-
 import csv
 from pathlib import Path
 

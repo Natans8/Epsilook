@@ -11,8 +11,6 @@ is the item's base look rather than a transmog recolour, and the lowest file
 of a model resource is its base model rather than a level of detail.
 """
 
-from __future__ import annotations
-
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import NamedTuple

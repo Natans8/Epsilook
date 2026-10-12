@@ -5,8 +5,6 @@ declaration and two compositions of the provider seam, so none of this needs a
 source stood up.
 """
 
-from __future__ import annotations
-
 from dataclasses import replace
 from pathlib import Path
 

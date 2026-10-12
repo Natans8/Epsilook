@@ -10,8 +10,6 @@ can ship them: a reader holding a raw value and the selector beside it can
 then say what the value is an id into.
 """
 
-from __future__ import annotations
-
 from collections.abc import Mapping, Sequence
 from typing import Any, NamedTuple
 

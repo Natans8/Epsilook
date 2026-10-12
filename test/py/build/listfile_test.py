@@ -1,8 +1,6 @@
 """Reading the shared listfile: which asset, the streaming filter, and how a
 supplement extends it through the ordinary merge."""
 
-from __future__ import annotations
-
 from pathlib import Path
 
 import pytest

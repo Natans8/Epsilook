@@ -78,8 +78,6 @@ ROUTES FOLLOWED TO A LEAF - everything means everything:
                sorted by kind -- so a route added later is included for free
 """
 
-from __future__ import annotations
-
 import argparse
 import csv
 import gzip
@@ -89,7 +87,8 @@ import re
 import sys
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
+from collections.abc import Callable
 
 from packs import schema_name
 from repo import CACHE
@@ -1187,7 +1186,7 @@ class Dossier:
         def nought(value: Any) -> bool:
             try:
                 return float(value) == 0.0
-            except (TypeError, ValueError):
+            except TypeError, ValueError:
                 return not value
 
         held = [row.get(name) for name in columns]

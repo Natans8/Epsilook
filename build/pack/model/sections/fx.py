@@ -7,8 +7,6 @@ apart rather than merged, since each names its rows in its own id space and a
 reader that merged them could not say which table a row came from.
 """
 
-from __future__ import annotations
-
 from collections.abc import Callable
 
 from ...derive import Reads

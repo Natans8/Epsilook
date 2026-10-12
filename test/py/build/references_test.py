@@ -1,7 +1,5 @@
 """Which file ids the pack must resolve, and the rows that survive resolution."""
 
-from __future__ import annotations
-
 from pack.derive.displays import Display, ResolvedDisplays
 from pack.derive.references import References, collect_references
 from pack.derive.walk import Occurrence, SpellVisuals

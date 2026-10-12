@@ -6,8 +6,6 @@ carries no pill and is dropped upstream, which is why nothing below tests for
 one.
 """
 
-from __future__ import annotations
-
 from collections import Counter
 from collections.abc import Callable
 

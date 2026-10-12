@@ -7,8 +7,6 @@ behind it. The document laws are pinned on the real registries, since what
 matters there is that the page the build writes holds together.
 """
 
-from __future__ import annotations
-
 import importlib
 import re
 import sys

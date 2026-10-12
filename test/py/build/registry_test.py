@@ -1,7 +1,5 @@
 """What the section registry refuses to accept."""
 
-from __future__ import annotations
-
 from collections.abc import Iterator
 
 import pytest

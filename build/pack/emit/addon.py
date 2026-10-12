@@ -27,8 +27,6 @@ addon to ask the game for instead. Moving a column between the two is one row
 there.
 """
 
-from __future__ import annotations
-
 import math
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field

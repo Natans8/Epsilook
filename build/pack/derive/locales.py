@@ -11,8 +11,6 @@ rules no `TextLocale` covers needs one of those too, which is the only reason
 that half is not here.
 """
 
-from __future__ import annotations
-
 from collections.abc import Sequence
 from dataclasses import dataclass
 

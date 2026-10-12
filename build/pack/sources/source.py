@@ -22,8 +22,6 @@ The three, separated:
 this build declares the source absent.
 """
 
-from __future__ import annotations
-
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path

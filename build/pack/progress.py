@@ -13,8 +13,6 @@ alongside its children. A name recorded more than once accumulates, which is how
 a per-item cost inside a loop is measured without one row per item.
 """
 
-from __future__ import annotations
-
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager

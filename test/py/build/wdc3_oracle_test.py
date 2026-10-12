@@ -33,8 +33,6 @@ opt-in: set `EPSILOOK_DB2_ORACLE` to run it. They are cached, so only the first
 run pays.
 """
 
-from __future__ import annotations
-
 import csv
 import os
 import struct
@@ -114,7 +112,7 @@ def same_huge_float(left: str, right: str) -> bool:
     """
     try:
         pair: list[float] = [struct.unpack("<f", struct.pack("<f", float(text)))[0] for text in (left, right)]
-    except (ValueError, OverflowError):
+    except ValueError, OverflowError:
         return False
     return pair[0] == pair[1] and abs(pair[0]) >= 1e15
 

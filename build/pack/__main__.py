@@ -12,8 +12,6 @@ makes sharing cost nothing to arrange: two builds whose sections serialise
 alike produce one file and both manifests point at it.
 """
 
-from __future__ import annotations
-
 import argparse
 import json
 import os

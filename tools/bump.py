@@ -24,8 +24,6 @@ the same day goes to 'b'. Past 'z' it continues 'aa', 'ab' - the string is
 compared for difference, never ordered, so that is only a readability choice.
 """
 
-from __future__ import annotations
-
 import argparse
 import datetime as dt
 import re

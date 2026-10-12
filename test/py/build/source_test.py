@@ -10,8 +10,6 @@ is exactly which requests they make, and a fake at a higher seam would be
 asserting the fake instead.
 """
 
-from __future__ import annotations
-
 import json
 import urllib.error
 import urllib.request

@@ -1,7 +1,5 @@
 """The drift declarations have to agree with the roster they qualify."""
 
-from __future__ import annotations
-
 from pack.drift import (
     CREATURE_DISPLAY_SOURCES,
     OPTIONAL_COLUMNS,

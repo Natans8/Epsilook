@@ -6,8 +6,6 @@ idea for a picture, kept apart because an icon is reduced to a name rather than
 shipped as a path.
 """
 
-from __future__ import annotations
-
 from ...derive import Reads
 from ...routes.models import SYNTHETIC_MODEL_FILES
 from ..registry import register

@@ -1,7 +1,5 @@
 """Creature and form displays, flattened to rows the pack can ship."""
 
-from __future__ import annotations
-
 from pack.derive.displays import resolve_displays
 from pack.routes import CreatureModels, ShapeshiftForms, SpellEffectRows
 from pack.targets import NO_TARGET

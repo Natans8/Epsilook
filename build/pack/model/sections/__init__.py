@@ -7,8 +7,6 @@ frontend's pill types use, and it is why adding a section is one record in one
 of these modules rather than an edit to a list somewhere else.
 """
 
-from __future__ import annotations
-
 from . import (
     anims,
     assets,

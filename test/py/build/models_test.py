@@ -1,7 +1,5 @@
 """The four ways an effect-name reaches a model, and the one that reaches none."""
 
-from __future__ import annotations
-
 from collections.abc import Callable
 
 from pack.routes.attachments import NO_ATTACHMENT, NO_MOTION

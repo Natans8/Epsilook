@@ -11,8 +11,6 @@ module-private because an overlay carrying no rule admits every hotfix row,
 which is not something any caller should be able to reach for by accident.
 """
 
-from __future__ import annotations
-
 from collections.abc import Mapping
 from dataclasses import replace
 

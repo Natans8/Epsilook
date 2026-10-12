@@ -1,7 +1,5 @@
 """What the mysqldump scanner must get right, one case per row."""
 
-from __future__ import annotations
-
 import pytest
 
 from pack.sources.dump import MYSQL_ESCAPES, iter_insert_rows, parse_create_table

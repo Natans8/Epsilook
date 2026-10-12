@@ -1,7 +1,5 @@
 """The base-difficulty rule, and the one column where zero is not an answer."""
 
-from __future__ import annotations
-
 from collections.abc import Container
 
 from pack.routes.flows import Routes

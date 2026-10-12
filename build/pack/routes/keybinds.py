@@ -5,8 +5,6 @@ trigger condition, not a kind of payload: Type 1 is mid-air, Type 0 an ordinary
 ground press, and one spell appears as both on the same function.
 """
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 
 KEYBOUND_TYPE_WORDS = {0: "", 1: "mid-air"}

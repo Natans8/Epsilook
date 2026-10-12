@@ -15,8 +15,6 @@ check runs `--check`. The definitions come from the build's own cache; a check
 with none cached skips rather than fetching.
 """
 
-from __future__ import annotations
-
 import argparse
 import sys
 from pathlib import Path
@@ -43,8 +41,6 @@ keeps, with the columns it keeps; and the pinned build's one table. A
 localised column carries the ``_lang`` suffix the export gives it, and an
 array column is marked, so one slot is ``Name[0]`` and the whole is ``Name[:]``.
 """
-
-from __future__ import annotations
 
 from .expressions import Column, Table
 '''

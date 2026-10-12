@@ -1,7 +1,5 @@
 """Bit arithmetic across columns, and the intersection a flag may declare."""
 
-from __future__ import annotations
-
 import pytest
 
 from pack.sources.enums import display_names

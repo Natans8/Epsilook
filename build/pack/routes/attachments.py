@@ -8,8 +8,6 @@ oddly ("Breath", "ChestBloodBack") because artists reuse generic slots as seat
 anchors.
 """
 
-from __future__ import annotations
-
 from ..sources import load_local_enum
 
 M2_ATTACHMENT_NAMES: dict[int, str] = load_local_enum("m2_attachments")

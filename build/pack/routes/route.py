@@ -19,10 +19,9 @@ attribute of a `Declarations` class body, named once by the attribute, its
 needs read off the plan itself.
 """
 
-from __future__ import annotations
-
 import dataclasses
 import inspect
+from annotationlib import Format
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, ClassVar, TypeVar
@@ -97,7 +96,7 @@ def route(field: str, *, phase: str = "", **sources: str) -> Callable[[Filler], 
     """
 
     def register(filler: Filler) -> Filler:
-        parameters = inspect.signature(filler).parameters
+        parameters = inspect.signature(filler, annotation_format=Format.FORWARDREF).parameters
         unknown = sorted(set(sources) - set(parameters))
         if unknown:
             raise ValueError(f"{field}: {', '.join(unknown)} is not a parameter of {filler.__name__}")

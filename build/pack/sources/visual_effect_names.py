@@ -17,12 +17,10 @@ answer. The stem is what makes the question answerable, and the derivation that
 asks it lives with the build rather than with the source.
 """
 
-from __future__ import annotations
-
 import gzip
 import json
 from collections.abc import Mapping
-from typing import NamedTuple, TypeAlias
+from typing import NamedTuple
 
 from .cache import BUILD_DIR, tracked_source
 from .source import Source
@@ -46,7 +44,7 @@ class VisualEffectName(NamedTuple):
     """
 
 
-VisualEffectNames: TypeAlias = Mapping[int, VisualEffectName]
+type VisualEffectNames = Mapping[int, VisualEffectName]
 """Effect id to its recovered name. Total over what the vendored client knew,
 which is a subset of what any modern pack references."""
 

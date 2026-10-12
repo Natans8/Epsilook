@@ -20,8 +20,6 @@ somebody looks at it, and two positions recorded from sample rows have already
 turned out wrong.
 """
 
-from __future__ import annotations
-
 import csv
 import struct
 from collections.abc import Sequence

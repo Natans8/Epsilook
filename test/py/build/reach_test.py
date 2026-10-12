@@ -5,8 +5,6 @@ columns ship, what is left out of the section entirely, and which of the row's
 flag bits survive as a fact about the reach.
 """
 
-from __future__ import annotations
-
 from pack.routes.flows import Routes
 from pack.routes.reach import MELEE, UNLIMITED, WEAPON, Reach
 from support import BuildTables

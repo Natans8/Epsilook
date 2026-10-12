@@ -8,8 +8,6 @@ test against the buckets the procedure route filled. A row pointing at a
 payload this build lacks is dropped rather than treated as an error.
 """
 
-from __future__ import annotations
-
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 

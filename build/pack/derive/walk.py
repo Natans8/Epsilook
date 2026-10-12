@@ -16,8 +16,6 @@ family carries a mask even where the pack does not ship one today, so giving a
 family an audience later is a section change rather than a walk change.
 """
 
-from __future__ import annotations
-
 from collections import defaultdict
 from collections.abc import Callable, Container, Iterable, Mapping
 from dataclasses import dataclass, field

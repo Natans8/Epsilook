@@ -4,18 +4,16 @@ A checked-in ladder of spell-id ceilings, built once from historical clients by
 ``tools/expansions.py`` rather than fetched.
 """
 
-from __future__ import annotations
-
 import gzip
 import json
-from typing import Any, TypeAlias
+from typing import Any
 
 from .cache import BUILD_DIR, tracked_source
 from .source import Source
 
 EXPANSIONS_FILE = BUILD_DIR / "expansion_ids.json.gz"
 
-ExpansionLadder: TypeAlias = tuple[list[dict[str, Any]], dict[int, int]]
+type ExpansionLadder = tuple[list[dict[str, Any]], dict[int, int]]
 """The rungs oldest-first, and the {spell id: rung index} map over them.
 
 Named because the pair travels together from acquisition to every derivation

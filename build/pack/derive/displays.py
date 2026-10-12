@@ -12,8 +12,6 @@ which is the same rule the dissolve and screen routes follow: a pill made of
 nothing has nothing to say.
 """
 
-from __future__ import annotations
-
 from dataclasses import dataclass, field
 
 from ..routes import CreatureModels, ShapeshiftForms, SpellEffectRows

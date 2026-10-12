@@ -4,8 +4,6 @@ Every derivation registers itself with `route` where it is written; this is
 the one assembled from two others.
 """
 
-from __future__ import annotations
-
 from collections.abc import Mapping
 
 from ..routes import MaskedIds, ScreenRow

@@ -1,7 +1,5 @@
 """The shared context every section's ``produce`` receives."""
 
-from __future__ import annotations
-
 from collections.abc import Iterable, Mapping, Sequence, Set as AbstractSet
 from dataclasses import dataclass, field, fields, replace
 from typing import Any

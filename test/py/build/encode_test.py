@@ -6,8 +6,6 @@ layout. It is worth a test rather than a reading because the two halves are
 easy to change one at a time.
 """
 
-from __future__ import annotations
-
 import pytest
 
 from pack.encode import EMPTY_SLOT, decode_column, encode_column

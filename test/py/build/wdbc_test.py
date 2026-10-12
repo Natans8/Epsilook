@@ -7,8 +7,6 @@ and the structural rules that file cannot exercise are asserted against files
 built here.
 """
 
-from __future__ import annotations
-
 import gzip
 import struct
 from pathlib import Path

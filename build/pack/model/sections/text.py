@@ -12,8 +12,6 @@ storing one copy per spell would ship the same prose over and over and, more to
 the point, make the browser hold it that way too.
 """
 
-from __future__ import annotations
-
 from collections.abc import Callable, Mapping, Sequence
 
 from ...derive import Reads

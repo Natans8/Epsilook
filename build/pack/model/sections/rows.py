@@ -15,8 +15,6 @@ family: one walk answers all of a section's counts, where one walk each would
 re-read every reference six times over.
 """
 
-from __future__ import annotations
-
 from collections import Counter
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from itertools import accumulate, chain, repeat

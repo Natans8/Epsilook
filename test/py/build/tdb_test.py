@@ -3,8 +3,6 @@
 Properties of the tables at module scope, not of any one fetch.
 """
 
-from __future__ import annotations
-
 import pytest
 
 from pack.sources.dump import Column, parse_create_table

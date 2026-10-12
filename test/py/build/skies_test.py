@@ -6,8 +6,6 @@ in the game, so a reader that unions the slots reports it as the sky of
 everywhere rather than the sky of being dead.
 """
 
-from __future__ import annotations
-
 import support
 from dataclasses import replace
 

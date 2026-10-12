@@ -27,8 +27,6 @@ animation name each stay in the one place they were already written, and the row
 costs an integer to point at them.
 """
 
-from __future__ import annotations
-
 from collections import Counter
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field

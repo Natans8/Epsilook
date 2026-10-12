@@ -1,10 +1,8 @@
 """The table provider interface every reader reads through."""
 
-from __future__ import annotations
-
 from collections.abc import Callable, Iterator, Sequence
 from pathlib import Path
-from typing import Protocol, TypeAlias
+from typing import Protocol
 
 
 class Tables(Protocol):
@@ -33,7 +31,7 @@ class Tables(Protocol):
         raise NotImplementedError
 
 
-Provider: TypeAlias = Callable[[Path], Tables]
+type Provider = Callable[[Path], Tables]
 """An implementation, not yet pointed at a directory.
 
 Which one a build reads through is one decision, and the wiring makes it once:

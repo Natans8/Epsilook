@@ -4,8 +4,6 @@ Implements the encodings the section records declare, column by column, and
 assembles the encoded columns into the payload a section ships as.
 """
 
-from __future__ import annotations
-
 from collections.abc import Mapping
 
 from ..model.section import Cardinality, Encoding, Layout, Section, SectionColumns

@@ -18,8 +18,6 @@ does not carry, so an axis a person would search BY NAME still needs its own
 vocabulary shipped.
 """
 
-from __future__ import annotations
-
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import NamedTuple

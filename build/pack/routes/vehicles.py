@@ -5,8 +5,6 @@ the rider plays and, separately, the ones the vehicle plays. The two sets stay
 apart; everything but the seat order is unioned per vehicle.
 """
 
-from __future__ import annotations
-
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import NamedTuple

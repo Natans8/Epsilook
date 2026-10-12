@@ -17,8 +17,6 @@ of client data begins at the CASC boundary, so a table that lost a column before
 then can only be read out of a client old enough to still have it.
 """
 
-from __future__ import annotations
-
 import struct
 from pathlib import Path
 from typing import Any

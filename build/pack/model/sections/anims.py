@@ -6,8 +6,6 @@ visual animation is loose, and the emote columns are not about the build at all
 but about what a player can ask for.
 """
 
-from __future__ import annotations
-
 from ...derive import Reads
 from ..registry import register
 from ..section import Count, Layout, Scope, Section, SectionColumns, size

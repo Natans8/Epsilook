@@ -16,8 +16,6 @@ looking at the page, and this prints the URL to do that with.
 Exit status is 0 when the expected ?v= is live and every asset resolves.
 """
 
-from __future__ import annotations
-
 import argparse
 import json
 import re
@@ -55,7 +53,7 @@ def fetch_once(url: str, token: int, head: bool = False) -> tuple[int, bytes, di
             return resp.status, (b"" if head else resp.read()), dict(resp.headers)
     except urllib.error.HTTPError as exc:
         return exc.code, b"", {}
-    except (urllib.error.URLError, TimeoutError):
+    except urllib.error.URLError, TimeoutError:
         return 0, b"", {}
 
 
@@ -87,7 +85,7 @@ def git(*args: str) -> str:
         out = subprocess.run(
             ["git", "-C", str(ROOT), *args], capture_output=True, encoding="utf-8", errors="replace", check=True
         )
-    except (subprocess.CalledProcessError, FileNotFoundError):
+    except subprocess.CalledProcessError, FileNotFoundError:
         return ""
     return out.stdout or ""
 

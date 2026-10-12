@@ -5,8 +5,6 @@ not name a file, a URL or an emitter; `tools/check.py` enforces that.
 `docs/DATA_ROUTES.md` documents what each route means.
 """
 
-from __future__ import annotations
-
 from . import registry as _registry
 from .areas import Area, AreaGates
 from .assets import resolve_paths

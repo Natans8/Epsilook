@@ -13,8 +13,6 @@ appeared on. The parent is used for the two links and nothing else, where
 pointing at the containing zone is exactly right.
 """
 
-from __future__ import annotations
-
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from typing import NamedTuple

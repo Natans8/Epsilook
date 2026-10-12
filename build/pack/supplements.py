@@ -24,8 +24,6 @@ Text in, because a provider hands back the source's own text (see
 ``tables.provider``) and a supplement is judged before anything types it.
 """
 
-from __future__ import annotations
-
 from collections.abc import Callable
 
 Admits = Callable[[str], bool]

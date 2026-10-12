@@ -4,8 +4,6 @@ The panel is frames and is not tested here; what is tested is every function
 that turns a stored value into the one a reader sees, run bare.
 """
 
-from __future__ import annotations
-
 from collections.abc import Iterator
 from typing import cast
 

@@ -7,8 +7,6 @@ and a body that merely looks like one -- a juxtaposition, a call, a division
 by zero -- yields no number at all rather than a wrong one.
 """
 
-from __future__ import annotations
-
 import random
 import warnings
 

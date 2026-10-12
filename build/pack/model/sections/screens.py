@@ -13,8 +13,6 @@ kits, which join the spell's sound rows, and ship here as the two small
 vocabularies below so a reader can say which set a screen names.
 """
 
-from __future__ import annotations
-
 from collections.abc import Callable
 
 from ...derive import Reads

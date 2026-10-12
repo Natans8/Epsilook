@@ -5,8 +5,6 @@ a chain, or from an effect row outright -- and by the time it gets here they
 are one fact: this spell plays this file, from this kit, at this audience.
 """
 
-from __future__ import annotations
-
 from ..registry import register
 from ..section import Section, size
 

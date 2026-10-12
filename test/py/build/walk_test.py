@@ -5,8 +5,6 @@ table, so its tests need no source at all -- which is the point of that rule
 rather than a convenience.
 """
 
-from __future__ import annotations
-
 from collections import defaultdict
 
 from pack.derive.walk import (

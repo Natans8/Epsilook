@@ -5,8 +5,6 @@ decompressing everything in front of it. Piping the member to stdout keeps
 hundreds of megabytes of SQL off the filesystem.
 """
 
-from __future__ import annotations
-
 import io
 import shutil
 import subprocess

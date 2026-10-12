@@ -14,8 +14,6 @@ sweeps up the spells with no `SpellMisc` row at all along with the ones naming
 the self-only band.
 """
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 from typing import NamedTuple
 

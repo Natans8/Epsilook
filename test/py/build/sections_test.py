@@ -5,8 +5,6 @@ only hold over the whole roster: the order the artifact keys on, and the
 vocabulary chain the row tables resolve stored numbers through.
 """
 
-from __future__ import annotations
-
 from pack.derive.kinds import COLUMN_FAMILIES, VOCABULARIES
 from pack.drift import OPTIONAL_TABLES, TDB_OPTIONAL_TABLES
 from pack.model import SECTIONS

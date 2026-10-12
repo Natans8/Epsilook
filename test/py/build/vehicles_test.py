@@ -1,7 +1,5 @@
 """Seats: the two absences, and why the animation sets stay apart."""
 
-from __future__ import annotations
-
 from pack.routes.vehicles import PASSENGER_ROLE_NAMES, SEAT_COLUMNS, SEAT_PASSENGER_ANIM_COLUMNS, VehicleSeats
 from support import BuildTables, resolve
 

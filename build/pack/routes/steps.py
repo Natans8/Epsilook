@@ -7,8 +7,6 @@ mapping-shaped part of a route; a walk that recurses over its own output or a
 cooker that parses is a function over a flow's rows and is not a step.
 """
 
-from __future__ import annotations
-
 from collections.abc import Container, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from enum import Enum

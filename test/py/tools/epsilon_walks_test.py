@@ -7,8 +7,6 @@ child numbered by the wrong convention produces a path that looks entirely
 plausible and matches no file.
 """
 
-from __future__ import annotations
-
 import struct
 from collections.abc import Iterable
 

@@ -1,7 +1,5 @@
 """The two sound tables a screen effect names, read to the kits they play."""
 
-from __future__ import annotations
-
 from pack.routes.flows import Routes
 from pack.routes.sounds import Ambience, ZoneMusic
 from support import BuildTables

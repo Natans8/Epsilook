@@ -25,8 +25,6 @@ The written procedure, including what to check by hand and what is still
 unnamed, is `docs/SUPPLEMENT.md`.
 """
 
-from __future__ import annotations
-
 import argparse
 import csv
 import gzip

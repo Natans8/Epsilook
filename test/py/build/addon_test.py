@@ -10,8 +10,6 @@ account of the layout would drift from the first, and the pack the chunk was
 built from is a better reference than a reimplementation of the writer.
 """
 
-from __future__ import annotations
-
 import os
 from typing import Any
 
@@ -249,7 +247,7 @@ def test_lua_returns_the_blob_byte_for_byte(lua: Any) -> None:
     move every column at once.
     """
     payload = "".join(chr(code) for code in range(32, 127)).encode("ascii")
-    payload += "élan\nnext ]] and ]=] done".encode("utf-8")
+    payload += "élan\nnext ]] and ]=] done".encode()
     source = b"local blob = " + wrapped(payload) + b"\nreturn blob\n"
     assert lua.execute(source) == payload
 

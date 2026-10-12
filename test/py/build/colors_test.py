@@ -1,7 +1,5 @@
 """The hue word is a search term, so what it names is a product decision."""
 
-from __future__ import annotations
-
 import pytest
 
 from pack.routes.colors import hue_word, hue_words, pack_rgb, to_channel, unpack_rgb

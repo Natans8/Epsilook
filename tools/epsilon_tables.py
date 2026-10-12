@@ -14,8 +14,6 @@ whole point is the rows a private client added, and no public copy of a table
 has them.
 """
 
-from __future__ import annotations
-
 import struct
 import sys
 from collections.abc import Iterator
@@ -172,7 +170,7 @@ def open_positional(storage: Reads, fid: int) -> Table | None:
     try:
         parsed = Db2(raw, None)
         return Table(list(parsed.columns), list(parsed.rows()))
-    except (ValueError, IndexError, KeyError, struct.error):
+    except ValueError, IndexError, KeyError, struct.error:
         return None
 
 
@@ -202,6 +200,6 @@ def open_table(storage: Reads, name: str, ids: dict[str, int]) -> Table | None:
         return None
     try:
         parsed = Db2(raw, schema)
-    except (ValueError, IndexError, KeyError):
+    except ValueError, IndexError, KeyError:
         return None
     return Table(list(parsed.columns), list(parsed.rows()))

@@ -5,8 +5,6 @@ hard error. To add a game version, run the build, let it name what is missing,
 and decide per item whether it belongs here or is a bug.
 """
 
-from __future__ import annotations
-
 # table -> the user-facing feature that switches off when the build predates it
 OPTIONAL_TABLES = {
     "SpellName": "spell names (pre-BfA they live on Spell itself)",

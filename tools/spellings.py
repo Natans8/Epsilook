@@ -23,8 +23,6 @@ here needs to judge what counts as a spelling. Three mechanical filters remain:
 Re-run after a default-pack bump if spelling coverage looks off.
 """
 
-from __future__ import annotations
-
 import re
 from pathlib import Path
 

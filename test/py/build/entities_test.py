@@ -1,7 +1,5 @@
 """Keybinds, mounts, objects and forms: what each keeps when its source is thin."""
 
-from __future__ import annotations
-
 from typing import cast
 
 import pytest

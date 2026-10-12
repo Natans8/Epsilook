@@ -1,7 +1,5 @@
 """The ``Section`` record: everything one pack section declares."""
 
-from __future__ import annotations
-
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import Enum

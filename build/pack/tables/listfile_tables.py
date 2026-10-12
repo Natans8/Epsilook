@@ -10,8 +10,6 @@ provider rather than a directory of CSVs: rows are `<file id>;<path>`,
 semicolon-separated, with no header line to read the column names from.
 """
 
-from __future__ import annotations
-
 import gzip
 import sys
 from collections.abc import Iterator, Sequence

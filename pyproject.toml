@@ -2,23 +2,23 @@
 name = "epsilook-build"
 version = "0"
 description = "The Epsilook data build and the repository checks that run over it."
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 dependencies = [
     # The engine behind the SQL table provider, and the exploration database the
     # tools read. One version for both, so a question asked in the mirror and a
     # pack built through `SqlTables` cannot answer it differently.
-    "duckdb>=1.5.5",
+    "duckdb>=1.5.6",
     # The provider builds its reads as expressions rather than as text: a table
     # and a column name both arrive from a game export, and the one thing a
     # string template cannot promise is that they are quoted as identifiers.
     # `duckdb-engine` is the dialect DuckDB's own documentation names.
-    "duckdb-sqlalchemy>=1.5.5",
-    "sqlalchemy>=2.0.52",
+    "duckdb-sqlalchemy>=1.5.6.1",
+    "sqlalchemy>=2.1.4",
     # The DDL half of reading a mysqldump file. The row scanner is hand-written
     # because nothing on the market reads a dump, but a CREATE TABLE is a real
     # grammar and the column order it yields is what keeps every distilled CSV
     # aligned -- worth a parser rather than a pattern.
-    "sqlglot",
+    "sqlglot>=30.22.0",
 ]
 
 # Nothing here is installed as a package: the build runs from the checkout and
@@ -32,29 +32,29 @@ package = false
 dev = [
     # Columns cross into DuckDB as columns. A pack is already column
     # oriented, so binding it row by row would be the one avoidable cost.
-    "pyarrow",
+    "pyarrow>=26.0.0",
     # Progress for the tools that take minutes -- a pack sweep, a walk over the
     # client's storage. Declared rather than ambient: it was already imported by
     # a tool the checkers read, so a machine without it failed type checking
     # rather than failing to draw a bar.
-    "tqdm",
-    "types-tqdm",
+    "tqdm>=4.70.1",
+    "types-tqdm>=4.70.0.20260906",
     # The formatter, and the only checker here that also writes. Pinned like the
     # rest rather than run through `uvx`, which resolves whatever PyPI served
     # that minute -- the point of this group is that a checker's version is a
     # fact of the repository.
-    "ruff",
-    "mypy",
-    "pyflakes",
-    "pylint",
-    "pytest",
+    "ruff>=0.17.0",
+    "mypy>=2.4.0",
+    "pyflakes>=4.0.3",
+    "pylint>=4.1.3",
+    "pytest>=9.1.1",
     # A real Lua inside the test run. The addon's data is written here and read
     # there, and the reader is the one account of that layout -- so the only
     # way to check the two agree is to run the actual reader over an actual
     # chunk. It ships every interpreter as its own module, and the client's is
     # 5.1, so the tests can be exact about the one that matters rather than
     # hoping a newer one behaves the same.
-    "lupa",
+    "lupa>=2.8",
     "pillow>=12.3.0",
 ]
 
@@ -91,12 +91,15 @@ cache_dir = ".pytest_cache"
 # own number.
 line-length = 120
 
-# Ruff ships as a linter too, and enabling it is a separate call that has not
-# been taken: its defaults are 413 rules, they report 172 findings on a tree
-# that passes mypy, pyflakes and pylint, and 80 of those are import ordering
-# alone. Selecting nothing keeps the editor quiet about rules nothing gates.
+# Ruff's linter runs one family: pyupgrade, which reports a spelling the
+# requires-python floor has a modern replacement for -- a `TypeAlias` where a
+# `type` statement exists, a `TypeVar` where a function can declare its own
+# parameter. That is what keeps a raised floor from being a version number
+# alone. Its defaults are a separate call that has not been taken: 413 rules,
+# 172 findings on a tree that passes mypy, pyflakes and pylint, and 80 of those
+# import ordering alone.
 [tool.ruff.lint]
-select = []
+select = ["UP"]
 
 # Both caches are pinned to the repository root. Left to their defaults they
 # land relative to whatever directory the tool was invoked from, which puts
@@ -112,9 +115,9 @@ cache_dir = ".mypy_cache"
 mypy_path = ["build", "test/py", "tools"]
 
 # The floor the package supports, not the interpreter that happens to run the
-# checker, so a feature newer than 3.12 is reported here rather than on
+# checker, so a feature newer than the floor is reported here rather than on
 # whichever machine is oldest.
-python_version = "3.12"
+python_version = "3.14"
 
 # Strict is the default for every Python tree in this repository. The data
 # build and both test trees pass it; what does not yet is named below, and that

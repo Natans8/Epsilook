@@ -7,8 +7,6 @@ asserting its own encoder, and each rule here was a defect that survived a
 reader agreeing with itself.
 """
 
-from __future__ import annotations
-
 import struct
 from dataclasses import dataclass
 

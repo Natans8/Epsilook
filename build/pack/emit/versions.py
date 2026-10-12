@@ -6,8 +6,6 @@ pure output -- rebuilt from what is on disk plus the pack just written -- so
 anything that must survive a rebuild belongs on the roster row instead.
 """
 
-from __future__ import annotations
-
 import hashlib
 import json
 import os

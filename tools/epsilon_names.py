@@ -17,8 +17,6 @@ of SavedVariables when a walk has just been run; otherwise read the copy kept
 beside the other exploration data.
 """
 
-from __future__ import annotations
-
 import json
 import os
 import re

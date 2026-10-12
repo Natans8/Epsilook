@@ -10,8 +10,6 @@ a section that declares a count contributes one and a section that goes away
 takes its own with it.
 """
 
-from __future__ import annotations
-
 import time
 from collections.abc import Mapping
 

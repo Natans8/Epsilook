@@ -68,8 +68,6 @@ before any source we had declared them -- which is why ``ArcSpell.extra`` / ``Ar
 here may enumerate-and-drop.
 """
 
-from __future__ import annotations
-
 import argparse
 import json
 import re
@@ -145,7 +143,7 @@ def _format_number(v: int | float) -> bytes:
     if v.is_integer() and abs(v) < 1e15:
         return str(int(v)).encode()
     # Lua 5.1 formats with "%.14g"; if that round-trips exactly we can send it as-is, which is the common case.
-    s = "%.14g" % v
+    s = f"{v:.14g}"
     if float(s) == v:
         return s.encode()
     raise ValueError(f"number {v!r} is not exactly representable in AceSerializer's ^N form")

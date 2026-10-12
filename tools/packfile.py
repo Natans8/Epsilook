@@ -15,8 +15,6 @@ one gzipped document directly, and four re-implementations of "join the modules
 back together" would be four chances to join them differently.
 """
 
-from __future__ import annotations
-
 import gzip
 import json
 from pathlib import Path

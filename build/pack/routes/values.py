@@ -14,8 +14,6 @@ cooker elides a value it cannot look up exactly as it elides a
 caster-dependent one.
 """
 
-from __future__ import annotations
-
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from typing import NamedTuple

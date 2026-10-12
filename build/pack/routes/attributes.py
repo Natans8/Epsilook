@@ -6,8 +6,6 @@ type. Some bits mean nothing on their own and declare a `requires` bit they are
 read in conjunction with.
 """
 
-from __future__ import annotations
-
 import sys
 from collections.abc import Mapping, Sequence
 

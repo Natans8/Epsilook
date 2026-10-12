@@ -12,8 +12,6 @@ repeats. Choosing between them is a property of the data, which is why it is
 declared per column rather than decided here.
 """
 
-from __future__ import annotations
-
 from collections.abc import Callable, Mapping, Sequence
 
 from ..model.section import Column, Encoding

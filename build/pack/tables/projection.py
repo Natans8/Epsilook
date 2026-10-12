@@ -7,8 +7,6 @@ crashing over, and two copies of a refusal drift towards disagreeing about what
 is fatal.
 """
 
-from __future__ import annotations
-
 import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass

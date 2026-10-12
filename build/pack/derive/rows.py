@@ -12,8 +12,6 @@ which is the same rule that keeps the registry flat: a section depends on this
 layer and never on another section.
 """
 
-from __future__ import annotations
-
 from collections.abc import Container, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import NamedTuple

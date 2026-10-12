@@ -32,8 +32,6 @@ What it checks is the difference between a static host that happens to return
 Exit status is 0 when nothing FAILED.
 """
 
-from __future__ import annotations
-
 import argparse
 import gzip
 import hashlib
@@ -106,7 +104,7 @@ def wait_for_health(base: str, container: str, timeout: float = 60.0) -> str | N
         try:
             if fetch(f"{base}/healthz").status == 200:
                 return None
-        except (urllib.error.URLError, ConnectionError, socket.timeout):
+        except TimeoutError, urllib.error.URLError, ConnectionError:
             pass
         if docker("inspect", "-f", "{{.State.Running}}", container, check=False).stdout.strip() != "true":
             logs = docker("logs", "--tail", "20", container, check=False)
@@ -341,7 +339,7 @@ def main() -> int:
     rep = Report(quiet=args.quiet)
     try:
         docker("version", "--format", "{{.Server.Version}}")
-    except (subprocess.CalledProcessError, FileNotFoundError):
+    except subprocess.CalledProcessError, FileNotFoundError:
         print(f"{RED}docker is not available{RESET} - start Docker Desktop, or run the rest with tools/check.py")
         return 1
 

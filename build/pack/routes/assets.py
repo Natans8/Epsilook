@@ -6,8 +6,6 @@ from that listfile supplemented by another source is a question about how the
 `Tables` was wired and not one this reader can see.
 """
 
-from __future__ import annotations
-
 from ..tables.listfile_tables import ID, PATH, TABLE
 from ..tables.provider import Tables
 from .route import route

@@ -46,8 +46,6 @@ the builder falls back to DuckDB's own inference. This is a development tool;
 losing a type annotation must never cost you the data.
 """
 
-from __future__ import annotations
-
 import re
 import urllib.error
 import urllib.request

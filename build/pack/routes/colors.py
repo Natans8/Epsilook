@@ -5,8 +5,6 @@ their colour from the tint alone. The app reproduces these buckets so the hover
 caption says the word that searches.
 """
 
-from __future__ import annotations
-
 import colorsys
 
 from .columns import to_float

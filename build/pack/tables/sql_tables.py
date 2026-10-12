@@ -24,8 +24,6 @@ is built with SQLAlchemy Core, so a table and a column arriving from a game
 export are quoted as identifiers rather than pasted into a string.
 """
 
-from __future__ import annotations
-
 import sys
 from collections.abc import Iterator, Sequence
 from pathlib import Path

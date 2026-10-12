@@ -21,8 +21,6 @@ read once, and `check_parallel` is what proves the second pass did not move
 them.
 """
 
-from __future__ import annotations
-
 import time
 from collections.abc import Container, Iterable, Mapping, Sequence
 from typing import Any

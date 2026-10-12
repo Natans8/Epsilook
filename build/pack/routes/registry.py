@@ -5,8 +5,6 @@ here are the few fields whose value is assembled from others rather than read,
 so the function that assembles it lives beside the record that names it.
 """
 
-from __future__ import annotations
-
 from collections.abc import Mapping, Sequence
 
 from ..sources import read_anim_names

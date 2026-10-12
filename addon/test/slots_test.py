@@ -5,8 +5,6 @@ reader names one: what the effect or aura beside it makes of each column, then
 the word a vocabulary value stands for or the words a mask sets.
 """
 
-from __future__ import annotations
-
 from typing import cast
 
 from support import LuaRuntime, unwrap

@@ -16,8 +16,6 @@ everywhere else in this build, and stating it in the artifact is what lets the
 app tell "this build never had it" from "this pack is broken".
 """
 
-from __future__ import annotations
-
 import json
 from collections.abc import Mapping, Sequence
 

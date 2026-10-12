@@ -7,8 +7,6 @@ described here as protocols of exactly the calls the tests make. A test then
 reads a Lua value through `lua_function` or `unwrap` and is typed from there.
 """
 
-from __future__ import annotations
-
 from collections.abc import Iterable
 from typing import Protocol, cast
 

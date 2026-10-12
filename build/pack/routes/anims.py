@@ -4,8 +4,6 @@ An animation id indexes a community-maintained name list rather than a db2 key,
 so every reader here drops an id past the list's end.
 """
 
-from __future__ import annotations
-
 from collections.abc import Sequence
 
 from ..sources import load_local_enum

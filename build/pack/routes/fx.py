@@ -6,8 +6,6 @@ tuning is a column that changes how a thing is drawn, and geometry that
 changes where it is drawn is content.
 """
 
-from __future__ import annotations
-
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import NamedTuple

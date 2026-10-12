@@ -9,8 +9,6 @@ build are wrong on the other ten. That is what lets the app draw a numeric
 control without walking a quarter of a million values on every load.
 """
 
-from __future__ import annotations
-
 from collections import Counter
 from collections.abc import Iterable
 from typing import Any

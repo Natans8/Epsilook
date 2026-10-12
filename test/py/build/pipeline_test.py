@@ -4,9 +4,8 @@ Built from plain values -- a fake section, a stated absent set -- because what
 is under test is the decision, not any route behind it.
 """
 
-from __future__ import annotations
-
 import inspect
+from annotationlib import Format
 from collections.abc import Iterator, Sequence
 from typing import cast
 
@@ -46,7 +45,9 @@ def test_a_defaulted_parameter_never_shadows_a_field() -> None:
     for route in REGISTERED:
         defaulted = {
             name
-            for name, parameter in inspect.signature(route.produce).parameters.items()
+            for name, parameter in inspect.signature(
+                route.produce, annotation_format=Format.FORWARDREF
+            ).parameters.items()
             if parameter.default is not inspect.Parameter.empty and name not in route.needs
         }
         shadowing = sorted(defaulted & filled)

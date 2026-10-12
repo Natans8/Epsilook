@@ -7,8 +7,6 @@ read from either end, so shipping them again here would be a third copy of one
 fact. What stays is the pool those rows store a number into.
 """
 
-from __future__ import annotations
-
 from ..registry import register
 from ..section import Layout, Section, size
 

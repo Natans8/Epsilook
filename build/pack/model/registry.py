@@ -1,7 +1,5 @@
 """The section registry: every section the build ships, as data."""
 
-from __future__ import annotations
-
 from ..derive import CONTEXT_FIELDS, SPOKEN_FIELDS
 from .section import Layout, Section
 

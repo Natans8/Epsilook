@@ -5,8 +5,6 @@ whole point: a family is a mapping, and a mapping can be checked against the
 pairs it was given.
 """
 
-from __future__ import annotations
-
 from collections.abc import Iterable
 from typing import cast
 

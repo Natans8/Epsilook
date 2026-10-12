@@ -6,8 +6,6 @@ side sections hanging off it. These run against the built data, because what is
 worth proving is that the Lua reads what the Python emitted.
 """
 
-from __future__ import annotations
-
 from typing import cast
 
 from support import LuaRuntime, unwrap

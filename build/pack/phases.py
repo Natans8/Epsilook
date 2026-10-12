@@ -10,8 +10,6 @@ layers say it: the routes read the event, the walk keys an occurrence by it,
 and the pack ships the word.
 """
 
-from __future__ import annotations
-
 PHASES_ENUM = "spell_visual_events"
 """The vendored `SpellVisualEventEvent` enum, whose values are the phases.
 

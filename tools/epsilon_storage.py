@@ -19,8 +19,6 @@ they are downloaded on demand. That is why every walk takes a local-only switch
 and why it is the default. Reading the rest costs one request per file.
 """
 
-from __future__ import annotations
-
 import struct
 import sys
 import zlib
@@ -221,7 +219,7 @@ class LocalArchives:
             return None
         try:
             return decode_blte(raw)
-        except (ValueError, zlib.error):
+        except ValueError, zlib.error:
             return None
 
 
@@ -352,7 +350,7 @@ class EpsilonStorage:
             # every read would re-scan a hundred and forty megabytes.
             raw = self.remote._fetch(key)  # pylint: disable=protected-access
             return decode_blte(raw)
-        except (LookupError, OSError, ValueError, zlib.error):
+        except LookupError, OSError, ValueError, zlib.error:
             return None
 
     def locate(self, file_ids: Iterable[int]) -> None:
@@ -424,7 +422,7 @@ class EpsilonStorage:
                 blob = self.remote._get(  # pylint: disable=protected-access
                     self.remote.cdn.data_url(key.hex()), headers={"Range": f"bytes=0-{cap - 1}"}
                 )
-        except (LookupError, OSError, ValueError):
+        except LookupError, OSError, ValueError:
             return None
         return decode_blte_prefix(blob)
 

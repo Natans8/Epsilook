@@ -26,8 +26,6 @@ larger set of known names yields fewer new rows, not more, and re-running after
 another route lands is how the last few are picked up.
 """
 
-from __future__ import annotations
-
 import bisect
 import re
 import struct

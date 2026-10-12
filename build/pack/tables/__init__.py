@@ -7,8 +7,6 @@ composition, because revising a table and restating it in another language
 differ only in what each source has to declare about itself.
 """
 
-from __future__ import annotations
-
 from .arrays import array_columns
 from .csv_tables import CsvTables
 from .hotfixes import hotfix_overlays

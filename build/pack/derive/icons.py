@@ -6,8 +6,6 @@ repeat heavily across spells, so they are deduped into one table and each spell
 carries an index into it.
 """
 
-from __future__ import annotations
-
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 

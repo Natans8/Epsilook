@@ -25,8 +25,6 @@ The exported column order is the schema's order, with arrays expanded to
 sits fourth exports it fourth.
 """
 
-from __future__ import annotations
-
 import math
 import struct
 from collections.abc import Iterator, Sequence

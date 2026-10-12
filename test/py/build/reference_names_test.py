@@ -1,7 +1,5 @@
 """The names a reference slot's raw value resolves to, read off the rows a build carries."""
 
-from __future__ import annotations
-
 from dataclasses import replace
 
 from pack.derive.context import DeriveContext, Reads

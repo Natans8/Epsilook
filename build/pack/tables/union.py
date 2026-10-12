@@ -10,8 +10,6 @@ them in; the one exception is declared, a source whose tables stand over the
 build's own, which is what a pinned build is for.
 """
 
-from __future__ import annotations
-
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 

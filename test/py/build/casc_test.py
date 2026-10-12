@@ -11,8 +11,6 @@ wire format, which is the thing being asserted, and no service is stood up to
 produce it.
 """
 
-from __future__ import annotations
-
 import struct
 import urllib.error
 import urllib.request

@@ -4,8 +4,6 @@ A spell can carry a cast time and a channel at once, and both numbers have to
 survive. The rest pins the two sentinels and the optional table.
 """
 
-from __future__ import annotations
-
 from pack.routes.flows import Routes
 from pack.routes.delivery import BREAKS_ON_MOVE, CHANNELLED, Delivery
 from support import BuildTables

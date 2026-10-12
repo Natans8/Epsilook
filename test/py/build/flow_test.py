@@ -2,8 +2,6 @@
 named wrongly fails when the flow is written rather than when a build runs.
 """
 
-from __future__ import annotations
-
 from typing import NamedTuple
 
 import pytest

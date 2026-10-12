@@ -7,9 +7,8 @@ plans this build can run; a record composed of other fields; or one read
 split into several landings. Nothing runs until the terminal asks.
 """
 
-from __future__ import annotations
-
 import inspect
+from annotationlib import Format
 from collections.abc import Callable, Container, Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from abc import ABC, abstractmethod
@@ -702,7 +701,7 @@ def compose[T](build: Callable[..., T], **sources: str) -> Composed[T]:
     Raises:
         ValueError: a mapping names a parameter ``build`` does not take.
     """
-    parameters = inspect.signature(build).parameters
+    parameters = inspect.signature(build, annotation_format=Format.FORWARDREF).parameters
     unknown = sorted(set(sources) - set(parameters))
     if unknown:
         raise ValueError(f"{', '.join(unknown)} is not a parameter of {getattr(build, '__name__', build)}")

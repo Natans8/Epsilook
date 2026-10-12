@@ -10,8 +10,6 @@ these return exactly what the client's own addon list reads off them:
 `name, title, notes, loadable, reason, security, newVersion`.
 """
 
-from __future__ import annotations
-
 import re
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager

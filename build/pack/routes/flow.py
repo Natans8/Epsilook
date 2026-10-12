@@ -14,8 +14,6 @@ the expressions, the steps, the plan and the terminals, and a route imports
 it from here.
 """
 
-from __future__ import annotations
-
 from .expressions import (
     Bit,
     BitsOf,

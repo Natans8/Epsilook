@@ -1,7 +1,5 @@
 """Projectiles, and the attachment rule the game settled."""
 
-from __future__ import annotations
-
 from pack.routes.flows import Routes
 from pack.routes.attachments import DEFAULT_MISSILE_SOURCE
 from pack.routes.missiles import Missile, MissileMotion, VisualMissiles

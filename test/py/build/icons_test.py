@@ -1,7 +1,5 @@
 """The icon table: deduping, and the two places case is folded."""
 
-from __future__ import annotations
-
 from pack.derive.icons import NO_ICON, build_icon_index
 
 FROST = "Interface/Icons/Spell_Frost_FrostBolt02.blp"

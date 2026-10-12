@@ -5,8 +5,6 @@ displays it can wear -- faction and gender variants, so several per mount. Both
 halves are client data, so this needs no server dump.
 """
 
-from __future__ import annotations
-
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import NamedTuple

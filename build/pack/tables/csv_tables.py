@@ -1,7 +1,5 @@
 """Tables served from the CSV files acquisition left in the cache."""
 
-from __future__ import annotations
-
 import csv
 import sys
 from collections.abc import Iterator, Sequence

@@ -6,8 +6,6 @@ pins the two things that can break: a section naming a field nothing produces,
 and the closure quietly coming out short.
 """
 
-from __future__ import annotations
-
 import json
 import os
 

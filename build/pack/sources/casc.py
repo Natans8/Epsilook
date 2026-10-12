@@ -35,8 +35,6 @@ newer one at the older offsets yields file ids that are wrong rather than
 absent.
 """
 
-from __future__ import annotations
-
 import struct
 import threading
 import urllib.error

@@ -6,8 +6,6 @@ regress silently: the shapes are rare enough that a whole run can look right
 while a hundred rows are wrong.
 """
 
-from __future__ import annotations
-
 from collections.abc import Iterable
 from pathlib import Path
 
@@ -238,7 +236,7 @@ def test_a_catalogue_row_keeps_the_bytes_it_was_written_with() -> None:
     chat layer; reading the file skips the round trip that mangled it."""
     from epsilon_names import read_object_dump  # pylint: disable=import-outside-toplevel
 
-    storage = CatalogueStorage("341891;Катапульта\n".encode("utf-8"))
+    storage = CatalogueStorage("341891;Катапульта\n".encode())
     assert read_object_dump(cached=None, storage=storage) == {341891: "Катапульта"}
 
 

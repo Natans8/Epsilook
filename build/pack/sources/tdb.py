@@ -7,8 +7,6 @@ client shipped. Each release is scanned once, leaving the distilled CSVs and the
 archive in the cache.
 """
 
-from __future__ import annotations
-
 import csv
 import sys
 from collections.abc import Iterable, Mapping, Sequence

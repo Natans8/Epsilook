@@ -18,8 +18,6 @@ The values are the build's own, which is the right answer for a build-pinned
 pack even where it disagrees with a site rendering a later patch.
 """
 
-from __future__ import annotations
-
 import ast
 import operator
 import re
@@ -239,11 +237,11 @@ def _arithmetic(body: str) -> float | None:
     """
     try:
         tree = ast.parse(body.strip(), mode="eval")
-    except (SyntaxError, ValueError, MemoryError, RecursionError):
+    except SyntaxError, ValueError, MemoryError, RecursionError:
         return None
     try:
         return _folded(tree.body)
-    except (ArithmeticError, TypeError, ValueError, RecursionError):
+    except ArithmeticError, TypeError, ValueError, RecursionError:
         return None
 
 

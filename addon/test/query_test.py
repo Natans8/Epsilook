@@ -1,7 +1,5 @@
 """The parser: what query text becomes, and what it refuses."""
 
-from __future__ import annotations
-
 from typing import cast
 
 from support import LuaFunction, LuaRuntime, as_dict, lua_function, lua_table

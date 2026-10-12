@@ -1,8 +1,6 @@
 """What the catalogue tool guarantees: the module it writes is the source
 roster rendered, and the checked-in copy is that rendering."""
 
-from __future__ import annotations
-
 import pytest
 
 from catalogue import MODULE, generated, rendered

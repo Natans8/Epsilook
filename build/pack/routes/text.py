@@ -6,8 +6,6 @@ The templates are deliberately not filtered against the spell list, because a
 template routinely redirects to a spell that has no name row of its own.
 """
 
-from __future__ import annotations
-
 import re
 from collections import defaultdict
 from dataclasses import dataclass, field

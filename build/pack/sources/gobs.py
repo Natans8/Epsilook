@@ -5,8 +5,6 @@ because no build can regenerate it: the ids are Epsilon's, not Blizzard's.
 Regenerating it needs the client, which is why the file is tracked.
 """
 
-from __future__ import annotations
-
 import csv
 import gzip
 import sys

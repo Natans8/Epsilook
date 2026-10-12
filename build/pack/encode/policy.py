@@ -25,8 +25,6 @@ whole build. Whichever ships, the app must understand the shape -- an encoder
 the reader does not know is a silently wrong pack, not a smaller one.
 """
 
-from __future__ import annotations
-
 from collections.abc import Mapping
 from types import MappingProxyType
 

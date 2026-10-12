@@ -1,7 +1,5 @@
 """The rules that decide which of a supplementary source's rows count."""
 
-from __future__ import annotations
-
 from pack.supplements import above, always, at_least
 
 

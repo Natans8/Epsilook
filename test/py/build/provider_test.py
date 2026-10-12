@@ -4,8 +4,6 @@ Parametrised over the implementations; each case is a semantic some route
 depends on.
 """
 
-from __future__ import annotations
-
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any, cast

@@ -1,7 +1,5 @@
 """Why each column decode is a decode and not a cast."""
 
-from __future__ import annotations
-
 import pytest
 
 from pack.routes.columns import to_amount, to_int, to_int_from_float

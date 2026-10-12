@@ -30,8 +30,6 @@ is committed. The build only ever reads the JSON.
     python tools/expansions.py --report   # per-source counts and rung overlaps
 """
 
-from __future__ import annotations
-
 import argparse
 import gzip
 import json

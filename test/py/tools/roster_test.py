@@ -6,8 +6,6 @@ id is a directory under `site/data/`, a `?v=` value and a database schema, so
 two packs agreeing on it is one silently overwriting the other.
 """
 
-from __future__ import annotations
-
 from collections import Counter
 
 import pytest

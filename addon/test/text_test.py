@@ -1,7 +1,5 @@
 """Text folding, and the column scan that runs a folded operand over a payload."""
 
-from __future__ import annotations
-
 from typing import cast
 
 from support import LuaRuntime, LuaTable, lua_function
@@ -52,7 +50,7 @@ def scanned(runtime: LuaRuntime, values: list[str], op: str, written: str) -> li
 def test_fold_and_squash(bare: LuaRuntime) -> None:
     fold = lua_function(bare, b"Epsilook.Text.fold")
     squash = lua_function(bare, b"Epsilook.Text.squash")
-    assert fold("Fire’Ball ".encode("utf-8")) == b"fire'ball "
+    assert fold("Fire’Ball ".encode()) == b"fire'ball "
     assert squash(b"Fire-Ball, Jr.") == b"fireballjr"
     assert squash(b"|cff71d5ff|Hspell:133|h[Fire]|h|r") == b"fire"
     assert squash(b"---") == b""

@@ -12,8 +12,6 @@ instant the complement at load time. That also sweeps up the spells with no
 partition.
 """
 
-from __future__ import annotations
-
 from collections.abc import Container, Iterable
 from dataclasses import dataclass
 from typing import NamedTuple

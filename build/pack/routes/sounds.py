@@ -4,8 +4,6 @@ A kit is a named group: the kit is what a spell references, the files under it
 are what the player hears. A kit with no entries is not shipped.
 """
 
-from __future__ import annotations
-
 from typing import NamedTuple
 
 from ..sources.enums import load_local_enum

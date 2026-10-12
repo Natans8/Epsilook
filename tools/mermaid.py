@@ -16,8 +16,6 @@ this never downloads a browser: a machine that has it validates, and one that
 does not says so and stops rather than pretending.
 """
 
-from __future__ import annotations
-
 import argparse
 import re
 import shutil

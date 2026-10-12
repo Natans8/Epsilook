@@ -5,8 +5,6 @@ itself; WoWDBDefs carries the community's names for the rest; wow.tools carries
 the animation names. The latter two are refetched every build.
 """
 
-from __future__ import annotations
-
 from collections.abc import Mapping
 
 import json

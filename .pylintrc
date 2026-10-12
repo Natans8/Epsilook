@@ -12,7 +12,7 @@
 # misuse of a class's own API.
 
 [MAIN]
-py-version = 3.12
+py-version = 3.14
 jobs = 0
 
 [FORMAT]

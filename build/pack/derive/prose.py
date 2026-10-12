@@ -11,8 +11,6 @@ unfiltered: the redirect target has to be resolvable even though it never ships
 a description of its own.
 """
 
-from __future__ import annotations
-
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 

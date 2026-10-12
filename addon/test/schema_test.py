@@ -1,7 +1,5 @@
 """Reading values by the declarations the data carries."""
 
-from __future__ import annotations
-
 from typing import cast
 
 from support import LuaRuntime, LuaTable, as_list, lua_function, lua_table

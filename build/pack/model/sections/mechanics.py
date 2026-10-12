@@ -10,8 +10,6 @@ tells you nothing, which is why they are declared together rather than in a
 vocabulary module of their own.
 """
 
-from __future__ import annotations
-
 import math
 from collections.abc import Callable, Mapping
 

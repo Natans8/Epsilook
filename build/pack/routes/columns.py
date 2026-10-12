@@ -7,8 +7,6 @@ builds and `2` on others, and one value under two column names depending on the
 build.
 """
 
-from __future__ import annotations
-
 BASE_DIFFICULTY = 0
 """The difficulty whose row a player's tooltip shows.
 

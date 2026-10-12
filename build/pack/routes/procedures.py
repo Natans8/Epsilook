@@ -7,8 +7,6 @@ as the rows of one Type and the column that Type reads. The types are declared
 with their decodes in `enums/spell_procedural_effect_types.json`.
 """
 
-from __future__ import annotations
-
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 

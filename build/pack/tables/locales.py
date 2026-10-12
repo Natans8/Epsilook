@@ -22,8 +22,6 @@ Module-private for the reason the hotfix map is: an overlay with no rule would
 union every language into one table, last one wins.
 """
 
-from __future__ import annotations
-
 from collections.abc import Iterable, Mapping
 from dataclasses import replace
 

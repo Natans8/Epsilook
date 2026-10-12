@@ -5,8 +5,6 @@ row's reference is in, so a creature display and an item share one field rather
 than each getting a column that is empty for the other six categories.
 """
 
-from __future__ import annotations
-
 from ...derive import Reads, build_item_icons
 from ...routes.models import MODEL_CAT_NAMES
 from ...targets import TARGET_NAMES

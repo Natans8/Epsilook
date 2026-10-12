@@ -19,11 +19,10 @@ adds nothing but how to read it, so a note written for the next reader of the
 code is the note the reference shows, and it moves with the code it describes.
 """
 
-from __future__ import annotations
-
 import ast
 import inspect
 import re
+from annotationlib import Format
 import textwrap
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
@@ -322,11 +321,9 @@ def name_of(value: object, fallback: str) -> str:
 
 
 def return_name(function: Callable[..., object]) -> str:
-    """The name of what a function is annotated to return."""
-    annotation = inspect.signature(function).return_annotation
-    if annotation is inspect.Signature.empty:
-        return "value"
-    return annotation if isinstance(annotation, str) else name_of(annotation, str(annotation))
+    """What a function is annotated to return, spelled as its source spells it."""
+    annotation = inspect.signature(function, annotation_format=Format.STRING).return_annotation
+    return "value" if annotation is inspect.Signature.empty else str(annotation)
 
 
 def attribute_notes(module: ModuleType, owner: str = "") -> dict[str, str]:

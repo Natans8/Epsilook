@@ -6,8 +6,6 @@ and importing a name out of `conftest` is not something pytest supports. So the
 shared type lives here, where both sides can name it.
 """
 
-from __future__ import annotations
-
 import email.message
 import io
 import urllib.error

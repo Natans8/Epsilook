@@ -12,8 +12,6 @@ one row per spell and source pair, which multiplies out past anything a reader
 wants; a reader walks the two in turn instead.
 """
 
-from __future__ import annotations
-
 from typing import NamedTuple
 
 POOL_KIND = 1

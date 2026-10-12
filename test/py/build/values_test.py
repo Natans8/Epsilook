@@ -1,7 +1,5 @@
 """Base difficulty only, template indexing, and the zeroes that are not values."""
 
-from __future__ import annotations
-
 from pack.routes.values import DescriptionValues
 from pack.tables import Tables
 from support import BuildTables, resolve

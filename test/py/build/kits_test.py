@@ -1,7 +1,5 @@
 """The fan-out point: one row, ten tables, and the double dispatch."""
 
-from __future__ import annotations
-
 from pack.routes.flows import Routes
 from pack.routes.attachments import NO_ATTACHMENT, NO_MOTION
 from pack.routes.fx import ChainEffect, ScreenRow, Shadowy

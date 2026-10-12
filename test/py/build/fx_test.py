@@ -1,7 +1,5 @@
 """The fx payloads, and the line between renderer tuning and content."""
 
-from __future__ import annotations
-
 from pack.routes.fx import TEX_MASK, TEX_OVERLAY, FxPayloads
 from support import BuildTables, resolve
 

@@ -5,8 +5,6 @@ bytes, which is what lets the sharing rule be tested by declaring two builds
 rather than by running two.
 """
 
-from __future__ import annotations
-
 import gzip
 import io
 import json

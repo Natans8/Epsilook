@@ -12,8 +12,6 @@ nothing to do.
 `builddb.py` already imports `dbd`.
 """
 
-from __future__ import annotations
-
 import io
 import re
 import subprocess
@@ -120,7 +118,7 @@ def git(*args: str) -> str:
         out = subprocess.run(
             ["git", "-C", str(ROOT), *args], capture_output=True, encoding="utf-8", errors="replace", check=True
         )
-    except (subprocess.CalledProcessError, FileNotFoundError):
+    except subprocess.CalledProcessError, FileNotFoundError:
         return ""
     return out.stdout or ""
 

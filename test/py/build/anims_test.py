@@ -1,7 +1,5 @@
 """Animations: what the name list decides, and what belongs to a segment."""
 
-from __future__ import annotations
-
 from pack.routes.flows import Routes
 from pack.routes.anims import read_anim_emotes
 from support import BuildTables

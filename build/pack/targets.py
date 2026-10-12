@@ -7,14 +7,10 @@ shipped in the pack -- three layers, one vocabulary. WHEN a row plays is the
 other half of the same question, and `phases.py` declares that.
 """
 
-from __future__ import annotations
-
 from collections.abc import Iterable
-from typing import TypeVar
 
 from .phases import AURA_PHASE_EVENTS
 
-T = TypeVar("T")
 
 # Declared before VISUAL_REDIRECTS, which needs them.
 NO_TARGET = 0
@@ -152,7 +148,7 @@ def resolve_target_bit(bit: int, phase: int, aura_bits: int, cast_bits: int) -> 
     return bit
 
 
-def merge_masked(into: dict[T, int], items: Iterable[T], mask: int) -> None:
+def merge_masked[T](into: dict[T, int], items: Iterable[T], mask: int) -> None:
     """Union items into a payload bucket, accumulating each one's target mask.
 
     The primitive the graph walk is built from. Every payload bucket maps a

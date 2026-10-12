@@ -1,7 +1,5 @@
 """The roster manifest: which packs exist, and what busts their caches."""
 
-from __future__ import annotations
-
 import hashlib
 import json
 from pathlib import Path

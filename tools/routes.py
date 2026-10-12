@@ -14,8 +14,6 @@ manifest counts, read from the committed manifest here and from the fresh one
 by the build, which are the same numbers once the build is committed.
 """
 
-from __future__ import annotations
-
 import argparse
 import json
 import sys

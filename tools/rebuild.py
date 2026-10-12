@@ -30,8 +30,6 @@ It refuses to run against a dirty pack, because restoring afterwards would
 throw away whatever was there.
 """
 
-from __future__ import annotations
-
 import argparse
 import json
 import shutil
@@ -67,7 +65,7 @@ def git(*args: str) -> str:
         out = subprocess.run(
             ["git", "-C", str(ROOT), *args], capture_output=True, encoding="utf-8", errors="replace", check=True
         )
-    except (subprocess.CalledProcessError, FileNotFoundError):
+    except subprocess.CalledProcessError, FileNotFoundError:
         return ""
     return out.stdout or ""
 

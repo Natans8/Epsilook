@@ -7,8 +7,6 @@ columns a flow carries at one point, so a name resolves to a position once,
 when the flow is written down.
 """
 
-from __future__ import annotations
-
 from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass
 from typing import Any, ClassVar, Protocol

@@ -5,8 +5,6 @@ the spell does, so those rows are in the mech column; this is what the number
 one of them stores resolves to.
 """
 
-from __future__ import annotations
-
 from ...derive import Reads
 from ..registry import register
 from ..section import Section, SectionColumns, size

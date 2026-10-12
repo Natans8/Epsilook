@@ -10,8 +10,6 @@ Epsilon runs its own, and a trainer it has moved is not visible from here --
 the caveat the cast gates already carry.
 """
 
-from __future__ import annotations
-
 from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
 from typing import NamedTuple

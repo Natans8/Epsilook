@@ -5,8 +5,6 @@ a pool, a pool may draw from another pool, and reading only the first kind
 silently loses most of the drops in the game.
 """
 
-from __future__ import annotations
-
 from pack.derive.sources import TOP_SOURCES, collect_sources, droppers, pooled, source_references
 from pack.routes import LootRow, QuestRewards, SourceKind
 from pack.routes.flows import Routes

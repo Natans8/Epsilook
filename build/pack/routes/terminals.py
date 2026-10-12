@@ -1,7 +1,5 @@
 """Where a flow's rows land: the shapes a route's field can hold, and the readers a cell goes through."""
 
-from __future__ import annotations
-
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any

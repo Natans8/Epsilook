@@ -1,7 +1,5 @@
 """The ``Build`` value: what one game version is to the code."""
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 
 

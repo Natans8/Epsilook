@@ -13,8 +13,6 @@ for is the one the most `Light` rows draw, which is the sky most people have
 actually seen.
 """
 
-from __future__ import annotations
-
 from collections.abc import Mapping
 
 from ...derive import Reads

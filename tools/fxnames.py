@@ -32,8 +32,6 @@ points at the same asset, which is a per-pack question and belongs to the build.
 This tool ships all three columns and lets the build judge.
 """
 
-from __future__ import annotations
-
 import argparse
 import gzip
 import json

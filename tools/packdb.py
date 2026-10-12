@@ -49,8 +49,6 @@ decodes them, which is also why the decode lives beside the encoder rather than
 here.
 """
 
-from __future__ import annotations
-
 import argparse
 import json
 import sys

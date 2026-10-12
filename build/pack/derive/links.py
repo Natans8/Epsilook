@@ -6,8 +6,6 @@ is why it lives here rather than in the route that reads the rows: the enum
 names it falls back to are resolved per build.
 """
 
-from __future__ import annotations
-
 from collections.abc import Mapping
 
 # A word is listed here only where several enum spellings name one

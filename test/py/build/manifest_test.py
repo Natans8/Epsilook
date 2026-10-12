@@ -1,7 +1,5 @@
 """What a pack's manifest says about its modules, its languages and what it lacks."""
 
-from __future__ import annotations
-
 import json
 
 from pack.emit.manifest import carry_forward, manifest, rendered

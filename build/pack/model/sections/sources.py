@@ -5,8 +5,6 @@ rows themselves, and the names of what they point at. Here they only become
 columns.
 """
 
-from __future__ import annotations
-
 from ...derive import Reads
 from ...routes import SOURCE_TABLES, SOURCE_WORDS, SourceKind
 from ..registry import register

@@ -9,8 +9,6 @@ field called `kind` is summarised to its id there, which is what a parse tree
 wants and not what these rows do.
 """
 
-from __future__ import annotations
-
 from typing import cast
 
 from support import LuaRuntime, unwrap

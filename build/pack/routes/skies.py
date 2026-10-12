@@ -14,8 +14,6 @@ stretch of a map a name; without one, the map is as close to a place as a light
 gets, because no table turns a light's coordinates into an area.
 """
 
-from __future__ import annotations
-
 from dataclasses import dataclass, field
 
 from ..tables import Tables

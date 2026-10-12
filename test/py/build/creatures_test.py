@@ -1,7 +1,5 @@
 """The creature chain: what survives when the server dump does not."""
 
-from __future__ import annotations
-
 from pack.drift import TDB_OPTIONAL_COLUMNS, TDB_OPTIONAL_TABLES
 from pack.routes.creatures import CreatureModels
 from pack.tables import Tables

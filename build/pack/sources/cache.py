@@ -5,8 +5,6 @@ already shipped: a version-pinned table cannot, a community-maintained list
 can, and a file tracked in this repository is not fetched at all.
 """
 
-from __future__ import annotations
-
 import sys
 import time
 import urllib.error

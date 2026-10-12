@@ -9,8 +9,6 @@ row flattening, the families and the text cooker, each a decorated function
 in its own module.
 """
 
-from __future__ import annotations
-
 from operator import attrgetter, or_
 
 from ..drift import RETIRED_SPAWN_OBJECT_EFFECTS, SPAWN_OBJECT_SLOTS_UNTIL, SPELL_NAME_SOURCES

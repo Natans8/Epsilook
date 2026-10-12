@@ -8,8 +8,6 @@ localised column carries the ``_lang`` suffix the export gives it, and an
 array column is marked, so one slot is ``Name[0]`` and the whole is ``Name[:]``.
 """
 
-from __future__ import annotations
-
 from .expressions import Column, Table
 
 

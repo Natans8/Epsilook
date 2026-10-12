@@ -11,8 +11,6 @@ icon's is reduced to a name and shipped as the icon table, so its file id never
 appears in the files table at all.
 """
 
-from __future__ import annotations
-
 from collections import defaultdict
 from collections.abc import Container, Iterable, Mapping
 from dataclasses import dataclass, field

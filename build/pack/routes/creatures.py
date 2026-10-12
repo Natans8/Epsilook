@@ -7,8 +7,6 @@ only the word for it. Morphs, shapeshift forms, mounts and the Type-2 effect
 names all end at a `CreatureDisplayID` and all resolve it here.
 """
 
-from __future__ import annotations
-
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import NamedTuple

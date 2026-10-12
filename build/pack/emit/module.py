@@ -23,8 +23,6 @@ locale modules beside them. Which language a module holds is a fact the module
 carries, so the manifest can group them without reading a byte.
 """
 
-from __future__ import annotations
-
 import gzip
 import hashlib
 import io

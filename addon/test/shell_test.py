@@ -5,8 +5,6 @@ is tested is every function that turns a record into a line or a message into
 a decision, run bare.
 """
 
-from __future__ import annotations
-
 import re
 from typing import cast
 

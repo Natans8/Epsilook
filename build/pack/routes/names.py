@@ -6,8 +6,6 @@ the name drifted -- `SpellName.db2` was split out of `Spell.db2` in BfA -- so
 the source is declared in `SPELL_NAME_SOURCES`, first candidate the build has.
 """
 
-from __future__ import annotations
-
 import sys
 from collections.abc import Mapping
 from dataclasses import dataclass, field

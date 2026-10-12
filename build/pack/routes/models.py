@@ -6,8 +6,6 @@ sharing only a file id and a category word. The category says which id space a
 row's `ref` is in, so a display id and an item id can share one field.
 """
 
-from __future__ import annotations
-
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from math import degrees

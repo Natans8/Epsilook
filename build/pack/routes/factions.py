@@ -8,8 +8,6 @@ pack ships the name for the word, the group for what separates nine templates
 all named Monster, and the faction id for the link.
 """
 
-from __future__ import annotations
-
 from typing import NamedTuple
 
 

@@ -4,8 +4,6 @@ Four routes that answer "can I cast this, and what happens when I do" rather
 than "what does it look like".
 """
 
-from __future__ import annotations
-
 from collections.abc import Callable
 
 from ...derive import Reads

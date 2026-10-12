@@ -5,8 +5,6 @@ escape table is written out in full: treating a backslash as "take the next
 character literally" is silently wrong for every control escape.
 """
 
-from __future__ import annotations
-
 from collections.abc import Iterator
 from dataclasses import dataclass
 

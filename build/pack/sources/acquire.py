@@ -8,8 +8,6 @@ split is what makes the first answerable on its own -- what a build reads, and
 where each of it comes from, with no request made and no network needed.
 """
 
-from __future__ import annotations
-
 import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field

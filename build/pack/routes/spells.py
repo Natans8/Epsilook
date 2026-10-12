@@ -12,8 +12,6 @@ disagree. The values are returned raw: `attributes.py` decodes the flag words
 and `delivery.py` resolves the two timing ids against their own tables.
 """
 
-from __future__ import annotations
-
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from typing import NamedTuple

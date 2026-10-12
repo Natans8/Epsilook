@@ -4,8 +4,6 @@ A route may not name a file, so its tests write rows as CSVs and read them back
 through a real `CsvTables` rather than a stand-in.
 """
 
-from __future__ import annotations
-
 import itertools
 from pathlib import Path
 

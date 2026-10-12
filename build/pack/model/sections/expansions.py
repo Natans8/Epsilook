@@ -10,8 +10,6 @@ about the build being packed: every pack that ships it ships the same bytes, so
 they name one file and fetch it once.
 """
 
-from __future__ import annotations
-
 from ...derive import Reads
 from ..registry import register
 from ..section import CountFamily, Scope, Section, SectionColumns

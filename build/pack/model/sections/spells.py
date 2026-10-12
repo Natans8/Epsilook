@@ -4,8 +4,6 @@ The row order of the whole pack: every other per-spell column is parallel to
 `spells.ids`, so a reader joins by position and never by lookup.
 """
 
-from __future__ import annotations
-
 from ...derive import Reads
 from ..registry import register
 from ..section import Cardinality, Count, Section, SectionColumns

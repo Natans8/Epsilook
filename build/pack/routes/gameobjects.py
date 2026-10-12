@@ -4,8 +4,6 @@ All of it depends on the server dump: the display id the model needs is itself
 server-side, so a build without one keeps nothing here.
 """
 
-from __future__ import annotations
-
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import NamedTuple

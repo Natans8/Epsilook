@@ -1,7 +1,5 @@
 """What an item resolves to, including the two thirds that have no name."""
 
-from __future__ import annotations
-
 from pack.routes.items import ItemModels
 from support import BuildTables, resolve
 

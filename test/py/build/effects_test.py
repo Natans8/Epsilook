@@ -5,8 +5,6 @@ with the wrong guard on it, silently produces a payload that is not there --
 or drops one that is.
 """
 
-from __future__ import annotations
-
 from pack.routes.flows import Routes
 from pack.routes.effects import (
     AURA_ANIM_REPLACEMENT_SET,

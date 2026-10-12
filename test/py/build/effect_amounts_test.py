@@ -1,7 +1,5 @@
 """The numbers an effect ships beyond its mechanics row, and the cone a spell's area takes."""
 
-from __future__ import annotations
-
 import math
 from dataclasses import replace
 

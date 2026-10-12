@@ -17,8 +17,6 @@ The draft is tagged at the commit being packaged, so that commit has to be on th
 release that names a commit nobody else can fetch is refused rather than created.
 """
 
-from __future__ import annotations
-
 import argparse
 import re
 import subprocess

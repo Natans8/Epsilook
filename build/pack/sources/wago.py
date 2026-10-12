@@ -14,8 +14,6 @@ translated text are fetched again -- everything else the reader needs is the
 build's own copy, which says the same thing whoever is reading it.
 """
 
-from __future__ import annotations
-
 from pathlib import Path
 
 from ..drift import OPTIONAL_TABLES

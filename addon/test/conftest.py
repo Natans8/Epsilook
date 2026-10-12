@@ -12,8 +12,6 @@ itself, so a file added to the addon is added to the tests by the one edit that
 ships it.
 """
 
-from __future__ import annotations
-
 import sys
 from pathlib import Path
 from typing import cast

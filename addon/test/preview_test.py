@@ -7,8 +7,6 @@ quietly: a file id says nothing about what the file is, and the client loads
 whatever it is given as whatever it was asked for.
 """
 
-from __future__ import annotations
-
 import math
 from typing import cast
 

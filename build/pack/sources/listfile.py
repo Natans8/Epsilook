@@ -13,8 +13,6 @@ shares is therefore a property of the source rather than a coincidence worth
 checking for.
 """
 
-from __future__ import annotations
-
 import json
 import urllib.request
 

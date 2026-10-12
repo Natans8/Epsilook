@@ -6,8 +6,6 @@ thing those rows cannot carry: the word each movement is named by, which a row
 stores a number into.
 """
 
-from __future__ import annotations
-
 from ...routes.effects import MOVEMENT_NAMES
 from ..registry import register
 from ..section import Layout, Scope, Section

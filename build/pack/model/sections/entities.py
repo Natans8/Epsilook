@@ -6,8 +6,6 @@ spaces are separate -- a creature, a mount display, a form, an object entry --
 and a pill has to say which one it is holding.
 """
 
-from __future__ import annotations
-
 from collections.abc import Callable, Mapping
 
 from ...derive import Reads

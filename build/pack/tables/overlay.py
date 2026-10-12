@@ -11,8 +11,6 @@ source judged on the build it was verified against and an asset-name supplement
 judged on the range of ids it is allowed to name.
 """
 
-from __future__ import annotations
-
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 

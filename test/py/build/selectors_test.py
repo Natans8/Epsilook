@@ -6,8 +6,6 @@ the split's own payloads are an oracle for them: wherever both say what a slot
 holds, they must say the same thing.
 """
 
-from __future__ import annotations
-
 import json
 from typing import Any
 

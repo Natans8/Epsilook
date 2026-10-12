@@ -34,8 +34,6 @@ Exit status is 0 when nothing FAILED. Warnings do not fail the run; they are
 things to look at, not things to fix before pushing.
 """
 
-from __future__ import annotations
-
 import argparse
 import ast
 import gzip
@@ -52,6 +50,7 @@ import time
 import tempfile
 import tokenize
 import tomllib
+import urllib.request
 from collections.abc import Iterable, Iterator
 from pathlib import Path
 
@@ -2416,7 +2415,7 @@ def check_pack_freshness(rep: Report) -> None:
     if cache.exists() and now - cache.stat().st_mtime < FRESHNESS_CACHE_HOURS * 3600:
         try:
             latest = json.loads(cache.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
+        except json.JSONDecodeError, OSError:
             latest = {}
     else:
         latest = {}
@@ -2569,7 +2568,7 @@ def check_license_scope(rep: Report) -> None:
 
 
 def check_dependencies(rep: Report) -> None:
-    """Report npm dependencies with a newer release available.
+    """Report npm and Python dependencies with a newer release available.
 
     WARN, never fail: a new minor of esbuild is not a defect in the change being
     committed. It fires here because a dependency bump is worth EVALUATING
@@ -2586,7 +2585,7 @@ def check_dependencies(rep: Report) -> None:
     if cache.exists() and now - cache.stat().st_mtime < FRESHNESS_CACHE_HOURS * 3600:
         try:
             stale = json.loads(cache.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
+        except json.JSONDecodeError, OSError:
             stale = {}
     else:
         exe = shutil.which("npm")
@@ -2605,13 +2604,136 @@ def check_dependencies(rep: Report) -> None:
         cache.parent.mkdir(parents=True, exist_ok=True)
         cache.write_text(json.dumps(stale), encoding="utf-8")
 
-    behind = {name: info for name, info in stale.items() if info.get("current") != info.get("latest")}
+    behind = {name: (info.get("current"), info.get("latest")) for name, info in stale.items()}
+    behind = {name: versions for name, versions in behind.items() if versions[0] != versions[1]}
+    behind |= python_outdated()
     if not behind:
-        rep.ok("dependencies", "every npm dependency is at its latest release")
+        rep.ok("dependencies", "every npm and Python dependency is at its latest release")
         return
-    listing = ", ".join(f"{n} {i.get('current')}->{i.get('latest')}" for n, i in sorted(behind.items())[:4])
+    listing = ", ".join(f"{n} {old}->{new}" for n, (old, new) in sorted(behind.items())[:4])
     more = f" (+{len(behind) - 4} more)" if len(behind) > 4 else ""
     rep.warn("dependencies", f"{len(behind)} behind: {listing}{more} - evaluate before deploying")
+
+
+OUTDATED_LINE = re.compile(
+    r"^\W+(?P<name>[\w.-]+) v(?P<locked>\S+)(?: \([^)]*\))*? \(latest: v(?P<latest>[^)]+)\)", re.M
+)
+"""A line of `uv tree --outdated`: the tree drawing, the name, the locked version,
+any group, then the release that is newer."""
+
+
+def python_outdated() -> dict[str, tuple[str, str]]:
+    """Each direct Python dependency with a newer release, to its locked and latest versions.
+
+    Cached like the npm half, and empty when uv cannot answer, which offline it
+    cannot: the npm half still reports.
+    """
+    cache = CACHE / "uv-outdated.json"
+    if cache.exists() and time.time() - cache.stat().st_mtime < FRESHNESS_CACHE_HOURS * 3600:
+        try:
+            return {name: (old, new) for name, (old, new) in json.loads(cache.read_text(encoding="utf-8")).items()}
+        except json.JSONDecodeError, OSError, ValueError:
+            pass
+    exe = shutil.which("uv")
+    if exe is None:
+        return {}
+    proc = subprocess.run(
+        [exe, "tree", "--outdated", "--depth", "1", "--frozen"],
+        cwd=ROOT,
+        capture_output=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
+    if proc.returncode != 0:
+        return {}
+    found = {m["name"]: (m["locked"], m["latest"]) for m in OUTDATED_LINE.finditer(proc.stdout)}
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    cache.write_text(json.dumps(found), encoding="utf-8")
+    return found
+
+
+WHEEL_TAG = re.compile(r"-(?P<python>[^-]+)-(?P<abi>[^-]+)-(?P<platform>[^-]+)\.whl$")
+"""The three compatibility tags that end a wheel's file name."""
+
+WHEEL_PLATFORMS = {
+    "Windows": lambda platform: "win_amd64" in platform,
+    "Linux": lambda platform: "manylinux" in platform and "x86_64" in platform,
+}
+"""Where the checkout has to install: this machine, and the CI runner."""
+
+
+def serves(wheels: Iterable[str], minor: int, platform: str) -> bool:
+    """Whether one of these wheel files installs on CPython 3.<minor> on a platform."""
+    on = WHEEL_PLATFORMS[platform]
+    for name in wheels:
+        tag = WHEEL_TAG.search(name)
+        if tag is None or not (tag["platform"] == "any" or on(tag["platform"])):
+            continue
+        if tag["abi"] == "none" or tag["abi"] == f"cp3{minor}":
+            return True
+        if tag["abi"].startswith("abi3") and int(tag["python"].removeprefix("cp3") or 0) <= minor:
+            return True
+    return False
+
+
+def check_python_next(rep: Report) -> None:
+    """Whether the next CPython minor can be the project's interpreter yet.
+
+    A minor ships months before every compiled dependency publishes wheels for
+    it, and a sync before then builds the rest from source: lupa's LuaJIT
+    cannot be built outside a Visual Studio prompt and DuckDB takes most of an
+    hour, on every machine and every CI run. So .python-version waits, and this
+    says when the wait is over: OK while it names what blocks the move, WARN
+    once nothing does. A package is blocking when every wheel uv.lock records
+    for it is tied to one CPython minor, and the latest release on PyPI has
+    none for the next one on a platform the checkout installs on.
+    """
+    if os.environ.get("CI"):
+        rep.skip("python next", "a local decision, not a CI concern")
+        return
+    current = int((ROOT / ".python-version").read_text(encoding="utf-8").strip().split(".")[1])
+    minor = current + 1
+    cache = CACHE / f"python-3.{minor}-blockers.json"
+    if cache.exists() and time.time() - cache.stat().st_mtime < FRESHNESS_CACHE_HOURS * 3600:
+        blockers = json.loads(cache.read_text(encoding="utf-8"))
+    else:
+        exe = shutil.which("uv")
+        if exe is None:
+            rep.skip("python next", "uv not on PATH")
+            return
+        listed = subprocess.run(
+            [exe, "python", "list", f"3.{minor}", "--only-downloads", "--output-format", "json"],
+            capture_output=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+        )
+        releases = json.loads(listed.stdout or "[]") if listed.returncode == 0 else []
+        blockers = (
+            [] if any(re.fullmatch(r"\d+\.\d+\.\d+", r["version"]) for r in releases) else [f"no 3.{minor} in uv"]
+        )
+        lock = tomllib.loads((ROOT / "uv.lock").read_text(encoding="utf-8"))
+        for package in lock["package"]:
+            wheels = [w["url"].rsplit("/", 1)[-1] for w in package.get("wheels", [])]
+            if not wheels or all(serves(wheels, minor, platform) for platform in WHEEL_PLATFORMS):
+                continue
+            try:
+                with urllib.request.urlopen(f"https://pypi.org/pypi/{package['name']}/json", timeout=20) as reply:
+                    latest = json.load(reply)
+            except OSError, ValueError:
+                rep.skip("python next", "could not reach PyPI")
+                return
+            files = [f["filename"] for f in latest["urls"]]
+            missing = [platform for platform in WHEEL_PLATFORMS if not serves(files, minor, platform)]
+            if missing:
+                blockers.append(f"{package['name']} {latest['info']['version']} ({', '.join(missing)})")
+        cache.parent.mkdir(parents=True, exist_ok=True)
+        cache.write_text(json.dumps(blockers), encoding="utf-8")
+    if blockers:
+        rep.ok("python next", f"3.{current} stays: no 3.{minor} wheel for {'; '.join(blockers)}")
+    else:
+        rep.warn("python next", f"3.{minor} is installable: every compiled dependency ships a wheel for it")
 
 
 def check_mermaid(rep: Report) -> None:
@@ -2716,6 +2838,16 @@ def check_toolchain(rep: Report) -> None:
         "ruff format",
         ["uv", "run", "ruff", "format", "--check", *PYTHON_SOURCES, ADDON_TESTS],
         "black style at 120 columns, [tool.ruff] in pyproject.toml",
+    )
+    # The language moves under the code: a spelling that was the only one on
+    # the old floor has a modern one on the new. pyupgrade's rules know which
+    # is which for the floor requires-python names, so raising the floor is
+    # what reports every spelling it made obsolete.
+    run_tool(
+        rep,
+        "ruff check",
+        ["uv", "run", "ruff", "check", *PYTHON_SOURCES, ADDON_TESTS],
+        "pyupgrade at the requires-python floor, [tool.ruff.lint] in pyproject.toml",
     )
     run_tool(rep, "mypy", ["uv", "run", "mypy", *PYTHON_SOURCES])
     run_tool(rep, "mypy addon", ["uv", "run", "mypy", ADDON_TESTS])
@@ -2829,6 +2961,7 @@ def main() -> int:
     check_pack_freshness(rep)
     check_cache(rep)
     check_dependencies(rep)
+    check_python_next(rep)
     check_docs(rep, args.base)
 
     straddle = straddle_report(head_before, git("rev-parse", "HEAD").strip())

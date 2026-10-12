@@ -6,8 +6,6 @@ Node. Set EPSILOOK_ADDON_ORACLE=1 to run it; it is the proof that the two
 engines answer one query language alike.
 """
 
-from __future__ import annotations
-
 import json
 import os
 import subprocess
@@ -318,7 +316,7 @@ def _head() -> str | None:
     not a failure, since the check it feeds can only ever be advisory."""
     try:
         done = subprocess.run(["git", "rev-parse", "HEAD"], cwd=REPO, check=True, capture_output=True, text=True)
-    except (OSError, subprocess.CalledProcessError):
+    except OSError, subprocess.CalledProcessError:
         return None
     return done.stdout.strip()
 

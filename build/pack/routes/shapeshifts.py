@@ -4,8 +4,6 @@ Most forms have no creature at all -- Battle Stance, Shadowform, Stealth,
 Moonkin -- so the name and the displays are kept apart.
 """
 
-from __future__ import annotations
-
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import NamedTuple
