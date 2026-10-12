@@ -47,8 +47,10 @@ jobs:
       # and a developer's machine run the same mypy, pyflakes, pylint and
       # pytest. Before this the versions were whatever pip found that morning.
       # Its cache is on by its own default, which leaves it off only for the
-      # events where a cache could be poisoned.
-      - uses: astral-sh/setup-uv@v10
+      # events where a cache could be poisoned. Pinned to a full version
+      # because setup-uv publishes no moving major tag: `@v10` resolves to
+      # nothing and fails the job before a step runs.
+      - uses: astral-sh/setup-uv@v10.3.0
 
       # The Node package.json's devEngines names, so the runtime is declared
       # once. npm's cache follows from devEngines naming npm as the manager.

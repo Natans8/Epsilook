@@ -43,7 +43,8 @@ jobs:
         with:
           node-version-file: package.json
 
-      - uses: astral-sh/setup-uv@v10
+      # a full version: setup-uv publishes no moving major tag
+      - uses: astral-sh/setup-uv@v10.3.0
 
       - name: Ask npm and uv which dependencies have a newer release
         id: check
