@@ -19,9 +19,9 @@
 # pointer files into the image and every game version would fail to load. The
 # `docroot` stage refuses to do that; see tools/verify_site.sh.
 
-ARG NODE_VERSION=24-alpine
-ARG ALPINE_VERSION=3.22
-ARG NGINX_VERSION=1.29-alpine
+ARG NODE_VERSION=26-alpine
+ARG ALPINE_VERSION=3.24
+ARG NGINX_VERSION=1.31-alpine
 
 
 # --- the bundle ------------------------------------------------------------

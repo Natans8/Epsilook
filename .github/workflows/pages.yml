@@ -38,7 +38,7 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           lfs: true
 
@@ -49,10 +49,9 @@ jobs:
       # (CLAUDE.md, "CI is an alarm"). A genuinely unparseable source or an
       # unreachable module does fail here, because then there is no bundle
       # worth serving.
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
-          node-version: '24'
-          cache: npm
+          node-version-file: package.json
 
       - name: Build the bundle
         run: |
@@ -70,11 +69,14 @@ jobs:
       - name: Prove site/ is servable
         run: sh tools/verify_site.sh site
 
-      - uses: actions/configure-pages@v5
+      - uses: actions/configure-pages@v6
 
-      - uses: actions/upload-pages-artifact@v3
+      # Dotfiles are left out of the artifact since v4. site/.nojekyll is the
+      # only one, and a Pages site deployed from an artifact is never run
+      # through Jekyll, so nothing served changes.
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: site
 
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

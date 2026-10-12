@@ -26,7 +26,7 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           # Full history, so the ?v= guard can reach the previously deployed
           # commit. It is cheap without a blob filter now that site/data is out
@@ -46,14 +46,15 @@ jobs:
       # uv resolves the Python checkers from pyproject.toml + uv.lock, so CI
       # and a developer's machine run the same mypy, pyflakes, pylint and
       # pytest. Before this the versions were whatever pip found that morning.
-      - uses: astral-sh/setup-uv@v7
-        with:
-          enable-cache: true
+      # Its cache is on by its own default, which leaves it off only for the
+      # events where a cache could be poisoned.
+      - uses: astral-sh/setup-uv@v10
 
-      - uses: actions/setup-node@v5
+      # The Node package.json's devEngines names, so the runtime is declared
+      # once. npm's cache follows from devEngines naming npm as the manager.
+      - uses: actions/setup-node@v7
         with:
-          node-version: '24'
-          cache: npm
+          node-version-file: package.json
 
       - name: Install the checkers and the toolchain
         run: |

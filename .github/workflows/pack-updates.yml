@@ -27,13 +27,13 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           lfs: false  # the roster is a .py file; the packs are not needed
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
-          python-version: "3.12"
+          python-version-file: .python-version
 
       - name: Ask wago for the current build of each tracked line
         id: check
@@ -51,7 +51,7 @@ jobs:
 
       - name: Open or update the tracking issue
         if: steps.check.outputs.behind == 'true'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const fs = require('fs');

@@ -1,4 +1,4 @@
-# Is any npm dependency behind its latest release?
+# Is any npm or Python dependency behind its latest release?
 #
 # THE POINT IS TO STOP A HUMAN HAVING TO REMEMBER, the same reason
 # pack-updates.yml exists. `tools/check.py` already warns about this, but it
@@ -9,7 +9,9 @@
 # Both halves of package.json are covered: `npm outdated` reports
 # devDependencies alongside dependencies, which is what makes the toolchain —
 # esbuild, typescript, oxlint — visible here at all. Most of what this repo
-# installs IS a dev dependency.
+# installs IS a dev dependency. pyproject.toml is covered the same way:
+# `uv tree --outdated` reports the dev group beside the build's own
+# dependencies, which is where mypy, ruff and pylint live.
 #
 # It deliberately does NOT bump anything. A major of TypeScript or esbuild can
 # change what compiles, and the repo's own checks are the acceptance test, so
@@ -33,15 +35,17 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
-          lfs: false  # package.json is all this reads; the packs are not needed
+          lfs: false  # the two manifests are all this reads; the packs are not needed
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version: "22"
+          node-version-file: package.json
 
-      - name: Ask npm which dependencies have a newer release
+      - uses: astral-sh/setup-uv@v10
+
+      - name: Ask npm and uv which dependencies have a newer release
         id: check
         run: |
           npm install --ignore-scripts --no-audit --no-fund
@@ -59,12 +63,22 @@ jobs:
             const line = ([name, i]) =>
               `  ${name.padEnd(22)} ${String(i.current).padEnd(12)} -> ${String(i.latest).padEnd(12)} ${dev.has(name) ? "(dev)" : ""}`.trimEnd();
             const report = behind.length
-              ? [`${behind.length} behind:`, "", ...behind.sort(([a], [b]) => a.localeCompare(b)).map(line)].join("\n")
-              : "every dependency is at its latest release";
-            writeFileSync("report.txt", report);
-            console.log(report);
+              ? [`npm, ${behind.length} behind:`, "", ...behind.sort(([a], [b]) => a.localeCompare(b)).map(line)].join("\n")
+              : "every npm dependency is at its latest release";
+            writeFileSync("report.txt", report + "\n");
           '
-          if [ -s report.txt ] && grep -q -- "->" report.txt; then
+          # The direct Python dependencies only: a transitive one moves when
+          # the package that wants it does. The tree drawing is stripped so a
+          # line reads like the npm ones above it.
+          uv tree --outdated --depth 1 --frozen 2>/dev/null | grep -- "(latest:" | sed -E 's/^[^[:alnum:]]+/  /' > python.txt || true
+          if [ -s python.txt ]; then
+            printf '\nPython, %s behind:\n\n' "$(wc -l < python.txt)" >> report.txt
+            cat python.txt >> report.txt
+          else
+            printf '\nevery Python dependency is at its latest release\n' >> report.txt
+          fi
+          cat report.txt
+          if grep -qE -- "->|\(latest:" report.txt; then
             echo "behind=true" >> "$GITHUB_OUTPUT"
           else
             echo "behind=false" >> "$GITHUB_OUTPUT"
@@ -72,14 +86,14 @@ jobs:
 
       - name: Open or update the tracking issue
         if: steps.check.outputs.behind == 'true'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const fs = require('fs');
             const report = fs.readFileSync('report.txt', 'utf8');
-            const title = 'npm dependencies are behind their latest releases';
+            const title = 'Dependencies are behind their latest releases';
             const body = [
-              'At least one dependency in `package.json` has a newer release. `(dev)` marks a devDependency — the toolchain, which is most of what this repo installs.',
+              'At least one dependency in `package.json` or `pyproject.toml` has a newer release. `(dev)` marks an npm devDependency and `(group: dev)` a Python one — the toolchain, which is most of what this repo installs.',
               '',
               '```',
               report.trim(),
@@ -87,14 +101,14 @@ jobs:
               '',
               '### What to do',
               '',
-              '1. Update what is worth updating. `npm update` takes the semver-compatible ones; a major needs its version range edited in `package.json` first.',
+              '1. Update what is worth updating. `npm update` takes the semver-compatible ones; a major needs its version range edited in `package.json` first. `uv lock --upgrade` takes every Python one; then raise its floor in `pyproject.toml` to the version locked.',
               '2. Run the checks — they are the acceptance test, since a new major of TypeScript, esbuild or oxlint can change what compiles or what lints:',
               '',
               '```bash',
-              'npm install && uv run python tools/check.py',
+              'npm install && uv sync && uv run python tools/check.py',
               '```',
               '',
-              '3. Commit `package.json` **and** `package-lock.json` together. Pushing is the deploy.',
+              '3. Commit each manifest with its lockfile: `package.json` with `package-lock.json`, `pyproject.toml` with `uv.lock`. Pushing is the deploy.',
               '',
               '### If it turns out not to be worth doing',
               '',
