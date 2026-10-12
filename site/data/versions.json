@@ -31,8 +31,8 @@
     "id": "5.5.4.69155",
     "label": "MoP Classic 5.5.4",
     "file": "data/5.5.4.69155/manifest.json",
-    "built": "2026-09-20",
-    "hash": "d6f6cdf690"
+    "built": "2026-10-12",
+    "hash": "cc21c933f3"
   },
   {
     "id": "7.3.5.26972",
@@ -60,43 +60,43 @@
     "id": "9.2.7.45745",
     "label": "Shadowlands 9.2.7",
     "file": "data/9.2.7.45745/manifest.json",
-    "built": "2026-09-20",
-    "hash": "4f6f441f92"
+    "built": "2026-10-12",
+    "hash": "6fab180f66"
   },
   {
     "id": "10.2.7.55664",
     "label": "Dragonflight 10.2.7",
     "file": "data/10.2.7.55664/manifest.json",
-    "built": "2026-09-30",
-    "hash": "566494b8f8"
+    "built": "2026-10-12",
+    "hash": "843dc31625"
   },
   {
     "id": "11.2.7.65299",
     "label": "The War Within 11.2.7",
     "file": "data/11.2.7.65299/manifest.json",
-    "built": "2026-09-30",
-    "hash": "dd3efd27c2"
+    "built": "2026-10-12",
+    "hash": "19e7b3fb3c"
   },
   {
     "id": "12.1.0.69273",
     "label": "Midnight 12.1.0",
     "file": "data/12.1.0.69273/manifest.json",
-    "built": "2026-09-30",
-    "hash": "abb93d2fd0"
+    "built": "2026-10-12",
+    "hash": "5d26d49950"
   },
   {
     "id": "12.1.0-ptr.69273",
     "label": "Midnight PTR 12.1.0",
     "file": "data/12.1.0-ptr.69273/manifest.json",
-    "built": "2026-09-30",
-    "hash": "7c2b525da6",
+    "built": "2026-10-12",
+    "hash": "1fb41f0160",
     "hidden": true
   },
   {
     "id": "12.1.5-ptr2.70077",
     "label": "Midnight PTR 2 12.1.5",
     "file": "data/12.1.5-ptr2.70077/manifest.json",
-    "built": "2026-09-30",
-    "hash": "01824e293d"
+    "built": "2026-10-12",
+    "hash": "91edcde985"
   }
 ]

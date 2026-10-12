@@ -21,8 +21,6 @@ A pack with no differences cannot change except in `meta.listfileTag`, and
 re-shipping it would cost its whole size for a metadata string.
 """
 
-from __future__ import annotations
-
 import argparse
 import csv
 import sys
@@ -37,6 +35,16 @@ ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "site" / "data"
 LISTFILE = CACHE / "listfile" / LISTFILE_ASSET
 TAG_FILE = CACHE / "listfile" / "release-tag.txt"
+
+HELD = {
+    "epsilon": "Epsilon's own sound API names some of these files the way the pack does today, and the "
+    "community list would rename them; the build does not yet prefer Epsilon's names",
+}
+"""Packs a listfile change is reported for but not re-shipped over, each with its reason.
+
+A held pack still says what would change, so the hold is a decision on view
+rather than a pack quietly left behind, and it is left out of the command.
+"""
 
 
 def pack_files(path: Path) -> tuple[dict[int, str], str]:
@@ -110,12 +118,19 @@ def main() -> int:
         )
         behind = "" if built_against == cached_tag else f"  {DIM}(built against {built_against}){RESET}"
         print(f"  {mark} {pack.id:20s} {len(named):>7,} fids  {detail}{behind}")
-        if moved:
+        if moved and pack.key in HELD:
+            print(f"    {DIM}held: {HELD[pack.key]}{RESET}")
+        elif moved:
             stale.append(pack.key)
 
     print()
     if stale:
-        print(f"{YELLOW}{len(stale)} pack(s) would change{RESET} — python tools/rebuild.py {' '.join(stale)}")
+        # rebuild.py takes one version per run, so several are one command each
+        rebuild = " && ".join(f"python tools/rebuild.py {key}" for key in stale)
+        print(f"{YELLOW}{len(stale)} pack(s) would change{RESET} — {rebuild}")
+        return 0
+    if any(pack.key in HELD for pack, _ in packs):
+        print(f"{GREEN}nothing to re-ship{RESET} — every pack a listfile change reaches is held, see above")
         return 0
     print(
         f"{GREEN}no pack would change{RESET} — a rebuild would move only "

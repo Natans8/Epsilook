@@ -101,7 +101,7 @@ WAGO_PROBE_URL = "https://wago.tools/db2/SpellCastTimes/csv?build={build}"
 IGNORED_PRODUCTS = {
     "wow_classic_titan": "China-exclusive (Titan Reforged)",
     "wow_beta": "retail alpha/beta",
-    "wow_cn_beta": "China-exclusive beta",
+    "wow_cn_beta": "WoW: Forever's beta (1.60.x), served in the US as well as China",
     "wow_classic_ptr": "Classic PTR",
     "wow_classic_beta": "Classic beta",
     "wow_classic_era_ptr": "Classic Era PTR",
