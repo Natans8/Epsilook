@@ -322,8 +322,8 @@ def log(message: str) -> None:
 
 
 def progress(
-    items: "Iterable[Any]", desc: str, unit: str, total: int | None = None, nested: bool = False
-) -> "Iterable[Any]":
+    items: Iterable[Any], desc: str, unit: str, total: int | None = None, nested: bool = False
+) -> Iterable[Any]:
     """Wrap an iterable in a tqdm bar, or return it untouched.
 
     It declines when stderr is not a TTY, which matters because this script is
@@ -336,7 +336,7 @@ def progress(
     return tqdm(items, desc=desc, unit=unit, total=total, leave=not nested, dynamic_ncols=True)
 
 
-def scalar(con: "duckdb.DuckDBPyConnection", sql: str, params: list | None = None) -> int:
+def scalar(con: duckdb.DuckDBPyConnection, sql: str, params: list | None = None) -> int:
     """One-cell query. `fetchone()` is Optional, and every caller here is a
     COUNT that cannot legitimately come back empty — so a None is a bug worth
     hearing about rather than a zero worth papering over."""
@@ -431,7 +431,7 @@ def csv_header(path: Path) -> list[str]:
 
 
 def load_csv_table(
-    con: "duckdb.DuckDBPyConnection", schema: str, table: str, path: Path, types: dict[str, str]
+    con: duckdb.DuckDBPyConnection, schema: str, table: str, path: Path, types: dict[str, str]
 ) -> tuple[int, bool]:
     """Create `schema.table` from a CSV. Returns (rows, fell_back_to_inference).
 
@@ -459,7 +459,7 @@ def load_csv_table(
 
 
 def build_version(
-    con: "duckdb.DuckDBPyConnection", pack_id: str, build_id: str, source: Path, catalog: list[tuple], refresh_dbd: bool
+    con: duckdb.DuckDBPyConnection, pack_id: str, build_id: str, source: Path, catalog: list[tuple], refresh_dbd: bool
 ) -> tuple[int, int, int]:
     """Load every CSV in one table set's cache directory into its own schema.
 
@@ -528,7 +528,7 @@ def build_version(
     return tables, rows, fallbacks
 
 
-def load_tdb(con: "duckdb.DuckDBPyConnection", build_id: str, tdb_tag: str | None) -> int:
+def load_tdb(con: duckdb.DuckDBPyConnection, build_id: str, tdb_tag: str | None) -> int:
     """Load the TrinityCore distilled CSVs under a `tdb_` prefix.
 
     Four Classic re-release packs have no TDB release at all — they simply get
@@ -591,7 +591,7 @@ def fetch_enums(refresh: bool) -> list[str]:
         request = urllib.request.Request(DBDE_LIST_URL, headers={"User-Agent": USER_AGENT})
         with urllib.request.urlopen(request, timeout=60) as response:
             names = [entry["name"][: -len(".dbde")] for entry in json.load(response) if entry["name"].endswith(".dbde")]
-    except (OSError, ValueError, KeyError):
+    except OSError, ValueError, KeyError:
         log("  ! could not list meta/enums — falling back to the core set")
 
     for name in sorted(set(names) | set(CORE_ENUMS)):
@@ -602,7 +602,7 @@ def fetch_enums(refresh: bool) -> list[str]:
     return sorted(set(names) | set(CORE_ENUMS))
 
 
-def build_reference(con: "duckdb.DuckDBPyConnection", manifest: list[dict], refresh: bool) -> None:
+def build_reference(con: duckdb.DuckDBPyConnection, manifest: list[dict], refresh: bool) -> None:
     """The `ref` schema — everything that is the same for every game version."""
     con.execute("CREATE SCHEMA IF NOT EXISTS ref")
 
@@ -788,7 +788,7 @@ def build_reference(con: "duckdb.DuckDBPyConnection", manifest: list[dict], refr
         )
 
 
-def build_catalog(con: "duckdb.DuckDBPyConnection", catalog: list[tuple]) -> None:
+def build_catalog(con: duckdb.DuckDBPyConnection, catalog: list[tuple]) -> None:
     """`ref.column_info` — every physical column, typed, with its FK and comment.
 
     This is where "relationships are configured" actually lives. It is a table
@@ -847,7 +847,7 @@ def build_catalog(con: "duckdb.DuckDBPyConnection", catalog: list[tuple]) -> Non
 # stays in `build/pack`.
 
 
-def has_tables(con: "duckdb.DuckDBPyConnection", schema: str, *tables: str) -> bool:
+def has_tables(con: duckdb.DuckDBPyConnection, schema: str, *tables: str) -> bool:
     placeholders = ",".join("?" * len(tables))
     found = scalar(
         con,
@@ -858,7 +858,7 @@ def has_tables(con: "duckdb.DuckDBPyConnection", schema: str, *tables: str) -> b
     return found == len(tables)
 
 
-def make_view(con: "duckdb.DuckDBPyConnection", schema: str, name: str, body: str) -> int:
+def make_view(con: duckdb.DuckDBPyConnection, schema: str, name: str, body: str) -> int:
     """Create one convenience view, refusing to collide with a real table.
 
     NAMING CONVENTION, and it is load-bearing: db2 tables keep their PascalCase
@@ -879,7 +879,7 @@ def make_view(con: "duckdb.DuckDBPyConnection", schema: str, name: str, body: st
     return 1
 
 
-def build_views(con: "duckdb.DuckDBPyConnection", schema: str) -> int:
+def build_views(con: duckdb.DuckDBPyConnection, schema: str) -> int:
     """Convenience views for one version. Each is skipped if its sources are absent."""
     made = 0
     q = f'"{schema}"'
@@ -969,7 +969,7 @@ def build_views(con: "duckdb.DuckDBPyConnection", schema: str) -> int:
     return made
 
 
-def build_summary(con: "duckdb.DuckDBPyConnection") -> None:
+def build_summary(con: duckdb.DuckDBPyConnection) -> None:
     """`ref.table_info` — what actually landed, so `--list` and the docs agree."""
     con.execute("""
                 CREATE
@@ -1019,7 +1019,7 @@ def main() -> int:
         for entry in manifest:
             release = tdb_release(entry["build"])
             entry["tdb_tag"] = release.get("tag") if release else None
-    except (ImportError, AttributeError):
+    except ImportError, AttributeError:
         for entry in manifest:
             entry["tdb_tag"] = None
 
