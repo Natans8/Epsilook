@@ -6,9 +6,8 @@
   "extends": "../../tsconfig.json",
   "compilerOptions": {
     "lib": [
-      "ES2023",
-      "DOM",
-      "DOM.Iterable"
+      "ES2024",
+      "DOM"
     ],
     "types": [
       "node"

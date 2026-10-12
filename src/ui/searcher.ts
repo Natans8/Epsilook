@@ -50,8 +50,10 @@ export class Searcher {
     private inFlight = false;
     private pending: { text: string; mode: "typing" | "final" } | null = null;
     private onCount: ((count: number, ms: number) => void) | null = null;
+    private readonly worker: WorkerLike;
 
-    constructor(private readonly worker: WorkerLike, handlers: LoadHandlers) {
+    constructor(worker: WorkerLike, handlers: LoadHandlers) {
+        this.worker = worker;
         worker.addEventListener("message", (event) => {
             const said = event.data;
             if (said.is === "progress") handlers.progress(said.pack, said.done, said.total);

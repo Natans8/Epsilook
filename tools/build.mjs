@@ -24,8 +24,12 @@ import * as esbuild from "esbuild";
 import {mkdirSync, readdirSync, rmSync, writeFileSync} from "node:fs";
 import {relative, resolve, sep} from "node:path";
 import {parseArgs} from "node:util";
+import manifest from "../package.json" with {type: "json"};
 
 const root = resolve(import.meta.dirname, "..");
+
+/** The Node the CLI and test bundles run on: the major package.json's devEngines declares, so it is stated once. */
+const NODE_TARGET = `node${/\d+/.exec(manifest.devEngines.runtime.version)[0]}`;
 
 /** @type {esbuild.BuildOptions} */
 const options = {
@@ -117,7 +121,7 @@ const cliOptions = CLI_ENTRIES.map((name) => ({
     bundle: true,
     format: "esm",
     platform: "node",
-    target: "node20",
+    target: NODE_TARGET,
     logLevel: "warning",
     external: ["fs"],
 }));
@@ -193,7 +197,7 @@ const testOptions = () => ({
     bundle: true,
     format: "esm",
     platform: "node",
-    target: "node22",
+    target: NODE_TARGET,
     sourcemap: true,
     logLevel: "warning",
     external: ["fs"],

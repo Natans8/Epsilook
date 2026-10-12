@@ -255,8 +255,15 @@ export class PackRowSource implements RowSource {
      */
     private readonly unreadable: boolean;
 
-    constructor(private readonly table: RowTable, private readonly kinds: Map<string, Kind>,
-                private readonly vocabs: Record<string, (value: number) => string | number | undefined>) {
+    private readonly table: RowTable;
+    private readonly kinds: Map<string, Kind>;
+    private readonly vocabs: Record<string, (value: number) => string | number | undefined>;
+
+    constructor(table: RowTable, kinds: Map<string, Kind>,
+                vocabs: Record<string, (value: number) => string | number | undefined>) {
+        this.table = table;
+        this.kinds = kinds;
+        this.vocabs = vocabs;
         this.index = indexRows(table);
         this.built = Array.from<Row | undefined>({length: this.index.owner.length});
         this.unreadable = table.kinds.some((word) => !kinds.has(word));

@@ -194,22 +194,26 @@ function fullOf(head: Head): string | undefined {
     return head.role === "kind" ? head.kind.full : head.prop.full;
 }
 
+/** Whether a word is the one its head writes, rather than a full name or synonym that resolves to it. */
+function isPrincipal(word: string): boolean {
+    const head = HEADS.get(word);
+    return head !== undefined && principalOf(head) === word;
+}
+
+/** A word with the principal it resolves to, for listing a way in beside the word it reaches. */
+function spelt(word: string): string {
+    const head = HEADS.get(word);
+    return head === undefined ? word : `${word} → ${principalOf(head)}`;
+}
+
 /** Prints every top-level word, then the plain-search roster. */
 function showRosters(): void {
     // The roster counts words, not spellings: a full name or synonym is a way in, not a new question, so each is
     // listed apart — full names as what naming surfaces write, synonyms as input-only.
-    const isPrincipal = (word: string): boolean => {
-        const head = HEADS.get(word);
-        return head !== undefined && principalOf(head) === word;
-    };
     const others = [...HEADS.keys()].filter((word) => !isPrincipal(word)).toSorted();
     const words = [...HEADS.keys()].filter(isPrincipal).toSorted();
     console.log(`\nTOP-LEVEL WORDS — every word that opens a tag (${String(words.length)})\n`);
     console.log(`  ${words.join("  ")}`);
-    const spelt = (word: string): string => {
-        const head = HEADS.get(word);
-        return head === undefined ? word : `${word} → ${principalOf(head)}`;
-    };
     const fulls: string[] = [];
     const synonyms: string[] = [];
     for (const word of others) {

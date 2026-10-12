@@ -2,14 +2,16 @@
   // Type checking only — esbuild does the emitting (tools/build.mjs).
   // Check from the repo root with: npx tsc  (tools/check.py runs it too).
   "compilerOptions": {
+    // the syntax esbuild emits for the browser bundle; the library is the
+    // newest year whose features are all Baseline widely available
     "target": "ES2022",
     "lib": [
-      "ES2023",
-      "DOM",
-      "DOM.Iterable"
+      "ES2024",
+      "DOM"
     ],
-    "module": "ESNext",
-    "moduleResolution": "bundler",
+    // a bundler resolves and rewrites every import, so tsc is told to leave
+    // them as written and resolve the way the bundler does
+    "module": "preserve",
     "noEmit": true,
     "strict": true,
     // the presentation layer (src/ui) is React written as .tsx; the automatic
@@ -19,6 +21,10 @@
     // alone, and type-only imports must say so (`import type`)
     "isolatedModules": true,
     "verbatimModuleSyntax": true,
+    // only syntax a type stripper can erase: no enum, namespace or parameter
+    // property, which is docs/CODE_STYLE.md's literal-union rule as a compiler
+    // error rather than a sentence
+    "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true,
     // the string registry imports its locale catalogs (src/locales/) as JSON;
     // esbuild bundles them natively, this flag lets tsc type them
@@ -26,10 +32,6 @@
     // vendored libs in src/vendor are plain JS with hand-written .d.ts
     // beside them; tsc reads the declarations, esbuild bundles the .js
     "allowJs": false,
-    // @types/node exists for tools/query.ts (see tsconfig.tools.json). Without
-    // this, tsc auto-includes it EVERYWHERE and `process.env` in an app module
-    // would typecheck - src/ ships to a browser and has no Node in it.
-    "types": [],
     "skipLibCheck": true
   },
   "include": [

@@ -5,8 +5,10 @@
   // must be held to exactly the same strictness as the code it calls.
   "extends": "./tsconfig.json",
   "compilerOptions": {
+    // Node runs every feature of the newest ES year, so the tools are not
+    // held to the browser's Baseline
     "lib": [
-      "ES2023"
+      "ES2025"
     ],
     "types": [
       "node"

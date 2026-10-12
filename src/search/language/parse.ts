@@ -138,13 +138,18 @@ class Parser {
     /** Every read of characters and positions goes through here; the parser itself only reads structure. */
     private readonly scan: Scanner;
 
+    private readonly text: string;
+    private readonly mode: ParseMode;
+
     /**
      * @param text The query, typography folded — what every structural decision reads.
      * @param mode Keystroke state or final text.
      * @param raw The query as typed, for the one value that must not fold: a regex pattern matches stored text
      *   as written, so its characters are taken from here. Folding is one-to-one, so positions line up.
      */
-    constructor(private readonly text: string, private readonly mode: ParseMode, raw: string = text) {
+    constructor(text: string, mode: ParseMode, raw: string = text) {
+        this.text = text;
+        this.mode = mode;
         this.scan = new Scanner({text, raw});
     }
 

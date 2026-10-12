@@ -23,28 +23,40 @@
     "translate": "node tools/build.mjs --cli && node tools/translate.mjs",
     "schema": "node tools/build.mjs --cli && node tools/schema.mjs"
   },
-  "engines": {
-    "node": ">=22"
+  "devEngines": {
+    "runtime": {
+      "name": "node",
+      "version": "^26",
+      "onFail": "error"
+    },
+    "packageManager": {
+      "name": "npm",
+      "version": "^11",
+      "onFail": "warn"
+    }
   },
   "devDependencies": {
-    "@playwright/test": "^1.62.1",
+    "@playwright/test": "^1.64.0",
     "@types/color-name": "^2.0.0",
-    "@types/node": "^26.2.0",
-    "@types/react": "^19.2.18",
-    "@types/react-dom": "^19.2.4",
+    "@types/node": "^26.6.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
     "esbuild": "^0.28.2",
-    "oxlint": "^1.79.0",
-    "oxlint-tsgolint": "^7.0.2001",
+    "oxlint": "^1.87.0",
+    "oxlint-tsgolint": "^7.0.2004",
     "typescript": "^7.0.2",
     "varcon": "^1.0.1"
   },
   "dependencies": {
     "color-name": "^2.1.1",
-    "i18next": "^26.3.6",
+    "i18next": "^26.4.3",
     "i18next-browser-languagedetector": "^8.2.1",
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8",
-    "react-i18next": "^17.0.11",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "react-i18next": "^17.0.16",
     "regex-colorizer": "^1.0.2"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true
   }
 }

@@ -167,7 +167,10 @@ export function splitAlternatives(inner: string): string[] {
 
 /** A scan over one query. Holds the source so a position-based reader never has to be handed it twice. */
 export class Scanner {
-    constructor(private readonly src: Source) {
+    private readonly src: Source;
+
+    constructor(src: Source) {
+        this.src = src;
     }
 
     private get text(): string {
