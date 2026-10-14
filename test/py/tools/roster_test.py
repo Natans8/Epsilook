@@ -75,14 +75,20 @@ def test_every_test_slot_is_marked() -> None:
             assert pack.mark, f"{pack.key} is a test slot with no mark"
 
 
-def test_a_table_set_is_where_the_bytes_came_from_not_which_line() -> None:
+def test_a_table_set_is_where_the_bytes_came_from_not_which_line(monkeypatch: pytest.MonkeyPatch) -> None:
     """Retail and its PTR are two lines and one downloaded export, which is
     why their modules come out byte-identical; a private client's decode is a
-    set of its own."""
-    sets = table_sets()
-    assert len(sets) == len({(p.build, p.client) for p in PACKS})
-    assert len(sets) < len(PACKS), "nothing shares an export, so the roster changed"
-    assert any(p.client for p in sets), "the client build is missing from the sets"
+    set of its own.
+
+    The roster is built here because whether two shipped packs share a build
+    changes every patch: a test slot converges onto live and diverges again.
+    """
+    live = Pack("live", "Live", "wow", "9.2.7.1", tracked=True, default=True)
+    level = Pack("ptr", "PTR", "wowt", "9.2.7.1", tracked=True)
+    ahead = Pack("ptr2", "PTR 2", "wowxptr", "9.2.8.1", tracked=True)
+    client = Pack("own", "Own", "epsilon", "9.2.7.1", client="own")
+    monkeypatch.setattr(roster, "PACKS", (live, level, ahead, client))
+    assert table_sets() == [live, ahead, client]
 
 
 def test_only_a_tracked_pack_may_be_asked_for_a_newer_build() -> None:
