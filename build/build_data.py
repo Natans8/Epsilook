@@ -427,6 +427,14 @@ TDB_RELEASES = {
         "world": "TDB_full_world_1210.26091_2026_09_09.sql",
         "hotfixes": "TDB_full_hotfixes_1210.26091_2026_09_09.sql",
     },
+    # 12.1.5 has no TDB of its own; the 12.1 dump carries over a minor patch, and
+    # the patch match would find nothing for 12.1.5 without this entry.
+    "12.1.5.70391": {
+        "tag": "TDB1210.26091",
+        "asset": "TDB_full_1210.26091_2026_09_09.7z",
+        "world": "TDB_full_world_1210.26091_2026_09_09.sql",
+        "hotfixes": "TDB_full_hotfixes_1210.26091_2026_09_09.sql",
+    },
     "8.3.7.35662": {
         "tag": "TDB837.20101",
         "asset": "TDB_full_837.20101_2020_10_20.7z",
