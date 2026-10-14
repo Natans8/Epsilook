@@ -2677,9 +2677,55 @@ def serves(wheels: Iterable[str], minor: int, platform: str) -> bool:
     return False
 
 
+FLOOR = re.compile(r">=\s*3\.(\d+)")
+"""The shape requires-python is written in: a floor and nothing else."""
+
+
+def floor_minor() -> int:
+    """The CPython minor requires-python names: the oldest the code may use, and the one CI runs.
+
+    A machine may run anything newer. The repository pins no interpreter of its
+    own, so this floor is what every checker targets and every workflow names.
+    """
+    spec = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]["requires-python"]
+    found = FLOOR.fullmatch(spec.strip())
+    if found is None:
+        raise ValueError(f"requires-python is {spec!r}, not a plain floor")
+    return int(found[1])
+
+
 def next_minor() -> int:
-    """The CPython minor after the one .python-version names."""
-    return int((ROOT / ".python-version").read_text(encoding="utf-8").strip().split(".")[1]) + 1
+    """The CPython minor after the floor, the one the floor moves to next."""
+    return floor_minor() + 1
+
+
+WORKFLOW_PYTHON = re.compile(r"""^\s*python-version(?P<file>-file)?:\s*["']?(?P<value>[^"'\s#]+)""", re.M)
+"""A workflow step naming the interpreter it sets up, by version or by file."""
+
+
+def check_python_floor(rep: Report) -> None:
+    """Every place that names an interpreter names the requires-python floor.
+
+    The repository pins no interpreter, so the floor is stated in several
+    places that cannot read one another: mypy's target, pylint's, and each
+    workflow that sets up a Python. A floor raised in one of them alone would
+    leave CI testing an interpreter the checkers never targeted.
+    """
+    floor = f"3.{floor_minor()}"
+    config = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    named = {"mypy python_version": str(config["tool"]["mypy"]["python_version"])}
+    pylint = re.search(r"^py-version\s*=\s*(\S+)", (ROOT / ".pylintrc").read_text(encoding="utf-8"), re.M)
+    named[".pylintrc py-version"] = pylint[1] if pylint else "(missing)"
+    for workflow in sorted((ROOT / ".github" / "workflows").glob("*.yml")):
+        for found in WORKFLOW_PYTHON.finditer(workflow.read_text(encoding="utf-8")):
+            where = f"{workflow.name} python-version{found['file'] or ''}"
+            named[where] = f"a file, {found['value']}" if found["file"] else found["value"]
+    wrong = {where: value for where, value in named.items() if value != floor}
+    if wrong:
+        listing = ", ".join(f"{where} is {value}" for where, value in wrong.items())
+        rep.fail("python floor", f"requires-python says {floor}, but {listing}")
+    else:
+        rep.ok("python floor", f"{len(named)} places name {floor}, the requires-python floor")
 
 
 def python_next_blockers(minor: int) -> list[str] | None:
@@ -2731,12 +2777,13 @@ def python_next_line(minor: int, blockers: Sequence[str]) -> str:
 
 
 def check_python_next(rep: Report) -> None:
-    """Whether the next CPython minor can be the project's interpreter yet.
+    """Whether the floor, and CI with it, can move to the next CPython minor yet.
 
-    .python-version waits for the compiled dependencies, and this says when
-    the wait is over: OK while it names what blocks the move, WARN once nothing
-    does. CI asks the same question through `--python-next`, from the weekly
-    dependency workflow rather than from every push.
+    A machine may already run the next minor on wheels it built itself; the
+    floor waits for PyPI's. This says when the wait is over: OK while it names
+    what blocks the move, WARN once nothing does. CI asks the same question
+    through `--python-next`, from the weekly dependency workflow rather than
+    from every push.
     """
     if os.environ.get("CI"):
         rep.skip("python next", "the weekly dependency workflow asks this in CI")
@@ -2987,6 +3034,7 @@ def main() -> int:
     check_range_declaration(rep)
     check_mypy_strict(rep)
     check_python_path(rep)
+    check_python_floor(rep)
     check_test_layout(rep)
     check_test_collection(rep)
     check_build_constructs(rep)

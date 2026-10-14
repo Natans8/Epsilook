@@ -4,7 +4,16 @@ import shutil
 
 import pytest
 
-from check import OUTDATED_LINE, next_minor, python_next_blockers, python_next_line, serves, straddle_report
+from check import (
+    FLOOR,
+    OUTDATED_LINE,
+    WORKFLOW_PYTHON,
+    next_minor,
+    python_next_blockers,
+    python_next_line,
+    serves,
+    straddle_report,
+)
 
 STILL = "0432111abcd"
 MOVED = "611c88dfeed"
@@ -98,3 +107,24 @@ def test_the_minor_the_lock_was_resolved_for_blocks_on_nothing() -> None:
     named a blocker here, the readiness check would never turn.
     """
     assert python_next_blockers(next_minor() - 1) == []
+
+
+def test_a_workflow_names_its_interpreter_by_version_or_by_file() -> None:
+    """Both spellings are read, so a step that still points at a pin file is caught rather than skipped."""
+    steps = (
+        "      - uses: astral-sh/setup-uv@v10.3.0\n"
+        "        with:\n"
+        '          python-version: "3.14"\n'
+        "      - uses: actions/setup-python@v7\n"
+        "        with:\n"
+        "          python-version-file: .python-version\n"
+    )
+    found = [(m["file"] is not None, m["value"]) for m in WORKFLOW_PYTHON.finditer(steps)]
+    assert found == [(False, "3.14"), (True, ".python-version")]
+
+
+def test_the_floor_is_a_plain_lower_bound() -> None:
+    """A range or an exact pin is not a floor, and the guard refuses rather than guessing which end to read."""
+    assert FLOOR.fullmatch(">=3.14") is not None
+    assert FLOOR.fullmatch(">=3.14,<3.16") is None
+    assert FLOOR.fullmatch("==3.14") is None

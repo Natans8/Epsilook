@@ -13,7 +13,10 @@
 
 [MAIN]
 py-version = 3.14
-jobs = 0
+# One process. Parallel jobs hand the linter to its workers through dill, which
+# cannot pickle it on CPython 3.15 until a release after 0.4.1; set this back to
+# 0, one per core, once that release is locked.
+jobs = 1
 
 [FORMAT]
 # Matches the width used by the markdown and TypeScript sources.

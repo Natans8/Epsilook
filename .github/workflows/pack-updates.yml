@@ -33,7 +33,7 @@ jobs:
 
       - uses: actions/setup-python@v7
         with:
-          python-version-file: .python-version
+          python-version: "3.14"
 
       - name: Ask wago for the current build of each tracked line
         id: check

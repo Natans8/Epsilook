@@ -49,8 +49,13 @@ jobs:
       # Its cache is on by its own default, which leaves it off only for the
       # events where a cache could be poisoned. Pinned to a full version
       # because setup-uv publishes no moving major tag: `@v10` resolves to
-      # nothing and fails the job before a step runs.
+      # nothing and fails the job before a step runs. CI runs the
+      # requires-python floor, since that is the interpreter every compiled
+      # dependency has a wheel for; a machine may run newer. check.py's
+      # python-floor guard holds this to pyproject.toml.
       - uses: astral-sh/setup-uv@v10.3.0
+        with:
+          python-version: "3.14"
 
       # The Node package.json's devEngines names, so the runtime is declared
       # once. npm's cache follows from devEngines naming npm as the manager.
@@ -79,7 +84,7 @@ jobs:
           echo "ref=${base:-HEAD}" >> "$GITHUB_OUTPUT"
           echo "comparing against ${base:-HEAD (no previous state — bump guard will skip)}"
 
-      # Through uv, so the checks run on the interpreter .python-version names
-      # rather than whatever the runner image happens to ship.
+      # Through uv, so the checks run on the floor's interpreter rather than
+      # whatever the runner image happens to ship.
       - name: Run the checks
         run: uv run python tools/check.py --base "${{ steps.base.outputs.ref }}"
