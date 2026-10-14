@@ -78,13 +78,6 @@
     "hash": "19e7b3fb3c"
   },
   {
-    "id": "12.1.0.69273",
-    "label": "Midnight 12.1.0",
-    "file": "data/12.1.0.69273/manifest.json",
-    "built": "2026-10-12",
-    "hash": "5d26d49950"
-  },
-  {
     "id": "12.1.0-ptr.69273",
     "label": "Midnight PTR 12.1.0",
     "file": "data/12.1.0-ptr.69273/manifest.json",
@@ -96,7 +89,15 @@
     "id": "12.1.5-ptr2.70077",
     "label": "Midnight PTR 2 12.1.5",
     "file": "data/12.1.5-ptr2.70077/manifest.json",
-    "built": "2026-10-12",
-    "hash": "91edcde985"
+    "built": "2026-10-14",
+    "hash": "8f8c67a00f",
+    "hidden": true
+  },
+  {
+    "id": "12.1.5.70391",
+    "label": "Midnight 12.1.5",
+    "file": "data/12.1.5.70391/manifest.json",
+    "built": "2026-10-14",
+    "hash": "7b18a4c1d3"
   }
 ]

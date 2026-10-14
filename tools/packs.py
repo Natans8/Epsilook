@@ -294,7 +294,7 @@ PACKS: tuple[Pack, ...] = (
     Pack("vanilla", "Vanilla Classic", "wow_classic_era", "1.15.9.69109", tracked=True),
     Pack("tbc", "TBC Classic", "wow_anniversary", "2.5.6.69110", tracked=True),
     Pack("mop", "MoP Classic", "wow_classic", "5.5.4.69155", tracked=True),
-    Pack("midnight", "Midnight", "wow", "12.1.0.69273", tracked=True),
+    Pack("midnight", "Midnight", "wow", "12.1.5.70391", tracked=True),
     # THE TWO RETAIL TEST LINES, and neither is "the" PTR. Blizzard runs two
     # equal public test slots and uses them in turn: whichever holds the patch
     # under test leads, and the other sits on the patch that just shipped. Over
