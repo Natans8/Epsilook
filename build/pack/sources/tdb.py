@@ -56,10 +56,10 @@ TDB_RELEASES: Mapping[str, Mapping[str, str]] = {
         "world": "TDB_full_world_1210.26091_2026_09_09.sql",
         "hotfixes": "TDB_full_hotfixes_1210.26091_2026_09_09.sql",
     },
-    # The second test slot, one minor patch further out and reaching the same
-    # dump, since creature entries carry across a minor patch. Keyed exactly
-    # rather than by patch, because no TDB is cut against 12.1.5 and a fallback
-    # would find nothing and empty every morph name without saying so.
+    # Every 12.1.5 build, one minor patch further out and reaching the same
+    # dump, since creature entries carry across a minor patch. No TDB is cut
+    # against 12.1.5, so without this entry tdb_release() would find nothing
+    # for the patch and empty every morph name without saying so.
     "12.1.5.70077": {
         "tag": "TDB1210.26091",
         "asset": "TDB_full_1210.26091_2026_09_09.7z",
