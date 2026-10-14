@@ -78,8 +78,13 @@ jobs:
           else
             printf '\nevery Python dependency is at its latest release\n' >> report.txt
           fi
+          # Whether the next CPython can be the interpreter yet: the same
+          # sentence check.py prints locally. A blocked one is a line of the
+          # report; an installable one opens the issue on its own. No project
+          # dependencies are needed to ask, so none are installed for it.
+          printf '\n%s\n' "$(uv run --no-project python tools/check.py --python-next 2>&1 || true)" >> report.txt
           cat report.txt
-          if grep -qE -- "->|\(latest:" report.txt; then
+          if grep -qE -- "->|\(latest:|is installable" report.txt; then
             echo "behind=true" >> "$GITHUB_OUTPUT"
           else
             echo "behind=false" >> "$GITHUB_OUTPUT"
@@ -94,7 +99,7 @@ jobs:
             const report = fs.readFileSync('report.txt', 'utf8');
             const title = 'Dependencies are behind their latest releases';
             const body = [
-              'At least one dependency in `package.json` or `pyproject.toml` has a newer release. `(dev)` marks an npm devDependency and `(group: dev)` a Python one — the toolchain, which is most of what this repo installs.',
+              'At least one dependency in `package.json` or `pyproject.toml` has a newer release, or the next Python has become installable. `(dev)` marks an npm devDependency and `(group: dev)` a Python one — the toolchain, which is most of what this repo installs.',
               '',
               '```',
               report.trim(),
@@ -110,6 +115,8 @@ jobs:
               '```',
               '',
               '3. Commit each manifest with its lockfile: `package.json` with `package-lock.json`, `pyproject.toml` with `uv.lock`. Pushing is the deploy.',
+              '',
+              'When the last line of the report says the next Python is installable, move the interpreter: `.python-version`, `requires-python` and mypy\'s `python_version` in `pyproject.toml`, and `py-version` in `.pylintrc`, then `uv sync` and the checks. Glimpse and OPie_Emotes pin the same interpreter and follow.',
               '',
               '### If it turns out not to be worth doing',
               '',

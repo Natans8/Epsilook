@@ -51,7 +51,7 @@ import tempfile
 import tokenize
 import tomllib
 import urllib.request
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterable, Iterator, Sequence
 from pathlib import Path
 
 import mermaid
@@ -2677,63 +2677,86 @@ def serves(wheels: Iterable[str], minor: int, platform: str) -> bool:
     return False
 
 
-def check_python_next(rep: Report) -> None:
-    """Whether the next CPython minor can be the project's interpreter yet.
+def next_minor() -> int:
+    """The CPython minor after the one .python-version names."""
+    return int((ROOT / ".python-version").read_text(encoding="utf-8").strip().split(".")[1]) + 1
+
+
+def python_next_blockers(minor: int) -> list[str] | None:
+    """What keeps the checkout off CPython 3.<minor>, or None when uv or PyPI cannot answer.
 
     A minor ships months before every compiled dependency publishes wheels for
     it, and a sync before then builds the rest from source: lupa's LuaJIT
     cannot be built outside a Visual Studio prompt and DuckDB takes most of an
-    hour, on every machine and every CI run. So .python-version waits, and this
-    says when the wait is over: OK while it names what blocks the move, WARN
-    once nothing does. A package is blocking when every wheel uv.lock records
-    for it is tied to one CPython minor, and the latest release on PyPI has
-    none for the next one on a platform the checkout installs on.
+    hour, on every machine and every CI run. A package blocks when every wheel
+    uv.lock records for it is tied to one CPython minor, and its latest release
+    on PyPI has none for this one on a platform the checkout installs on. The
+    interpreter itself blocks while uv offers no final release of it.
+    """
+    exe = shutil.which("uv")
+    if exe is None:
+        return None
+    listed = subprocess.run(
+        [exe, "python", "list", f"3.{minor}", "--only-downloads", "--output-format", "json"],
+        capture_output=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
+    releases = json.loads(listed.stdout or "[]") if listed.returncode == 0 else []
+    final = any(re.fullmatch(r"\d+\.\d+\.\d+", release["version"]) for release in releases)
+    blockers = [] if final else [f"no 3.{minor} in uv"]
+    lock = tomllib.loads((ROOT / "uv.lock").read_text(encoding="utf-8"))
+    for package in lock["package"]:
+        wheels = [w["url"].rsplit("/", 1)[-1] for w in package.get("wheels", [])]
+        if not wheels or all(serves(wheels, minor, platform) for platform in WHEEL_PLATFORMS):
+            continue
+        try:
+            with urllib.request.urlopen(f"https://pypi.org/pypi/{package['name']}/json", timeout=20) as reply:
+                latest = json.load(reply)
+        except OSError, ValueError:
+            return None
+        files = [f["filename"] for f in latest["urls"]]
+        missing = [platform for platform in WHEEL_PLATFORMS if not serves(files, minor, platform)]
+        if missing:
+            blockers.append(f"{package['name']} {latest['info']['version']} ({', '.join(missing)})")
+    return blockers
+
+
+def python_next_line(minor: int, blockers: Sequence[str]) -> str:
+    """Whether 3.<minor> can be the interpreter, in the one sentence the check and the weekly issue both print."""
+    if blockers:
+        return f"3.{minor - 1} stays: no 3.{minor} wheel for {'; '.join(blockers)}"
+    return f"3.{minor} is installable: every compiled dependency ships a wheel for it"
+
+
+def check_python_next(rep: Report) -> None:
+    """Whether the next CPython minor can be the project's interpreter yet.
+
+    .python-version waits for the compiled dependencies, and this says when
+    the wait is over: OK while it names what blocks the move, WARN once nothing
+    does. CI asks the same question through `--python-next`, from the weekly
+    dependency workflow rather than from every push.
     """
     if os.environ.get("CI"):
-        rep.skip("python next", "a local decision, not a CI concern")
+        rep.skip("python next", "the weekly dependency workflow asks this in CI")
         return
-    current = int((ROOT / ".python-version").read_text(encoding="utf-8").strip().split(".")[1])
-    minor = current + 1
+    minor = next_minor()
     cache = CACHE / f"python-3.{minor}-blockers.json"
     if cache.exists() and time.time() - cache.stat().st_mtime < FRESHNESS_CACHE_HOURS * 3600:
         blockers = json.loads(cache.read_text(encoding="utf-8"))
     else:
-        exe = shutil.which("uv")
-        if exe is None:
-            rep.skip("python next", "uv not on PATH")
+        found = python_next_blockers(minor)
+        if found is None:
+            rep.skip("python next", "uv or PyPI could not answer")
             return
-        listed = subprocess.run(
-            [exe, "python", "list", f"3.{minor}", "--only-downloads", "--output-format", "json"],
-            capture_output=True,
-            encoding="utf-8",
-            errors="replace",
-            check=False,
-        )
-        releases = json.loads(listed.stdout or "[]") if listed.returncode == 0 else []
-        blockers = (
-            [] if any(re.fullmatch(r"\d+\.\d+\.\d+", r["version"]) for r in releases) else [f"no 3.{minor} in uv"]
-        )
-        lock = tomllib.loads((ROOT / "uv.lock").read_text(encoding="utf-8"))
-        for package in lock["package"]:
-            wheels = [w["url"].rsplit("/", 1)[-1] for w in package.get("wheels", [])]
-            if not wheels or all(serves(wheels, minor, platform) for platform in WHEEL_PLATFORMS):
-                continue
-            try:
-                with urllib.request.urlopen(f"https://pypi.org/pypi/{package['name']}/json", timeout=20) as reply:
-                    latest = json.load(reply)
-            except OSError, ValueError:
-                rep.skip("python next", "could not reach PyPI")
-                return
-            files = [f["filename"] for f in latest["urls"]]
-            missing = [platform for platform in WHEEL_PLATFORMS if not serves(files, minor, platform)]
-            if missing:
-                blockers.append(f"{package['name']} {latest['info']['version']} ({', '.join(missing)})")
+        blockers = found
         cache.parent.mkdir(parents=True, exist_ok=True)
         cache.write_text(json.dumps(blockers), encoding="utf-8")
     if blockers:
-        rep.ok("python next", f"3.{current} stays: no 3.{minor} wheel for {'; '.join(blockers)}")
+        rep.ok("python next", python_next_line(minor, blockers))
     else:
-        rep.warn("python next", f"3.{minor} is installable: every compiled dependency ships a wheel for it")
+        rep.warn("python next", python_next_line(minor, blockers))
 
 
 def check_mermaid(rep: Report) -> None:
@@ -2915,7 +2938,21 @@ def main() -> int:
     ap.add_argument("--base", default="origin/main", help="the deployed tree to compare against (default: origin/main)")
     ap.add_argument("--fast", action="store_true", help="repo guards only - skip tsc/node/mypy/pyflakes")
     ap.add_argument("--quiet", action="store_true", help="print only failures and warnings")
+    ap.add_argument(
+        "--python-next",
+        action="store_true",
+        help="say whether the next CPython can be the interpreter yet, and run nothing else",
+    )
     args = ap.parse_args()
+
+    if args.python_next:
+        minor = next_minor()
+        blockers = python_next_blockers(minor)
+        if blockers is None:
+            print("python next: uv or PyPI could not answer")
+            return 1
+        print(python_next_line(minor, blockers))
+        return 0
 
     rep = Report(quiet=args.quiet)
     # Read before anything else and read again at the end: a full run takes

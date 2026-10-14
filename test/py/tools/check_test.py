@@ -1,6 +1,10 @@
 """The repo guards' own guard: a run that spanned two trees reports neither."""
 
-from check import OUTDATED_LINE, serves, straddle_report
+import shutil
+
+import pytest
+
+from check import OUTDATED_LINE, next_minor, python_next_blockers, python_next_line, serves, straddle_report
 
 STILL = "0432111abcd"
 MOVED = "611c88dfeed"
@@ -76,3 +80,21 @@ def test_uv_reports_an_outdated_dependency_with_its_group() -> None:
     )
     found = {m["name"]: (m["locked"], m["latest"]) for m in OUTDATED_LINE.finditer(tree)}
     assert found == {"duckdb": ("1.5.5", "1.5.6"), "mypy": ("2.3.0", "2.4.0")}
+
+
+def test_a_blocked_minor_is_named_with_what_blocks_it() -> None:
+    """The one sentence the check and the weekly issue share, in both of its states."""
+    assert python_next_line(15, ["duckdb 1.5.6 (Windows, Linux)"]) == (
+        "3.14 stays: no 3.15 wheel for duckdb 1.5.6 (Windows, Linux)"
+    )
+    assert "3.15 is installable" in python_next_line(15, [])
+
+
+@pytest.mark.skipif(shutil.which("uv") is None, reason="uv lists the interpreters")
+def test_the_minor_the_lock_was_resolved_for_blocks_on_nothing() -> None:
+    """Every locked wheel serves the interpreter it was locked on, so no package reaches PyPI.
+
+    This is the whole question answered end to end without the network: if it
+    named a blocker here, the readiness check would never turn.
+    """
+    assert python_next_blockers(next_minor() - 1) == []
