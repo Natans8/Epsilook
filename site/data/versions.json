@@ -1,17 +1,17 @@
 [
   {
-    "id": "1.15.9.69109",
+    "id": "1.15.9.70003",
     "label": "Vanilla Classic 1.15.9",
-    "file": "data/1.15.9.69109/manifest.json",
-    "built": "2026-09-20",
-    "hash": "5dc6065d3c"
+    "file": "data/1.15.9.70003/manifest.json",
+    "built": "2026-10-17",
+    "hash": "7d01940197"
   },
   {
-    "id": "2.5.6.69110",
+    "id": "2.5.6.70006",
     "label": "TBC Classic 2.5.6",
-    "file": "data/2.5.6.69110/manifest.json",
-    "built": "2026-09-20",
-    "hash": "4d0ba8c436"
+    "file": "data/2.5.6.70006/manifest.json",
+    "built": "2026-10-17",
+    "hash": "e135a61191"
   },
   {
     "id": "3.4.3.58936",
@@ -28,11 +28,11 @@
     "hash": "7cf509d4d2"
   },
   {
-    "id": "5.5.4.69155",
+    "id": "5.5.4.70449",
     "label": "MoP Classic 5.5.4",
-    "file": "data/5.5.4.69155/manifest.json",
-    "built": "2026-10-12",
-    "hash": "cc21c933f3"
+    "file": "data/5.5.4.70449/manifest.json",
+    "built": "2026-10-17",
+    "hash": "6b54e895e5"
   },
   {
     "id": "7.3.5.26972",
@@ -78,26 +78,25 @@
     "hash": "19e7b3fb3c"
   },
   {
-    "id": "12.1.0-ptr.69273",
-    "label": "Midnight PTR 12.1.0",
-    "file": "data/12.1.0-ptr.69273/manifest.json",
-    "built": "2026-10-12",
-    "hash": "1fb41f0160",
-    "hidden": true
-  },
-  {
-    "id": "12.1.5-ptr2.70077",
+    "id": "12.1.5-ptr2.70340",
     "label": "Midnight PTR 2 12.1.5",
-    "file": "data/12.1.5-ptr2.70077/manifest.json",
-    "built": "2026-10-14",
-    "hash": "8f8c67a00f",
+    "file": "data/12.1.5-ptr2.70340/manifest.json",
+    "built": "2026-10-17",
+    "hash": "dde4aef7ea",
     "hidden": true
   },
   {
-    "id": "12.1.5.70391",
+    "id": "12.1.7-ptr.70424",
+    "label": "Midnight PTR 12.1.7",
+    "file": "data/12.1.7-ptr.70424/manifest.json",
+    "built": "2026-10-17",
+    "hash": "182977b1ad"
+  },
+  {
+    "id": "12.1.5.70448",
     "label": "Midnight 12.1.5",
-    "file": "data/12.1.5.70391/manifest.json",
-    "built": "2026-10-14",
-    "hash": "7b18a4c1d3"
+    "file": "data/12.1.5.70448/manifest.json",
+    "built": "2026-10-17",
+    "hash": "d00baac295"
   }
 ]

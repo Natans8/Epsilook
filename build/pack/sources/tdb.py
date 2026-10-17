@@ -66,6 +66,14 @@ TDB_RELEASES: Mapping[str, Mapping[str, str]] = {
         "world": "TDB_full_world_1210.26091_2026_09_09.sql",
         "hotfixes": "TDB_full_hotfixes_1210.26091_2026_09_09.sql",
     },
+    # Every 12.1.7 build, for the same reason: no TDB is cut against it, and
+    # the 12.1 dump is the nearest one that names its creatures.
+    "12.1.7.70424": {
+        "tag": "TDB1210.26091",
+        "asset": "TDB_full_1210.26091_2026_09_09.7z",
+        "world": "TDB_full_world_1210.26091_2026_09_09.sql",
+        "hotfixes": "TDB_full_hotfixes_1210.26091_2026_09_09.sql",
+    },
     "8.3.7.35662": {
         "tag": "TDB837.20101",
         "asset": "TDB_full_837.20101_2020_10_20.7z",

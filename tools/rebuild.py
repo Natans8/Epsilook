@@ -3,6 +3,7 @@
 
     python tools/rebuild.py --list           # what would run, for every pack
     python tools/rebuild.py 9.2.7            # rebuild one pack (prefix match)
+    python tools/rebuild.py vanilla 12.1     # ... or several, by key or prefix
     python tools/rebuild.py                  # rebuild the whole roster
     python tools/rebuild.py --verify         # the oracle, on the DEFAULT pack
     python tools/rebuild.py --verify 11.2.7  # ... against another pack
@@ -440,7 +441,7 @@ def verify(pack: Pack, refresh: bool, timing: bool = False) -> bool | None:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("version", nargs="?", help="pack id or a prefix of one (default: all)")
+    ap.add_argument("version", nargs="*", help="pack keys, ids or prefixes of one (default: all)")
     ap.add_argument("--all", action="store_true", help="with --verify, check every pack rather than the default one")
     ap.add_argument("--verify", action="store_true", help="deterministic-build oracle: rebuild, compare, restore")
     ap.add_argument("--refresh", action="store_true", help="re-download sources even if cached")
@@ -479,7 +480,9 @@ def main() -> int:
         )
         return 0
 
-    chosen = select(args.version)
+    # In roster order, and once each, however many of the words name a pack.
+    wanted = {pack.key for word in args.version for pack in select(word)}
+    chosen = [pack for pack in PACKS if pack.key in wanted] if args.version else select(None)
     if args.verify and not args.version and not args.all:
         # One pack by default because a rebuild is minutes and the oracle is
         # usually asked about a change just made. Narrowing SILENTLY was the

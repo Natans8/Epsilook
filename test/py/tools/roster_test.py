@@ -7,6 +7,7 @@ two packs agreeing on it is one silently overwriting the other.
 """
 
 from collections import Counter
+from pathlib import Path
 
 import pytest
 
@@ -178,6 +179,34 @@ def test_a_pack_off_the_test_lines_is_always_listed(monkeypatch: pytest.MonkeyPa
     frozen = Pack("legion", "Legion", "wow", "7.3.5.26972")
     _roster(monkeypatch, "12.1.0.69273", frozen)
     assert listed(frozen)
+
+
+def _dumps(monkeypatch: pytest.MonkeyPatch, cache: Path, *tags: str) -> None:
+    """A cache holding one extracted TDB release per tag, and nothing else."""
+    for tag in tags:
+        (cache / f"tdb-{tag}").mkdir()
+    monkeypatch.setattr(roster, "CACHE", cache)
+
+
+def test_a_tdb_lookup_that_cannot_answer_keeps_every_dump(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """A bare interpreter cannot import the build's release lookup, and the
+    sweep deletes, so not knowing which dumps a pack reads must keep them all.
+    A placeholder tag standing in for "unknown" once read as the only dump
+    worth keeping, and the sweep removed every other one."""
+    _roster(monkeypatch, "9.2.7.45745")
+    _dumps(monkeypatch, tmp_path, "TDB927.22111", "TDB1210.26091")
+    monkeypatch.setattr(roster, "_tdb_release", lambda: None)
+    assert not roster.stale_cache()
+
+
+def test_a_tdb_lookup_that_answers_sweeps_only_the_dumps_no_pack_reads(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The sweep's reason to exist: a retired release is hundreds of megabytes."""
+    _roster(monkeypatch, "9.2.7.45745")
+    _dumps(monkeypatch, tmp_path, "TDB927.22111", "TDB1210.26091")
+    monkeypatch.setattr(roster, "_tdb_release", lambda: lambda build: {"tag": "TDB927.22111"})
+    assert [directory.name for directory, _ in roster.stale_cache()] == ["tdb-TDB1210.26091"]
 
 
 def test_exactly_one_retail_line_is_tracked() -> None:

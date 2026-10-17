@@ -291,10 +291,10 @@ class Pack:
 PACKS: tuple[Pack, ...] = (
     # The three still shipping their own patch — these are the ones `--check`
     # can actually answer for, and the only ones a routine bump touches.
-    Pack("vanilla", "Vanilla Classic", "wow_classic_era", "1.15.9.69109", tracked=True),
-    Pack("tbc", "TBC Classic", "wow_anniversary", "2.5.6.69110", tracked=True),
-    Pack("mop", "MoP Classic", "wow_classic", "5.5.4.69155", tracked=True),
-    Pack("midnight", "Midnight", "wow", "12.1.5.70391", tracked=True),
+    Pack("vanilla", "Vanilla Classic", "wow_classic_era", "1.15.9.70003", tracked=True),
+    Pack("tbc", "TBC Classic", "wow_anniversary", "2.5.6.70006", tracked=True),
+    Pack("mop", "MoP Classic", "wow_classic", "5.5.4.70449", tracked=True),
+    Pack("midnight", "Midnight", "wow", "12.1.5.70448", tracked=True),
     # THE TWO RETAIL TEST LINES, and neither is "the" PTR. Blizzard runs two
     # equal public test slots and uses them in turn: whichever holds the patch
     # under test leads, and the other sits on the patch that just shipped. Over
@@ -310,8 +310,8 @@ PACKS: tuple[Pack, ...] = (
     # names and are written once — both manifests then name the same files.
     # The condition is the shared build, not the roster row: move one to a
     # build of its own and the modules diverge with it, needing no edit here.
-    Pack("midnight-ptr", "Midnight PTR", "wowt", "12.1.0.69273", tracked=True),
-    Pack("midnight-ptr2", "Midnight PTR 2", "wowxptr", "12.1.5.70077", tracked=True),
+    Pack("midnight-ptr", "Midnight PTR", "wowt", "12.1.7.70424", tracked=True),
+    Pack("midnight-ptr2", "Midnight PTR 2", "wowxptr", "12.1.5.70340", tracked=True),
     # Lines that moved on, and pinned retail. Historical artifacts: their build
     # is final, so untracked rather than polling a line that would answer
     # about a different expansion entirely.
@@ -497,7 +497,8 @@ def stale_cache() -> list[tuple[Path, int]]:
     # pattern cannot quietly start deleting a quarter of a gigabyte that no
     # download would bring back.
     keep = set(builds()) | {SOUNDKITNAME_BUILD} | {f"{pack.build}-{pack.client}" for pack in PACKS if pack.client}
-    keep_tdb = {tdb_tag(build) for build in builds()} - {""}
+    tags = {tdb_tag(build) for build in builds()}
+    keep_tdb = {tag for tag in tags if tag}
 
     stale = []
     for directory in sorted(CACHE.iterdir()):
@@ -505,12 +506,12 @@ def stale_cache() -> list[tuple[Path, int]]:
             continue
         tdb = TDB_DIR_RE.match(directory.name)
         if tdb:
-            # No mapping means the question could not be answered, not that the
-            # answer is "none of them" -- on a bare interpreter `tdb_tag` cannot
-            # reach the builder and returns nothing for every build. Keeping is
-            # the only safe reading, and it costs disk where the alternative
-            # costs a re-download of hundreds of megabytes.
-            if not keep_tdb or tdb.group(1) in keep_tdb:
+            # An unknown tag means the question could not be answered, not that
+            # the answer is "none of them" -- on a bare interpreter `tdb_tag`
+            # cannot reach the builder. Keeping is the only safe reading, and it
+            # costs disk where the alternative costs a re-download of hundreds
+            # of megabytes per release.
+            if None in tags or not keep_tdb or tdb.group(1) in keep_tdb:
                 continue
         elif not BUILD_DIR_RE.match(directory.name) or directory.name in keep:
             continue
@@ -617,18 +618,28 @@ def wago_has(build: str) -> bool | None:
         return None
 
 
-def tdb_tag(build: str) -> str:
-    """The TDB release tag covering this build's PATCH, or "".
+def tdb_tag(build: str) -> str | None:
+    """The TDB release tag covering this build's PATCH, "" for none, None if unknown.
 
     Imported from the build rather than restated — two copies of this mapping
     would drift, and the whole point is to answer the same question the build
     will answer. Matching is per patch (the user's call): a TDB tracks 9.2.7,
     not 9.2.7.45745, so a hotfix bump keeps its server-side data.
+
+    None is a bare interpreter, which cannot import the lookup. It is not a
+    string on purpose: `stale_cache` deletes every dump whose tag it was not
+    given, and a placeholder tag once read as the one dump worth keeping.
     """
     release = _tdb_release()
     if release is None:
-        return ""
+        return None
     return (release(build) or {}).get("tag", "")
+
+
+def tdb_word(build: str) -> str:
+    """`tdb_tag` for a person to read: the tag, "none", or "unknown"."""
+    tag = tdb_tag(build)
+    return "unknown" if tag is None else tag or "none"
 
 
 def availability(build: str) -> str:
@@ -642,10 +653,9 @@ def availability(build: str) -> str:
     """
     wago = wago_has(build)
     wago_word = {True: "yes", False: "NOT YET", None: "unknown"}[wago]
-    tag = tdb_tag(build)
     # ASCII only: this lands in a Windows console that is often cp1252, where a
     # middot comes out as "?" and makes the line look corrupted.
-    return f"  [wago: {wago_word}, TDB: {tag or 'none'}]"
+    return f"  [wago: {wago_word}, TDB: {tdb_word(build)}]"
 
 
 def bump(keys: list[str]) -> int:
@@ -696,14 +706,14 @@ def bump(keys: list[str]) -> int:
         if count != 1:
             print(f"{key}: could not locate its build string in {source_path.name}", file=sys.stderr)
             return 1
-        changed.append((key, pack.build, live, tdb_tag(live)))
+        changed.append((key, pack.build, live, tdb_word(live)))
 
     if not changed:
         return 0
 
     source_path.write_text(source, encoding="utf-8")
     for key, old, new, tag in changed:
-        print(f"{key:<13} {old} -> {new}   [TDB: {tag or 'none'}]")
+        print(f"{key:<13} {old} -> {new}   [TDB: {tag}]")
     print(f"\nedited {source_path.name}. Now: python tools/rebuild.py {' '.join(k for k, *_ in changed)}")
     return 0
 
