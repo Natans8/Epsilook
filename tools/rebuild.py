@@ -288,7 +288,9 @@ def retire_superseded(built: list[Pack]) -> list[str]:
     if gone and MANIFEST.exists():
         manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
         kept = [e for e in manifest if e["id"] not in gone]
-        MANIFEST.write_text(json.dumps(kept, indent=2) + "\n", encoding="utf-8")
+        # Bytes, as the build writes it: text mode on Windows turns every newline
+        # into CRLF, and the file is committed as it is written.
+        MANIFEST.write_bytes((json.dumps(kept, indent=2) + "\n").encode("utf-8"))
 
     return gone
 
