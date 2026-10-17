@@ -11,6 +11,7 @@ asserting the fake instead.
 """
 
 import json
+import threading
 import urllib.error
 import urllib.request
 from collections.abc import Callable, Sequence
@@ -22,7 +23,7 @@ import pytest
 
 from pack.sources.cache import Pinned, Revalidated, Volatile, tracked_source
 from pack.sources.listfile import LISTFILE_ASSET, latest_release
-from pack.sources.source import Extracted, Fetch, Fetched, Gathered, Origin, Part, Source, each
+from pack.sources.source import Extracted, Fetch, Fetched, Gathered, Origin, Part, Source, each, together
 from pack.sources.tdb import TDB_TABLES, Distill
 from pack.sources.wago import tables_source
 from support import Network
@@ -407,6 +408,80 @@ def test_a_wago_table_this_build_predates_is_absent(tmp_path: Path, network: Net
     assert not source.fetch.get(optional.origin, tmp_path / optional.name, False, optional.optional)
     with pytest.raises(urllib.error.HTTPError):
         source.fetch.get(required.origin, tmp_path / required.name, False, required.optional)
+
+
+@dataclass
+class Gate:
+    """A fetch that lets no part through until `waiting` of them are asking at once.
+
+    The one thing a loop cannot do, so a set that gets through it was asked
+    for together rather than in turn.
+    """
+
+    waiting: int
+    barrier: threading.Barrier = field(init=False)
+
+    def __post_init__(self) -> None:
+        self.barrier = threading.Barrier(self.waiting, timeout=2)
+
+    def get(self, origin: Origin, dest: Path, refresh: bool, optional: bool = False) -> bool:
+        del origin, refresh, optional
+        self.barrier.wait()
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(BODY)
+        return True
+
+    def get_many(self, parts: Sequence[Part], into: Path, refresh: bool) -> list[Path]:
+        return together(self, parts, into, refresh, self.waiting)
+
+
+def _address(table: str) -> str:
+    """Where the fake network serves one table's export."""
+    return f"https://example.invalid/{table}.csv"
+
+
+def _tables(*names: str) -> list[Part]:
+    """One part per table, at its own address."""
+    return [Part(origin=Origin(_address(name)), name=f"{name}.csv") for name in names]
+
+
+def test_a_set_asked_for_together_is_in_flight_at_once(tmp_path: Path) -> None:
+    """The point of `together`: three requests open at one time, where a loop
+    would wait for each before asking for the next and never pass the gate."""
+    gate = Gate(3)
+    parts = _tables("Spell", "SpellVisual", "SpellMisc")
+    assert gate.get_many(parts, tmp_path, False) == [tmp_path / part.name for part in parts]
+
+
+def test_a_set_asked_for_together_answers_as_one_asked_for_in_turn(tmp_path: Path) -> None:
+    """Declaration order, and a part this build predates left out, whatever
+    order the requests happened to finish in."""
+    parts = [
+        *_tables("Spell"),
+        Part(origin=Origin(_address("UiMap")), name="UiMap.csv", optional=True),
+        *_tables("SpellVisual"),
+    ]
+    bodies = {_address("Spell"): BODY, _address("SpellVisual"): BODY}
+    in_turn = each(Copied(bodies, []), parts, tmp_path / "in-turn", False)
+    at_once = together(Copied(bodies, []), parts, tmp_path / "at-once", False, 3)
+    assert [path.name for path in at_once] == [path.name for path in in_turn] == ["Spell.csv", "SpellVisual.csv"]
+
+
+def test_a_part_that_fails_fails_the_set(tmp_path: Path, network: Network) -> None:
+    """A required table missing upstream stops the build, as it did one at a time."""
+    network.bodies[_address("Spell")] = BODY
+    with pytest.raises(urllib.error.HTTPError):
+        together(Pinned(), _tables("Spell", "SpellVisual"), tmp_path, False, 2)
+
+
+def test_a_pinned_set_lands_whole_and_is_asked_for_once(tmp_path: Path, network: Network) -> None:
+    """The policy the build's own tables travel under, over the fake network:
+    every file lands, and none is requested twice for being asked together."""
+    names = ("Spell", "SpellVisual", "SpellMisc", "SpellName", "SpellEffect", "SoundKitEntry")
+    network.bodies.update({_address(name): BODY for name in names})
+    landed = Pinned().get_many(_tables(*names), tmp_path, False)
+    assert [path.read_bytes() for path in landed] == [BODY] * len(names)
+    assert all(network.asked[_address(name)] == 1 for name in names)
 
 
 def test_a_volatile_source_is_fetched_every_build(tmp_path: Path, network: Network) -> None:

@@ -13,9 +13,13 @@ alongside its children. A name recorded more than once accumulates, which is how
 a per-item cost inside a loop is measured without one row per item.
 """
 
+import sys
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
+from typing import Never
+
+from tqdm import tqdm
 
 _ELAPSED: dict[str, float] = {}
 """Seconds spent per phase name, summed over every span recorded under it.
@@ -40,8 +44,25 @@ or the cost is spread, which is the only question a breakdown answers."""
 
 
 def log(message: str) -> None:
-    """Print one line of build progress."""
-    print(message, flush=True)
+    """Print one line of build progress, above any bar being drawn.
+
+    Through tqdm rather than `print`, which is what keeps a line from landing
+    inside a bar, and what keeps two threads' lines whole.
+    """
+    tqdm.write(message, file=sys.stdout)
+    sys.stdout.flush()
+
+
+def counting(total: int, description: str) -> tqdm[Never]:  # pylint: disable=unsubscriptable-object
+    """A bar over `total` items, on stderr, drawn only where a person is watching.
+
+    A captured or redirected run gets the log lines alone, since a bar redrawn
+    into a file is a line per update and says nothing the lines do not.
+
+    Only tqdm's stubs make the class generic, which is what pylint, reading the
+    class itself, objects to; the annotation is never evaluated at runtime.
+    """
+    return tqdm(total=total, desc=description, unit="file", disable=None)
 
 
 def record(name: str, seconds: float) -> None:

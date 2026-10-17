@@ -23,11 +23,12 @@ this build declares the source absent.
 """
 
 from collections.abc import Sequence
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
-from ..progress import log
+from ..progress import counting, log
 
 
 @dataclass(frozen=True)
@@ -106,10 +107,11 @@ class Fetch(Protocol):
         """Get a whole set at once, and say which of them landed.
 
         The set is offered rather than the parts one at a time because that is
-        the only moment a policy can act on what they share. Over http there is
-        nothing to share and this is a loop; over a content store, resolving
-        keys is one pass over an index whose repeated scanning would otherwise
-        dominate the read. A policy with nothing to share calls ``each``.
+        the only moment a policy can act on what they share. Over http the parts
+        share nothing but the wait, so a pinned set is asked for several at a
+        time; over a content store, resolving keys is one pass over an index
+        whose repeated scanning would otherwise dominate the read. A policy with
+        nothing to share calls ``each``, or ``together`` to overlap the waits.
 
         Args:
             parts: what to get, in the order they are declared.
@@ -135,6 +137,37 @@ def each(fetch: Fetch, parts: Sequence[Part], into: Path, refresh: bool) -> list
         if fetch.get(part.origin, dest, refresh, part.optional):
             landed.append(dest)
     return landed
+
+
+def together(fetch: Fetch, parts: Sequence[Part], into: Path, refresh: bool, at_once: int) -> list[Path]:
+    """Get parts several at a time: what a policy over separate addresses does.
+
+    Each part lands in a file of its own, so they cannot race one another. The
+    answer is what `each` would give, in the order the parts are declared, and
+    a failure raises as it would there; the parts not yet started are dropped
+    rather than fetched for a build that is about to stop.
+
+    Args:
+        fetch: the policy each part is gotten under.
+        parts: what to get.
+        into: the directory they land in.
+        refresh: get them again even where cached copies would pass.
+        at_once: how many requests may be open at one time.
+    """
+    landed = [False] * len(parts)
+    with counting(len(parts), into.name) as bar, ThreadPoolExecutor(max_workers=at_once) as pool:
+        started: dict[Future[bool], int] = {
+            pool.submit(fetch.get, part.origin, into / part.name, refresh, part.optional): at
+            for at, part in enumerate(parts)
+        }
+        try:
+            for done in as_completed(started):
+                landed[started[done]] = done.result()
+                bar.update()
+        except BaseException:
+            pool.shutdown(cancel_futures=True)
+            raise
+    return [into / part.name for part, there in zip(parts, landed, strict=True) if there]
 
 
 class Extract(Protocol):

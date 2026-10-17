@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ..progress import log
-from .source import Fetched, Origin, Part, each
+from .source import Fetched, Origin, Part, each, together
 
 BUILD_DIR = Path(__file__).resolve().parents[2]
 """The build's own directory: where its checked-in sources live, tracked."""
@@ -45,6 +45,15 @@ A tuple because it is the network's vocabulary rather than a universal: one
 that will not disclose whether an object exists refuses the request instead,
 and reads as 403. Which codes mean absent is declared where a source is wired,
 so a policy never has to guess.
+"""
+
+AT_ONCE = 4
+"""How many files of one pinned set are asked for at a time.
+
+wago builds an export when it is asked for one, and that is where a table's
+time goes rather than into the transfer, so requests made together overlap
+instead of queueing. Four do so without slowing one another, and the service is
+somebody else's and free, so the build asks for no more than that.
 """
 
 BUSY = 500
@@ -171,8 +180,9 @@ class Pinned:
         return download(origin.address, dest, refresh, optional=optional, absent=self.absent)
 
     def get_many(self, parts: Sequence[Part], into: Path, refresh: bool) -> list[Path]:
-        """One request each: separate addresses share nothing to resolve."""
-        return each(self, parts, into, refresh)
+        """One request each, `AT_ONCE` at a time: separate addresses share
+        nothing to resolve, and each lands in a file of its own."""
+        return together(self, parts, into, refresh, AT_ONCE)
 
 
 @dataclass(frozen=True)

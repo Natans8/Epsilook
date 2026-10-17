@@ -118,7 +118,13 @@ def jobs_for(asked: int, chosen: Sequence[Pack]) -> int:
 
 
 def prewarm(chosen: Sequence[Pack], refresh: bool) -> int:
-    """Fetch every chosen pack's sources, one at a time. Non-zero on failure.
+    """Fetch every chosen pack's sources, one build at a time. Non-zero on failure.
+
+    Streamed rather than captured, since this is the step that takes minutes:
+    each build's fetch draws its own bar, and one build at a time is what keeps
+    two bars from drawing over each other. Inside a build the tables are
+    already asked for several at once, so running builds together would only
+    add requests to a service the build has already decided how hard to ask.
 
     THE FETCH PHASE, AND IT RUNS SERIALLY ON PURPOSE -- separating acquisition
     from execution is what makes the fan-out safe. Builds share sources, and two
@@ -140,7 +146,8 @@ def prewarm(chosen: Sequence[Pack], refresh: bool) -> int:
     for pack in chosen:
         by_build.setdefault(pack.build, []).append(pack)
 
-    for build, packs in by_build.items():
+    for at, (build, packs) in enumerate(by_build.items(), 1):
+        print(f"{DIM}[{at}/{len(by_build)}] fetching {build}{RESET}", flush=True)
         # Empty means every declared language here exactly as it does on a
         # roster row, so one pack asking for all of them settles the build.
         locales = (
@@ -151,12 +158,9 @@ def prewarm(chosen: Sequence[Pack], refresh: bool) -> int:
             argv += ["--locale", locale]
         if refresh:
             argv.append("--refresh")
-        proc = subprocess.run(
-            argv, cwd=BUILD_ROOT, capture_output=True, encoding="utf-8", errors="replace", check=False
-        )
+        proc = subprocess.run(argv, cwd=BUILD_ROOT, check=False)
         if proc.returncode != 0:
             print(f"{RED}fetch failed{RESET} {build} exit {proc.returncode}")
-            print(proc.stdout or "", proc.stderr or "", sep="")
             return proc.returncode
     return 0
 
