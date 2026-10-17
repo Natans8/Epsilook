@@ -175,10 +175,10 @@ class Pack:
 PACKS: tuple[Pack, ...] = (
     # The three still shipping their own patch — these are the ones `--check`
     # can actually answer for, and the only ones a routine bump touches.
-    Pack("vanilla", "Vanilla Classic", "wow_classic_era", "1.15.9.69109"),
-    Pack("tbc", "TBC Classic", "wow_anniversary", "2.5.6.69110"),
-    Pack("mop", "MoP Classic", "wow_classic", "5.5.4.69155"),
-    Pack("midnight", "Midnight", "wow", "12.1.5.70391"),
+    Pack("vanilla", "Vanilla Classic", "wow_classic_era", "1.15.9.70003"),
+    Pack("tbc", "TBC Classic", "wow_anniversary", "2.5.6.70006"),
+    Pack("mop", "MoP Classic", "wow_classic", "5.5.4.70449"),
+    Pack("midnight", "Midnight", "wow", "12.1.5.70448"),
     # Lines that moved on, and pinned retail. Historical artifacts: their build
     # is final, so FROZEN rather than a product that would answer about a
     # different expansion entirely.

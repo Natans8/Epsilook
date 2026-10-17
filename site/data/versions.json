@@ -1,17 +1,17 @@
 [
   {
-    "id": "1.15.9.69109",
+    "id": "1.15.9.70003",
     "label": "Vanilla Classic 1.15.9",
-    "file": "data/1.15.9.69109/spelldata.json.gz",
-    "built": "2026-08-10",
-    "hash": "7bf9403e1b"
+    "file": "data/1.15.9.70003/spelldata.json.gz",
+    "built": "2026-10-17",
+    "hash": "61065afc3d"
   },
   {
-    "id": "2.5.6.69110",
+    "id": "2.5.6.70006",
     "label": "TBC Classic 2.5.6",
-    "file": "data/2.5.6.69110/spelldata.json.gz",
-    "built": "2026-08-10",
-    "hash": "431b14da58"
+    "file": "data/2.5.6.70006/spelldata.json.gz",
+    "built": "2026-10-17",
+    "hash": "a211cc9d84"
   },
   {
     "id": "3.4.3.58936",
@@ -28,11 +28,11 @@
     "hash": "2387301bfa"
   },
   {
-    "id": "5.5.4.69155",
+    "id": "5.5.4.70449",
     "label": "MoP Classic 5.5.4",
-    "file": "data/5.5.4.69155/spelldata.json.gz",
-    "built": "2026-08-10",
-    "hash": "8ca7bcd9a0"
+    "file": "data/5.5.4.70449/spelldata.json.gz",
+    "built": "2026-10-17",
+    "hash": "703949532e"
   },
   {
     "id": "7.3.5.26972",
@@ -71,10 +71,10 @@
     "hash": "70e402e4cc"
   },
   {
-    "id": "12.1.5.70391",
+    "id": "12.1.5.70448",
     "label": "Midnight 12.1.5",
-    "file": "data/12.1.5.70391/spelldata.json.gz",
-    "built": "2026-10-14",
-    "hash": "1a0f0c5f47"
+    "file": "data/12.1.5.70448/spelldata.json.gz",
+    "built": "2026-10-17",
+    "hash": "c739f9d13b"
   }
 ]

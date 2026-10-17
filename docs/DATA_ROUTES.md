@@ -1477,8 +1477,9 @@ offering no button.
 
 - **`SpellCastingRequirements`**, **`AreaGroupMember`**, **`AreaTable`** — in `TABLES`, present on all ten builds.
 - **`UiMap`**, **`UiMapAssignment`** — in **both** `TABLES` and `OPTIONAL_TABLES`, and it must be both: `TABLES` is what
-  gets DOWNLOADED and `OPTIONAL_TABLES` only permits a 404. They were declared optional alone at first, so nothing ever
-  fetched them and the map button worked on 9.2.7 only — because an exploration run had left those CSVs in its cache.
+  gets DOWNLOADED and `OPTIONAL_TABLES` only permits a 404 or 400. They were declared optional alone at first, so
+  nothing ever fetched them and the map button worked on 9.2.7 only — because an exploration run had left those CSVs in
+  its cache.
   Now asserted at module level in `build_data.py`. **Measured on all ten (2026-08-05): present everywhere except Legion
   7.3.5, which 404s both** — `UiMap` replaced `WorldMapArea` in BfA 8.0, so Legion predates it and correctly ships
   `mapIds` 0 with no map button. The five Classic re-releases DO have it, being modern clients serving old content.
@@ -2167,7 +2168,7 @@ a version is a config edit, not a code edit:
 
 | Declaration                                                                 | Handles                                                                                                                                                                              |
 |-----------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `OPTIONAL_TABLES`                                                           | Table postdates the build → 404 tolerated, section empty, feature switches off.                                                                                                      |
+| `OPTIONAL_TABLES`                                                           | Table postdates the build → 404 or 400 tolerated, section empty, feature switches off.                                                                                               |
 | `OPTIONAL_COLUMNS`                                                          | Table exists, one column doesn't → default stands in (3 so far: two missile-set variants, plus `ReducedUnexpectedCameraMovementSpellVisualID` absent on Legion 7.3.5 and BfA 8.3.7). |
 | `SPELL_NAME_SOURCES`                                                        | Data moved tables — first candidate that exists wins.                                                                                                                                |
 | `TDB_OPTIONAL_TABLES` / `TDB_OPTIONAL_COLUMNS` / `CREATURE_DISPLAY_SOURCES` | The same three kinds of drift on the TrinityCore side, in its own namespace.                                                                                                         |

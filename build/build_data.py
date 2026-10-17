@@ -1345,9 +1345,12 @@ def download(url: str, dest: Path, refresh: bool, headers: dict | None = None,
              optional: bool = False) -> bool:
     """Download url to dest unless it is already cached (or refresh is set).
 
-    Returns False when an `optional` source is absent (HTTP 404) — that is how
-    a build that predates a db2 table reports it, and the caller treats the
+    Returns False when an `optional` source is absent — that is how a build
+    that predates a db2 table reports it, and the caller treats the
     corresponding feature as switched off. Any other error still raises.
+
+    Absent is 404 or 400: wago answers a table a build lacks with 400 and
+    `{"errors":"Table not found."}`, where it once answered 404.
     """
     if dest.exists() and dest.stat().st_size > 0 and not refresh:
         log(f"  cached   {dest.name} ({dest.stat().st_size:,} bytes)")
@@ -1362,7 +1365,7 @@ def download(url: str, dest: Path, refresh: bool, headers: dict | None = None,
                 out.write(chunk)
     except urllib.error.HTTPError as e:
         tmp.unlink(missing_ok=True)
-        if optional and e.code == 404:
+        if optional and e.code in (400, 404):
             dest.unlink(missing_ok=True)  # a stale pack's table must not linger
             log(f"  absent   {dest.name} (this build predates the table)")
             return False
