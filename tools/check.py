@@ -2567,6 +2567,21 @@ def check_license_scope(rep: Report) -> None:
         rep.ok("license scope", f"{len(names)} site/ directories classified: {', '.join(names)}")
 
 
+def still_fresh(cache: Path, *inputs: Path) -> bool:
+    """Whether a cached answer may be reused: written within the interval, and
+    after every file it is an answer about.
+
+    An answer about locked versions goes stale when the lock changes, not a day
+    later; without the second test an upgrade went on being reported as due.
+    """
+    if not cache.exists():
+        return False
+    written = cache.stat().st_mtime
+    if time.time() - written >= FRESHNESS_CACHE_HOURS * 3600:
+        return False
+    return all(written > source.stat().st_mtime for source in inputs if source.exists())
+
+
 def check_dependencies(rep: Report) -> None:
     """Report npm and Python dependencies with a newer release available.
 
@@ -2581,8 +2596,7 @@ def check_dependencies(rep: Report) -> None:
         rep.skip("dependencies", "not a CI concern")
         return
     cache = CACHE / "npm-outdated.json"
-    now = time.time()
-    if cache.exists() and now - cache.stat().st_mtime < FRESHNESS_CACHE_HOURS * 3600:
+    if still_fresh(cache, ROOT / "package-lock.json"):
         try:
             stale = json.loads(cache.read_text(encoding="utf-8"))
         except json.JSONDecodeError, OSError:
@@ -2629,7 +2643,7 @@ def python_outdated() -> dict[str, tuple[str, str]]:
     cannot: the npm half still reports.
     """
     cache = CACHE / "uv-outdated.json"
-    if cache.exists() and time.time() - cache.stat().st_mtime < FRESHNESS_CACHE_HOURS * 3600:
+    if still_fresh(cache, ROOT / "uv.lock"):
         try:
             return {name: (old, new) for name, (old, new) in json.loads(cache.read_text(encoding="utf-8")).items()}
         except json.JSONDecodeError, OSError, ValueError:
@@ -2790,7 +2804,7 @@ def check_python_next(rep: Report) -> None:
         return
     minor = next_minor()
     cache = CACHE / f"python-3.{minor}-blockers.json"
-    if cache.exists() and time.time() - cache.stat().st_mtime < FRESHNESS_CACHE_HOURS * 3600:
+    if still_fresh(cache, ROOT / "uv.lock"):
         blockers = json.loads(cache.read_text(encoding="utf-8"))
     else:
         found = python_next_blockers(minor)

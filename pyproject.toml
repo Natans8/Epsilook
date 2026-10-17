@@ -12,13 +12,13 @@ dependencies = [
     # and a column name both arrive from a game export, and the one thing a
     # string template cannot promise is that they are quoted as identifiers.
     # `duckdb-engine` is the dialect DuckDB's own documentation names.
-    "duckdb-sqlalchemy>=1.5.6.1",
-    "sqlalchemy>=2.1.4",
+    "duckdb-sqlalchemy>=1.5.6.4",
+    "sqlalchemy>=2.1.5",
     # The DDL half of reading a mysqldump file. The row scanner is hand-written
     # because nothing on the market reads a dump, but a CREATE TABLE is a real
     # grammar and the column order it yields is what keeps every distilled CSV
     # aligned -- worth a parser rather than a pattern.
-    "sqlglot>=30.22.0",
+    "sqlglot>=30.23.0",
 ]
 
 # Nothing here is installed as a package: the build runs from the checkout and
@@ -43,7 +43,7 @@ dev = [
     # rest rather than run through `uvx`, which resolves whatever PyPI served
     # that minute -- the point of this group is that a checker's version is a
     # fact of the repository.
-    "ruff>=0.17.0",
+    "ruff>=0.17.1",
     "mypy>=2.4.0",
     "pyflakes>=4.0.3",
     "pylint>=4.1.3",
@@ -55,7 +55,7 @@ dev = [
     # 5.1, so the tests can be exact about the one that matters rather than
     # hoping a newer one behaves the same.
     "lupa>=2.8",
-    "pillow>=12.3.0",
+    "pillow>=13.0.0",
 ]
 
 [tool.pytest.ini_options]

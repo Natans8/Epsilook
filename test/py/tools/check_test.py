@@ -1,17 +1,22 @@
 """The repo guards' own guard: a run that spanned two trees reports neither."""
 
+import os
 import shutil
+import time
+from pathlib import Path
 
 import pytest
 
 from check import (
     FLOOR,
+    FRESHNESS_CACHE_HOURS,
     OUTDATED_LINE,
     WORKFLOW_PYTHON,
     next_minor,
     python_next_blockers,
     python_next_line,
     serves,
+    still_fresh,
     straddle_report,
 )
 
@@ -128,3 +133,29 @@ def test_the_floor_is_a_plain_lower_bound() -> None:
     assert FLOOR.fullmatch(">=3.14") is not None
     assert FLOOR.fullmatch(">=3.14,<3.16") is None
     assert FLOOR.fullmatch("==3.14") is None
+
+
+def _written(path: Path, seconds_ago: float) -> Path:
+    """A file that exists, last written that long ago."""
+    path.write_text("{}", encoding="utf-8")
+    then = time.time() - seconds_ago
+    os.utime(path, (then, then))
+    return path
+
+
+def test_a_cached_answer_newer_than_its_lock_is_reused(tmp_path: Path) -> None:
+    """The ordinary day: one request, then the cache."""
+    lock = _written(tmp_path / "uv.lock", 600)
+    assert still_fresh(_written(tmp_path / "answer.json", 60), lock)
+
+
+def test_a_cached_answer_older_than_its_lock_is_asked_again(tmp_path: Path) -> None:
+    """An upgrade rewrites the lock, so the answer about the old versions is gone
+    with it, rather than reported as still due for the rest of the day."""
+    cache = _written(tmp_path / "answer.json", 600)
+    assert not still_fresh(cache, _written(tmp_path / "uv.lock", 60))
+
+
+def test_a_cached_answer_past_the_interval_is_asked_again(tmp_path: Path) -> None:
+    """A newer release says nothing to a lock, so time alone has to expire it."""
+    assert not still_fresh(_written(tmp_path / "answer.json", FRESHNESS_CACHE_HOURS * 3600 + 60))
