@@ -293,8 +293,8 @@ PACKS: tuple[Pack, ...] = (
     # can actually answer for, and the only ones a routine bump touches.
     Pack("vanilla", "Vanilla Classic", "wow_classic_era", "1.15.9.70003", tracked=True),
     Pack("tbc", "TBC Classic", "wow_anniversary", "2.5.6.70006", tracked=True),
-    Pack("mop", "MoP Classic", "wow_classic", "5.5.4.70449", tracked=True),
-    Pack("midnight", "Midnight", "wow", "12.1.5.70448", tracked=True),
+    Pack("mop", "MoP Classic", "wow_classic", "5.5.4.70579", tracked=True),
+    Pack("midnight", "Midnight", "wow", "12.1.5.70575", tracked=True),
     # THE TWO RETAIL TEST LINES, and neither is "the" PTR. Blizzard runs two
     # equal public test slots and uses them in turn: whichever holds the patch
     # under test leads, and the other sits on the patch that just shipped. Over

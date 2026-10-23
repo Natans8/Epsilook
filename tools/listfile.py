@@ -36,10 +36,7 @@ DATA = ROOT / "site" / "data"
 LISTFILE = CACHE / "listfile" / LISTFILE_ASSET
 TAG_FILE = CACHE / "listfile" / "release-tag.txt"
 
-HELD = {
-    "epsilon": "Epsilon's own sound API names some of these files the way the pack does today, and the "
-    "community list would rename them; the build does not yet prefer Epsilon's names",
-}
+HELD: dict[str, str] = {}
 """Packs a listfile change is reported for but not re-shipped over, each with its reason.
 
 A held pack still says what would change, so the hold is a decision on view

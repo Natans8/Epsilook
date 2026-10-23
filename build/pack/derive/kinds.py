@@ -291,13 +291,15 @@ class ColumnRows:
 def _pool(family: Family, rows: Iterable[SpellRow], into: dict[int, list[int]], base: int) -> KindPool:
     """One family's rows pooled, and every spell's references recorded.
 
-    Insertion order is the pool's order, which keeps the encoding deterministic
-    without a sort that would have to order tuples of unrelated meanings.
+    The pool is sorted by its values. The order a walk visits rows in is not a
+    fact about them: a walk that reaches the same rows another way would
+    otherwise ship different bytes for the same content. Every value is a
+    number, so the tuples order without a key.
     """
-    slots: dict[RowValues, int] = {}
-    for spell, values in rows:
-        slot = slots.setdefault(values, len(slots))
-        into.setdefault(spell, []).append(base + slot)
+    visits = list(rows)
+    slots = {values: slot for slot, values in enumerate(sorted({values for _, values in visits}))}
+    for spell, values in visits:
+        into.setdefault(spell, []).append(base + slots[values])
     width = sum(family.width(prop) for prop in family.props) + len(family.carried)
     columns = tuple([values[at] for values in slots] for at in range(width))
     # Only this kind's own properties: a shared helper hands every kind it

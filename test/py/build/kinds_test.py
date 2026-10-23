@@ -77,6 +77,17 @@ def test_a_spells_references_are_sorted() -> None:
     assert rows.refs == sorted(rows.refs)
 
 
+def test_the_pool_ships_the_same_whatever_order_the_walk_visits() -> None:
+    """The order rows are reached in is not a fact about them, so two walks
+    over the same pairs in different orders ship the same pool and the same
+    references."""
+    pairs = [(1, (9, 2)), (2, (3, 1)), (1, (3, 1)), (3, (5, -1)), (2, (9, 2))]
+    one = build_column([family("loose", ("anim", "phase"), pairs)], reads=NO_READS, spell_ids=[1, 2, 3])
+    other = build_column([family("loose", ("anim", "phase"), pairs[::-1])], reads=NO_READS, spell_ids=[1, 2, 3])
+    assert one.pools["loose"].columns == other.pools["loose"].columns == ([3, 5, 9], [1, -1, 2])
+    assert (one.counts, one.refs) == (other.counts, other.refs)
+
+
 def test_every_pair_survives_the_pooling() -> None:
     """Pooling is a change of storage, never of content: as many references come
     out as pairs went in."""

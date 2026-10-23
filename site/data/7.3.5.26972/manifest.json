@@ -4,8 +4,8 @@
     "format": 71,
     "version": "7.3.5.26972",
     "label": "Legion 7.3.5",
-    "built": "2026-09-20",
-    "listfileTag": "202609191859",
+    "built": "2026-10-23",
+    "listfileTag": "202610232020",
     "tdbTag": "TDB735.00",
     "absentTables": ["BarrageEffect", "ItemXItemEffect", "SpellName", "SpellOverrideName", "SpellVisualScreenEffect", "UiMap", "UiMapAssignment"],
     "degradedSections": {
@@ -140,7 +140,7 @@
     }
   },
   "modules": {
-    "core": {"file": "data/modules/core-b58cfad92e55.json.gz", "bytes": 6653335},
+    "core": {"file": "data/modules/core-01eddc639e30.json.gz", "bytes": 6426127},
     "universal": {"file": "data/modules/universal-1edd241fb00e.json.gz", "bytes": 41556},
     "sky": {"file": "data/modules/sky-d5b271582932.json.gz", "bytes": 207479}
   },

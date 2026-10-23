@@ -4,8 +4,8 @@
     "format": 71,
     "version": "1.15.9.70003",
     "label": "Vanilla Classic 1.15.9",
-    "built": "2026-10-17",
-    "listfileTag": "202610162123",
+    "built": "2026-10-23",
+    "listfileTag": "202610232020",
     "tdbTag": "",
     "absentTables": ["BarrageEffect", "ItemXItemEffect", "JournalEncounterSection", "Mount", "MountXDisplay", "ShadowyEffect", "SpellEffectEmission", "SpellKeyboundOverride", "SpellOverrideName", "SpellScaling", "SpellVisualScreenEffect", "WeaponTrail", "ZoneLight"],
     "degradedSections": {
@@ -232,7 +232,7 @@
     }
   },
   "modules": {
-    "core": {"file": "data/modules/core-dc8f68a4c8d3.json.gz", "bytes": 840299},
+    "core": {"file": "data/modules/core-060160d51dd5.json.gz", "bytes": 821355},
     "universal": {"file": "data/modules/universal-1edd241fb00e.json.gz", "bytes": 41556},
     "sky": {"file": "data/modules/sky-ad00897d3167.json.gz", "bytes": 30833}
   },

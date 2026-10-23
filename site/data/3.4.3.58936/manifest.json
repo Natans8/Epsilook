@@ -4,8 +4,8 @@
     "format": 71,
     "version": "3.4.3.58936",
     "label": "WotLK Classic 3.4.3",
-    "built": "2026-09-30",
-    "listfileTag": "202609301048",
+    "built": "2026-10-23",
+    "listfileTag": "202610232020",
     "tdbTag": "TDB335.26091",
     "absentTables": ["BarrageEffect", "BeamEffect", "DissolveEffect", "EdgeGlowEffect", "FullScreenEffect", "ItemXItemEffect", "JournalEncounterSection", "ShadowyEffect", "SpellEffectEmission", "SpellKeyboundOverride", "SpellOverrideName", "SpellScaling", "SpellVisualScreenEffect", "WeaponTrail"],
     "degradedSections": {
@@ -188,7 +188,7 @@
     }
   },
   "modules": {
-    "core": {"file": "data/modules/core-3364f34e8ec0.json.gz", "bytes": 1613678},
+    "core": {"file": "data/modules/core-3065c8312586.json.gz", "bytes": 1582719},
     "universal": {"file": "data/modules/universal-1edd241fb00e.json.gz", "bytes": 41556},
     "sky": {"file": "data/modules/sky-093efe9ff8cb.json.gz", "bytes": 67352}
   },

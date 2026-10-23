@@ -4,8 +4,8 @@
     "format": 71,
     "version": "9.2.7.45745",
     "label": "Shadowlands 9.2.7",
-    "built": "2026-10-12",
-    "listfileTag": "202610111812",
+    "built": "2026-10-24",
+    "listfileTag": "202610232020",
     "tdbTag": "TDB927.22111",
     "absentTables": [],
     "degradedSections": {},
@@ -137,7 +137,7 @@
     }
   },
   "modules": {
-    "core": {"file": "data/modules/core-9e00caa68f04.json.gz", "bytes": 11183282},
+    "core": {"file": "data/modules/core-3508809ccc1b.json.gz", "bytes": 10768686},
     "universal": {"file": "data/modules/universal-1edd241fb00e.json.gz", "bytes": 41556},
     "sky": {"file": "data/modules/sky-c570ad276f1e.json.gz", "bytes": 306515}
   },

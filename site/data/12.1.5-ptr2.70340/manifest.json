@@ -4,8 +4,8 @@
     "format": 71,
     "version": "12.1.5.70340",
     "label": "Midnight PTR 2 12.1.5",
-    "built": "2026-10-17",
-    "listfileTag": "202610162123",
+    "built": "2026-10-24",
+    "listfileTag": "202610232020",
     "tdbTag": "TDB1210.26091",
     "absentTables": [],
     "degradedSections": {},
@@ -102,7 +102,7 @@
     }
   },
   "modules": {
-    "core": {"file": "data/modules/core-8ac4a0c26e2f.json.gz", "bytes": 18070751},
+    "core": {"file": "data/modules/core-88a19bd64989.json.gz", "bytes": 17335952},
     "universal": {"file": "data/modules/universal-1edd241fb00e.json.gz", "bytes": 41556},
     "sky": {"file": "data/modules/sky-35e6761728be.json.gz", "bytes": 413118}
   },
