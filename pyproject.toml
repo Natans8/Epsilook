@@ -55,6 +55,7 @@ dev = [
     # hoping a newer one behaves the same.
     "lupa>=2.8",
     "pillow>=13.0.0",
+    "requests>=2.34.2",
 ]
 
 [tool.pytest.ini_options]
