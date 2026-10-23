@@ -59,7 +59,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -71,7 +71,7 @@ from pack.sources.client import client_tables_dir  # noqa: E402  (path set above
 from pack.sources.tdb import tdb_dir_name  # noqa: E402  (path set above)
 from packs import schema_name, table_sets  # noqa: E402  (path set above)
 
-from repo import CACHE, LISTFILE_ASSET
+from repo import CACHE, LISTFILE_ASSET, STORAGE_VERSION
 
 try:
     # The `type: ignore` is REQUIRED, not cosmetic: tools/check.py type-checks
@@ -96,13 +96,6 @@ WAGO_CSV_URL = "https://wago.tools/db2/{table}/csv?build={version}"
 DBDE_URL = "https://raw.githubusercontent.com/wowdev/WoWDBDefs/master/meta/enums/{name}.dbde"
 DBDE_LIST_URL = "https://api.github.com/repos/wowdev/WoWDBDefs/contents/meta/enums"
 USER_AGENT = "Epsilook-devdb (github.com/Natans8/Epsilook)"
-
-# DuckDB's storage format is not forward compatible: a file written by a newer
-# engine cannot be opened by an older reader. DataGrip 2026.2 bundles JDBC
-# driver 1.3.1, so the file is pinned to the v1.0.0 format to guarantee the IDE
-# can open it. 1.5.5 already defaults to this; pinning stops a future DuckDB
-# upgrade silently locking the user out of their own database.
-STORAGE_VERSION = "v1.0.0"
 
 # Tables worth having in the database that the PACK does not need, so
 # the build never downloads them. Fetched into the same per-version cache
@@ -345,6 +338,18 @@ def scalar(con: duckdb.DuckDBPyConnection, sql: str, params: list | None = None)
     if result is None:
         raise RuntimeError(f"query returned no row: {sql}")
     return int(result[0])
+
+
+def append(con: duckdb.DuckDBPyConnection, table: str, rows: Iterable[Sequence[object]]) -> None:
+    """Load rows into an existing table through DuckDB's appender.
+
+    `executemany` binds every row as a statement of its own, and the catalog
+    alone is thousands of rows; the appender buffers them and writes once. The
+    table's own constraints still hold, so a duplicate key raises as it did.
+    """
+    with con.appender(table) as appender:
+        for row in rows:
+            appender.append_row(*row)
 
 
 def fetch(url: str, dest: Path, refresh: bool = False, timeout: int = 120) -> bool:
@@ -641,7 +646,7 @@ def build_reference(con: duckdb.DuckDBPyConnection, manifest: list[dict], refres
         text = anims.read_text(encoding="utf-8", errors="replace")
         names = re.findall(r'"((?:[^"\\]|\\.)*)"', text)
         con.execute("CREATE OR REPLACE TABLE ref.anim_name (anim_id INTEGER PRIMARY KEY, name VARCHAR)")
-        con.executemany("INSERT INTO ref.anim_name VALUES (?, ?)", list(enumerate(names)))
+        append(con, "ref.anim_name", enumerate(names))
         log(f"  ref.anim_name                   {len(names):>9,}")
 
     # -- hardcoded client tables, imported from the build --------------------
@@ -655,7 +660,7 @@ def build_reference(con: duckdb.DuckDBPyConnection, manifest: list[dict], refres
         from pack.sources import load_local_enum  # pylint: disable=import-outside-toplevel
 
         con.execute("CREATE OR REPLACE TABLE ref.m2_attachment (attachment_id INTEGER PRIMARY KEY, name VARCHAR)")
-        con.executemany("INSERT INTO ref.m2_attachment VALUES (?, ?)", sorted(M2_ATTACHMENT_NAMES.items()))
+        append(con, "ref.m2_attachment", sorted(M2_ATTACHMENT_NAMES.items()))
         log(f"  ref.m2_attachment               {len(M2_ATTACHMENT_NAMES):>9,}")
 
         # VehicleSeat.AttachmentID is an INDEX into a table hardcoded in the
@@ -666,7 +671,7 @@ def build_reference(con: duckdb.DuckDBPyConnection, manifest: list[dict], refres
         con.execute(
             "CREATE OR REPLACE TABLE ref.vehicle_geo_component_link (idx INTEGER PRIMARY KEY, attachment_id INTEGER)"
         )
-        con.executemany("INSERT INTO ref.vehicle_geo_component_link VALUES (?, ?)", pairs)
+        append(con, "ref.vehicle_geo_component_link", pairs)
         log(f"  ref.vehicle_geo_component_link  {len(pairs):>9,}")
 
         # The 449 spell attribute bits. They are packed across
@@ -681,8 +686,9 @@ def build_reference(con: duckdb.DuckDBPyConnection, manifest: list[dict], refres
             " attr_column VARCHAR, mask BIGINT,"
             " handler VARCHAR, requires INTEGER)"
         )
-        con.executemany(
-            "INSERT INTO ref.spell_attribute VALUES (?, ?, ?, ?, ?, ?, ?)",
+        append(
+            con,
+            "ref.spell_attribute",
             [
                 (
                     bit,
@@ -721,7 +727,7 @@ def build_reference(con: duckdb.DuckDBPyConnection, manifest: list[dict], refres
                 (enum_file, applies, bit, meta["name"], meta["label"], 1 << (bit % 32), meta.get("handler"))
                 for bit, meta in sorted(enum.items())
             ]
-        con.executemany("INSERT INTO ref.spell_interrupt_flag VALUES (?, ?, ?, ?, ?, ?, ?)", interrupt_rows)
+        append(con, "ref.spell_interrupt_flag", interrupt_rows)
         log(f"  ref.spell_interrupt_flag        {len(interrupt_rows):>9,}")
     except (ImportError, AttributeError) as exc:
         log(f"  ! the build's declared tables are unavailable ({exc})")
@@ -739,8 +745,7 @@ def build_reference(con: duckdb.DuckDBPyConnection, manifest: list[dict], refres
             label = label.strip()
             if value.lstrip("-").isdigit() and label:
                 rows.append((name, int(value), label))
-    if rows:
-        con.executemany("INSERT INTO ref.enum_value VALUES (?, ?, ?)", rows)
+    append(con, "ref.enum_value", rows)
     con.execute("CREATE INDEX IF NOT EXISTS enum_value_idx ON ref.enum_value(enum_name, value)")
     log(f"  ref.enum_value                  {len(rows):>9,}  ({len({r[0] for r in rows})} enums)")
 
@@ -749,21 +754,21 @@ def build_reference(con: duckdb.DuckDBPyConnection, manifest: list[dict], refres
         "CREATE OR REPLACE TABLE ref.kit_effect_type "
         "(effect_type INTEGER PRIMARY KEY, target_table VARCHAR, note VARCHAR)"
     )
-    con.executemany("INSERT INTO ref.kit_effect_type VALUES (?, ?, ?)", KIT_EFFECT_TYPES)
+    append(con, "ref.kit_effect_type", KIT_EFFECT_TYPES)
 
     con.execute(
         "CREATE OR REPLACE TABLE ref.proc_type "
         "(type INTEGER PRIMARY KEY, payload_column VARCHAR, "
         " becomes VARCHAR, note VARCHAR)"
     )
-    con.executemany("INSERT INTO ref.proc_type VALUES (?, ?, ?, ?)", PROC_TYPES)
+    append(con, "ref.proc_type", PROC_TYPES)
 
     con.execute(
         "CREATE OR REPLACE TABLE ref.target_type "
         "(target_type INTEGER PRIMARY KEY, bit INTEGER, "
         " word VARCHAR, meaning VARCHAR)"
     )
-    con.executemany("INSERT INTO ref.target_type VALUES (?, ?, ?, ?)", TARGET_TYPES)
+    append(con, "ref.target_type", TARGET_TYPES)
     log("  ref.kit_effect_type / proc_type / target_type   (project decodes)")
 
     # -- the version manifest -------------------------------------------------
@@ -773,19 +778,21 @@ def build_reference(con: duckdb.DuckDBPyConnection, manifest: list[dict], refres
         " major INTEGER, minor INTEGER, patch INTEGER, build_number INTEGER,"
         " is_default BOOLEAN, tdb_tag VARCHAR)"
     )
-    for entry in manifest:
-        parsed = dbd.parse_build(entry["id"]) or (0, 0, 0, 0)
-        con.execute(
-            "INSERT INTO ref.game_build VALUES (?,?,?,?,?,?,?,?,?)",
-            [
+    append(
+        con,
+        "ref.game_build",
+        [
+            (
                 schema_name(entry["id"]),
                 entry["id"],
                 entry.get("label"),
-                *parsed,
+                *(dbd.parse_build(entry["id"]) or (0, 0, 0, 0)),
                 bool(entry.get("default")),
                 entry.get("tdb_tag"),
-            ],
-        )
+            )
+            for entry in manifest
+        ],
+    )
 
 
 def build_catalog(con: duckdb.DuckDBPyConnection, catalog: list[tuple]) -> None:
@@ -807,8 +814,7 @@ def build_catalog(con: duckdb.DuckDBPyConnection, catalog: list[tuple]) -> None:
             unverified    BOOLEAN,  comment       VARCHAR,
             fk_table      VARCHAR,  fk_column     VARCHAR,
             enum_name     VARCHAR)""")
-    if catalog:
-        con.executemany("INSERT INTO ref.column_info VALUES (" + ",".join("?" * 17) + ")", catalog)
+    append(con, "ref.column_info", catalog)
     con.execute("CREATE INDEX IF NOT EXISTS column_info_idx ON ref.column_info(schema_name, table_name)")
 
     # The FK graph on its own, flagged by whether the target is a table we hold:
@@ -1045,8 +1051,8 @@ def main() -> int:
     database = Path(args.db)
     database.parent.mkdir(parents=True, exist_ok=True)
 
-    # STORAGE_VERSION pins the on-disk format so DataGrip's bundled JDBC driver
-    # can open the file. See the constant's comment.
+    # STORAGE_VERSION pins the on-disk format so every older reader can still
+    # open the file. See the constant's comment in repo.py.
     con = duckdb.connect()
     literal = str(database).replace("'", "''")
     con.execute(f"ATTACH '{literal}' AS db (STORAGE_VERSION '{STORAGE_VERSION}')")

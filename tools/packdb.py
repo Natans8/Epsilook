@@ -58,7 +58,7 @@ from typing import Any
 
 import packfile
 from packs import schema_name, select
-from repo import CACHE, DIM, GREEN, RESET, ROOT, YELLOW, log, survive_console_encoding
+from repo import CACHE, DIM, GREEN, RESET, ROOT, STORAGE_VERSION, YELLOW, log, survive_console_encoding
 
 sys.path.insert(0, str(ROOT / "build"))
 
@@ -267,7 +267,7 @@ def main() -> int:
         return 0
 
     Path(args.db).parent.mkdir(parents=True, exist_ok=True)
-    connection = duckdb.connect(args.db)
+    connection = duckdb.connect(args.db, config={"storage_compatibility_version": STORAGE_VERSION})
     total_tables = total_rows = 0
     try:
         for index, (pack, path) in enumerate(chosen, 1):

@@ -74,6 +74,15 @@ CACHE = ROOT / ".cache"
 # differ and reports every pack stale forever.
 LISTFILE_ASSET = "community-listfile-withcapitals.csv"
 
+# The on-disk format every database the tools write is pinned to. DuckDB's
+# format is not forward compatible: a file written at a newer engine's default
+# cannot be opened by an older reader, and the readers here are older than the
+# writer by design -- the two database tool servers run their own DuckDB, and
+# the IDE opens the file through its bundled JDBC driver. DuckDB 2.0 writes a
+# format 1.x refuses unless told otherwise, so an unpinned writer locks every
+# one of them out the first time it runs after an upgrade.
+STORAGE_VERSION = "v1.0.0"
+
 # A change to the css, the bundle's SOURCES or the build itself needs a bump.
 # site/js is generated and gitignored, so it can never appear in a diff - which
 # is why src/ is watched instead of the bundle it produces. An html-only or

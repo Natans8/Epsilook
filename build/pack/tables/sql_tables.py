@@ -17,11 +17,12 @@ would make which one ran decide what a pack says. `all_varchar` turns the
 question off at the source, and the route parses the text exactly as it always
 did. Typing belongs to whatever stage decides to re-baseline for it.
 
-The attachment is SQL and every read is an expression. Naming a CSV takes one
-DuckDB-specific statement, because `read_csv`'s options are named arguments no
-SQL builder emits. Past that the table is an ordinary relation: the projection
-is built with SQLAlchemy Core, so a table and a column arriving from a game
-export are quoted as identifiers rather than pasted into a string.
+Every read is a relation, and nothing here writes SQL. The file is opened with
+DuckDB's own `read_csv`, which quotes the path and pins the columns it found
+when the relation is built, and the projection is made of DuckDB expressions,
+so a table and a column arriving from a game export are quoted as identifiers
+rather than pasted into a string. The relation prints the query it stands for,
+and that text is what each read runs on a cursor of its own.
 """
 
 import sys
@@ -29,8 +30,7 @@ from collections.abc import Iterator, Sequence
 from pathlib import Path
 
 import duckdb
-import sqlalchemy as sa
-from duckdb_sqlalchemy import Dialect
+from duckdb import coalesce, col, lit
 
 from ..drift import OPTIONAL_COLUMNS, OPTIONAL_TABLES
 from .projection import absent, project
@@ -50,20 +50,13 @@ The scan streams rather than materialising: `SpellEffect` is 420,713 rows on
 9.2.7 and the routes consume it one row at a time.
 """
 
-DIALECT = Dialect()
-"""The dialect the projections compile against.
-
-Held once because it is stateless and building one per read would be the only
-per-read allocation in this file that buys nothing.
-"""
-
 
 class SqlTables:
     """One directory of `<table>.csv` files, presented row-wise as text.
 
-    Each table is attached as a view over its file the first time it is asked
+    Each table becomes a relation over its file the first time it is asked
     for, in one in-memory database per instance. Nothing is copied: DuckDB scans
-    the CSV where it lies, so attaching costs a header read.
+    the CSV where it lies, so opening one costs a header read.
     """
 
     def __init__(
@@ -82,8 +75,7 @@ class SqlTables:
         self.absent_tables = OPTIONAL_TABLES if absent_tables is None else absent_tables
         self.defaults = OPTIONAL_COLUMNS if defaults is None else defaults
         self._database: duckdb.DuckDBPyConnection | None = None
-        self._attached: dict[str, sa.Table] = {}
-        self._metadata = sa.MetaData()
+        self._attached: dict[str, duckdb.DuckDBPyRelation] = {}
 
     def path_of(self, table: str) -> Path:
         """Where a table's file would be, whether or not it exists."""
@@ -101,7 +93,7 @@ class SqlTables:
         to read, and `rows` is where an unreadable one has to be fatal.
         """
         attached = self._attach(table)
-        return [column.name for column in attached.columns] if attached is not None else []
+        return attached.columns if attached is not None else []
 
     def rows(self, table: str, columns: Sequence[str]) -> Iterator[tuple[str, ...]]:
         """Yield the named columns of every row, in file order.
@@ -119,20 +111,15 @@ class SqlTables:
                 f"header row, so the cached copy is incomplete"
             )
 
-        plan = project(table, [column.name for column in attached.columns], columns, defaults=self.defaults)
+        plan = project(table, attached.columns, columns, defaults=self.defaults)
         # A row of no columns is still a row, and the plain reader yields one
-        # empty tuple for each. SQL has no zero-column select, so the count is
+        # empty tuple for each. SQL has no zero-column select, so a constant is
         # what gets asked for and the shape is restored on the way out.
         chosen = [
-            sa.func.coalesce(attached.c[source], "") if source is not None else sa.literal(stand_in)
+            coalesce(col(source), "") if source is not None else lit(stand_in)
             for source, stand_in in zip(plan.sources, plan.stand_ins)
         ]
-        # Named rather than inferred from the columns, because a request made
-        # entirely of stand-ins references none of them: the table would drop
-        # out of the FROM clause and the whole read would collapse to the one
-        # row a bare SELECT of literals returns.
-        statement = sa.select(*chosen or [sa.literal(1)]).select_from(attached)
-        sql = str(statement.compile(dialect=DIALECT, compile_kwargs={"literal_binds": True}))
+        sql = attached.select(*chosen or [lit(1)]).sql_query()
 
         # Its own cursor, because two routes may hold two reads of this source
         # open at once and one connection streams one result at a time.
@@ -162,8 +149,8 @@ class SqlTables:
             self._database = duckdb.connect()
         return self._database
 
-    def _attach(self, table: str) -> sa.Table | None:
-        """The relation for one table, attaching it on first ask.
+    def _attach(self, table: str) -> duckdb.DuckDBPyRelation | None:
+        """The relation for one table, opening it on first ask.
 
         Returns None when there is no file, or when there is one and it holds no
         header -- a truncated download rather than a build that predates the
@@ -174,20 +161,11 @@ class SqlTables:
         path = self.path_of(table)
         if not path.exists():
             return None
-        database = self._connect()
-        # The one statement no builder writes: `read_csv`'s options are named
-        # arguments rather than SQL, and a view definition cannot take a bound
-        # parameter, so the path is quoted as the string literal it is.
-        literal = str(path).replace("'", "''")
         try:
-            database.execute(
-                f'CREATE OR REPLACE VIEW "{table}" AS SELECT * FROM read_csv('
-                f"'{literal}', all_varchar = true, header = true, "
-                f"max_line_size = {MAX_LINE}, null_padding = false)"
+            relation = self._connect().read_csv(
+                str(path), all_varchar=True, header=True, max_line_size=MAX_LINE, null_padding=False
             )
-            described = database.execute(f'SELECT * FROM "{table}" LIMIT 0')
         except duckdb.Error:
             return None
-        relation = sa.Table(table, self._metadata, *[sa.Column(name, sa.Text) for name, *_ in described.description])
         self._attached[table] = relation
         return relation

@@ -6,14 +6,11 @@ requires-python = ">=3.14"
 dependencies = [
     # The engine behind the SQL table provider, and the exploration database the
     # tools read. One version for both, so a question asked in the mirror and a
-    # pack built through `SqlTables` cannot answer it differently.
-    "duckdb>=1.5.6",
-    # The provider builds its reads as expressions rather than as text: a table
+    # pack built through `SqlTables` cannot answer it differently. The provider
+    # builds its reads with DuckDB's own expressions rather than as text: a table
     # and a column name both arrive from a game export, and the one thing a
     # string template cannot promise is that they are quoted as identifiers.
-    # `duckdb-engine` is the dialect DuckDB's own documentation names.
-    "duckdb-sqlalchemy>=1.5.6.4",
-    "sqlalchemy>=2.1.5",
+    "duckdb>=2.0.0",
     # The DDL half of reading a mysqldump file. The row scanner is hand-written
     # because nothing on the market reads a dump, but a CREATE TABLE is a real
     # grammar and the column order it yields is what keeps every distilled CSV
