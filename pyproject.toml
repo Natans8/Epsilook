@@ -15,7 +15,7 @@ dependencies = [
     # because nothing on the market reads a dump, but a CREATE TABLE is a real
     # grammar and the column order it yields is what keeps every distilled CSV
     # aligned -- worth a parser rather than a pattern.
-    "sqlglot>=30.23.0",
+    "sqlglot>=30.24.0",
     # Progress for the steps that take minutes: the build draws a bar while it
     # downloads a build's tables, and the tools that sweep packs or walk the
     # client's storage draw one too.
@@ -39,7 +39,7 @@ dev = [
     # rest rather than run through `uvx`, which resolves whatever PyPI served
     # that minute -- the point of this group is that a checker's version is a
     # fact of the repository.
-    "ruff>=0.17.1",
+    "ruff>=0.17.2",
     "mypy>=2.4.0",
     "pyflakes>=4.0.3",
     "pylint>=4.1.3",

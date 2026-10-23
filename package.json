@@ -42,18 +42,18 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "esbuild": "^0.28.2",
-    "oxlint": "^1.88.0",
-    "oxlint-tsgolint": "^7.0.2004",
+    "oxlint": "^1.89.0",
+    "oxlint-tsgolint": "^7.0.2005",
     "typescript": "^7.0.2",
     "varcon": "^1.0.1"
   },
   "dependencies": {
     "color-name": "^2.1.1",
-    "i18next": "^26.5.2",
-    "i18next-browser-languagedetector": "^8.2.1",
+    "i18next": "^26.5.7",
+    "i18next-browser-languagedetector": "^8.2.2",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
-    "react-i18next": "^17.1.0",
+    "react-i18next": "^17.1.5",
     "regex-colorizer": "^1.0.2"
   },
   "allowScripts": {
