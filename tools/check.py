@@ -2537,6 +2537,44 @@ def check_cli_entries(rep: Report) -> None:
         rep.ok("cli entries", f"{len(bundled)} bundled and typechecked: {', '.join(sorted(bundled))}")
 
 
+#: The file types the game client is made of: models, world models and map tiles, their textures and animation
+#: data, its tables, and its sounds. The repository refers to them by id and by name and never holds one.
+CLIENT_ASSET_EXTS = (
+    ".wmo",
+    ".m2",
+    ".skin",
+    ".anim",
+    ".bone",
+    ".phys",
+    ".skel",
+    ".blp",
+    ".tex",
+    ".adt",
+    ".wdt",
+    ".wdl",
+    ".db2",
+    ".dbc",
+    ".ogg",
+    ".mp3",
+)
+
+
+def check_no_client_assets(rep: Report) -> None:
+    """No file the game client is made of is tracked.
+
+    The packs, the addon data and every page carry ids, names and numbers read out of the client, and the client's
+    files themselves stay on the machine that read them: a model, a texture or a sound committed here would be
+    published with the next push. Epsilon's own files are what this guards above all, and a Blizzard file is no more
+    ours to publish.
+    """
+    tracked = [f for f in git("ls-files").splitlines() if f.lower().endswith(CLIENT_ASSET_EXTS)]
+    if tracked:
+        shown = ", ".join(tracked[:5]) + (f" and {len(tracked) - 5} more" if len(tracked) > 5 else "")
+        rep.fail("no client assets", f"{len(tracked)} client file(s) tracked: {shown}")
+    else:
+        rep.ok("no client assets", "no model, texture, table or sound file is tracked")
+
+
 def check_license_scope(rep: Report) -> None:
     """Every directory under site/ is classified in NOTICE.
 
@@ -3040,6 +3078,7 @@ def main() -> int:
     check_comment_style(rep)
     check_cli_entries(rep)
     check_license_scope(rep)
+    check_no_client_assets(rep)
     check_listfile_declaration(rep)
     check_localized_tables(rep)
     check_locale_declaration(rep)
