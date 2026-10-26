@@ -947,6 +947,30 @@ class ShadowyEffect(Table):
     Value = Column("Value")
 
 
+class GradientEffect(Table):
+    """The client's ``GradientEffect``."""
+
+    ID = Column("ID")
+    Colors0_r = Column("Colors0_r")
+    Colors0_g = Column("Colors0_g")
+    Colors0_b = Column("Colors0_b")
+    Colors1_r = Column("Colors1_r")
+    Colors1_g = Column("Colors1_g")
+    Colors1_b = Column("Colors1_b")
+    Colors2_r = Column("Colors2_r")
+    Colors2_g = Column("Colors2_g")
+    Colors2_b = Column("Colors2_b")
+    Alpha1 = Column("Alpha1")
+    Alpha2 = Column("Alpha2")
+    EdgeColor_r = Column("EdgeColor_r")
+    EdgeColor_g = Column("EdgeColor_g")
+    EdgeColor_b = Column("EdgeColor_b")
+    Field_8_1_0_28440_014 = Column("Field_8_1_0_28440_014")
+    Field_8_1_0_28440_015 = Column("Field_8_1_0_28440_015")
+    Field_10_0_5_47118_016 = Column("Field_10_0_5_47118_016")
+    Field_10_0_5_47118_017 = Column("Field_10_0_5_47118_017")
+
+
 class SpellVisualScreenEffect(Table):
     """The client's ``SpellVisualScreenEffect``."""
 

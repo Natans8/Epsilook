@@ -214,6 +214,14 @@
         "colour": ""
       }
     },
+    "gradient": {
+      "hint": "",
+      "props": {
+        "colour": "",
+        "uniform": "",
+        "shadowless": ""
+      }
+    },
     "ghost": {
       "hint": "",
       "props": {

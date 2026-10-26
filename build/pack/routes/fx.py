@@ -101,6 +101,66 @@ class Shadowy(NamedTuple):
     attachment: int
 
 
+GRADIENT_UNIFORM = 0x1
+"""The gradient flag that switches off the fade toward the feet, leaving the
+opacity even along the body rather than solid."""
+
+GRADIENT_SHADOWLESS = 0x2
+"""The gradient flag that takes the model's ordinary draw away as the effect
+comes in, and the model's shadow with it."""
+
+
+class Gradient(NamedTuple):
+    """One GradientEffect row: a gradient map over the lit model's brightness.
+
+    The three ramp colours repaint the model by brightness, the start at its
+    darkest and the end at its brightest. Nothing orders them, so a ramp can run
+    backwards and render as a negative; they are kept in their places rather
+    than as a set. The edge colour glows along the outline.
+
+    The middle colour's position and the rim's exponent are renderer tuning,
+    and the priority only decides between two gradients on one unit, so none
+    of the three is read. No column sets the opacity: the fade toward the feet
+    is fixed in the client's shader.
+    """
+
+    start: int
+    middle: int
+    end: int
+    edge: int
+    uniform: bool
+    """No fade toward the feet: the opacity is even along the body."""
+    shadowless: bool
+    """The model's ordinary draw, and its shadow, give way to the gradient."""
+
+    @classmethod
+    def of(  # noqa: PLR0913  -- one parameter per column it is read from
+        cls,
+        start_red: int,
+        start_green: int,
+        start_blue: int,
+        middle_red: int,
+        middle_green: int,
+        middle_blue: int,
+        end_red: int,
+        end_green: int,
+        end_blue: int,
+        edge_red: int,
+        edge_green: int,
+        edge_blue: int,
+        flags: int,
+    ) -> Gradient:
+        """A gradient from its channel bytes, in column order, and its flag word."""
+        return cls(
+            start=pack_rgb(start_red, start_green, start_blue),
+            middle=pack_rgb(middle_red, middle_green, middle_blue),
+            end=pack_rgb(end_red, end_green, end_blue),
+            edge=pack_rgb(edge_red, edge_green, edge_blue),
+            uniform=bool(flags & GRADIENT_UNIFORM),
+            shadowless=bool(flags & GRADIENT_SHADOWLESS),
+        )
+
+
 @dataclass
 class ScreenRow:
     """One screen effect: what it does to the whole frame while its aura holds.
@@ -213,6 +273,8 @@ class FxPayloads:
     glow_alphas: Mapping[int, int] = field(default_factory=dict)
     """Edge glow -> its alpha, a real 0..255 spread rather than a flag."""
     shadowies: Mapping[int, Shadowy] = field(default_factory=dict)
+    gradients: Mapping[int, Gradient] = field(default_factory=dict)
+    """Gradient -> its four colours and two flags."""
     screens: Mapping[int, ScreenRow] = field(default_factory=dict)
     """Screen effect -> its payload."""
     visual_screens: Mapping[int, int] = field(default_factory=dict)

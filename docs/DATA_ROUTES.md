@@ -432,6 +432,7 @@ erDiagram
         table DissolveEffect
         table EdgeGlowEffect
         table ShadowyEffect
+        table GradientEffect
         table SpellVisualScreenEffect
         table SpellEffectEmission
         table BarrageEffect
@@ -831,10 +832,11 @@ flowchart LR
     T -->|"11 dissolve"| DIS["textures and a duration"]
     T -->|"12 edge glow"| GLO["a colour and an alpha"]
     T -->|"7 shadowy"| SHA["two colours"]
+    T -->|"16 gradient"| GRD["a three-colour ramp, an edge colour<br/>and two flags"]
     T -->|"19 screen"| SCR["a full-frame grade"]
     T -->|"1 procedure"| PRC{"SpellProceduralEffect.Type<br/>thirty-five declared"}
     T -->|"2 model attach"| MA["not read HERE: the same rows the walk<br/>already reaches straight off the kit"]
-    T -->|"3 4 9 10 14 15 16 18 20"| NONE["camera, outline, unit sound, scene,<br/>clone, gradient, rope, decal<br/>— no file, sound or attachment to read"]
+    T -->|"3 4 9 10 14 15 18 20"| NONE["camera, outline, unit sound, scene,<br/>clone, rope, decal<br/>— no file, sound or attachment to read"]
 
     PRC -->|"0 12 26"| BEAM
     PRC -->|"1 23"| COL["a packed colour"]
@@ -871,6 +873,7 @@ the route that knows what a type means is the one that decided, and the walk doe
 | **dissolves**  | A duration, textures and an anchor                  | `fxRows`, `dissolves`                                                                          |
 | **glows**      | A packed colour and an alpha                        | `fxRows`, `glows`                                                                              |
 | **ghosts**     | Two packed colours and an anchor                    | `fxRows`, `shadowies`                                                                          |
+| **gradients**  | A three-colour ramp, an edge colour and two flags   | `fxRows`, `gradients`                                                                          |
 | **screens**    | A bundle: a frame grade, a sky preset, a sound swap, an hour | `fxRows`, `screens`, `zoneMusic`, `ambiences`; the preset via `skySpells`, the kits via `soundRows` |
 | **procedures** | Whatever its type says: thirteen different meanings | `fxRows`, and the tables it points into                                                        |
 

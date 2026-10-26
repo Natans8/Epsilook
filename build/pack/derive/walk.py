@@ -100,6 +100,7 @@ class SpellVisuals:
     dissolves: Bucket = field(default_factory=_bucket)
     glows: Bucket = field(default_factory=_bucket)
     shadowies: Bucket = field(default_factory=_bucket)
+    gradients: Bucket = field(default_factory=_bucket)
     ghost_mats: Bucket = field(default_factory=_bucket)
     tints: Bucket = field(default_factory=_bucket)
     desats: Bucket = field(default_factory=_bucket)
@@ -157,6 +158,7 @@ KIT_BUCKETS: tuple[KitBucket, ...] = (
     KitBucket(lambda kits: kits.dissolves, lambda vis: vis.dissolves),
     KitBucket(lambda kits: kits.glows, lambda vis: vis.glows),
     KitBucket(lambda kits: kits.shadowies, lambda vis: vis.shadowies),
+    KitBucket(lambda kits: kits.gradients, lambda vis: vis.gradients),
     KitBucket(lambda kits: kits.ghost_mats, lambda vis: vis.ghost_mats),
     KitBucket(lambda kits: kits.tints, lambda vis: vis.tints),
     KitBucket(lambda kits: kits.desats, lambda vis: vis.desats),

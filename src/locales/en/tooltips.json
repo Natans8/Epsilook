@@ -214,6 +214,14 @@
         "colour": "the shadow's tint"
       }
     },
+    "gradient": {
+      "hint": "a colour ramp repainting the model, fading toward the feet",
+      "props": {
+        "colour": "the ramp's middle colour",
+        "uniform": "evenly see-through, with no fade toward the feet",
+        "shadowless": "the model casts no shadow"
+      }
+    },
     "ghost": {
       "hint": "a ghost material swapped onto the model",
       "props": {

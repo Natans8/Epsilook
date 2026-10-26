@@ -143,8 +143,15 @@
     },
     "16": {
       "name": "GradientEffect",
+      "handler": "gradient",
       "points_at": "GradientEffect.ID",
-      "note": "266 rows over 265 kits on 9.2.7; table not downloaded"
+      "reads": [
+        {
+          "column": "Effect",
+          "holds": "reference",
+          "into": "GradientEffect"
+        }
+      ]
     },
     "17": {
       "name": "BarrageEffect",

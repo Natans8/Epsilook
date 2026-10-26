@@ -8,7 +8,7 @@ under its line in `build/pack/routes/flows.py`, or its function's docstring; a s
 its module's docstring. Change the note there and the next build rewrites it here. Why the routes are shaped the way
 they are is [DATA_ROUTES.md](../DATA_ROUTES.md).
 
-132 fields, 112 of them flows and 20 functions; 87 sections in 19 families; 82 tables. The numbers are the manifest
+134 fields, 114 of them flows and 20 functions; 88 sections in 19 families; 83 tables. The numbers are the manifest
 counts of `9.2.7-epsilon.45745`.
 
 Every field has an entry under [Fields](#fields), headed by its own name, so `#name` links to it. Every section is a row
@@ -312,6 +312,7 @@ flowchart LR
     s_dissolveTextures([dissolveTextures])
     s_glows([glows])
     s_shadowies([shadowies])
+    s_gradients([gradients])
     s_ghostMats([ghostMats])
     s_tints([tints])
     s_anchorNames([anchorNames])
@@ -333,6 +334,8 @@ flowchart LR
     f_fx --> s_glows
     f_visuals --> s_shadowies
     f_fx --> s_shadowies
+    f_visuals --> s_gradients
+    f_fx --> s_gradients
     f_visuals --> s_ghostMats
     f_procs --> s_ghostMats
     f_visuals --> s_tints
@@ -343,7 +346,7 @@ flowchart LR
     classDef field fill:#2a78d618,stroke:#2a78d6,stroke-width:2px
     classDef elsewhere fill:none,stroke:#898781,stroke-width:1px,stroke-dasharray:3 3
     classDef section fill:#c9850018,stroke:#c98500,stroke-width:2px
-    class s_fxChains,s_fxTextures,s_dissolves,s_dissolveTextures,s_glows,s_shadowies,s_ghostMats,s_tints,s_anchorNames,s_visualPhases section
+    class s_fxChains,s_fxTextures,s_dissolves,s_dissolveTextures,s_glows,s_shadowies,s_gradients,s_ghostMats,s_tints,s_anchorNames,s_visualPhases section
     class f_references,f_fx,f_visuals,f_procs,f_declared elsewhere
 ```
 
@@ -355,6 +358,7 @@ flowchart LR
 | `dissolveTextures` | core      |             | [`references`](#references) and [`fx`](#fx) | The textures each dissolve blends through.                                  |
 | `glows`            | core      |       1,716 | [`visuals`](#visuals) and [`fx`](#fx)       | Each edge glow's colour and opacity.                                        |
 | `shadowies`        | core      |         384 | [`visuals`](#visuals) and [`fx`](#fx)       | Each shadowy effect's two colours and where it is anchored.                 |
+| `gradients`        | core      |         150 | [`visuals`](#visuals) and [`fx`](#fx)       | Each gradient's three ramp colours and its edge colour.                     |
 | `ghostMats`        | core      |         470 | [`visuals`](#visuals) and [`procs`](#procs) | Each ghost material's colour.                                               |
 | `tints`            | core      |       2,263 | [`visuals`](#visuals) and [`procs`](#procs) | Each model tint's colour.                                                   |
 | `anchorNames`      | universal |             | [`declared`](#declared)                     | Where an overlay is anchored: a point on the model, or the whole of it.     |
@@ -365,6 +369,7 @@ flowchart LR
 - `dissolveTextures` ships thinner from a build without `TextureBlendSet`.
 - `glows` ships absent from a build without `EdgeGlowEffect`.
 - `shadowies` ships absent from a build without `ShadowyEffect`.
+- `gradients` ships absent from a build without `GradientEffect`.
 
 ### gates family
 
@@ -596,7 +601,7 @@ flowchart LR
 | `effectNames`          | universal          |                     | [`declared`](#declared)                                                                                                                                                                                                                                                                                                                                                | Every effect id's enum name, for the word a mechanics pill prints.                                  |
 | `auraNames`            | universal          |                     | [`declared`](#declared)                                                                                                                                                                                                                                                                                                                                                | Every aura id's enum name, for the word a mechanics pill prints.                                    |
 | `implicitTargetNames`  | core               | 133 implicitTargets | [`rows`](#rows) and [`declared`](#declared)                                                                                                                                                                                                                                                                                                                            | The name of each implicit target this build's rows name.                                            |
-| `selectors`            | universal          |               1,028 | nothing derived                                                                                                                                                                                                                                                                                                                                                        | What each column of a discriminated row is an id into, per selector value.                          |
+| `selectors`            | universal          |               1,029 | nothing derived                                                                                                                                                                                                                                                                                                                                                        | What each column of a discriminated row is an id into, per selector value.                          |
 | `selectorVocabularies` | universal          |               1,214 | nothing derived                                                                                                                                                                                                                                                                                                                                                        | The word each value of a vocabulary a selector's slot names stands for.                             |
 | `referenceNames`       | core, per language |              55,514 | [`rows`](#rows), [`creatures`](#creatures), [`objects`](#objects), [`items`](#items), [`names`](#names), [`forms`](#forms), [`fx`](#fx), [`factions`](#factions), [`kit_names`](#kit_names), [`faction_names`](#faction_names), [`skill_names`](#skill_names), [`enchantment_names`](#enchantment_names), [`effects`](#effects), and [`spell_sources`](#spell_sources) | The name of each id an effect or aura's reference slot points at.                                   |
 | `effectAmounts`        | core               |             197,620 | [`values`](#values), [`effects`](#effects), [`spell_radii`](#spell_radii), and [`names`](#names)                                                                                                                                                                                                                                                                       | Each effect's resolved amount, radii, facing, multipliers, coefficients, mechanic and created item. |
@@ -1408,7 +1413,8 @@ Drawn here: [`effects`](#effects), [`summon_controls`](#summon_controls), and [`
 
 ### fx group
 
-`fx`: Composed of `beams`, `chains`, `dissolves`, `glow_alphas`, `glows`, `screens`, `shadowies`, and `visual_screens`.
+`fx`: Composed of `beams`, `chains`, `dissolves`, `glow_alphas`, `glows`, `gradients`, `screens`, `shadowies`, and
+`visual_screens`.
 
 ```mermaid
 ---
@@ -1425,6 +1431,7 @@ flowchart LR
     f_dissolves[dissolves]
     t_EdgeGlowEffect[(EdgeGlowEffect)]
     f_glows[glows]
+    f_gradients[gradients]
     f_screens[screens]
     f_shadowies[shadowies]
     t_SpellVisualScreenEffect[(SpellVisualScreenEffect)]
@@ -1435,6 +1442,7 @@ flowchart LR
     f_glow_alphas --> f_fx
     t_EdgeGlowEffect --> f_glow_alphas
     f_glows --> f_fx
+    f_gradients --> f_fx
     f_screens --> f_fx
     f_shadowies --> f_fx
     f_visual_screens --> f_fx
@@ -1446,7 +1454,7 @@ flowchart LR
     classDef section fill:#c9850018,stroke:#c98500,stroke-width:2px
     class f_fx,f_beams,f_glow_alphas,f_visual_screens field
     class t_BeamEffect,t_EdgeGlowEffect,t_SpellVisualScreenEffect table
-    class f_chains,f_dissolves,f_glows,f_screens,f_shadowies elsewhere
+    class f_chains,f_dissolves,f_glows,f_gradients,f_screens,f_shadowies elsewhere
 ```
 
 Drawn here: [`beams`](#beams), [`fx`](#fx), [`glow_alphas`](#glow_alphas), and [`visual_screens`](#visual_screens).
@@ -1665,6 +1673,7 @@ flowchart LR
     f_kit_dissolves[kit_dissolves]
     f_kit_emissions[kit_emissions]
     f_kit_glows[kit_glows]
+    f_kit_gradients[kit_gradients]
     f_kit_proc_chains[kit_proc_chains]
     f_kit_procedures[kit_procedures]
     f_kit_screens[kit_screens]
@@ -1693,6 +1702,7 @@ flowchart LR
     f_chains[chains]
     f_dissolves[dissolves]
     f_glows[glows]
+    f_gradients[gradients]
     f_proc_chains[proc_chains]
     t_SpellVisualScreenEffect[(SpellVisualScreenEffect)]
     f_screens[screens]
@@ -1743,6 +1753,9 @@ flowchart LR
     f_kit_glows --> f_kits
     t_SpellVisualKitEffect --> f_kit_glows
     f_glows --> f_kit_glows
+    f_kit_gradients --> f_kits
+    t_SpellVisualKitEffect --> f_kit_gradients
+    f_gradients --> f_kit_gradients
     f_kit_proc_chains --> f_kits
     t_SpellVisualKitEffect --> f_kit_proc_chains
     t_SpellChainEffects --> f_kit_proc_chains
@@ -1777,18 +1790,18 @@ flowchart LR
     classDef field fill:#2a78d618,stroke:#2a78d6,stroke-width:2px
     classDef elsewhere fill:none,stroke:#898781,stroke-width:1px,stroke-dasharray:3 3
     classDef section fill:#c9850018,stroke:#c98500,stroke-width:2px
-    class f_visuals,f_graph,f_spell_visuals,f_visual_events,f_visual_sounds,f_kits,f_attachments,f_kit_animkits,f_kit_barrages,f_kit_beams,f_kit_dissolves,f_kit_emissions,f_kit_glows,f_kit_proc_chains,f_kit_procedures,f_kit_screens,f_kit_shadowies,f_kit_sounds,f_kit_visual_anims,f_missiles,f_soundkit_files field
-    class f_ambiences,f_delivery,f_effects,f_fx,f_creatures,f_effect_names,f_items,f_barrages,f_emissions,f_chains,f_dissolves,f_glows,f_proc_chains,f_screens,f_shadowies,f_procs,f_names,f_props,f_zone_music elsewhere
+    class f_visuals,f_graph,f_spell_visuals,f_visual_events,f_visual_sounds,f_kits,f_attachments,f_kit_animkits,f_kit_barrages,f_kit_beams,f_kit_dissolves,f_kit_emissions,f_kit_glows,f_kit_gradients,f_kit_proc_chains,f_kit_procedures,f_kit_screens,f_kit_shadowies,f_kit_sounds,f_kit_visual_anims,f_missiles,f_soundkit_files field
+    class f_ambiences,f_delivery,f_effects,f_fx,f_creatures,f_effect_names,f_items,f_barrages,f_emissions,f_chains,f_dissolves,f_glows,f_gradients,f_proc_chains,f_screens,f_shadowies,f_procs,f_names,f_props,f_zone_music elsewhere
     class t_SpellXSpellVisual,t_SpellVisual,t_SpellVisualEvent,t_SpellVisualKitModelAttach,t_SpellVisualKitEffect,t_SpellVisualAnim,t_BeamEffect,t_SpellChainEffects,t_SpellVisualScreenEffect,t_SpellVisualMissile,t_SoundKitEntry table
 ```
 
 Drawn here: [`attachments`](#attachments), [`graph`](#graph), [`kit_animkits`](#kit_animkits),
 [`kit_barrages`](#kit_barrages), [`kit_beams`](#kit_beams), [`kit_dissolves`](#kit_dissolves),
-[`kit_emissions`](#kit_emissions), [`kit_glows`](#kit_glows), [`kit_proc_chains`](#kit_proc_chains),
-[`kit_procedures`](#kit_procedures), [`kit_screens`](#kit_screens), [`kit_shadowies`](#kit_shadowies),
-[`kit_sounds`](#kit_sounds), [`kit_visual_anims`](#kit_visual_anims), [`kits`](#kits), [`missiles`](#missiles),
-[`soundkit_files`](#soundkit_files), [`spell_visuals`](#spell_visuals), [`visual_events`](#visual_events),
-[`visual_sounds`](#visual_sounds), and [`visuals`](#visuals).
+[`kit_emissions`](#kit_emissions), [`kit_glows`](#kit_glows), [`kit_gradients`](#kit_gradients),
+[`kit_proc_chains`](#kit_proc_chains), [`kit_procedures`](#kit_procedures), [`kit_screens`](#kit_screens),
+[`kit_shadowies`](#kit_shadowies), [`kit_sounds`](#kit_sounds), [`kit_visual_anims`](#kit_visual_anims),
+[`kits`](#kits), [`missiles`](#missiles), [`soundkit_files`](#soundkit_files), [`spell_visuals`](#spell_visuals),
+[`visual_events`](#visual_events), [`visual_sounds`](#visual_sounds), and [`visuals`](#visuals).
 
 ### other shared fields
 
@@ -1811,6 +1824,7 @@ flowchart LR
     f_effect_names[effect_names]
     f_emissions[emissions]
     f_glows[glows]
+    f_gradients[gradients]
     f_keybinds[keybinds]
     f_mounts[mounts]
     f_objects[objects]
@@ -1838,6 +1852,7 @@ flowchart LR
     t_SpellEffectEmission[(SpellEffectEmission)]
     t_SpellVisualKitAreaModel[(SpellVisualKitAreaModel)]
     t_EdgeGlowEffect[(EdgeGlowEffect)]
+    t_GradientEffect[(GradientEffect)]
     t_SpellKeyboundOverride[(SpellKeyboundOverride)]
     t_Mount[(Mount)]
     t_MountXDisplay[(MountXDisplay)]
@@ -1873,6 +1888,7 @@ flowchart LR
     t_SpellEffectEmission --> f_emissions
     t_SpellVisualKitAreaModel --> f_emissions
     t_EdgeGlowEffect --> f_glows
+    t_GradientEffect --> f_gradients
     t_SpellKeyboundOverride --> f_keybinds
     t_Mount --> f_mounts
     t_MountXDisplay --> f_mounts
@@ -1910,8 +1926,8 @@ flowchart LR
     classDef field fill:#2a78d618,stroke:#2a78d6,stroke-width:2px
     classDef elsewhere fill:none,stroke:#898781,stroke-width:1px,stroke-dasharray:3 3
     classDef section fill:#c9850018,stroke:#c98500,stroke-width:2px
-    class f_ambiences,f_anim_names,f_animkit_bonesets,f_barrages,f_chains,f_displays,f_forms,f_dissolves,f_effect_names,f_emissions,f_glows,f_keybinds,f_mounts,f_objects,f_paths,f_references,f_proc_chains,f_rows,f_screens,f_shadowies,f_spell_ids,f_used_kits,f_zone_music field
-    class t_SoundAmbience,t_AnimKitSegment,t_AnimKitConfigBoneSet,t_AnimKitBoneSet,t_BarrageEffect,t_SpellVisualEffectName,t_SpellChainEffects,t_SpellShapeshiftForm,t_DissolveEffect,t_TextureBlendSet,t_SpellEffectEmission,t_SpellVisualKitAreaModel,t_EdgeGlowEffect,t_SpellKeyboundOverride,t_Mount,t_MountXDisplay,t_GameObjectDisplayInfo,t_SpellProceduralEffect,t_ScreenEffect,t_FullScreenEffect,t_ShadowyEffect,t_ZoneMusic table
+    class f_ambiences,f_anim_names,f_animkit_bonesets,f_barrages,f_chains,f_displays,f_forms,f_dissolves,f_effect_names,f_emissions,f_glows,f_gradients,f_keybinds,f_mounts,f_objects,f_paths,f_references,f_proc_chains,f_rows,f_screens,f_shadowies,f_spell_ids,f_used_kits,f_zone_music field
+    class t_SoundAmbience,t_AnimKitSegment,t_AnimKitConfigBoneSet,t_AnimKitBoneSet,t_BarrageEffect,t_SpellVisualEffectName,t_SpellChainEffects,t_SpellShapeshiftForm,t_DissolveEffect,t_TextureBlendSet,t_SpellEffectEmission,t_SpellVisualKitAreaModel,t_EdgeGlowEffect,t_GradientEffect,t_SpellKeyboundOverride,t_Mount,t_MountXDisplay,t_GameObjectDisplayInfo,t_SpellProceduralEffect,t_ScreenEffect,t_FullScreenEffect,t_ShadowyEffect,t_ZoneMusic table
     class f_creatures,f_effects,f_names,f_fx,f_items,f_props,f_visuals,f_declared,f_delivery,f_vehicles elsewhere
     class t_gameobject_template server
 ```
@@ -1919,9 +1935,9 @@ flowchart LR
 Drawn here: [`ambiences`](#ambiences), [`anim_names`](#anim_names), [`animkit_bonesets`](#animkit_bonesets),
 [`barrages`](#barrages), [`chains`](#chains), [`displays`](#displays), [`dissolves`](#dissolves),
 [`effect_names`](#effect_names), [`emissions`](#emissions), [`forms`](#forms), [`glows`](#glows),
-[`keybinds`](#keybinds), [`mounts`](#mounts), [`objects`](#objects), [`paths`](#paths), [`proc_chains`](#proc_chains),
-[`references`](#references), [`rows`](#rows), [`screens`](#screens), [`shadowies`](#shadowies),
-[`spell_ids`](#spell_ids), [`used_kits`](#used_kits), and [`zone_music`](#zone_music).
+[`gradients`](#gradients), [`keybinds`](#keybinds), [`mounts`](#mounts), [`objects`](#objects), [`paths`](#paths),
+[`proc_chains`](#proc_chains), [`references`](#references), [`rows`](#rows), [`screens`](#screens),
+[`shadowies`](#shadowies), [`spell_ids`](#spell_ids), [`used_kits`](#used_kits), and [`zone_music`](#zone_music).
 
 ## Fields
 
@@ -1938,7 +1954,7 @@ A flow in `routes/flows.py`, landing as `map, then override_names`. Reads `Spell
 The ambience a screen effect swaps in.
 
 A flow in `routes/flows.py`, landing as `records`. Reads `SoundAmbience`. Needed by [`visuals`](#visuals). Read by the
-section `ambiences`. Reaches 43 sections in 13 families, and is drawn in full under [other shared
+section `ambiences`. Reaches 44 sections in 13 families, and is drawn in full under [other shared
 fields](#other-shared-fields).
 
 #### `anim_ids`
@@ -2024,7 +2040,7 @@ A group naming an area the build has no row for is skipped rather than shipped n
 The models a kit hangs on a unit, and where.
 
 A flow in `routes/flows.py`, landing as `rows, then assemble`. Reads `SpellVisualKitModelAttach`. Needs
-[`creatures`](#creatures), [`effect_names`](#effect_names), and [`items`](#items). Needed by [`kits`](#kits). Reaches 43
+[`creatures`](#creatures), [`effect_names`](#effect_names), and [`items`](#items). Needed by [`kits`](#kits). Reaches 44
 sections in 13 families, and is drawn in full under [visuals group](#visuals-group).
 
 #### `attributes`
@@ -2051,14 +2067,14 @@ A spell carrying only housekeeping bits is absent rather than empty.
 The model a volley is made of, and where on the caster it spawns.
 
 A flow in `routes/flows.py`, landing as `records`. Reads `BarrageEffect` and `SpellVisualEffectName`. Needed by
-[`kit_barrages`](#kit_barrages) and [`kits`](#kits). Reaches 43 sections in 13 families, and is drawn in full under
+[`kit_barrages`](#kit_barrages) and [`kits`](#kits). Reaches 44 sections in 13 families, and is drawn in full under
 [other shared fields](#other-shared-fields).
 
 #### `beams`
 
 The chain a beam draws, and its two ends.
 
-A flow in `routes/flows.py`, landing as `records`. Reads `BeamEffect`. Needed by [`fx`](#fx). Reaches 43 sections in 13
+A flow in `routes/flows.py`, landing as `records`. Reads `BeamEffect`. Needed by [`fx`](#fx). Reaches 44 sections in 13
 families, and is drawn in full under [fx group](#fx-group).
 
 #### `chains`
@@ -2066,7 +2082,7 @@ families, and is drawn in full under [fx group](#fx-group).
 What a beam segment draws with.
 
 A flow in `routes/flows.py`, landing as `records`. Reads `SpellChainEffects`. Needed by [`fx`](#fx),
-[`kit_beams`](#kit_beams), and [`kit_proc_chains`](#kit_proc_chains). Reaches 43 sections in 13 families, and is drawn
+[`kit_beams`](#kit_beams), and [`kit_proc_chains`](#kit_proc_chains). Reaches 44 sections in 13 families, and is drawn
 in full under [other shared fields](#other-shared-fields).
 
 Chains nest: a composite chain names up to eleven others. The flicker and wave columns are tuning read as traits, and
@@ -2077,7 +2093,7 @@ the geometry is dropped.
 The channels that movement cancels.
 
 A flow in `routes/flows.py`, landing as `ids`. Reads `SpellInterrupts`. Needs [`names.names`](#names). Needed by
-[`delivery`](#delivery). Reaches 44 sections in 14 families, and is drawn in full under [delivery
+[`delivery`](#delivery). Reaches 45 sections in 14 families, and is drawn in full under [delivery
 group](#delivery-group).
 
 The channel column, so the channel enum rather than the cast one.
@@ -2087,7 +2103,7 @@ The channel column, so the channel enum rather than the cast one.
 The displays a creature wears, by slot.
 
 A flow in `routes/flows.py`, landing as `sets, then ordered`. Reads `creature_template_model` and `creature_template`.
-Needed by [`creatures`](#creatures). Reaches 48 sections in 14 families, and is drawn in full under [creatures
+Needed by [`creatures`](#creatures). Reaches 49 sections in 14 families, and is drawn in full under [creatures
 group](#creatures-group).
 
 Whichever shape the release has wins; a display named in two slots is two rows, since the first slot is the one the pill
@@ -2116,14 +2132,14 @@ section's question.
 Each creature model's file.
 
 A flow in `routes/flows.py`, landing as `map`. Reads `CreatureModelData`. Needed by [`creatures`](#creatures). Reaches
-48 sections in 14 families, and is drawn in full under [creatures group](#creatures-group).
+49 sections in 14 families, and is drawn in full under [creatures group](#creatures-group).
 
 #### `creature_names`
 
 What the server calls each creature.
 
 A flow in `routes/flows.py`, landing as `map`. Reads `creature_template`. Needed by [`creatures`](#creatures). Reaches
-48 sections in 14 families, and is drawn in full under [creatures group](#creatures-group).
+49 sections in 14 families, and is drawn in full under [creatures group](#creatures-group).
 
 #### `creatures`
 
@@ -2134,7 +2150,7 @@ A flow in `routes/flows.py`, landing as `CreatureModels`. Needs [`creature_displ
 [`creature_model_files`](#creature_model_files), [`creature_names`](#creature_names),
 [`display_models`](#display_models), [`display_skins`](#display_skins), and [`totem_displays`](#totem_displays). Needed
 by [`attachments`](#attachments), [`displays`](#displays), [`mounts`](#mounts), and [`references`](#references). Read by
-the sections `displaySkins`, `morphs`, `referenceNames`, and `summons`. Reaches 48 sections in 14 families, and is drawn
+the sections `displaySkins`, `morphs`, `referenceNames`, and `summons`. Reaches 49 sections in 14 families, and is drawn
 in full under [creatures group](#creatures-group).
 
 #### `declared`
@@ -2156,7 +2172,7 @@ How a spell is delivered: a cast time, a channel, or both.
 
 A flow in `routes/flows.py`, landing as `rows, then assemble_delivery`. Reads `SpellMisc`, `SpellCastTimes`, and
 `SpellDuration`. Needs [`channel_breaks`](#channel_breaks) and [`names.names`](#names). Needed by [`rows`](#rows) and
-[`visuals`](#visuals). Read by the section `spellDelivery`. Reaches 44 sections in 14 families, and is drawn in full
+[`visuals`](#visuals). Read by the section `spellDelivery`. Reaches 45 sections in 14 families, and is drawn in full
 under [delivery group](#delivery-group).
 
 #### `display_models`
@@ -2164,14 +2180,14 @@ under [delivery group](#delivery-group).
 The model each creature display wears.
 
 A flow in `routes/flows.py`, landing as `map`. Reads `CreatureDisplayInfo`. Needed by [`creatures`](#creatures). Reaches
-48 sections in 14 families, and is drawn in full under [creatures group](#creatures-group).
+49 sections in 14 families, and is drawn in full under [creatures group](#creatures-group).
 
 #### `display_skins`
 
 The textures a display paints its model with.
 
 A flow in `routes/flows.py`, landing as `map, then nonzero`. Reads `CreatureDisplayInfo`. Needed by
-[`creatures`](#creatures). Reaches 48 sections in 14 families, and is drawn in full under [creatures
+[`creatures`](#creatures). Reaches 49 sections in 14 families, and is drawn in full under [creatures
 group](#creatures-group).
 
 As many slots as the build has, in slot order; a display painting nothing is absent rather than empty.
@@ -2190,7 +2206,7 @@ fields](#other-shared-fields).
 The dissolve materials.
 
 A flow in `routes/flows.py`, landing as `records`. Reads `DissolveEffect` and `TextureBlendSet`. Needed by [`fx`](#fx)
-and [`kit_dissolves`](#kit_dissolves). Reaches 43 sections in 13 families, and is drawn in full under [other shared
+and [`kit_dissolves`](#kit_dissolves). Reaches 44 sections in 13 families, and is drawn in full under [other shared
 fields](#other-shared-fields).
 
 #### `effect_names`
@@ -2198,7 +2214,7 @@ fields](#other-shared-fields).
 What each effect name reaches: a file, an item, a display or a weapon slot.
 
 A flow in `routes/flows.py`, landing as `records, then without_placeholders`. Reads `SpellVisualEffectName`. Handed
-`named` by the wiring. Needed by [`attachments`](#attachments) and [`missiles`](#missiles). Reaches 43 sections in 13
+`named` by the wiring. Needed by [`attachments`](#attachments) and [`missiles`](#missiles). Reaches 44 sections in 13
 families, and is drawn in full under [other shared fields](#other-shared-fields).
 
 #### `effect_values`
@@ -2225,7 +2241,7 @@ A flow in `routes/flows.py`, landing as `SpellEffectRows`. Reads `SpellEffect`. 
 `cast_target_bits`, and `aura_target_bits`. Needed by [`alt_names`](#alt_names), [`displays`](#displays),
 [`factions`](#factions), [`references`](#references), [`rows`](#rows), [`sky_spells`](#sky_spells), and
 [`visuals`](#visuals). Read by the sections `animRows`, `creatures`, `effectAmounts`, `fxRows`, `keybinds`, `mechRows`,
-`morphs`, `referenceNames`, `shapeshifts`, and `summons`. Reaches 51 sections in 14 families, and is drawn in full under
+`morphs`, `referenceNames`, `shapeshifts`, and `summons`. Reaches 52 sections in 14 families, and is drawn in full under
 [effects group](#effects-group).
 
 A zero amount is dropped: a pill made of nothing but the number would promise a change and deliver none. A payload
@@ -2238,7 +2254,7 @@ trigger column selects nothing: every row carries it.
 The ground model an emitter spawns copies of.
 
 A flow in `routes/flows.py`, landing as `map`. Reads `SpellEffectEmission` and `SpellVisualKitAreaModel`. Needed by
-[`kit_emissions`](#kit_emissions) and [`kits`](#kits). Reaches 43 sections in 13 families, and is drawn in full under
+[`kit_emissions`](#kit_emissions) and [`kits`](#kits). Reaches 44 sections in 13 families, and is drawn in full under
 [other shared fields](#other-shared-fields).
 
 #### `emotes`
@@ -2292,20 +2308,22 @@ is drawn in full under [other shared fields](#other-shared-fields).
 
 #### `fx`
 
-Composed of `beams`, `chains`, `dissolves`, `glow_alphas`, `glows`, `screens`, `shadowies`, and `visual_screens`.
+Composed of `beams`, `chains`, `dissolves`, `glow_alphas`, `glows`, `gradients`, `screens`, `shadowies`, and
+`visual_screens`.
 
 A flow in `routes/flows.py`, landing as `FxPayloads`. Needs [`beams`](#beams), [`chains`](#chains),
-[`dissolves`](#dissolves), [`glow_alphas`](#glow_alphas), [`glows`](#glows), [`screens`](#screens),
-[`shadowies`](#shadowies), and [`visual_screens`](#visual_screens). Needed by [`references`](#references),
-[`sky_spells`](#sky_spells), and [`visuals`](#visuals). Read by the sections `ambiences`, `dissolveTextures`,
-`dissolves`, `fxChains`, `fxRows`, `fxTextures`, `glows`, `referenceNames`, `screenTextures`, `screens`, `shadowies`,
-and `zoneMusic`. Reaches 43 sections in 13 families, and is drawn in full under [fx group](#fx-group).
+[`dissolves`](#dissolves), [`glow_alphas`](#glow_alphas), [`glows`](#glows), [`gradients`](#gradients),
+[`screens`](#screens), [`shadowies`](#shadowies), and [`visual_screens`](#visual_screens). Needed by
+[`references`](#references), [`sky_spells`](#sky_spells), and [`visuals`](#visuals). Read by the sections `ambiences`,
+`dissolveTextures`, `dissolves`, `fxChains`, `fxRows`, `fxTextures`, `glows`, `gradients`, `referenceNames`,
+`screenTextures`, `screens`, `shadowies`, and `zoneMusic`. Reaches 44 sections in 13 families, and is drawn in full
+under [fx group](#fx-group).
 
 #### `glow_alphas`
 
 How opaque an edge glow is.
 
-A flow in `routes/flows.py`, landing as `map`. Reads `EdgeGlowEffect`. Needed by [`fx`](#fx). Reaches 43 sections in 13
+A flow in `routes/flows.py`, landing as `map`. Reads `EdgeGlowEffect`. Needed by [`fx`](#fx). Reaches 44 sections in 13
 families, and is drawn in full under [fx group](#fx-group).
 
 #### `glows`
@@ -2313,17 +2331,28 @@ families, and is drawn in full under [fx group](#fx-group).
 The colour an edge glow paints.
 
 A flow in `routes/flows.py`, landing as `records`. Reads `EdgeGlowEffect`. Needed by [`fx`](#fx) and
-[`kit_glows`](#kit_glows). Reaches 43 sections in 13 families, and is drawn in full under [other shared
+[`kit_glows`](#kit_glows). Reaches 44 sections in 13 families, and is drawn in full under [other shared
 fields](#other-shared-fields).
 
 The colour is the whole visible payload; the multiplier, fade and fresnel columns are tuning.
+
+#### `gradients`
+
+The colours a gradient repaints the model with, and its two flags.
+
+A flow in `routes/flows.py`, landing as `records`. Reads `GradientEffect`. Needed by [`fx`](#fx) and
+[`kit_gradients`](#kit_gradients). Reaches 44 sections in 13 families, and is drawn in full under [other shared
+fields](#other-shared-fields).
+
+The ramp's middle position, the rim's exponent and the priority are left unread: two are renderer tuning, and the third
+only decides between two gradients worn by one unit at once.
 
 #### `graph`
 
 Composed of `spell_visuals`, `visual_events`, and `visual_sounds`.
 
 A flow in `routes/flows.py`, landing as `VisualGraph`. Needs [`spell_visuals`](#spell_visuals),
-[`visual_events`](#visual_events), and [`visual_sounds`](#visual_sounds). Needed by [`visuals`](#visuals). Reaches 43
+[`visual_events`](#visual_events), and [`visual_sounds`](#visual_sounds). Needed by [`visuals`](#visuals). Reaches 44
 sections in 13 families, and is drawn in full under [visuals group](#visuals-group).
 
 #### `icons`
@@ -2343,14 +2372,14 @@ deduped — the picture shown is the same either way.
 Each item's appearances, the base look first.
 
 A flow in `routes/flows.py`, landing as `map`. Reads `ItemModifiedAppearance` and `ItemAppearance`. Needed by
-[`items`](#items). Reaches 43 sections in 13 families, and is drawn in full under [items group](#items-group).
+[`items`](#items). Reaches 44 sections in 13 families, and is drawn in full under [items group](#items-group).
 
 #### `item_models`
 
 Each item's appearances, the base look first.
 
 A flow in `routes/flows.py`, landing as `map, then <lambda>`. Reads `ItemModifiedAppearance`, `ItemAppearance`, and
-`ItemDisplayInfo`. Needs [`model_files`](#model_files). Needed by [`items`](#items). Reaches 43 sections in 13 families,
+`ItemDisplayInfo`. Needs [`model_files`](#model_files). Needed by [`items`](#items). Reaches 44 sections in 13 families,
 and is drawn in full under [items group](#items-group).
 
 The first appearance whose display reaches a file, and its first slot that does: a paired item carries its second
@@ -2360,7 +2389,7 @@ component in the second slot.
 
 The items a visual holds up, by name and quality.
 
-A flow in `routes/flows.py`, landing as `records`. Reads `ItemSearchName`. Needed by [`items`](#items). Reaches 43
+A flow in `routes/flows.py`, landing as `records`. Reads `ItemSearchName`. Needed by [`items`](#items). Reaches 44
 sections in 13 families, and is drawn in full under [items group](#items-group).
 
 #### `item_spells`
@@ -2387,7 +2416,7 @@ Composed of `item_icons`, `item_models`, and `item_names`.
 
 A flow in `routes/flows.py`, landing as `ItemModels`. Needs [`item_icons`](#item_icons), [`item_models`](#item_models),
 and [`item_names`](#item_names). Needed by [`attachments`](#attachments) and [`references`](#references). Read by the
-sections `itemIconNames`, `items`, and `referenceNames`. Reaches 43 sections in 13 families, and is drawn in full under
+sections `itemIconNames`, `items`, and `referenceNames`. Reaches 44 sections in 13 families, and is drawn in full under
 [items group](#items-group).
 
 #### `keybinds`
@@ -2395,7 +2424,7 @@ sections `itemIconNames`, `items`, and `referenceNames`. Reaches 43 sections in 
 The game functions a key override casts a spell from.
 
 A flow in `routes/flows.py`, landing as `records`. Reads `SpellKeyboundOverride`. Needed by [`effects`](#effects). Read
-by the section `keybinds`. Reaches 51 sections in 14 families, and is drawn in full under [other shared
+by the section `keybinds`. Reaches 52 sections in 14 families, and is drawn in full under [other shared
 fields](#other-shared-fields).
 
 #### `kit_animkits`
@@ -2403,21 +2432,21 @@ fields](#other-shared-fields).
 What a kit's effect rows reach, by type.
 
 A flow in `routes/flows.py`, landing as `sets`. Reads `SpellVisualKitEffect` and `SpellVisualAnim`. Needed by
-[`kits`](#kits). Reaches 43 sections in 13 families, and is drawn in full under [visuals group](#visuals-group).
+[`kits`](#kits). Reaches 44 sections in 13 families, and is drawn in full under [visuals group](#visuals-group).
 
 #### `kit_barrages`
 
 What a kit's effect rows reach, by type.
 
 A flow in `routes/flows.py`, landing as `sets`. Reads `SpellVisualKitEffect`. Needs [`barrages`](#barrages). Needed by
-[`kits`](#kits). Reaches 43 sections in 13 families, and is drawn in full under [visuals group](#visuals-group).
+[`kits`](#kits). Reaches 44 sections in 13 families, and is drawn in full under [visuals group](#visuals-group).
 
 #### `kit_beams`
 
 What a kit's effect rows reach, by type.
 
 A flow in `routes/flows.py`, landing as `sets`. Reads `SpellVisualKitEffect`, `BeamEffect`, and `SpellChainEffects`.
-Needs [`chains`](#chains). Needed by [`kits`](#kits). Reaches 43 sections in 13 families, and is drawn in full under
+Needs [`chains`](#chains). Needed by [`kits`](#kits). Reaches 44 sections in 13 families, and is drawn in full under
 [visuals group](#visuals-group).
 
 A beam's chains and every chain those nest, each tagged with the beam's two ends: nested chains are segments of the same
@@ -2428,21 +2457,28 @@ beam. The graph may cycle.
 What a kit's effect rows reach, by type.
 
 A flow in `routes/flows.py`, landing as `sets`. Reads `SpellVisualKitEffect`. Needs [`dissolves`](#dissolves). Needed by
-[`kits`](#kits). Reaches 43 sections in 13 families, and is drawn in full under [visuals group](#visuals-group).
+[`kits`](#kits). Reaches 44 sections in 13 families, and is drawn in full under [visuals group](#visuals-group).
 
 #### `kit_emissions`
 
 What a kit's effect rows reach, by type.
 
 A flow in `routes/flows.py`, landing as `sets`. Reads `SpellVisualKitEffect`. Needs [`emissions`](#emissions). Needed by
-[`kits`](#kits). Reaches 43 sections in 13 families, and is drawn in full under [visuals group](#visuals-group).
+[`kits`](#kits). Reaches 44 sections in 13 families, and is drawn in full under [visuals group](#visuals-group).
 
 #### `kit_glows`
 
 What a kit's effect rows reach, by type.
 
 A flow in `routes/flows.py`, landing as `sets`. Reads `SpellVisualKitEffect`. Needs [`glows`](#glows). Needed by
-[`kits`](#kits). Reaches 43 sections in 13 families, and is drawn in full under [visuals group](#visuals-group).
+[`kits`](#kits). Reaches 44 sections in 13 families, and is drawn in full under [visuals group](#visuals-group).
+
+#### `kit_gradients`
+
+What a kit's effect rows reach, by type.
+
+A flow in `routes/flows.py`, landing as `sets`. Reads `SpellVisualKitEffect`. Needs [`gradients`](#gradients). Needed by
+[`kits`](#kits). Reaches 44 sections in 13 families, and is drawn in full under [visuals group](#visuals-group).
 
 #### `kit_names`
 
@@ -2459,7 +2495,7 @@ Kits added after the pinned build have no name anywhere and stay unnamed.
 What a kit's effect rows reach, by type.
 
 A flow in `routes/flows.py`, landing as `sets`. Reads `SpellVisualKitEffect` and `SpellChainEffects`. Needs
-[`chains`](#chains) and [`proc_chains`](#proc_chains). Needed by [`kits`](#kits). Reaches 43 sections in 13 families,
+[`chains`](#chains) and [`proc_chains`](#proc_chains). Needed by [`kits`](#kits). Reaches 44 sections in 13 families,
 and is drawn in full under [visuals group](#visuals-group).
 
 A procedure-route chain has no beam row, so it carries no attachment pair.
@@ -2468,7 +2504,7 @@ A procedure-route chain has no beam row, so it carries no attachment pair.
 
 What a kit's effect rows reach, by type.
 
-A flow in `routes/flows.py`, landing as `sets`. Reads `SpellVisualKitEffect`. Needed by [`kits`](#kits). Reaches 43
+A flow in `routes/flows.py`, landing as `sets`. Reads `SpellVisualKitEffect`. Needed by [`kits`](#kits). Reaches 44
 sections in 13 families, and is drawn in full under [visuals group](#visuals-group).
 
 Dispatched a second time, by membership in the procedure route's buckets.
@@ -2478,7 +2514,7 @@ Dispatched a second time, by membership in the procedure route's buckets.
 What a kit's effect rows reach, by type.
 
 A flow in `routes/flows.py`, landing as `sets`. Reads `SpellVisualKitEffect` and `SpellVisualScreenEffect`. Needs
-[`screens`](#screens). Needed by [`kits`](#kits). Reaches 43 sections in 13 families, and is drawn in full under
+[`screens`](#screens). Needed by [`kits`](#kits). Reaches 44 sections in 13 families, and is drawn in full under
 [visuals group](#visuals-group).
 
 #### `kit_shadowies`
@@ -2486,7 +2522,7 @@ A flow in `routes/flows.py`, landing as `sets`. Reads `SpellVisualKitEffect` and
 What a kit's effect rows reach, by type.
 
 A flow in `routes/flows.py`, landing as `sets`. Reads `SpellVisualKitEffect`. Needs [`shadowies`](#shadowies). Needed by
-[`kits`](#kits). Reaches 43 sections in 13 families, and is drawn in full under [visuals group](#visuals-group).
+[`kits`](#kits). Reaches 44 sections in 13 families, and is drawn in full under [visuals group](#visuals-group).
 
 A row pointing at a payload this build lacks is dropped rather than an error.
 
@@ -2494,7 +2530,7 @@ A row pointing at a payload this build lacks is dropped rather than an error.
 
 What a kit's effect rows reach, by type.
 
-A flow in `routes/flows.py`, landing as `sets`. Reads `SpellVisualKitEffect`. Needed by [`kits`](#kits). Reaches 43
+A flow in `routes/flows.py`, landing as `sets`. Reads `SpellVisualKitEffect`. Needed by [`kits`](#kits). Reaches 44
 sections in 13 families, and is drawn in full under [visuals group](#visuals-group).
 
 #### `kit_types`
@@ -2510,23 +2546,23 @@ A flow in `routes/flows.py`, landing as `map`. Reads `SoundKit`. Needs [`sound_t
 What a kit's effect rows reach, by type.
 
 A flow in `routes/flows.py`, landing as `sets`. Reads `SpellVisualKitEffect` and `SpellVisualAnim`. Needed by
-[`kits`](#kits). Reaches 43 sections in 13 families, and is drawn in full under [visuals group](#visuals-group).
+[`kits`](#kits). Reaches 44 sections in 13 families, and is drawn in full under [visuals group](#visuals-group).
 
 Nought would be Stand and minus one is unset, so neither is played.
 
 #### `kits`
 
 Composed of `attachments`, `barrages`, `emissions`, `kit_animkits`, `kit_barrages`, `kit_beams`, `kit_dissolves`,
-`kit_emissions`, `kit_glows`, `kit_proc_chains`, `kit_procedures`, `kit_screens`, `kit_shadowies`, `kit_sounds`,
-`kit_visual_anims`, and `procs`.
+`kit_emissions`, `kit_glows`, `kit_gradients`, `kit_proc_chains`, `kit_procedures`, `kit_screens`, `kit_shadowies`,
+`kit_sounds`, `kit_visual_anims`, and `procs`.
 
 A flow in `routes/flows.py`, landing as `assemble`. Needs [`attachments`](#attachments), [`barrages`](#barrages),
 [`emissions`](#emissions), [`kit_animkits`](#kit_animkits), [`kit_barrages`](#kit_barrages), [`kit_beams`](#kit_beams),
 [`kit_dissolves`](#kit_dissolves), [`kit_emissions`](#kit_emissions), [`kit_glows`](#kit_glows),
-[`kit_proc_chains`](#kit_proc_chains), [`kit_procedures`](#kit_procedures), [`kit_screens`](#kit_screens),
-[`kit_shadowies`](#kit_shadowies), [`kit_sounds`](#kit_sounds), [`kit_visual_anims`](#kit_visual_anims), and
-[`procs`](#procs). Needed by [`visuals`](#visuals). Reaches 43 sections in 13 families, and is drawn in full under
-[visuals group](#visuals-group).
+[`kit_gradients`](#kit_gradients), [`kit_proc_chains`](#kit_proc_chains), [`kit_procedures`](#kit_procedures),
+[`kit_screens`](#kit_screens), [`kit_shadowies`](#kit_shadowies), [`kit_sounds`](#kit_sounds),
+[`kit_visual_anims`](#kit_visual_anims), and [`procs`](#procs). Needed by [`visuals`](#visuals). Reaches 44 sections in
+13 families, and is drawn in full under [visuals group](#visuals-group).
 
 #### `looping_kits`
 
@@ -2554,7 +2590,7 @@ following it.
 The projectiles a visual launches, from its base set and its raid set.
 
 A flow in `routes/flows.py`, landing as `rows, then assemble_missiles`. Reads `SpellVisual` and `SpellVisualMissile`.
-Needs [`effect_names`](#effect_names). Needed by [`visuals`](#visuals). Reaches 43 sections in 13 families, and is drawn
+Needs [`effect_names`](#effect_names). Needed by [`visuals`](#visuals). Reaches 44 sections in 13 families, and is drawn
 in full under [visuals group](#visuals-group).
 
 #### `model_files`
@@ -2562,7 +2598,7 @@ in full under [visuals group](#visuals-group).
 The base file of each model resource.
 
 A flow in `routes/flows.py`, landing as `map`. Reads `ModelFileData`. Needed by [`item_models`](#item_models). Reaches
-43 sections in 13 families, and is drawn in full under [items group](#items-group).
+44 sections in 13 families, and is drawn in full under [items group](#items-group).
 
 A model shipping with levels of detail names several files, and the lowest is the base model.
 
@@ -2592,7 +2628,7 @@ A flow in `routes/flows.py`, landing as `map, then assemble`. Reads `SpellName` 
 [`mounts`](#mounts), [`props`](#props), [`prose`](#prose), [`reach`](#reach), [`spell_cones`](#spell_cones),
 [`spell_icons`](#spell_icons), [`spell_ids`](#spell_ids), [`spell_sources`](#spell_sources),
 [`spell_trainers`](#spell_trainers), and [`visuals`](#visuals). Read by the sections `effectAmounts`, `referenceNames`,
-and `spells`. Reaches 60 sections in 18 families, and is drawn in full under [names group](#names-group).
+and `spells`. Reaches 61 sections in 18 families, and is drawn in full under [names group](#names-group).
 
 Membership is the spell list: every route downstream filters against it.
 
@@ -2628,13 +2664,13 @@ of them.
 The character procedures.
 
 A flow in `routes/flows.py`, landing as `records, then nonzero`. Reads `SpellProceduralEffect`. Needed by
-[`procs`](#procs). Reaches 43 sections in 13 families, and is drawn in full under [procs group](#procs-group).
+[`procs`](#procs). Reaches 44 sections in 13 families, and is drawn in full under [procs group](#procs-group).
 
 #### `proc_camos`
 
 The character procedures.
 
-A flow in `routes/flows.py`, landing as `ids`. Reads `SpellProceduralEffect`. Needed by [`procs`](#procs). Reaches 43
+A flow in `routes/flows.py`, landing as `ids`. Reads `SpellProceduralEffect`. Needed by [`procs`](#procs). Reaches 44
 sections in 13 families, and is drawn in full under [procs group](#procs-group).
 
 #### `proc_chains`
@@ -2642,7 +2678,7 @@ sections in 13 families, and is drawn in full under [procs group](#procs-group).
 The character procedures.
 
 A flow in `routes/flows.py`, landing as `map`. Reads `SpellProceduralEffect`. Needed by
-[`kit_proc_chains`](#kit_proc_chains) and [`procs`](#procs). Reaches 43 sections in 13 families, and is drawn in full
+[`kit_proc_chains`](#kit_proc_chains) and [`procs`](#procs). Reaches 44 sections in 13 families, and is drawn in full
 under [other shared fields](#other-shared-fields).
 
 #### `proc_desats`
@@ -2650,20 +2686,20 @@ under [other shared fields](#other-shared-fields).
 The character procedures.
 
 A flow in `routes/flows.py`, landing as `map, then nonzero`. Reads `SpellProceduralEffect`. Needed by [`procs`](#procs).
-Reaches 43 sections in 13 families, and is drawn in full under [procs group](#procs-group).
+Reaches 44 sections in 13 families, and is drawn in full under [procs group](#procs-group).
 
 #### `proc_freezes`
 
 The character procedures.
 
-A flow in `routes/flows.py`, landing as `ids`. Reads `SpellProceduralEffect`. Needed by [`procs`](#procs). Reaches 43
+A flow in `routes/flows.py`, landing as `ids`. Reads `SpellProceduralEffect`. Needed by [`procs`](#procs). Reaches 44
 sections in 13 families, and is drawn in full under [procs group](#procs-group).
 
 #### `proc_ghosts`
 
 The character procedures.
 
-A flow in `routes/flows.py`, landing as `map`. Reads `SpellProceduralEffect`. Needed by [`procs`](#procs). Reaches 43
+A flow in `routes/flows.py`, landing as `map`. Reads `SpellProceduralEffect`. Needed by [`procs`](#procs). Reaches 44
 sections in 13 families, and is drawn in full under [procs group](#procs-group).
 
 A colourless ghost has nothing to show and is dropped.
@@ -2673,14 +2709,14 @@ A colourless ghost has nothing to show and is dropped.
 The character procedures.
 
 A flow in `routes/flows.py`, landing as `map`. Reads `SpellProceduralEffect` and `SpellVisualKitAreaModel`. Needed by
-[`procs`](#procs). Reaches 43 sections in 13 families, and is drawn in full under [procs group](#procs-group).
+[`procs`](#procs). Reaches 44 sections in 13 families, and is drawn in full under [procs group](#procs-group).
 
 #### `proc_tints`
 
 The character procedures.
 
 A flow in `routes/flows.py`, landing as `records`. Reads `SpellProceduralEffect`. Needed by [`procs`](#procs). Reaches
-43 sections in 13 families, and is drawn in full under [procs group](#procs-group).
+44 sections in 13 families, and is drawn in full under [procs group](#procs-group).
 
 The payload column differs per Type, and a colourless tint folds in as black.
 
@@ -2689,14 +2725,14 @@ The payload column differs per Type, and a colourless tint folds in as black.
 The character procedures.
 
 A flow in `routes/flows.py`, landing as `map`. Reads `SpellProceduralEffect` and `WeaponTrail`. Needed by
-[`procs`](#procs). Reaches 43 sections in 13 families, and is drawn in full under [procs group](#procs-group).
+[`procs`](#procs). Reaches 44 sections in 13 families, and is drawn in full under [procs group](#procs-group).
 
 #### `proc_transps`
 
 The character procedures.
 
 A flow in `routes/flows.py`, landing as `map, then nonzero`. Reads `SpellProceduralEffect`. Needed by [`procs`](#procs).
-Reaches 43 sections in 13 families, and is drawn in full under [procs group](#procs-group).
+Reaches 44 sections in 13 families, and is drawn in full under [procs group](#procs-group).
 
 A percentage of zero would render as a claim that something happened.
 
@@ -2709,7 +2745,7 @@ A flow in `routes/flows.py`, landing as `ProcEffects`. Needs [`proc_anims`](#pro
 [`proc_chains`](#proc_chains), [`proc_desats`](#proc_desats), [`proc_freezes`](#proc_freezes),
 [`proc_ghosts`](#proc_ghosts), [`proc_ground`](#proc_ground), [`proc_tints`](#proc_tints),
 [`proc_trails`](#proc_trails), and [`proc_transps`](#proc_transps). Needed by [`kits`](#kits). Read by the sections
-`fxRows`, `ghostMats`, and `tints`. Reaches 43 sections in 13 families, and is drawn in full under [procs
+`fxRows`, `ghostMats`, and `tints`. Reaches 44 sections in 13 families, and is drawn in full under [procs
 group](#procs-group).
 
 #### `props`
@@ -2719,7 +2755,7 @@ What SpellMisc says about a spell.
 A flow in `routes/flows.py`, landing as `rows, then assemble`. Reads `SpellMisc`. Needs [`names.names`](#names) and
 [`spell_icons`](#spell_icons). Needed by [`attributes`](#attributes), [`icons`](#icons), [`references`](#references),
 [`rows`](#rows), and [`visuals`](#visuals). Read by the sections `fxRows`, `mechRows`, `spellTimeline`, and `spells`.
-Reaches 45 sections in 14 families, and is drawn in full under [props group](#props-group).
+Reaches 46 sections in 14 families, and is drawn in full under [props group](#props-group).
 
 #### `prose`
 
@@ -2777,7 +2813,7 @@ sections in 7 families, and is drawn in full under [other shared fields](#other-
 What a screen effect does to the frame, the sky, the sound and the hour.
 
 A flow in `routes/flows.py`, landing as `records`. Reads `ScreenEffect`, `FullScreenEffect`, and `TextureBlendSet`.
-Needed by [`effects`](#effects), [`fx`](#fx), and [`kit_screens`](#kit_screens). Reaches 51 sections in 14 families, and
+Needed by [`effects`](#effects), [`fx`](#fx), and [`kit_screens`](#kit_screens). Reaches 52 sections in 14 families, and
 is drawn in full under [other shared fields](#other-shared-fields).
 
 #### `seats`
@@ -2792,7 +2828,7 @@ sections in 7 families, and is drawn in full under [vehicles group](#vehicles-gr
 The two colours of a ghost effect, and where it anchors.
 
 A flow in `routes/flows.py`, landing as `records`. Reads `ShadowyEffect`. Needed by [`fx`](#fx) and
-[`kit_shadowies`](#kit_shadowies). Reaches 43 sections in 13 families, and is drawn in full under [other shared
+[`kit_shadowies`](#kit_shadowies). Reaches 44 sections in 13 families, and is drawn in full under [other shared
 fields](#other-shared-fields).
 
 #### `skies`
@@ -2834,7 +2870,7 @@ rather than fetched.
 
 The files a sound kit plays.
 
-A flow in `routes/flows.py`, landing as `sets`. Reads `SoundKitEntry`. Needed by [`visuals`](#visuals). Reaches 43
+A flow in `routes/flows.py`, landing as `sets`. Reads `SoundKitEntry`. Needed by [`visuals`](#visuals). Reaches 44
 sections in 13 families, and is drawn in full under [visuals group](#visuals-group).
 
 #### `spell_aura_texts`
@@ -2882,7 +2918,7 @@ families, and is drawn in full under [text family](#text-family).
 Each spell's icon, from the row that has one.
 
 A flow in `routes/flows.py`, landing as `map`. Reads `SpellMisc`. Needs [`names.names`](#names). Needed by
-[`props`](#props). Reaches 45 sections in 14 families, and is drawn in full under [props group](#props-group).
+[`props`](#props). Reaches 46 sections in 14 families, and is drawn in full under [props group](#props-group).
 
 An icon of zero never displaces one, so the icon is read apart from the rest of the row, base row first among the rows
 that have one.
@@ -2941,7 +2977,7 @@ Handed `base` by the wiring. Needed by [`values`](#values). Reaches 2 sections i
 
 The parenthetical rank or variant under a spell's name.
 
-A flow in `routes/flows.py`, landing as `map`. Reads `Spell`. Needed by [`names`](#names). Reaches 60 sections in 18
+A flow in `routes/flows.py`, landing as `map`. Reads `Spell`. Needed by [`names`](#names). Reaches 61 sections in 18
 families, and is drawn in full under [names group](#names-group).
 
 #### `spell_target_caps`
@@ -2984,7 +3020,7 @@ under [text family](#text-family).
 The visuals a spell reaches, its redirects followed.
 
 A flow in `routes/flows.py`, landing as `nested`. Reads `SpellXSpellVisual` and `SpellVisual`. Needed by
-[`graph`](#graph). Reaches 43 sections in 13 families, and is drawn in full under [visuals group](#visuals-group).
+[`graph`](#graph). Reaches 44 sections in 13 families, and is drawn in full under [visuals group](#visuals-group).
 
 A visual reached straight from the spell carries no extra bits; one reached through a redirect carries the bits of the
 columns the path went through, and a visual reached two ways carries both. The graph may cycle.
@@ -2993,7 +3029,7 @@ columns the path went through, and a visual reached two ways carries both. The g
 
 How a summoned creature is controlled.
 
-A flow in `routes/flows.py`, landing as `map`. Reads `SummonProperties`. Needed by [`effects`](#effects). Reaches 51
+A flow in `routes/flows.py`, landing as `map`. Reads `SummonProperties`. Needed by [`effects`](#effects). Reaches 52
 sections in 14 families, and is drawn in full under [effects group](#effects-group).
 
 #### `target_bits`
@@ -3001,7 +3037,7 @@ sections in 14 families, and is drawn in full under [effects group](#effects-gro
 This build's implicit-target ids resolved to target bits, which the effect rows look their two target columns up
 through.
 
-A function in `routes/registry.py`, landing as `Mapping[int, int]`. Needed by [`effects`](#effects). Reaches 51 sections
+A function in `routes/registry.py`, landing as `Mapping[int, int]`. Needed by [`effects`](#effects). Reaches 52 sections
 in 14 families, and is drawn in full under [effects group](#effects-group).
 
 #### `templates`
@@ -3019,7 +3055,7 @@ The three template reads are declarations; the journal fold, which recurses, is 
 The displays a totem wears, one per caster race.
 
 A flow in `routes/flows.py`, landing as `sets, then ordered`. Reads `spell_totem_model`. Needed by
-[`creatures`](#creatures). Reaches 48 sections in 14 families, and is drawn in full under [creatures
+[`creatures`](#creatures). Reaches 49 sections in 14 families, and is drawn in full under [creatures
 group](#creatures-group).
 
 Two races sharing a model is one display, in display order, since no race travels with it.
@@ -3064,7 +3100,7 @@ loses its name.
 
 What a visual plays, when, and for whom.
 
-A flow in `routes/flows.py`, landing as `lists`. Reads `SpellVisualEvent`. Needed by [`graph`](#graph). Reaches 43
+A flow in `routes/flows.py`, landing as `lists`. Reads `SpellVisualEvent`. Needed by [`graph`](#graph). Reaches 44
 sections in 13 families, and is drawn in full under [visuals group](#visuals-group).
 
 Distinct, in table order, and kept per event rather than folded per kit: the phase is what the pack ships.
@@ -3073,14 +3109,14 @@ Distinct, in table order, and kept per event rather than folded per kit: the pha
 
 The kit's route into a screen effect.
 
-A flow in `routes/flows.py`, landing as `map`. Reads `SpellVisualScreenEffect`. Needed by [`fx`](#fx). Reaches 43
+A flow in `routes/flows.py`, landing as `map`. Reads `SpellVisualScreenEffect`. Needed by [`fx`](#fx). Reaches 44
 sections in 13 families, and is drawn in full under [fx group](#fx-group).
 
 #### `visual_sounds`
 
 The sound a visual's own animation events play.
 
-A flow in `routes/flows.py`, landing as `map`. Reads `SpellVisual`. Needed by [`graph`](#graph). Reaches 43 sections in
+A flow in `routes/flows.py`, landing as `map`. Reads `SpellVisual`. Needed by [`graph`](#graph). Reaches 44 sections in
 13 families, and is drawn in full under [visuals group](#visuals-group).
 
 #### `visuals`
@@ -3091,8 +3127,8 @@ A function in `derive/walk.py`, landing as `SpellVisuals`. Needs [`ambiences`](#
 [`effects`](#effects), [`fx`](#fx), [`graph`](#graph), [`kits`](#kits), [`missiles`](#missiles),
 [`names.names`](#names), [`props.delayed`](#props), [`soundkit_files`](#soundkit_files), and
 [`zone_music`](#zone_music). Needed by [`references`](#references), [`rows`](#rows), [`sky_spells`](#sky_spells), and
-[`used_kits`](#used_kits). Read by the sections `animRows`, `files`, `fxRows`, `ghostMats`, `glows`, `mechRows`,
-`shadowies`, and `tints`. Reaches 43 sections in 13 families, and is drawn in full under [visuals
+[`used_kits`](#used_kits). Read by the sections `animRows`, `files`, `fxRows`, `ghostMats`, `glows`, `gradients`,
+`mechRows`, `shadowies`, and `tints`. Reaches 44 sections in 13 families, and is drawn in full under [visuals
 group](#visuals-group).
 
 #### `weapon_trails`
@@ -3106,7 +3142,7 @@ A flow in `routes/flows.py`, landing as `map`. Reads `WeaponTrail`. Reaches no s
 The music set a screen effect swaps in.
 
 A flow in `routes/flows.py`, landing as `records`. Reads `ZoneMusic`. Needed by [`visuals`](#visuals). Read by the
-section `zoneMusic`. Reaches 43 sections in 13 families, and is drawn in full under [other shared
+section `zoneMusic`. Reaches 44 sections in 13 families, and is drawn in full under [other shared
 fields](#other-shared-fields).
 
 ## Tables
@@ -3129,6 +3165,7 @@ fields](#other-shared-fields).
 - `FactionTemplate`, the client's: read by [`factions`](#factions).
 - `FullScreenEffect`, the client's: read by [`screens`](#screens).
 - `GameObjectDisplayInfo`, the client's: read by [`objects`](#objects).
+- `GradientEffect`, the client's: read by [`gradients`](#gradients).
 - `ItemAppearance`, the client's: read by [`item_icons`](#item_icons) and [`item_models`](#item_models).
 - `ItemDisplayInfo`, the client's: read by [`item_models`](#item_models).
 - `ItemEffect`, the client's: read by [`item_spells`](#item_spells).
@@ -3185,9 +3222,9 @@ fields](#other-shared-fields).
   [`proc_ground`](#proc_ground).
 - `SpellVisualKitEffect`, the client's: read by [`kit_animkits`](#kit_animkits), [`kit_barrages`](#kit_barrages),
   [`kit_beams`](#kit_beams), [`kit_dissolves`](#kit_dissolves), [`kit_emissions`](#kit_emissions),
-  [`kit_glows`](#kit_glows), [`kit_proc_chains`](#kit_proc_chains), [`kit_procedures`](#kit_procedures),
-  [`kit_screens`](#kit_screens), [`kit_shadowies`](#kit_shadowies), [`kit_sounds`](#kit_sounds), and
-  [`kit_visual_anims`](#kit_visual_anims).
+  [`kit_glows`](#kit_glows), [`kit_gradients`](#kit_gradients), [`kit_proc_chains`](#kit_proc_chains),
+  [`kit_procedures`](#kit_procedures), [`kit_screens`](#kit_screens), [`kit_shadowies`](#kit_shadowies),
+  [`kit_sounds`](#kit_sounds), and [`kit_visual_anims`](#kit_visual_anims).
 - `SpellVisualKitModelAttach`, the client's: read by [`attachments`](#attachments).
 - `SpellVisualMissile`, the client's: read by [`missiles`](#missiles).
 - `SpellVisualScreenEffect`, the client's: read by [`kit_screens`](#kit_screens) and

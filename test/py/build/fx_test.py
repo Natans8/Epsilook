@@ -1,6 +1,6 @@
 """The fx payloads, and the line between renderer tuning and content."""
 
-from pack.routes.fx import TEX_MASK, TEX_OVERLAY, FxPayloads
+from pack.routes.fx import TEX_MASK, TEX_OVERLAY, FxPayloads, Gradient
 from support import BuildTables, resolve
 
 TEXTURE_BLEND_SET = """\
@@ -48,6 +48,14 @@ ID,PrimaryColor,SecondaryColor,AttachPos
 60,-16776961,255,-1
 """
 
+# Gradient 90 is Ghostly Cosmetic's lavender ramp with only the shadow flag;
+# 91 runs backwards, cyan to black, and carries both flags.
+GRADIENT_EFFECT = """\
+ID,Colors0_r,Colors0_g,Colors0_b,Colors1_r,Colors1_g,Colors1_b,Colors2_r,Colors2_g,Colors2_b,Alpha1,Alpha2,EdgeColor_r,EdgeColor_g,EdgeColor_b,Field_8_1_0_28440_014,Field_8_1_0_28440_015
+90,0.2117647,0.1058823,0.2705882,0.6901961,0.5333333,0.7333333,1,1,1,0.5,1,1,1,1,1,2
+91,0,1,1,0,0.5,1,0,0,0,0.5,1,0,0,1,0,3
+"""
+
 # Chain 70 nests 71; 72 and 73 nest each other. 70 has every character
 # trait, and 72 ripples below the visible height.
 SPELL_CHAIN_EFFECTS = """\
@@ -75,6 +83,7 @@ def payloads(tables: BuildTables) -> FxPayloads:
             SpellVisualScreenEffect=SPELL_VISUAL_SCREEN_EFFECT,
             EdgeGlowEffect=EDGE_GLOW_EFFECT,
             ShadowyEffect=SHADOWY_EFFECT,
+            GradientEffect=GRADIENT_EFFECT,
             SpellChainEffects=SPELL_CHAIN_EFFECTS,
             BeamEffect=BEAM_EFFECT,
         ),
@@ -160,6 +169,25 @@ def test_a_glow_packs_its_colour_and_keeps_its_alpha(tables: BuildTables) -> Non
 def test_a_ghost_masks_the_alpha_off_both_colours(tables: BuildTables) -> None:
     """Stored as signed ARGB, so the top byte is not colour."""
     assert payloads(tables).shadowies[60] == (0x0000FF, 0x0000FF, -1)
+
+
+def test_a_gradient_keeps_its_colours_in_their_places(tables: BuildTables) -> None:
+    """The ramp runs from the model's darkest to its brightest, and nothing
+    orders the colours, so they are not a set."""
+    assert payloads(tables).gradients[90] == Gradient(0x361B45, 0xB088BB, 0xFFFFFF, 0xFFFFFF, False, True)
+
+
+def test_a_backwards_ramp_stays_backwards(tables: BuildTables) -> None:
+    """A ramp bright at its dark end renders as a negative, which is content."""
+    gradient = payloads(tables).gradients[91]
+    assert (gradient.start, gradient.middle, gradient.end) == (0x00FFFF, 0x0080FF, 0x000000)
+
+
+def test_each_gradient_flag_is_its_own_bit(tables: BuildTables) -> None:
+    """One switches the fade toward the feet off, the other the model's own draw."""
+    found = payloads(tables).gradients
+    assert (found[90].uniform, found[90].shadowless) == (False, True)
+    assert (found[91].uniform, found[91].shadowless) == (True, True)
 
 
 def test_a_chain_keeps_its_colour_sound_and_textures(tables: BuildTables) -> None:

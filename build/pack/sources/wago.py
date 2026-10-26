@@ -94,6 +94,7 @@ TABLES = [
     "TextureBlendSet",
     "EdgeGlowEffect",
     "ShadowyEffect",
+    "GradientEffect",
     "SpellVisualScreenEffect",
     "ScreenEffect",
     "FullScreenEffect",

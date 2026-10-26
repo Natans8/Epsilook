@@ -103,6 +103,11 @@ const PROBES: Probe[] = [
         v1: 'fx:"shadowy black"', v2: "fx:{shadowy colour:black}", was: 0,
         note: "1.0 matches the HUE word in its corpus; 2.0 reads the packed colour, so nearness decides"
     },
+    {v1: "fx:gradient", v2: "fx:gradient", note: "1.0 never read the gradient table; its count is a corpus substring"},
+    {
+        v1: 'fx:"gradient uniform"', v2: "fx:{gradient uniform}",
+        note: "the even, unfaded gradients; 1.0 has no such word",
+    },
     {
         v1: 'anim:"passenger"', v2: "anim:{passenger sit:*}", was: 242,
         note: "a rider animation carries its role now, so the seated ones are selectable apart"

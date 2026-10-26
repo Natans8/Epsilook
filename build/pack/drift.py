@@ -25,6 +25,8 @@ OPTIONAL_TABLES = {
     "TextureBlendSet": "dissolve materials + screen mask textures",
     "EdgeGlowEffect": "the glow fx category",
     "ShadowyEffect": "the ghost/shadowy fx category",
+    # arrives in BfA (8.1.0)
+    "GradientEffect": "the gradient fx category",
     "SpellVisualScreenEffect": "the kit route into screen fx",
     "ScreenEffect": "the screen fx category",
     # The sky sections ship absent without these; nothing else reads them.

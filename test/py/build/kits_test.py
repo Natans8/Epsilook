@@ -2,7 +2,7 @@
 
 from pack.routes.flows import Routes
 from pack.routes.attachments import NO_ATTACHMENT, NO_MOTION
-from pack.routes.fx import ChainEffect, ScreenRow, Shadowy
+from pack.routes.fx import ChainEffect, Gradient, ScreenRow, Shadowy
 from pack.routes.kits import KitEffects
 from pack.routes.models import (
     MODEL_CAT_AREA,
@@ -47,6 +47,8 @@ ParentSpellVisualKitID,EffectType,Effect
 12,19,40
 13,19,41
 15,13,81
+16,16,700
+16,16,701
 0,5,300
 14,5,0
 """
@@ -109,6 +111,7 @@ def kits(tables: BuildTables) -> KitEffects:
         dissolves={400: (1.0, (), -1)},
         glows={500: 0xFF0000},
         shadowies={600: Shadowy(0, 0, -1)},
+        gradients={700: Gradient(0, 0, 0, 0, False, False)},
         screens={90: ScreenRow(name="Shaman - Hex")},
     )
     if not isinstance(found, KitEffects):
@@ -162,6 +165,12 @@ def test_a_row_pointing_at_a_payload_this_build_lacks_is_dropped(tables: BuildTa
     assert resolved.dissolves[7] == {400}
     assert 999 not in resolved.dissolves[7]
     assert 13 not in resolved.screens
+
+
+def test_a_gradient_reaches_its_kit_and_a_missing_one_does_not(tables: BuildTables) -> None:
+    """Effect type 16 points at GradientEffect, and a row naming a gradient
+    this build lacks is dropped like any other."""
+    assert kits(tables).gradients[16] == {700}
 
 
 def test_the_emission_and_barrage_models_carry_their_categories(tables: BuildTables) -> None:

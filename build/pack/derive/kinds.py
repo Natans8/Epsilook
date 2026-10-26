@@ -723,6 +723,18 @@ def _shadowies(reads: Reads) -> Iterable[SpellRow]:
         yield spell, (reads.fx.shadowies[shadowy][2], shadowy, mask, phase)
 
 
+def _gradients(reads: Reads) -> Iterable[SpellRow]:
+    """The gradients a spell repaints the model with.
+
+    The colour stores which gradient row it is and the vocabulary resolves its
+    MIDDLE colour: the two ends of a ramp are mostly black and white, the frame
+    the colour sits in rather than an answer to what colour it is.
+    """
+    for spell, gradient, phase, mask in masked_rows(reads.visuals.gradients):
+        row = reads.fx.gradients[gradient]
+        yield spell, (gradient, int(row.uniform), int(row.shadowless), mask, phase)
+
+
 def _coloured(bucket: str) -> Callable[[Reads], Iterable[SpellRow]]:
     """One colour-only family: the row is which recolour, when, and who it
     plays on."""
@@ -876,6 +888,15 @@ FX_FAMILIES: tuple[Family, ...] = (
         _shadowies,
         vocab={"where": "anchors", "colour": "shadowyColours"},
         absent={"where": NO_ANCHOR},
+    ),
+    timed(
+        "gradient",
+        ("colour", "uniform", "shadowless", "target"),
+        _gradients,
+        vocab={"colour": "gradientColours"},
+        # A flag ships as one where the gradient has it and nought where it does
+        # not, and nought is the absence of the property rather than a value.
+        absent={"uniform": 0, "shadowless": 0},
     ),
     timed(
         "ghost",
@@ -1257,6 +1278,7 @@ VOCABULARIES: Mapping[str, Mapping[str, str]] = {
     "anchors": {"in": "anchorNames"},
     "chainColours": {"in": "fxChains", "keys": "ids", "values": "colors"},
     "shadowyColours": {"in": "shadowies", "keys": "ids", "values": "primaryColors"},
+    "gradientColours": {"in": "gradients", "keys": "ids", "values": "middleColors"},
     "ghostColours": {"in": "ghostMats", "keys": "ids", "values": "colors"},
     "glowColours": {"in": "glows", "keys": "ids", "values": "colors"},
     "tintColours": {"in": "tints", "keys": "ids", "values": "colors"},

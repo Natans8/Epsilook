@@ -18,8 +18,16 @@ from ..derive import DeriveContext
 from ..model import SECTIONS, CountFamily, Section, SectionColumns
 from ..progress import detail
 
-PACK_FORMAT = 71
+PACK_FORMAT = 72
 """What shape the artifact is in.
+
+72 says how a gradient repaints the model. `gradients` carries, per gradient a
+spell reaches, the three colours its ramp runs through from the model's darkest
+to its brightest and the colour along its outline, and the fx rows gain a
+`gradient` kind whose colour is the ramp's middle one, with two flags: one for
+a gradient evenly see-through rather than fading toward the feet, one for a
+model that gives its own look and its shadow over to the gradient. Data only;
+a build predating the table ships none.
 
 71 says where a spell comes from. `spellSources` carries, per spell, who
 teaches it, what quest grants it, and who sells, drops or holds the item that

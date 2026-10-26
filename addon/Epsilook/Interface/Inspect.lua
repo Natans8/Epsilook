@@ -36,6 +36,10 @@ local GOLD, WHITE, CYAN, GREY, RED =
 	Shell.COLOURS.red
 local END = "|r"
 
+--- The orange a flag is written in on a line, the tooltip's own (1, 0.62,
+-- 0.26), which is how `.lookup` writes its flags inline.
+local FLAG = "|cffff9e42"
+
 --- The verbs of the links this file draws: a part's own link, a group's,
 -- an axis's count on a result line, and the copy that hands the chat box
 -- the number a command takes.
@@ -320,6 +324,9 @@ local BARE = { how = true, where = true }
 local function beside(value)
 	if value.name == "target" then
 		return GREY .. "on " .. END .. value.text
+	elseif value.type == "flag" then
+		-- A flag is its word alone: the number beside it would only say yes.
+		return FLAG .. value.label .. END
 	elseif BARE[value.name] then
 		return written(value)
 	end

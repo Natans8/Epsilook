@@ -41,6 +41,7 @@ REGISTERED_ORDER = (
     "dissolveTextures",
     "glows",
     "shadowies",
+    "gradients",
     "ghostMats",
     "tints",
     "anchorNames",

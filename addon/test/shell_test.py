@@ -147,7 +147,10 @@ def test_the_dossier_prints_every_axis_the_spell_has(engine: LuaRuntime) -> None
     assert "[Fireball]" in text and "5 Models" in text and "12 Sounds" in text and "1 Mechanics" in text
     # Sounds are grouped under their kit: the kit's line, then its files indented.
     assert "|cff3ddc84kit:|r" in text
-    assert "\n   |cffffffff|Hgarrmission:epsilook:133:part:sound:1|h[fx_fire_magic_loop_medium_01.ogg]|h" in text
+    # Any position: a part's number is its place in the pack's sorted pool, which a listfile renaming the files moves.
+    assert re.search(
+        r"\n   \|cffffffff\|Hgarrmission:epsilook:133:part:sound:\d+\|h\[fx_fire_magic_loop_medium_01\.ogg\]\|h", text
+    )
     assert "no spell" in dossier(engine, 0)
 
 
@@ -307,6 +310,38 @@ def part_index(api: LuaTable, spell_id: int, axis: bytes, kind: str) -> int:
     raise AssertionError(f"spell {spell_id} has no {kind} part on {axis.decode()}")
 
 
+def test_a_flag_on_a_line_is_its_word_alone(engine: LuaRuntime) -> None:
+    """Ghostly Cosmetic's gradient carries the shadow flag, and its line says the word, never a number after it."""
+    text = re.sub(r"\|c[0-9a-f]{8}|\|r", "", dossier(engine, 290508))
+    gradient = next(line for line in text.split("\n") if "gradient:" in line)
+    assert "#b088bb" in gradient and "shadowless" in gradient
+    assert "shadowless 1" not in gradient and "uniform" not in gradient
+
+
+def file_index(engine: LuaRuntime, spell_id: int, axis: bytes, name: str) -> int:
+    """The one-based index of the spell's part on an axis whose file is named so.
+
+    A part's place is its row's place in the pack's sorted pool, and the pool
+    sorts by path, so a listfile that renames the files moves it; a test that
+    wants one file asks for it by name.
+    """
+    # language=Lua
+    engine.execute(b"""
+                   function FILE_INDEX(id, axis, name)
+                       for n = 1, Epsilook:GetNumParts(id, axis) do
+                           local _, path = Epsilook.Inspect.FileOf(Epsilook:GetPartDataByIndex(id, axis, n))
+                           if path and path:sub(-#name) == name then
+                               return n
+                           end
+                       end
+                   end
+                   """)
+    found = lua_function(engine, b"FILE_INDEX")(spell_id, axis, name.encode())
+    if not isinstance(found, int):
+        raise AssertionError(f"spell {spell_id} has no {name} on {axis.decode()}")
+    return found
+
+
 def test_a_part_names_its_displays_through_a_creature_or_outright(engine: LuaRuntime) -> None:
     api = lua_table(engine, b"Epsilook")
     # A morph stores the creature, and names every display it wears with its model.
@@ -368,7 +403,7 @@ def test_a_tooltip_says_only_what_says_something(engine: LuaRuntime) -> None:
     attached = tooltip_lines(engine, 116, b"model", part_index(api, 116, b"model", "attach"))
     assert not [line for line in attached if line.startswith(("scale", "built"))]
     assert "point Head - 20" in attached
-    sound = tooltip_lines(engine, 116, b"sound", 1)
+    sound = tooltip_lines(engine, 116, b"sound", file_index(engine, 116, b"sound", "Precast_Loop_01.ogg"))
     assert "loop" in sound and not [line for line in sound if line.startswith("loop ")]
     # A flag is its word alone, and several share one line rather than taking one each.
     effect = tooltip_lines(engine, 116, b"mech", part_index(api, 116, b"mech", "effect"))
@@ -392,7 +427,8 @@ def test_a_tooltip_of_short_rows_is_two_columns_and_one_with_a_path_is_lines(eng
     rows = lua_function(engine, b"TOOLTIP_ROWS")
     short = re.sub(r"\|c[0-9a-f]{8}|\|r", "", cast(bytes, rows(116, b"anim", 1)).decode()).split("\n")
     assert "stage\tcast - 3" in short and "anim\tSpellCastDirected - 53" in short
-    long = re.sub(r"\|c[0-9a-f]{8}|\|r", "", cast(bytes, rows(116, b"sound", 1)).decode()).split("\n")
+    loop = file_index(engine, 116, b"sound", "Precast_Loop_01.ogg")
+    long = re.sub(r"\|c[0-9a-f]{8}|\|r", "", cast(bytes, rows(116, b"sound", loop)).decode()).split("\n")
     assert "file SOUND/SPELLS/SPELL_MA_Revamp_Frostbolt_Precast_Loop_01.ogg" in long
     assert "stage precast - 1" in long and not [line for line in long if "\t" in line]
 
@@ -551,7 +587,8 @@ def test_a_group_tooltip_names_the_group_and_its_value(engine: LuaRuntime) -> No
     tip = lua_function(engine, b"GROUP_TIP")
     # The kit's line and its tooltip both carry what the kit is FOR, which
     # belongs to the kit and not to each file it plays.
-    assert cast(bytes, tip(133, b"sound", 1)).decode().split("\n") == [
+    missile = file_index(engine, 133, b"sound", "fx_fire_magic_loop_medium_01.ogg")
+    assert cast(bytes, tip(133, b"sound", missile)).decode().split("\n") == [
         "kit",
         "SPELL_Fire_Missile_Loop - 3011",
         "spells",

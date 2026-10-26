@@ -516,6 +516,25 @@ export const shadowy = defineKind({
     },
 });
 
+/**
+ * A colour ramp that repaints the model by brightness, see-through toward the feet, with an edge colour along its
+ * outline.
+ *
+ * Its colour is the ramp's middle one: the two ends are mostly black and white, so searching them would make almost
+ * every gradient answer to both.
+ */
+export const gradient = defineKind({
+    column: fxColumn, word: "gradient", group: "overlay",
+    hint: t("tooltips:kind.gradient.hint"),
+    props: {
+        colour: {types: [colour], synonyms: ["color"], hint: t("tooltips:kind.gradient.props.colour")},
+        uniform: {types: [flag], hint: t("tooltips:kind.gradient.props.uniform")},
+        shadowless: {types: [flag], hint: t("tooltips:kind.gradient.props.shadowless")},
+        target: target(),
+        phase: phase(),
+    },
+});
+
 /** A material recolour that renders the model as a ghost. */
 export const ghost = defineKind({
     column: fxColumn, word: "ghost", group: "overlay",

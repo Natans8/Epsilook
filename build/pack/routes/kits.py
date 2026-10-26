@@ -21,6 +21,7 @@ EFFECT_TYPE_PROC = enum_id_where(_KIT_EFFECT_TYPES, "proc")
 EFFECT_TYPE_SOUND = enum_id_where(_KIT_EFFECT_TYPES, "sound")
 EFFECT_TYPE_ANIM = enum_id_where(_KIT_EFFECT_TYPES, "anim")
 EFFECT_TYPE_SHADOWY = enum_id_where(_KIT_EFFECT_TYPES, "shadowy")
+EFFECT_TYPE_GRADIENT = enum_id_where(_KIT_EFFECT_TYPES, "gradient")
 EFFECT_TYPE_EMISSION = enum_id_where(_KIT_EFFECT_TYPES, "emission")
 EFFECT_TYPE_DISSOLVE = enum_id_where(_KIT_EFFECT_TYPES, "dissolve")
 EFFECT_TYPE_EDGE_GLOW = enum_id_where(_KIT_EFFECT_TYPES, "edge_glow")
@@ -54,6 +55,7 @@ class KitEffects:
     dissolves: dict[int, set[int]] = field(default_factory=dict)
     glows: dict[int, set[int]] = field(default_factory=dict)
     shadowies: dict[int, set[int]] = field(default_factory=dict)
+    gradients: dict[int, set[int]] = field(default_factory=dict)
     ghost_mats: dict[int, set[int]] = field(default_factory=dict)
     tints: dict[int, set[int]] = field(default_factory=dict)
     desats: dict[int, set[int]] = field(default_factory=dict)
@@ -72,6 +74,7 @@ class KitEffects:
         kit_dissolves: Mapping[int, set[int]],
         kit_glows: Mapping[int, set[int]],
         kit_shadowies: Mapping[int, set[int]],
+        kit_gradients: Mapping[int, set[int]],
         kit_screens: Mapping[int, set[int]],
         kit_emissions: Mapping[int, set[int]],
         kit_barrages: Mapping[int, set[int]],
@@ -109,6 +112,7 @@ class KitEffects:
             dissolves=union(kit_dissolves),
             glows=union(kit_glows),
             shadowies=union(kit_shadowies),
+            gradients=union(kit_gradients),
             screens=union(kit_screens),
             ghost_mats=members(kit_procedures, procs.ghost_mats),
             tints=members(kit_procedures, procs.tints),

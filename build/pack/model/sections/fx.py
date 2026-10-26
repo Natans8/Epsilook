@@ -167,6 +167,30 @@ SHADOWIES = register(
     )
 )
 
+GRADIENTS = register(
+    Section(
+        name="gradients",
+        doc="Each gradient's three ramp colours and its edge colour.",
+        module="core",
+        produce=colored(
+            "gradients",
+            # Searched by the middle colour alone: the ends are mostly black and
+            # white, which would make every gradient answer to both.
+            lambda reads, row: (reads.fx.gradients[row].middle,),
+            {
+                "startColors": lambda reads, row: reads.fx.gradients[row].start,
+                "middleColors": lambda reads, row: reads.fx.gradients[row].middle,
+                "endColors": lambda reads, row: reads.fx.gradients[row].end,
+                "edgeColors": lambda reads, row: reads.fx.gradients[row].edge,
+            },
+        ),
+        columns=("ids", "startColors", "middleColors", "endColors", "edgeColors", "hues"),
+        reads=("visuals", "fx"),
+        needs=("GradientEffect",),
+        counts=(size("gradients", "ids"),),
+    )
+)
+
 GHOST_MATS = register(
     Section(
         name="ghostMats",

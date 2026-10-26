@@ -89,6 +89,7 @@ from .fx import (
     ChainEffect,
     Dissolve,
     FxPayloads,
+    Gradient,
     ScreenRow,
     Shadowy,
     grade,
@@ -109,6 +110,7 @@ from .kits import (
     EFFECT_TYPE_DISSOLVE,
     EFFECT_TYPE_EDGE_GLOW,
     EFFECT_TYPE_EMISSION,
+    EFFECT_TYPE_GRADIENT,
     EFFECT_TYPE_PROC,
     EFFECT_TYPE_SCREEN,
     EFFECT_TYPE_SHADOWY,
@@ -857,6 +859,33 @@ class Routes(Declarations):
         )
     )
 
+    gradients = (
+        flow("the colours a gradient repaints the model with, and its two flags")
+        .read(T.GradientEffect)
+        .into(
+            as_records(
+                T.GradientEffect.ID,
+                Gradient.of,
+                typed(T.GradientEffect.Colors0_r, channel),
+                typed(T.GradientEffect.Colors0_g, channel),
+                typed(T.GradientEffect.Colors0_b, channel),
+                typed(T.GradientEffect.Colors1_r, channel),
+                typed(T.GradientEffect.Colors1_g, channel),
+                typed(T.GradientEffect.Colors1_b, channel),
+                typed(T.GradientEffect.Colors2_r, channel),
+                typed(T.GradientEffect.Colors2_g, channel),
+                typed(T.GradientEffect.Colors2_b, channel),
+                typed(T.GradientEffect.EdgeColor_r, channel),
+                typed(T.GradientEffect.EdgeColor_g, channel),
+                typed(T.GradientEffect.EdgeColor_b, channel),
+                T.GradientEffect.Field_8_1_0_28440_015,
+            )
+        )
+    )
+    """The ramp's middle position, the rim's exponent and the priority are left
+    unread: two are renderer tuning, and the third only decides between two
+    gradients worn by one unit at once."""
+
     screens = (
         flow("what a screen effect does to the frame, the sky, the sound and the hour")
         .read(
@@ -1039,6 +1068,12 @@ class Routes(Declarations):
         .into(as_sets(KitEffect.ParentSpellVisualKitID, KitEffect.Effect))
     )
     """A row pointing at a payload this build lacks is dropped rather than an error."""
+
+    kit_gradients = (
+        kit_effects.where(KitEffect.EffectType == EFFECT_TYPE_GRADIENT)
+        .narrow(KitEffect.Effect, "gradients")
+        .into(as_sets(KitEffect.ParentSpellVisualKitID, KitEffect.Effect))
+    )
 
     kit_screens = (
         kit_effects.where(KitEffect.EffectType == EFFECT_TYPE_SCREEN)
