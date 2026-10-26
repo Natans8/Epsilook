@@ -153,13 +153,14 @@ describe("the type registry", () => {
         assert.equal(percent.parse!("+50"), null);
     });
 
-    it("reads a colour by its CSS name as well as by hex", () => {
-        // The vocabulary is the web's own named-colour list, vendored verbatim, so a reader types the name they
-        // already know and the nearness matching makes it mean "about this colour".
-        assert.equal(colour.parse!("red"), 0xff0000);
-        assert.equal(colour.parse!("REBECCAPURPLE"), 0x663399);
+    it("reads a colour word as itself and a hex triplet as its value", () => {
+        // A word names the shades people call it rather than one colour, so it stays a word through a round trip,
+        // in either regional spelling; a hex triplet is the one colour it spells.
+        assert.equal(colour.parse!("Purple"), "purple");
         assert.equal(colour.parse!("grey"), colour.parse!("gray"));
-        assert.equal(colour.format!(colour.parse!("red")!), "#ff0000");
+        assert.equal(colour.format!(colour.parse!("lavender")!), "lavender");
+        assert.equal(colour.parse!("#B088BB"), 0xb088bb);
+        assert.equal(colour.format!(0xb088bb), "#b088bb");
     });
 
     it("refuses a role name the target mask does not have", () => {
@@ -425,10 +426,14 @@ describe("what each type refuses to parse", () => {
         assert.equal(spellId.parse!("99999999999999999999"), null);
     });
 
-    it("makes a colour reject anything that is neither a hex triplet nor a known name", () => {
+    it("makes a colour reject anything that is neither a hex triplet nor a colour word", () => {
         assert.equal(colour.parse!("#fff"), null);
         assert.equal(colour.parse!("#ff00gg"), null);
         assert.equal(colour.parse!("notacolour"), null);
+        // A CSS name is one value rather than a word for what people call a colour, and a modifier makes a shade of
+        // a word rather than a word of its own; both are refused, so a reader reaches for the word or the hex.
+        assert.equal(colour.parse!("navy"), null);
+        assert.equal(colour.parse!("lightblue"), null);
     });
 
     it("makes a composite reject more members than it has, or an unknown member name", () => {

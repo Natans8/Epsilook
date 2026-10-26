@@ -23,12 +23,18 @@ part of it is not ours to license at all.
 
        src/vendor/bufo.js     Bufo    — Kruithne <kruithne@gmail.com> — MIT
        src/vendor/js-blp.js   js-blp  — Kruithne <kruithne@gmail.com> — MIT
-       color-name (npm)       colorjs/color-name — MIT — bundled into site/js/
        regex-colorizer (npm)  slevithan/regex-colorizer — MIT — bundled with src/ui/, site/js/ when 2.0 ships
+       c3 (colour naming)     StanfordHCI/c3, Copyright (c) 2011 Stanford University — BSD-3-Clause
+                              build/sources/c3-xkcd-model.json.gz is its data/xkcd/c3_data.json at d3576c7;
+                              src/search/vocabulary/colour-terms.json is derived from it and bundled into site/js/
+       xkcd colour survey     Randall Munroe — CC0 1.0 — build/sources/xkcd-colour-names.txt.gz is the survey's
+                              published name list, xkcd.com/color/rgb.txt, and c3's data comes from the survey
 
-   The MIT licence requires its copyright and permission notice to travel with redistributions. For the two
-   vendored files that notice is the header in each file, kept intact. For the two npm packages the notice
-   must reach the BUNDLE, because the bundle is what visitors are served — see section 5.
+   The MIT and BSD licences require their copyright and permission notices to travel with redistributions. For
+   the two vendored files that notice is the header in each file, kept intact. For the npm package and the c3
+   table the notice must reach the BUNDLE, because the bundle is what visitors are served — see section 5; the
+   c3 notice rides as a legal comment at the head of src/search/vocabulary/colour-terms.ts, which the bundler
+   keeps.
 
 
 3. NOT LICENSED BY US — redistributed, not owned
@@ -40,7 +46,7 @@ part of it is not ours to license at all.
        material and none is granted by the AGPL above; it is redistributed here for non-commercial fan
        use only.
 
-   build/sources/**
+   build/sources/** — except the two colour files, recorded in section 2
        Client tables from World of Warcraft clients old enough to still carry columns that later builds
        dropped, kept so the artifacts derived from them can be rebuilt rather than only trusted. Same
        footing as the packs above: the property of Blizzard Entertainment, no copyright claimed, none

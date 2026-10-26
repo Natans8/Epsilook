@@ -194,11 +194,19 @@ test("an inner bind is a chip of its own inside the lane; a grown count binds un
     });
 });
 
-test("a colour value displays a swatch beside the written word", () => {
-    const l = lane("fx:{glow colour:red}");
+test("a hex colour displays a swatch beside its spelling", () => {
+    const l = lane("fx:{glow colour:#ff0000}");
     assert.deepEqual(l.items[1], {
         is: "bind", not: false, head: "colour",
-        body: [{is: "swatch", colour: "#ff0000"}, {is: "word", text: "red"}], span: {start: 9, end: 19},
+        body: [{is: "swatch", colour: "#ff0000"}, {is: "word", text: "#ff0000"}], span: {start: 9, end: 23},
+        lone: false,
+    });
+});
+
+test("a colour word displays as a word, since no one swatch stands for every shade it names", () => {
+    const l = lane("fx:{glow colour:purple}");
+    assert.deepEqual(l.items[1], {
+        is: "bind", not: false, head: "colour", body: [{is: "word", text: "purple"}], span: {start: 9, end: 22},
         lone: false,
     });
 });

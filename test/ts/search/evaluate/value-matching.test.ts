@@ -147,6 +147,28 @@ describe("colours", () => {
         assert.equal(same(0xff00aa, 0xff00aa), true);
         assert.equal(same(0xff00aa, 0xff00ab), false);
     });
+
+    it("matches a colour word by what people call the stored colour", () => {
+        // A muted lilac no channel tolerance puts near CSS purple, and which people call purple first.
+        assert.equal(near(0xb088bb, "purple"), true);
+        assert.equal(near(0xb088bb, "red"), false);
+        assert.equal(near(0xb088bb, 0x800080), false);
+    });
+
+    it("finds under a general word every colour its specific words find", () => {
+        // c3's lavender: lavender is the colour's own name, and purple stands over it.
+        assert.equal(near(0xc79fef, "lavender"), true);
+        assert.equal(near(0xc79fef, "purple"), true);
+    });
+
+    it("reads a word alike whichever operator binds it", () => {
+        const same = matcher("exact", "colour")!;
+        for (const packed of [0xb088bb, 0xc79fef, 0xff0000, 0x008080]) {
+            for (const word of ["purple", "lavender", "red", "teal", "blue"]) {
+                assert.equal(same(packed, word), near(packed, word), `${word} on #${packed.toString(16)}`);
+            }
+        }
+    });
 });
 
 describe("target roles", () => {

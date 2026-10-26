@@ -12,6 +12,7 @@
  *
  * Every function here is pure and synchronous.
  */
+import {answersTo} from "../vocabulary/colour-terms";
 import {compilePattern} from "../text/patterns";
 import {fold, squash} from "../text/normalize";
 import type {Value} from "../vocabulary/value-types";
@@ -221,18 +222,21 @@ define(["range"], NUMERIC, (stored, operand) => {
 /* ----------------------------------------------------------------------- colours */
 
 // A colour is stored packed as 0xRRGGBB and compared channel by channel, so that "near enough" is expressible.
-// Exact equality over sixteen million values answers almost nothing on its own.
+// Exact equality over sixteen million values answers almost nothing on its own. A colour word is a set of colours
+// rather than one, so it answers alike whichever operator binds it.
 
-/** How far apart two colours may be, per channel, and still count as the same colour. */
 /** How far each channel may stray, in either direction, for a bare colour operand to match a stored colour. */
 export const COLOUR_TOLERANCE = 24;
 
 const channels = (packed: number): [number, number, number] =>
     [(packed >> 16) & 0xff, (packed >> 8) & 0xff, packed & 0xff];
 
-define(["exact"], ["colour"], (stored, operand) => asNumber(stored) === asNumber(operand));
+define(["exact"], ["colour"], (stored, operand) => typeof operand === "string"
+    ? answersTo(operand)(asNumber(stored))
+    : asNumber(stored) === asNumber(operand));
 define(["present"], ["colour"], () => true);
 define(["contains"], ["colour"], (stored, operand) => {
+    if (typeof operand === "string") return answersTo(operand)(asNumber(stored));
     const [r1, g1, b1] = channels(asNumber(stored));
     const [r2, g2, b2] = channels(asNumber(operand));
     return Math.abs(r1 - r2) <= COLOUR_TOLERANCE

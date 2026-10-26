@@ -17,7 +17,7 @@
  * Adding a type is one `defineType` call. Nothing else in the system changes.
  */
 import {t} from "../../i18n";
-import {COLOUR_NAMES} from "./colour-names";
+import {colourWordOf} from "./colour-terms";
 import type {Operator} from "./operators";
 import {anyOf, contains, exact, glob, OPERATORS, ORDERING, present, regex} from "./operators";
 import {fold} from "../text/normalize";
@@ -662,22 +662,25 @@ export const pace = numeric({
 /**
  * A colour, stored packed as 0xRRGGBB.
  *
- * Written as a hex triplet or as a CSS colour name, and edited with a colour picker, which is the only practical way
- * to choose one: nobody knows a tint's packed value, so the control is what makes the axis usable. A bare token
- * matches approximately, by channel distance, because "about this colour" is the question a reader actually has —
- * which is also what makes a name useful, since nobody's tint is exactly pure red; `=` matches the exact value for a
- * reader who copied one. Names are read and never written: a stored colour prints as its hex triplet.
+ * Written as a colour word or as a hex triplet, and edited with a colour picker, which is the only practical way to
+ * choose one value: nobody knows a tint's packed value, so the control is what makes the axis usable.
+ *
+ * The two spellings ask two questions. A word asks what people call a colour, and names a set of them: `purple` finds
+ * the shades people call purple and those they call lavender ({@link ./colour-terms!}). A hex triplet asks about one
+ * colour, and a bare one matches it approximately, by channel distance, because "about this colour" is the question a
+ * reader has; `=` matches the exact value for a reader who copied one. A word is never one colour, so `=` asks nothing
+ * more of it. Any other name is refused rather than read as some colour it happens to be.
  */
-export const colour = defineType<number>({
+export const colour = defineType<Value>({
     name: "colour",
     storage: "int",
     parse: (s) => {
         const written = s.trim();
         const hex = /^#?([0-9a-f]{6})$/i.exec(written);
         if (hex) return Number.parseInt(hex[1], 16);
-        return COLOUR_NAMES[fold(written)] ?? null;
+        return colourWordOf(written) ?? null;
     },
-    format: (packed) => `#${packed.toString(16).padStart(6, "0")}`,
+    format: (value) => typeof value === "string" ? value : `#${value.toString(16).padStart(6, "0")}`,
     accepts: [exact, contains, present, anyOf],
     hint: t("tooltips:type.colour"),
     ui: "colour",

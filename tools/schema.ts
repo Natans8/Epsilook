@@ -17,12 +17,12 @@
  */
 import type {Notation, Operator} from "../src/search/index";
 import {
-    COLOUR_NAMES, COLOUR_TOLERANCE, COLUMNS, doorOf, GRAMMAR, hintOf, isIdentity, KINDS, membersOf, OPERATORS,
+    COLOUR_TERMS, COLOUR_TOLERANCE, COLUMNS, doorOf, GRAMMAR, hintOf, isIdentity, KINDS, membersOf, OPERATORS,
     ROLE_WORDS, ROLES, TYPES, wordOf,
 } from "../src/search/index";
 
 /** The shape of this output. A reader refuses another rather than misreading it. */
-const SCHEMA_FORMAT = 6;
+const SCHEMA_FORMAT = 7;
 
 /** A record with its undefined and null fields left out, so an absent declaration is an absent key. */
 function trimmed<T extends Record<string, unknown>>(record: T): Partial<T> {
@@ -119,7 +119,7 @@ function main(): void {
         roles: ROLES,
         targetWords: ROLE_WORDS,
         colourTolerance: COLOUR_TOLERANCE,
-        colourNames: COLOUR_NAMES,
+        colourWords: COLOUR_TERMS,
     };
     process.stdout.write(JSON.stringify(out, null, 1) + "\n");
 }

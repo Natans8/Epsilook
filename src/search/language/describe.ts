@@ -197,7 +197,9 @@ function operandPieces(operand: ParsedOperand, at?: PropRef): Piece[] {
     // text `operandQuoted` weighed for quotes are the same string.
     const written = operandText(operand, at, "written");
     if (type === undefined) return [{is: "value", text: written}];
-    if (type === colour && typeof operand.value === "number") {
+    // A hex triplet is one colour and draws its swatch; a colour word is a set of colours, so no one swatch is honest.
+    if (type === colour) {
+        if (typeof operand.value === "string") return [texty(written, "word", operand, at)];
         return [{is: "swatch", colour: colour.format?.(operand.value) ?? written}, {is: "word", text: written}];
     }
     if (type.quantity === true && typeof operand.value === "number") {

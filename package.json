@@ -37,7 +37,6 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.64.1",
-    "@types/color-name": "^2.0.0",
     "@types/node": "^26.6.5",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
@@ -48,7 +47,6 @@
     "varcon": "^1.0.1"
   },
   "dependencies": {
-    "color-name": "^2.1.1",
     "i18next": "^26.5.7",
     "i18next-browser-languagedetector": "^8.2.2",
     "react": "^19.3.1",

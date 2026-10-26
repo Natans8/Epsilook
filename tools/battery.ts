@@ -105,6 +105,10 @@ const PROBES: Probe[] = [
     },
     {v1: "fx:gradient", v2: "fx:gradient", note: "1.0 never read the gradient table; its count is a corpus substring"},
     {
+        v1: 'fx:"gradient purple"', v2: "fx:{gradient colour:purple}",
+        note: "a colour word read through c3; CSS purple's ±24 found none of these muted ramps",
+    },
+    {
         v1: 'fx:"gradient uniform"', v2: "fx:{gradient uniform}",
         note: "the even, unfaded gradients; 1.0 has no such word",
     },

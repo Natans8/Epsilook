@@ -20,7 +20,7 @@ def test_numeric_notations_read_as_the_web_does(engine: LuaRuntime) -> None:
     assert parse(b"percentChange", b"50") == -50
     assert parse(b"percent", b"-50") is None
     assert parse(b"colour", b"#ff0000") == 0xFF0000
-    assert parse(b"colour", b"red") == 0xFF0000
+    assert parse(b"colour", b"purple") == b"purple"
     assert parse(b"bitmask", b"caster") == b"caster"
     assert parse(b"bitmask", b"everyone") is None
     assert parse(b"ordinal", b"wrath") == b"WotLK"

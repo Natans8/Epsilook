@@ -160,7 +160,7 @@ describe("properties and doors", () => {
         assert.deepEqual(ids("xpac:classic"), [0, 1, 11]);
     });
 
-    it("matches a colour name against nearby shades", () => {
+    it("matches a colour word against the shades people call it", () => {
         assert.deepEqual(ids("fx:{tint red}"), [4]);
     });
 });

@@ -28,7 +28,7 @@ local Text = Epsilook.Text
 local floor, abs = math.floor, math.abs
 
 --- The shape of declarations this file reads. Another is refused at load.
-Schema.FORMAT = 6
+Schema.FORMAT = 7
 
 --- The synthetic property behind the count word, so a cardinality reads its
 -- operands like any numeric axis. Its word is read off the grammar at load.
@@ -169,8 +169,8 @@ function Schema.Load(declared)
 
 	Schema.roles = declared.roles
 	Schema.targetWords = declared.targetWords
-	Schema.colourNames = declared.colourNames
 	Schema.colourTolerance = declared.colourTolerance
+	Schema.colourWords = declared.colourWords
 	Schema.heads = headsOf(Schema.columns, Schema.kinds)
 	return true
 end
@@ -462,8 +462,9 @@ end
 --- One operand read as a value of one type, by the type's own rule.
 -- The per-type readers: text is itself, a whole number is an
 -- identity or a count, a numeric type dispatches over its notations, a colour
--- is a hex triplet or a name, a role is one of the closed set, an ordinal is a
--- rung of the ladder. A type with no reader here reads nothing.
+-- is a hex triplet or a colour word and any other name is refused, a role is
+-- one of the closed set, an ordinal is a rung of the ladder. A type with no
+-- reader here reads nothing.
 -- @param typeName the type
 -- @param written the operand as typed
 -- @return the value, or nil where the operand is not of this type
@@ -488,7 +489,7 @@ function Schema.ParseType(typeName, written)
 		if hex then
 			return tonumber(hex, 16)
 		end
-		return Schema.colourNames[Text.fold(trimmed)]
+		return Schema.colourWords.spellings[Text.fold(trimmed)]
 	elseif typeName == "bitmask" then
 		local role = Text.foldTrimmed(written)
 		return Schema.roles[role] and role or nil
@@ -667,13 +668,17 @@ function Schema.ParseValue(prop, written, notations)
 end
 
 --- The spelling a stored value of a type is written in.
--- A numeric type writes its display notation; everything else writes itself.
+-- A numeric type writes its display notation; a colour word writes itself, as
+-- does everything else.
 -- @param typeName the type
 -- @param value the stored value
 -- @return the text
 function Schema.FormatType(typeName, value)
 	local declaredType = Schema.types[typeName]
 	if typeName == "colour" then
+		if type(value) == "string" then
+			return value
+		end
 		return string.format("#%06x", value)
 	end
 	if typeName == "bitmask" then

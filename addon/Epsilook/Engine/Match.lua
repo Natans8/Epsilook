@@ -73,6 +73,35 @@ local function channels(packed)
 	return floor(packed / 65536) % 256, floor(packed / 256) % 256, packed % 256
 end
 
+--- The test for one colour word against stored colours: a colour answers to
+-- a word it is called, or to a word over one it is called. The table carries,
+-- per cell of the colour space, the set of names people give the colours in
+-- it; each set is decided once here, so a stored colour costs a lookup.
+-- @param word the word as the declarations spell it
+-- @return a function from a packed colour to true or false
+local function answersTo(word)
+	local terms = Schema.colourWords
+	local hits = {}
+	for at, names in ipairs(terms.names) do
+		for _, name in ipairs(names) do
+			if name == word then
+				hits[at] = true
+			end
+			for _, above in ipairs(terms.broader[name] or {}) do
+				if above == word then
+					hits[at] = true
+				end
+			end
+		end
+	end
+	local cells, span = terms.cells, 256 / terms.cells
+	return function(stored)
+		local r, g, b = channels(stored)
+		local cell = (floor(r / span) * cells + floor(g / span)) * cells + floor(b / span)
+		return hits[terms.index[cell + 1] + 1] == true
+	end
+end
+
 --- The bits two masks share. Arithmetic rather than the client's bit library,
 -- so the file runs under a bare interpreter; the masks are a handful of bits.
 local function band(a, b)
@@ -139,6 +168,15 @@ function Match.Test(op, typeName, operand)
 	end
 
 	if typeName == "colour" then
+		-- A word asks what people call a colour. It names a set of colours
+		-- rather than one, so anchoring it asks nothing more: an exact colour
+		-- is written as a hex triplet.
+		if type(operand.value) == "string" then
+			if op == "exact" or op == "contains" then
+				return answersTo(operand.value)
+			end
+			return never
+		end
 		local wanted = tonumber(operand.value)
 		if wanted == nil then
 			return never

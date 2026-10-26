@@ -25,7 +25,7 @@ import type {
     Ask, Column, Dataset, Kind, Row, RowSource, RowTest, Rung, ScopeTerm, Stored, ValueExpr,
 } from "./search/index";
 import {
-    animColumn, catalogue, colour as colourType, COLOUR_NAMES, enumeration, fold, fxColumn, idColumn, isIdentity,
+    animColumn, catalogue, colour as colourType, colourWordOf, enumeration, fold, fxColumn, idColumn, isIdentity,
     KINDS, mechColumn, modelColumn, setOrdinalLadder, soundColumn, spellColumn, squash, TARGET_ROLES,
     kindsOf, text as textType, wordOf,
 } from "./search/index";
@@ -776,7 +776,7 @@ export function packDataset(l: LoadedPack): Dataset {
                     for (const at of inv.kindPresence.get(kind) ?? []) seed.add(at);
                 }
             }
-            if (/^[0-9a-f]{6}$/.test(token) || COLOUR_NAMES[fold(token)] !== undefined) {
+            if (/^[0-9a-f]{6}$/.test(token) || colourWordOf(token) !== undefined) {
                 for (const kind of inv.colourKinds.get(column) ?? []) {
                     for (const at of inv.kindPresence.get(kind) ?? []) seed.add(at);
                 }

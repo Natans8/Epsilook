@@ -390,12 +390,12 @@ describe("the quote law: a phrase is one literal string value", () => {
         assert.deepEqual(term.ask.value, {op: "exact", operand: {type: "bitmask", value: "caster", written: "caster"}});
     });
 
-    it("a quoted colour name carries the colour, not the letters", () => {
+    it("a quoted colour word carries the word, not the letters", () => {
         const [term] = termsOf(ok('fx:{tint:"red"}'));
         assert.ok(term.ask !== null && term.ask.on === "props");
         assert.deepEqual(term.ask.value, {
             op: "contains",
-            operand: {type: "colour", value: 0xff_00_00, written: "red", verbatim: true}
+            operand: {type: "colour", value: "red", written: "red", verbatim: true}
         });
     });
 
@@ -710,7 +710,7 @@ describe("alternative spellings", () => {
         assert.ok(colour.ask !== null && colour.ask.on === "props");
         assert.deepEqual(colour.ask.value, {
             op: "contains",
-            operand: {type: "colour", value: 0xff_00_00, written: "red"}
+            operand: {type: "colour", value: "red", written: "red"}
         });
     });
 });

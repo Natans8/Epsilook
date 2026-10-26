@@ -27,7 +27,7 @@ export {
     membersOf, seconds, setOrdinalLadder, soundKitId, spellId, TARGET_ROLES, text, TYPES,
 } from "./vocabulary/value-types";
 
-export {COLOUR_NAMES} from "./vocabulary/colour-names";
+export {answersTo, colourWordOf, COLOUR_TERMS, COLOUR_WORDS, namesOf} from "./vocabulary/colour-terms";
 
 export type {Match, Operand} from "./evaluate/value-matching";
 export type {BitTest} from "./evaluate/value-matching";

@@ -81,6 +81,14 @@ PROBES = [
     "xpac:{wotlk legion}",
     "mech:{triggers caster}",
     "fx:{glow red}",
+    # Colour words: what people call a colour, the general word standing for its specific ones whichever glue binds
+    # it; one colour is a hex triplet, near by default and exact under `=`.
+    "fx:{tint colour:purple}",
+    "fx:{tint colour=purple}",
+    "fx:{gradient colour:purple}",
+    "fx:{tint colour:grey}",
+    "fx:{tint colour:#000080}",
+    "fx:{tint colour=#000080}",
     "model:{fire missile",
     "anim:{kit count:>2}",
     # Reach: the two sentinel words, the flags, a near edge, and a flag conjoined with a value.

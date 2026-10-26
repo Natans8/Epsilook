@@ -3000,6 +3000,12 @@ def check_toolchain(rep: Report) -> None:
         ["uv", "run", "python", "tools/catalogue.py", "--check"],
         "build/pack/routes/catalogue.py is the table catalogue the source roster declares",
     )
+    run_tool(
+        rep,
+        "colour terms",
+        ["uv", "run", "python", "tools/colour_terms.py", "--check"],
+        "src/search/vocabulary/colour-terms.json is what the vendored naming model gives",
+    )
 
 
 # ---------------------------------------------------------------------- main
