@@ -1,11 +1,11 @@
 {
   "pack": "1.15.9.70003",
   "meta": {
-    "format": 72,
+    "format": 73,
     "version": "1.15.9.70003",
     "label": "Vanilla Classic 1.15.9",
     "built": "2026-10-26",
-    "listfileTag": "202610260649",
+    "listfileTag": "202610260910",
     "tdbTag": "",
     "absentTables": ["BarrageEffect", "ItemXItemEffect", "JournalEncounterSection", "Mount", "MountXDisplay", "ShadowyEffect", "SpellEffectEmission", "SpellKeyboundOverride", "SpellOverrideName", "SpellScaling", "SpellVisualScreenEffect", "WeaponTrail", "ZoneLight"],
     "degradedSections": {
@@ -232,7 +232,7 @@
     }
   },
   "modules": {
-    "core": {"file": "data/modules/core-e16595fb18ba.json.gz", "bytes": 821527},
+    "core": {"file": "data/modules/core-a1500fff66cc.json.gz", "bytes": 821261},
     "universal": {"file": "data/modules/universal-75ebb3be603e.json.gz", "bytes": 41583},
     "sky": {"file": "data/modules/sky-ad00897d3167.json.gz", "bytes": 30833}
   },

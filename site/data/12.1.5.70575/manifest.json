@@ -1,11 +1,11 @@
 {
   "pack": "12.1.5.70575",
   "meta": {
-    "format": 72,
+    "format": 73,
     "version": "12.1.5.70575",
     "label": "Midnight 12.1.5",
     "built": "2026-10-26",
-    "listfileTag": "202610260649",
+    "listfileTag": "202610260910",
     "tdbTag": "TDB1210.26091",
     "absentTables": [],
     "degradedSections": {},
@@ -102,7 +102,7 @@
     }
   },
   "modules": {
-    "core": {"file": "data/modules/core-b774ffdb5fa8.json.gz", "bytes": 17349263},
+    "core": {"file": "data/modules/core-65eec14e5a87.json.gz", "bytes": 17333692},
     "universal": {"file": "data/modules/universal-75ebb3be603e.json.gz", "bytes": 41583},
     "sky": {"file": "data/modules/sky-35e6761728be.json.gz", "bytes": 413118}
   },

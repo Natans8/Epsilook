@@ -1,11 +1,11 @@
 {
   "pack": "4.4.2.60895",
   "meta": {
-    "format": 72,
+    "format": 73,
     "version": "4.4.2.60895",
     "label": "Cataclysm Classic 4.4.2",
     "built": "2026-10-26",
-    "listfileTag": "202610260649",
+    "listfileTag": "202610260910",
     "tdbTag": "TDB442.26081",
     "absentTables": ["BarrageEffect", "BeamEffect", "DissolveEffect", "EdgeGlowEffect", "FullScreenEffect", "GradientEffect", "ItemXItemEffect", "ShadowyEffect", "SpellEffectEmission", "SpellKeyboundOverride", "SpellOverrideName", "SpellVisualScreenEffect", "WeaponTrail"],
     "degradedSections": {
@@ -189,7 +189,7 @@
     }
   },
   "modules": {
-    "core": {"file": "data/modules/core-527e0d8b14bb.json.gz", "bytes": 2320947},
+    "core": {"file": "data/modules/core-c89b3a7a477c.json.gz", "bytes": 2318369},
     "universal": {"file": "data/modules/universal-75ebb3be603e.json.gz", "bytes": 41583},
     "sky": {"file": "data/modules/sky-3a598b74175a.json.gz", "bytes": 92803}
   },

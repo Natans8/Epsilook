@@ -17,7 +17,6 @@ from collections.abc import Callable
 
 from ...derive import Reads
 from ...routes import Ambience, ScreenRow, ZoneMusic
-from ...routes.colors import hue_words
 from ..registry import register
 from ..section import Cardinality, Count, Section, SectionColumns, size
 
@@ -56,7 +55,6 @@ def payloads(reads: Reads) -> SectionColumns:
         "maskOffsetY": [row.mask[0] for row in rows],
         "maskSize": [row.mask[1] for row in rows],
         "maskPower": [row.mask[2] for row in rows],
-        "hues": [hue_words((row.fog, row.mul, row.add)) for row in rows],
         # The light preset the screen swaps the sky to, and how long the swap
         # takes each way, in milliseconds.
         "skyParams": [row.sky for row in rows],
@@ -127,7 +125,6 @@ SCREENS = register(
             "maskOffsetY",
             "maskSize",
             "maskPower",
-            "hues",
             "skyParams",
             "skyFadeIns",
             "skyFadeOuts",

@@ -685,8 +685,7 @@ end
 
 --- What a screen effect paints, in the tooltip: a palette line with a swatch
 -- and its hex for the fog, the multiply and the add colour, each where the
--- effect has one, the hue words after, then the textures it draws. Only a
--- screen part carries one.
+-- effect has one, then the textures it draws. Only a screen part carries one.
 -- @param tooltip the GameTooltip, already owned
 -- @param part a PartData
 function Inspect.FillPalette(tooltip, part)
@@ -703,9 +702,6 @@ function Inspect.FillPalette(tooltip, part)
 	end
 	if #swatches > 0 then
 		tooltip:AddLine(table.concat(swatches, "  "))
-	end
-	if screen.hues ~= "" then
-		tooltip:AddLine(GREY .. "hues " .. END .. screen.hues, 1, 1, 1)
 	end
 	-- The effect's own textures: the finished art at the screen's size, the
 	-- masks that shape it at half.

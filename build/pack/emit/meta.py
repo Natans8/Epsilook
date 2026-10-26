@@ -18,8 +18,12 @@ from ..derive import DeriveContext
 from ..model import SECTIONS, CountFamily, Section, SectionColumns
 from ..progress import detail
 
-PACK_FORMAT = 72
+PACK_FORMAT = 73
 """What shape the artifact is in.
+
+73 drops the `hues` column from every colour section and from `screens`. A
+colour ships as its packed value alone, and what it is called is the query
+engine's to answer. A reader of 72 finds the words gone.
 
 72 says how a gradient repaints the model. `gradients` carries, per gradient a
 spell reaches, the three colours its ramp runs through from the model's darkest

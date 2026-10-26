@@ -1,11 +1,11 @@
 {
   "pack": "9.2.7.45745",
   "meta": {
-    "format": 72,
+    "format": 73,
     "version": "9.2.7.45745",
     "label": "Shadowlands 9.2.7",
     "built": "2026-10-26",
-    "listfileTag": "202610260649",
+    "listfileTag": "202610260910",
     "tdbTag": "TDB927.22111",
     "absentTables": [],
     "degradedSections": {},
@@ -137,7 +137,7 @@
     }
   },
   "modules": {
-    "core": {"file": "data/modules/core-2b62b0c4fd16.json.gz", "bytes": 10771934},
+    "core": {"file": "data/modules/core-75395f8b3a25.json.gz", "bytes": 10759589},
     "universal": {"file": "data/modules/universal-75ebb3be603e.json.gz", "bytes": 41583},
     "sky": {"file": "data/modules/sky-c570ad276f1e.json.gz", "bytes": 306515}
   },

@@ -352,7 +352,7 @@ flowchart LR
 
 | section            | module    | on the pack | reads                                       | what it is                                                                  |
 |--------------------|-----------|------------:|---------------------------------------------|-----------------------------------------------------------------------------|
-| `fxChains`         | core      |       4,485 | [`references`](#references) and [`fx`](#fx) | Each drawn chain's tint, and the hue word it is searched by.                |
+| `fxChains`         | core      |       4,485 | [`references`](#references) and [`fx`](#fx) | Each drawn chain's tint.                                                    |
 | `fxTextures`       | core      |             | [`references`](#references) and [`fx`](#fx) | The textures each drawn chain paints with.                                  |
 | `dissolves`        | core      |         724 | [`references`](#references) and [`fx`](#fx) | Each dissolve row's duration and where on the model it is anchored.         |
 | `dissolveTextures` | core      |             | [`references`](#references) and [`fx`](#fx) | The textures each dissolve blends through.                                  |

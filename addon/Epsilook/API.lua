@@ -768,8 +768,7 @@ end
 -- carry only some of them. A screen part carries the id as an extra.
 -- @param screenID the screen effect id
 -- @return a table with name; fog, mul and add, the colours it paints with,
---   each -1 where it paints none; hues, the build's words for them;
---   textures, a list of { role, fid } with the finished art (role 0) before
+--   each -1 where it paints none; textures, a list of { role, fid } with the finished art (role 0) before
 --   the masks it is shaped by (role 1); sky, the LightParams it swaps to, or
 --   nought, with skyFadeIn and skyFadeOut in milliseconds; hour, the minute
 --   of the day it pins, or -1; music and ambience, each { name?, day, night }
@@ -800,7 +799,6 @@ function Epsilook:GetScreenEffect(screenID)
 		fog = Data.Lookup("fx", "screens", "ids", "fogColors", screenID),
 		mul = Data.Lookup("fx", "screens", "ids", "mulColors", screenID),
 		add = Data.Lookup("fx", "screens", "ids", "addColors", screenID),
-		hues = Data.Lookup("fx", "screens", "ids", "hues", screenID) or "",
 		textures = textures,
 		sky = Data.Lookup("fx", "screens", "ids", "skyParams", screenID) or 0,
 		skyFadeIn = Data.Lookup("fx", "screens", "ids", "skyFadeIns", screenID) or 0,

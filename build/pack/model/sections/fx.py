@@ -12,7 +12,7 @@ from collections.abc import Callable
 from ...derive import Reads
 from ...derive.kinds import WHOLE_MODEL
 from ...routes import phase_words
-from ...routes.colors import hue_word, hue_words, pack_rgb
+from ...routes.colors import pack_rgb
 from ..registry import register
 from ..section import Column, Layout, Scope, Section, SectionColumns, size
 
@@ -31,14 +31,10 @@ def used(reads: Reads, bucket: str) -> list[int]:
 
 
 def fx_chains(reads: Reads) -> SectionColumns:
-    """Each drawn chain's tint and the hue word its corpus searches by."""
+    """Each drawn chain's tint."""
     ids = sorted(reads.references.chains)
     drawn = [reads.fx.chains[chain] for chain in ids]
-    return {
-        "ids": ids,
-        "colors": [pack_rgb(row.red, row.green, row.blue) for row in drawn],
-        "hues": [hue_word(row.red, row.green, row.blue) for row in drawn],
-    }
+    return {"ids": ids, "colors": [pack_rgb(row.red, row.green, row.blue) for row in drawn]}
 
 
 def fx_textures(reads: Reads) -> SectionColumns:
@@ -63,17 +59,14 @@ def dissolve_textures(reads: Reads) -> SectionColumns:
     return {"dissolveIds": [row[0] for row in rows], "fids": [row[1] for row in rows]}
 
 
-def colored(
-    bucket: str, colors_of: Callable[[Reads, int], tuple[int, ...]], columns: dict[str, Callable[[Reads, int], object]]
-) -> Callable[[Reads], SectionColumns]:
-    """One colour family's distinct rows, their colours and their hue words."""
+def family(bucket: str, columns: dict[str, Callable[[Reads, int], object]]) -> Callable[[Reads], SectionColumns]:
+    """One colour family's distinct rows and what each looks like."""
 
     def produce(reads: Reads) -> SectionColumns:
         ids = used(reads, bucket)
         made: dict[str, Column] = {"ids": ids}
         for name, of_row in columns.items():
             made[name] = [of_row(reads, row) for row in ids]
-        made["hues"] = [hue_words(colors_of(reads, row)) for row in ids]
         return made
 
     return produce
@@ -82,10 +75,10 @@ def colored(
 FX_CHAINS = register(
     Section(
         name="fxChains",
-        doc="Each drawn chain's tint, and the hue word it is searched by.",
+        doc="Each drawn chain's tint.",
         module="core",
         produce=fx_chains,
-        columns=("ids", "colors", "hues"),
+        columns=("ids", "colors"),
         reads=("references", "fx"),
         counts=(size("fxChains", "ids"),),
     )
@@ -133,12 +126,11 @@ GLOWS = register(
         name="glows",
         doc="Each edge glow's colour and opacity.",
         module="core",
-        produce=colored(
+        produce=family(
             "glows",
-            lambda reads, row: (reads.fx.glows[row],),
             {"colors": lambda reads, row: reads.fx.glows[row], "alphas": lambda reads, row: reads.fx.glow_alphas[row]},
         ),
-        columns=("ids", "colors", "alphas", "hues"),
+        columns=("ids", "colors", "alphas"),
         reads=("visuals", "fx"),
         needs=("EdgeGlowEffect",),
         counts=(size("glows", "ids"),),
@@ -150,9 +142,8 @@ SHADOWIES = register(
         name="shadowies",
         doc="Each shadowy effect's two colours and where it is anchored.",
         module="core",
-        produce=colored(
+        produce=family(
             "shadowies",
-            lambda reads, row: reads.fx.shadowies[row][:2],
             {
                 "primaryColors": lambda reads, row: reads.fx.shadowies[row][0],
                 "secondaryColors": lambda reads, row: reads.fx.shadowies[row][1],
@@ -160,7 +151,7 @@ SHADOWIES = register(
                 "attaches": lambda reads, row: reads.fx.shadowies[row][2],
             },
         ),
-        columns=("ids", "primaryColors", "secondaryColors", "hues", "attaches"),
+        columns=("ids", "primaryColors", "secondaryColors", "attaches"),
         reads=("visuals", "fx"),
         needs=("ShadowyEffect",),
         counts=(size("shadowies", "ids"),),
@@ -172,11 +163,8 @@ GRADIENTS = register(
         name="gradients",
         doc="Each gradient's three ramp colours and its edge colour.",
         module="core",
-        produce=colored(
+        produce=family(
             "gradients",
-            # Searched by the middle colour alone: the ends are mostly black and
-            # white, which would make every gradient answer to both.
-            lambda reads, row: (reads.fx.gradients[row].middle,),
             {
                 "startColors": lambda reads, row: reads.fx.gradients[row].start,
                 "middleColors": lambda reads, row: reads.fx.gradients[row].middle,
@@ -184,7 +172,7 @@ GRADIENTS = register(
                 "edgeColors": lambda reads, row: reads.fx.gradients[row].edge,
             },
         ),
-        columns=("ids", "startColors", "middleColors", "endColors", "edgeColors", "hues"),
+        columns=("ids", "startColors", "middleColors", "endColors", "edgeColors"),
         reads=("visuals", "fx"),
         needs=("GradientEffect",),
         counts=(size("gradients", "ids"),),
@@ -196,12 +184,8 @@ GHOST_MATS = register(
         name="ghostMats",
         doc="Each ghost material's colour.",
         module="core",
-        produce=colored(
-            "ghost_mats",
-            lambda reads, row: (reads.procs.ghost_mats[row],),
-            {"colors": lambda reads, row: reads.procs.ghost_mats[row]},
-        ),
-        columns=("ids", "colors", "hues"),
+        produce=family("ghost_mats", {"colors": lambda reads, row: reads.procs.ghost_mats[row]}),
+        columns=("ids", "colors"),
         reads=("visuals", "procs"),
         counts=(size("ghostMats", "ids"),),
     )
@@ -212,10 +196,8 @@ TINTS = register(
         name="tints",
         doc="Each model tint's colour.",
         module="core",
-        produce=colored(
-            "tints", lambda reads, row: (reads.procs.tints[row],), {"colors": lambda reads, row: reads.procs.tints[row]}
-        ),
-        columns=("ids", "colors", "hues"),
+        produce=family("tints", {"colors": lambda reads, row: reads.procs.tints[row]}),
+        columns=("ids", "colors"),
         reads=("visuals", "procs"),
         counts=(size("tints", "ids"),),
     )
