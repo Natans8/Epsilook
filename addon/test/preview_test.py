@@ -408,6 +408,45 @@ def test_a_body_with_no_size_yet_keeps_the_camera_where_it_waits(engine: LuaRunt
     assert camera == [value(engine, b"return Epsilook.Preview.DISTANCE"), 0, 0]
 
 
+def test_clearing_a_look_takes_off_what_its_kits_painted(engine: LuaRuntime) -> None:
+    """A kit's painting outlives the kit and the model, so the effects come off right
+    after the kit, by the call Epsilon's client gives a scene actor, where it has one."""
+    # language=Lua
+    calls = value(
+        engine,
+        b"""
+        local calls = {}
+        local function actor(name, epsilon)
+            local made = {}
+            for _, method in ipairs({ "StopAnimationKit", "SetSpellVisualKit", "SetAnimation", "SetScale",
+                    "ClearModel", "Hide" }) do
+                made[method] = function() calls[#calls + 1] = name .. " " .. method end
+            end
+            if epsilon then
+                made.ClearAllEffects = function() calls[#calls + 1] = name .. " ClearAllEffects" end
+            end
+            return made
+        end
+        Epsilook.Preview.Clear({ body = actor("body", true), rider = actor("rider", false) })
+        return calls
+        """,
+    )
+    assert calls == [
+        "body StopAnimationKit",
+        "body SetSpellVisualKit",
+        "body ClearAllEffects",
+        "body SetAnimation",
+        "body SetScale",
+        "body ClearModel",
+        "rider StopAnimationKit",
+        "rider SetSpellVisualKit",
+        "rider SetAnimation",
+        "rider SetScale",
+        "rider ClearModel",
+        "rider Hide",
+    ], "the rider's client has no ClearAllEffects, so it is not called"
+
+
 def test_a_lent_inside_is_left_empty_where_there_is_nothing_to_play(engine: LuaRuntime) -> None:
     """A spell with no visuals, and a client with no frames to draw in, both answer false."""
     # language=Lua

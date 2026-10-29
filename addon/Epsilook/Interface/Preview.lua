@@ -394,12 +394,18 @@ end
 --
 -- ⚠ What the client itself does to reset an actor, rather than relying on a new
 -- model to clear the old one's kits and animation. Loading a model is not
--- documented to stop what was playing, and the client does not rely on it.
+-- documented to stop what was playing, and the client does not rely on it. What
+-- a kit painted, an edge glow or a tint, stays on the actor once the kit is
+-- taken off and once the model is cleared; Epsilon's client gives every scene
+-- actor `ClearAllEffects`, the one call that takes it off.
 -- @param frame the look
 function Preview.Clear(frame)
 	for _, actor in ipairs({ frame.body, frame.rider }) do
 		pcall(actor.StopAnimationKit, actor)
 		pcall(actor.SetSpellVisualKit, actor, nil)
+		if actor.ClearAllEffects then
+			pcall(actor.ClearAllEffects, actor)
+		end
 		pcall(actor.SetAnimation, actor, 0)
 		pcall(actor.SetScale, actor, 1)
 		actor:ClearModel()
@@ -563,12 +569,11 @@ local function draw(frame, part)
 		return false
 	end
 	-- A frame is reused, so whatever was running on it stops: a sequence left
-	-- ticking would keep laying its own beats over whatever is drawn next.
+	-- ticking would keep laying its own beats over whatever is drawn next, and a
+	-- kit's painting would stay on a still subject drawn after it.
 	frame.sequence = nil
 	frame:SetScript("OnUpdate", nil)
-	frame.body:ClearModel()
-	frame.rider:ClearModel()
-	frame.rider:Hide()
+	Preview.Clear(frame)
 	frame.facing = Preview.FACING
 	subject.put(frame, value)
 	return true
