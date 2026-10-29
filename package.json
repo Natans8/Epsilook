@@ -35,26 +35,31 @@
       "onFail": "warn"
     }
   },
+  "//": {
+    "floors": "A version range only where the code needs one, its reason here; package-lock.json pins what actually runs, and npm update moves every pin at once.",
+    "@types/node": "^26: the Node that devEngines runs, 26, and no other",
+    "typescript": ">=5.8: tsconfig's erasableSyntaxOnly"
+  },
   "devDependencies": {
-    "@playwright/test": "^1.64.1",
-    "@types/node": "^26.6.5",
-    "@types/react": "^19.3.0",
-    "@types/react-dom": "^19.3.0",
-    "esbuild": "^0.28.2",
-    "oxlint": "^1.89.0",
-    "oxlint-tsgolint": "^7.0.2005",
-    "typescript": "^7.0.2",
-    "varcon": "^1.0.1"
+    "@playwright/test": "*",
+    "@types/node": "^26",
+    "@types/react": "*",
+    "@types/react-dom": "*",
+    "esbuild": "*",
+    "oxlint": "*",
+    "oxlint-tsgolint": "*",
+    "typescript": ">=5.8",
+    "varcon": "*"
   },
   "dependencies": {
-    "i18next": "^26.5.7",
-    "i18next-browser-languagedetector": "^8.2.2",
-    "react": "^19.3.1",
-    "react-dom": "^19.3.1",
-    "react-i18next": "^17.1.5",
-    "regex-colorizer": "^1.0.2"
+    "i18next": "*",
+    "i18next-browser-languagedetector": "*",
+    "react": "*",
+    "react-dom": "*",
+    "react-i18next": "*",
+    "regex-colorizer": "*"
   },
   "allowScripts": {
-    "esbuild@0.28.2": true
+    "esbuild": true
   }
 }

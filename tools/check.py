@@ -51,8 +51,9 @@ import tempfile
 import tokenize
 import tomllib
 import urllib.request
-from collections.abc import Iterable, Iterator, Sequence
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from pathlib import Path
+from typing import Any
 
 import mermaid
 import packfile
@@ -2780,6 +2781,72 @@ def check_python_floor(rep: Report) -> None:
         rep.ok("python floor", f"{len(named)} places name {floor}, the requires-python floor")
 
 
+REQUIREMENT = re.compile(r"^(?P<name>[A-Za-z0-9_.\-]+)(?:\[[^\]]*\])?(?P<spec>[^;]*)")
+"""A requirement's name and whatever follows it up to an environment marker."""
+
+
+def unexplained_floors(pyproject: str) -> list[str]:
+    """The requirements in a pyproject.toml that name a version with no reason on their line.
+
+    The lock pins what runs, so a version in a requirement must say what the code
+    needs, and the reason beside it is what tells that apart from a floor that
+    only repeats the lock and has to be raised by hand on every upgrade.
+    """
+    config = tomllib.loads(pyproject)
+    lists = [config.get("project", {}).get("dependencies", []), *config.get("dependency-groups", {}).values()]
+    lines = pyproject.splitlines()
+    missing = []
+    for requirement in (r for group in lists for r in group if isinstance(r, str)):
+        found = REQUIREMENT.match(requirement)
+        if found is None or not re.search(r"[<>=!~]", found["spec"]):
+            continue
+        quoted = f'"{requirement}"'
+        line = next((text for text in lines if quoted in text), "")
+        if "#" not in line.split(quoted, 1)[-1]:
+            missing.append(requirement)
+    return missing
+
+
+def unexplained_ranges(package: Mapping[str, Any]) -> list[str]:  # Any: parsed JSON, any shape the file holds
+    """What breaks the same rule in a package.json, said as the fix.
+
+    A range other than `*` needs its reason in the `"//"` note, a note may not
+    outlive its dependency, and a script approval names no version, since a
+    pinned one has to be rewritten by hand on every update of that package.
+    """
+    note = package.get("//", {})
+    named = {**package.get("devDependencies", {}), **package.get("dependencies", {})}
+    problems = [
+        f"{name} {spec} has no reason in the // note"
+        for name, spec in named.items()
+        if spec != "*" and name not in note
+    ]
+    problems += [
+        f"the // note explains {name}, which is no dependency"
+        for name in note
+        if name != "floors" and name not in named
+    ]
+    problems += [
+        f"allowScripts names a version in {name}" for name in package.get("allowScripts", {}) if name.rfind("@") > 0
+    ]
+    return problems
+
+
+def check_version_floors(rep: Report) -> None:
+    """Every version a manifest names carries the reason the code needs it.
+
+    The lock files pin what runs, so a floor that only repeats them is noise an
+    upgrade has to raise by hand, and `uv sync --upgrade` or `npm update` cannot.
+    """
+    floors = unexplained_floors((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    ranges = unexplained_ranges(json.loads((ROOT / "package.json").read_text(encoding="utf-8")))
+    if floors or ranges:
+        listing = [f"{name} names a version with no # reason on its line" for name in floors] + ranges
+        rep.fail("version floors", "; ".join(listing))
+    else:
+        rep.ok("version floors", "every version in pyproject.toml and package.json carries its reason")
+
+
 def python_next_blockers(minor: int) -> list[str] | None:
     """What keeps the checkout off CPython 3.<minor>, or None when uv or PyPI cannot answer.
 
@@ -3094,6 +3161,7 @@ def main() -> int:
     check_mypy_strict(rep)
     check_python_path(rep)
     check_python_floor(rep)
+    check_version_floors(rep)
     check_test_layout(rep)
     check_test_collection(rep)
     check_build_constructs(rep)

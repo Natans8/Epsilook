@@ -18,6 +18,8 @@ from check import (
     serves,
     still_fresh,
     straddle_report,
+    unexplained_floors,
+    unexplained_ranges,
 )
 
 STILL = "0432111abcd"
@@ -159,3 +161,47 @@ def test_a_cached_answer_older_than_its_lock_is_asked_again(tmp_path: Path) -> N
 def test_a_cached_answer_past_the_interval_is_asked_again(tmp_path: Path) -> None:
     """A newer release says nothing to a lock, so time alone has to expire it."""
     assert not still_fresh(_written(tmp_path / "answer.json", FRESHNESS_CACHE_HOURS * 3600 + 60))
+
+
+PYPROJECT = """[project]
+dependencies = [
+    "duckdb>=2.0.0",  # the 2.0 API
+    "sqlglot",
+]
+
+[dependency-groups]
+dev = [
+    "ruff",
+    "mypy>=2.4.0",
+    "pywin32; sys_platform == 'win32'",
+]
+"""
+
+
+def test_a_floor_with_its_reason_passes_and_one_without_is_named() -> None:
+    """A version repeating the lock is the thing to catch; a bare name and an
+    environment marker are not versions at all."""
+    assert unexplained_floors(PYPROJECT) == ["mypy>=2.4.0"]
+
+
+def test_a_floor_whose_reason_is_given_passes() -> None:
+    """The fix the failure asks for is the whole of what makes it pass."""
+    assert unexplained_floors(PYPROJECT.replace('"mypy>=2.4.0",', '"mypy>=2.4.0",  # a reason')) == []
+
+
+def test_a_range_needs_its_reason_in_the_note() -> None:
+    """`*` needs nothing; anything narrower names its reason under "//"."""
+    package = {"//": {"floors": "the rule"}, "devDependencies": {"esbuild": "*", "typescript": ">=5.8"}}
+    assert unexplained_ranges(package) == ["typescript >=5.8 has no reason in the // note"]
+    package["//"]["typescript"] = ">=5.8: tsconfig needs it"
+    assert unexplained_ranges(package) == []
+
+
+def test_a_note_cannot_outlive_its_dependency_and_an_approval_names_no_version() -> None:
+    """A reason left behind for a removed package, and a script approval pinned to
+    one version, both have to be edited by hand the next time anything moves."""
+    package = {"//": {"gone": "why"}, "dependencies": {"react": "*"}, "allowScripts": {"esbuild@0.28.2": True}}
+    assert unexplained_ranges(package) == [
+        "the // note explains gone, which is no dependency",
+        "allowScripts names a version in esbuild@0.28.2",
+    ]
