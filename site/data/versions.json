@@ -1,17 +1,17 @@
 [
   {
-    "id": "1.15.9.70003",
+    "id": "1.15.9.70576",
     "label": "Vanilla Classic 1.15.9",
-    "file": "data/1.15.9.70003/spelldata.json.gz",
-    "built": "2026-10-17",
-    "hash": "61065afc3d"
+    "file": "data/1.15.9.70576/spelldata.json.gz",
+    "built": "2026-11-05",
+    "hash": "3d98f103f1"
   },
   {
-    "id": "2.5.6.70006",
+    "id": "2.5.6.70577",
     "label": "TBC Classic 2.5.6",
-    "file": "data/2.5.6.70006/spelldata.json.gz",
-    "built": "2026-10-17",
-    "hash": "a211cc9d84"
+    "file": "data/2.5.6.70577/spelldata.json.gz",
+    "built": "2026-11-05",
+    "hash": "2fa3b8bb85"
   },
   {
     "id": "3.4.3.58936",
@@ -28,11 +28,11 @@
     "hash": "2387301bfa"
   },
   {
-    "id": "5.5.4.70449",
+    "id": "5.5.4.70631",
     "label": "MoP Classic 5.5.4",
-    "file": "data/5.5.4.70449/spelldata.json.gz",
-    "built": "2026-10-17",
-    "hash": "703949532e"
+    "file": "data/5.5.4.70631/spelldata.json.gz",
+    "built": "2026-11-05",
+    "hash": "e767f57235"
   },
   {
     "id": "7.3.5.26972",
@@ -45,36 +45,36 @@
     "id": "8.3.7.35662",
     "label": "Battle for Azeroth 8.3.7",
     "file": "data/8.3.7.35662/spelldata.json.gz",
-    "built": "2026-08-10",
-    "hash": "b0012e0c66"
+    "built": "2026-11-05",
+    "hash": "a0e46bd0f2"
   },
   {
     "id": "9.2.7.45745",
     "label": "Shadowlands 9.2.7",
     "file": "data/9.2.7.45745/spelldata.json.gz",
-    "built": "2026-10-24",
-    "hash": "3fddda5b4e",
+    "built": "2026-11-05",
+    "hash": "d1be1bd8e0",
     "default": true
   },
   {
     "id": "10.2.7.55664",
     "label": "Dragonflight 10.2.7",
     "file": "data/10.2.7.55664/spelldata.json.gz",
-    "built": "2026-10-24",
-    "hash": "66cec85768"
+    "built": "2026-11-05",
+    "hash": "3581443a68"
   },
   {
     "id": "11.2.7.65299",
     "label": "The War Within 11.2.7",
     "file": "data/11.2.7.65299/spelldata.json.gz",
-    "built": "2026-10-24",
-    "hash": "d11f6416ee"
+    "built": "2026-11-05",
+    "hash": "a3f1d73aab"
   },
   {
-    "id": "12.1.5.70575",
+    "id": "12.1.5.70783",
     "label": "Midnight 12.1.5",
-    "file": "data/12.1.5.70575/spelldata.json.gz",
-    "built": "2026-10-24",
-    "hash": "081067f279"
+    "file": "data/12.1.5.70783/spelldata.json.gz",
+    "built": "2026-11-05",
+    "hash": "414c1d69be"
   }
 ]

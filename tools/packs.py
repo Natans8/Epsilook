@@ -107,7 +107,7 @@ IGNORED_PRODUCTS = {
     "wow_classic_era_ptr": "Classic Era PTR",
     "wow_classic_era_beta": "Classic Era beta",
     "wowz": "internal",
-    "wowf": "CDN configuration only; publishes no build",
+    "wowf": "WoW Forever, shipped by the 2.0 roster; this app files Wowhead sections by major",
 }
 
 # ⚠ BLIZZARD'S OWN SUMMARY LISTS THE INTERNAL LINES TOO, and there are far more
@@ -175,10 +175,10 @@ class Pack:
 PACKS: tuple[Pack, ...] = (
     # The three still shipping their own patch — these are the ones `--check`
     # can actually answer for, and the only ones a routine bump touches.
-    Pack("vanilla", "Vanilla Classic", "wow_classic_era", "1.15.9.70003"),
-    Pack("tbc", "TBC Classic", "wow_anniversary", "2.5.6.70006"),
-    Pack("mop", "MoP Classic", "wow_classic", "5.5.4.70449"),
-    Pack("midnight", "Midnight", "wow", "12.1.5.70575"),
+    Pack("vanilla", "Vanilla Classic", "wow_classic_era", "1.15.9.70576"),
+    Pack("tbc", "TBC Classic", "wow_anniversary", "2.5.6.70577"),
+    Pack("mop", "MoP Classic", "wow_classic", "5.5.4.70631"),
+    Pack("midnight", "Midnight", "wow", "12.1.5.70783"),
     # Lines that moved on, and pinned retail. Historical artifacts: their build
     # is final, so FROZEN rather than a product that would answer about a
     # different expansion entirely.
