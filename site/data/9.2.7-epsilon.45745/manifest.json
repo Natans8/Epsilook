@@ -4,8 +4,8 @@
     "format": 73,
     "version": "9.2.7.45745",
     "label": "Epsilon 9.2.7",
-    "built": "2026-10-26",
-    "listfileTag": "202610260910",
+    "built": "2026-11-05",
+    "listfileTag": "202611050009",
     "tdbTag": "TDB927.22111",
     "absentTables": [],
     "degradedSections": {},
@@ -137,7 +137,7 @@
     }
   },
   "modules": {
-    "core": {"file": "data/modules/core-66fbe43fa445.json.gz", "bytes": 10864642},
+    "core": {"file": "data/modules/core-cd798cd072e0.json.gz", "bytes": 10864903},
     "universal": {"file": "data/modules/universal-75ebb3be603e.json.gz", "bytes": 41583},
     "sky": {"file": "data/modules/sky-e358b6b64905.json.gz", "bytes": 313860}
   },
