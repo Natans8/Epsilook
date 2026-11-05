@@ -1,17 +1,24 @@
 [
   {
-    "id": "1.15.9.70003",
+    "id": "1.15.9.70576",
     "label": "Vanilla Classic 1.15.9",
-    "file": "data/1.15.9.70003/manifest.json",
-    "built": "2026-10-26",
-    "hash": "41c12aa073"
+    "file": "data/1.15.9.70576/manifest.json",
+    "built": "2026-11-05",
+    "hash": "677381a4ab"
   },
   {
-    "id": "2.5.6.70006",
+    "id": "1.60.1.70790",
+    "label": "Forever 1.60.1",
+    "file": "data/1.60.1.70790/manifest.json",
+    "built": "2026-11-05",
+    "hash": "b8d03b29d3"
+  },
+  {
+    "id": "2.5.6.70577",
     "label": "TBC Classic 2.5.6",
-    "file": "data/2.5.6.70006/manifest.json",
-    "built": "2026-10-26",
-    "hash": "de843d99d8"
+    "file": "data/2.5.6.70577/manifest.json",
+    "built": "2026-11-05",
+    "hash": "e01ee35211"
   },
   {
     "id": "3.4.3.58936",
@@ -28,11 +35,11 @@
     "hash": "db34509204"
   },
   {
-    "id": "5.5.4.70579",
+    "id": "5.5.4.70631",
     "label": "MoP Classic 5.5.4",
-    "file": "data/5.5.4.70579/manifest.json",
-    "built": "2026-10-26",
-    "hash": "f699f507c9"
+    "file": "data/5.5.4.70631/manifest.json",
+    "built": "2026-11-05",
+    "hash": "0279dde94e"
   },
   {
     "id": "7.3.5.26972",
@@ -86,17 +93,17 @@
     "hidden": true
   },
   {
-    "id": "12.1.7-ptr.70424",
+    "id": "12.1.7-ptr.70740",
     "label": "Midnight PTR 12.1.7",
-    "file": "data/12.1.7-ptr.70424/manifest.json",
-    "built": "2026-10-26",
-    "hash": "681bd55955"
+    "file": "data/12.1.7-ptr.70740/manifest.json",
+    "built": "2026-11-05",
+    "hash": "2d463436ef"
   },
   {
-    "id": "12.1.5.70575",
+    "id": "12.1.5.70783",
     "label": "Midnight 12.1.5",
-    "file": "data/12.1.5.70575/manifest.json",
-    "built": "2026-10-26",
-    "hash": "a78afd93e1"
+    "file": "data/12.1.5.70783/manifest.json",
+    "built": "2026-11-05",
+    "hash": "915d99ccb1"
   }
 ]

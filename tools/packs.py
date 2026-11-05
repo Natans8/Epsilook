@@ -107,7 +107,6 @@ IGNORED_PRODUCTS = {
     "wow_classic_era_ptr": "Classic Era PTR",
     "wow_classic_era_beta": "Classic Era beta",
     "wowz": "internal",
-    "wowf": "CDN configuration only; publishes no build",
 }
 
 # ⚠ BLIZZARD'S OWN SUMMARY LISTS THE INTERNAL LINES TOO, and there are far more
@@ -172,6 +171,7 @@ FLAVOURS: dict[str, Flavour] = {
         Flavour("wow_classic"),
         Flavour("wow_classic_era"),
         Flavour("wow_anniversary"),
+        Flavour("wowf"),
         Flavour("epsilon", mark="epsilon"),
     )
 }
@@ -289,12 +289,17 @@ class Pack:
 #
 # Ordered oldest to newest, which is also the order versions.json sorts into.
 PACKS: tuple[Pack, ...] = (
-    # The three still shipping their own patch — these are the ones `--check`
+    # The lines still shipping their own patch — these are the ones `--check`
     # can actually answer for, and the only ones a routine bump touches.
-    Pack("vanilla", "Vanilla Classic", "wow_classic_era", "1.15.9.70003", tracked=True),
-    Pack("tbc", "TBC Classic", "wow_anniversary", "2.5.6.70006", tracked=True),
-    Pack("mop", "MoP Classic", "wow_classic", "5.5.4.70579", tracked=True),
-    Pack("midnight", "Midnight", "wow", "12.1.5.70575", tracked=True),
+    Pack("vanilla", "Vanilla Classic", "wow_classic_era", "1.15.9.70576", tracked=True),
+    Pack("tbc", "TBC Classic", "wow_anniversary", "2.5.6.70577", tracked=True),
+    Pack("mop", "MoP Classic", "wow_classic", "5.5.4.70631", tracked=True),
+    Pack("midnight", "Midnight", "wow", "12.1.5.70783", tracked=True),
+    # Vanilla's world on a modern client, with content of its own: the patch is
+    # 1.x while the build number runs with retail's. It shares a build with
+    # nothing, so it carries no mark, and no TDB covers it, so it ships without
+    # the server's tables, as the Classic re-releases do.
+    Pack("forever", "Forever", "wowf", "1.60.1.70790", tracked=True),
     # THE TWO RETAIL TEST LINES, and neither is "the" PTR. Blizzard runs two
     # equal public test slots and uses them in turn: whichever holds the patch
     # under test leads, and the other sits on the patch that just shipped. Over
@@ -310,7 +315,7 @@ PACKS: tuple[Pack, ...] = (
     # names and are written once — both manifests then name the same files.
     # The condition is the shared build, not the roster row: move one to a
     # build of its own and the modules diverge with it, needing no edit here.
-    Pack("midnight-ptr", "Midnight PTR", "wowt", "12.1.7.70424", tracked=True),
+    Pack("midnight-ptr", "Midnight PTR", "wowt", "12.1.7.70740", tracked=True),
     Pack("midnight-ptr2", "Midnight PTR 2", "wowxptr", "12.1.5.70340", tracked=True),
     # Lines that moved on, and pinned retail. Historical artifacts: their build
     # is final, so untracked rather than polling a line that would answer
