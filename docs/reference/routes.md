@@ -100,7 +100,7 @@ flowchart LR
 | `bonesetNames`       | core      |                  | [`rows`](#rows)                                       | The body regions an animation can be confined to, pooled.             |
 | `animKitAnimBoneset` | core      |            4,353 | [`rows`](#rows)                                       | Which body region each of a kit's animations moves.                   |
 | `animNames`          | universal |                  | [`declared`](#declared)                               | Every animation's name, indexed by animation id.                      |
-| `animEmoteOneshots`  | universal | 1,730 animEmotes | [`declared`](#declared)                               | The Epsilon emote that performs each animation once, by animation id. |
+| `animEmoteOneshots`  | universal | 1,776 animEmotes | [`declared`](#declared)                               | The Epsilon emote that performs each animation once, by animation id. |
 | `animEmoteLoops`     | universal |                  | [`declared`](#declared)                               | The Epsilon emote that holds each animation, by animation id.         |
 
 ### assets family

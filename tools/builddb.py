@@ -55,6 +55,7 @@ import argparse
 import csv
 import json
 import re
+import shutil
 import sys
 import time
 import urllib.error
@@ -67,7 +68,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "build"))
 
 from pack.sources import dbd  # noqa: E402  (path set above)
-from pack.sources.client import client_tables_dir  # noqa: E402  (path set above)
+from pack.sources.client import CLIENTS, DEFINITIONS, ClientTables, client_tables_dir  # noqa: E402  (path set above)
+from pack.sources.listfile import listfile_source  # noqa: E402  (path set above)
 from pack.sources.tdb import tdb_dir_name  # noqa: E402  (path set above)
 from packs import schema_name, table_sets  # noqa: E402  (path set above)
 
@@ -563,6 +565,44 @@ def load_tdb(con: duckdb.DuckDBPyConnection, build_id: str, tdb_tag: str | None)
     return loaded
 
 
+CLIENT_EXTRA_TABLES = ("Emotes",)
+"""The EXTRA_TABLES a private client's schema takes from the client rather than the export.
+
+A client that adds rows to one of these makes the export's copy a wrong answer
+rather than a partial one: Epsilon's `Emotes` holds 4,071 rows against the
+export's 409, and an emote it added, looked up in the export, plays nothing.
+`AnimationData` stays the export's on purpose: its count is the number of
+animations the executable plays by the ordinary call, and the client's own
+table adds the ones Epsilon downported past that.
+"""
+
+
+def extract_client_tables(client: str, build_id: str, directory: Path) -> None:
+    """Put the client's own copy of each CLIENT_EXTRA_TABLES table where the export's would go.
+
+    Extracted into a directory of its own, so its stamp is not the pack's, then
+    copied over the export's, so `fetch_extra_tables` finds the table there and
+    fetches nothing. A client that cannot be read leaves the export's standing.
+    """
+    into = directory / "database"
+    extracted = ClientTables(
+        name=f"database tables ({client} client, build {build_id})",
+        service=CLIENTS[client],
+        version=build_id,
+        tables=CLIENT_EXTRA_TABLES,
+        into=into,
+        listfile=listfile_source(),
+        definitions=DEFINITIONS,
+    )
+    if extracted.acquire(False) is None:
+        log(f"    ! the {client} client's own tables could not be read; the export's stand in")
+        return
+    for table in CLIENT_EXTRA_TABLES:
+        if (into / f"{table}.csv").exists():
+            shutil.copyfile(into / f"{table}.csv", directory / f"{table}.csv")
+            log(f"    = {table}.csv, the client's own")
+
+
 def fetch_extra_tables(build_id: str, directory: Path) -> None:
     """Download the EXTRA_TABLES this build has, into its normal cache dir.
 
@@ -1013,6 +1053,7 @@ def main() -> int:
             "build": pack.build,
             "label": pack.label,
             "default": pack.default,
+            "client": pack.client,
             "dir": str(client_tables_dir(pack.client, pack.build) if pack.client else CACHE / pack.build),
         }
         for pack in table_sets()
@@ -1068,6 +1109,8 @@ def main() -> int:
         pack_id, build_id = entry["id"], entry["build"]
         directory = Path(entry["dir"])
         log(f"\n{schema_name(pack_id)}  ({entry.get('label', pack_id)})")
+        if entry["client"]:
+            extract_client_tables(entry["client"], build_id, directory)
         fetch_extra_tables(build_id, directory)
         tables, rows, fallbacks = build_version(con, pack_id, build_id, directory, catalog, args.refresh_dbd)
         tdb = load_tdb(con, pack_id, entry.get("tdb_tag"))

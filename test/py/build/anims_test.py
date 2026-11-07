@@ -116,25 +116,23 @@ def test_an_emote_pair_lands_on_its_animation() -> None:
     assert (oneshots[75], loops[75]) == (2075, 4075)
 
 
-def test_the_pairing_is_read_not_computed() -> None:
-    """Most emotes sit at 2000 and 4000 above their animation, and a handful do
-    not. Animation 1772 loops from 5933, while the id arithmetic would claim
-    5772, which is a different animation's emote. Computing the pair instead of
-    reading it would quietly name the wrong one.
+def test_a_downported_animation_carries_its_pair() -> None:
+    """Animation 1772 is past stock 9.2.7's table, one Epsilon brought down from
+    a later expansion, and it still takes the pair at 2000 and 4000 above it.
     """
     oneshots, loops = read_anim_emotes(FULL_ANIM_NAMES)
-    assert loops[1772] == 5933
-    assert oneshots[1772] == 0
+    assert (oneshots[1772], loops[1772]) == (3772, 5772)
 
 
 def test_an_animation_without_an_emote_gets_none() -> None:
     """Animation 1536 has no emote at all. The arithmetic would hand it 3536,
-    which belongs to animation 1744, so a zero here is the point rather than a
-    gap in the table.
+    which plays animation 1744, so a zero here is the point rather than a gap in
+    the table. Animation 1744 is reached by 3536 and 5536 as well as by its own
+    pair, and the pair at its own slots is the one shipped.
     """
     oneshots, loops = read_anim_emotes(FULL_ANIM_NAMES)
     assert (oneshots[1536], loops[1536]) == (0, 0)
-    assert (oneshots[1744], loops[1744]) == (3536, 5536)
+    assert (oneshots[1744], loops[1744]) == (3744, 5744)
 
 
 def test_emotes_past_the_animation_table_are_dropped() -> None:

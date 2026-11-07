@@ -1,8 +1,8 @@
 {
   "enum": "Epsilon Emotes.db2 -> AnimationData",
-  "description": "Which Epsilon emote plays an animation, looping and one-shot. Epsilon exposes the client's whole animation set as emotes, so an animation this app already indexes is something a player can perform: the emote is the click-path the animation axis otherwise lacks. Shipped in every pack because an animation present in any build is playable on Epsilon if Epsilon has an emote for it, and Epsilon's audience is the app's audience. Frozen here rather than fetched, and NOT because it is unavailable: Emotes.db2 is downloadable from Epsilon's own CDN with no game install, by the route in .claude/docs/EPSILON.md. It is frozen for two other reasons. The build has no CASC or WDC3 reader, so nothing in it can read a db2 yet. And Epsilon rewrites its build config roughly monthly, so a build-time fetch would stop packs rebuilding byte-identically unless the source build were pinned -- which is the shape soundKitNames already uses, reading a frozen 8.3.0 build whatever pack is building. This is that shape with the pin made total, and refreshing it is a deliberate act like a listfile bump. Measured rather than computed. The exceptions are explained by when Epsilon generated the block: it covers its client's own AnimationData exactly -- stock 9.2.7 has 1,726 animations, ids 0 to 1725, and 1,724 of them carry the arithmetic pair (1536 and 1537 are the two it skipped). Every animation with an emote outside that range is one Epsilon downported from a later expansion: all six of them (1740, 1744, 1745, 1770, 1772, 1774) are absent from stock 9.2.7 and present from Dragonflight 10.2.7 onwards, so they were added after the block was generated and had to go wherever there was room. That is why the arithmetic breaks precisely where it does, and why refreshing this table means re-reading it rather than extending a formula.  Epsilon numbered the pair it generated at 2000 + anim and 4000 + anim, which holds for 3,448 of the 3,456 entries; the remaining 8 sit in another slot and are taken as measured, because emote 3536 occupies the slot belonging to animation 1536 while playing animation 1744, so a formula would name an emote that plays something else and would give animation 1536 -- which has no emote at all -- one that does not. Where several emotes of one kind resolve to one animation the canonical slot wins, then the lowest id.",
+  "description": "Which Epsilon emote plays an animation, looping and one-shot. Epsilon exposes the client's whole animation set as emotes, so an animation this app already indexes is something a player can perform: the emote is the click-path the animation axis otherwise lacks. Shipped in every pack because an animation present in any build is playable on Epsilon if Epsilon has an emote for it, and Epsilon's audience is the app's audience. Read from the private client's own Emotes.db2, which no published export carries, and frozen here rather than read at build time: Epsilon pushes new content under a build number that never moves, so a build-time read would stop packs rebuilding byte-identically unless the source build were pinned -- the shape soundKitNames uses, reading a frozen 8.3.0 build whatever pack is building. This is that shape with the pin made total, and refreshing it is a deliberate act like a listfile bump, done when Epsilon's version service names a new build config. Epsilon numbers the pair it generates at 2000 + anim ([OneShot]) and 4000 + anim ([Loop]), which holds for every one of the 3,588 entries. The pairs cover 70 of the animations Epsilon downported from later expansions, past stock 9.2.7's 1,726, as well as the stock set. The arithmetic is still not the table: 1536 and 1537 have no emote, because 3536, 3537, 5536, 5537 play the downported 1744 and 1745 instead, so a formula would name an emote that plays something else. Where several emotes of one kind resolve to one animation the canonical slot wins, then the lowest id.",
   "source": [
-    "Epsilon client 9.2.7.45745, DBFilesClient/Emotes.db2 (layout C2B2FDD1)",
+    "Epsilon client 9.2.7.45745, build config 3a7b7403e09c6b76108641b0e70bcbda, DBFilesClient/Emotes.db2",
     "AnimID resolved against AnimationData from the same client",
     "Fetchable without an install: http://tact.epsilonwow.net/wow/versions -> BuildConfig at <cdn>/tpr/wow/config/xx/yy/<hash> -> encoding -> root -> the fid"
   ],
@@ -6904,25 +6904,285 @@
       "oneshot": 3725,
       "loop": 5725
     },
+    "1726": {
+      "oneshot": 3726,
+      "loop": 5726
+    },
+    "1727": {
+      "oneshot": 3727,
+      "loop": 5727
+    },
+    "1728": {
+      "oneshot": 3728,
+      "loop": 5728
+    },
+    "1729": {
+      "oneshot": 3729,
+      "loop": 5729
+    },
+    "1730": {
+      "oneshot": 3730,
+      "loop": 5730
+    },
+    "1731": {
+      "oneshot": 3731,
+      "loop": 5731
+    },
+    "1732": {
+      "oneshot": 3732,
+      "loop": 5732
+    },
+    "1733": {
+      "oneshot": 3733,
+      "loop": 5733
+    },
+    "1734": {
+      "oneshot": 3734,
+      "loop": 5734
+    },
+    "1735": {
+      "oneshot": 3735,
+      "loop": 5735
+    },
+    "1736": {
+      "oneshot": 3736,
+      "loop": 5736
+    },
+    "1737": {
+      "oneshot": 3737,
+      "loop": 5737
+    },
+    "1738": {
+      "oneshot": 3738,
+      "loop": 5738
+    },
+    "1739": {
+      "oneshot": 3739,
+      "loop": 5739
+    },
     "1740": {
-      "loop": 5935
+      "oneshot": 3740,
+      "loop": 5740
+    },
+    "1741": {
+      "oneshot": 3741,
+      "loop": 5741
+    },
+    "1742": {
+      "oneshot": 3742,
+      "loop": 5742
+    },
+    "1743": {
+      "oneshot": 3743,
+      "loop": 5743
     },
     "1744": {
-      "oneshot": 3536,
-      "loop": 5536
+      "oneshot": 3744,
+      "loop": 5744
     },
     "1745": {
-      "oneshot": 3537,
-      "loop": 5537
+      "oneshot": 3745,
+      "loop": 5745
+    },
+    "1746": {
+      "oneshot": 3746,
+      "loop": 5746
+    },
+    "1747": {
+      "oneshot": 3747,
+      "loop": 5747
+    },
+    "1748": {
+      "oneshot": 3748,
+      "loop": 5748
+    },
+    "1749": {
+      "oneshot": 3749,
+      "loop": 5749
+    },
+    "1750": {
+      "oneshot": 3750,
+      "loop": 5750
+    },
+    "1751": {
+      "oneshot": 3751,
+      "loop": 5751
+    },
+    "1752": {
+      "oneshot": 3752,
+      "loop": 5752
+    },
+    "1753": {
+      "oneshot": 3753,
+      "loop": 5753
+    },
+    "1754": {
+      "oneshot": 3754,
+      "loop": 5754
+    },
+    "1755": {
+      "oneshot": 3755,
+      "loop": 5755
+    },
+    "1756": {
+      "oneshot": 3756,
+      "loop": 5756
+    },
+    "1757": {
+      "oneshot": 3757,
+      "loop": 5757
+    },
+    "1758": {
+      "oneshot": 3758,
+      "loop": 5758
+    },
+    "1759": {
+      "oneshot": 3759,
+      "loop": 5759
+    },
+    "1760": {
+      "oneshot": 3760,
+      "loop": 5760
+    },
+    "1761": {
+      "oneshot": 3761,
+      "loop": 5761
+    },
+    "1762": {
+      "oneshot": 3762,
+      "loop": 5762
+    },
+    "1763": {
+      "oneshot": 3763,
+      "loop": 5763
+    },
+    "1764": {
+      "oneshot": 3764,
+      "loop": 5764
+    },
+    "1765": {
+      "oneshot": 3765,
+      "loop": 5765
+    },
+    "1766": {
+      "oneshot": 3766,
+      "loop": 5766
+    },
+    "1767": {
+      "oneshot": 3767,
+      "loop": 5767
+    },
+    "1768": {
+      "oneshot": 3768,
+      "loop": 5768
+    },
+    "1769": {
+      "oneshot": 3769,
+      "loop": 5769
     },
     "1770": {
-      "loop": 5944
+      "oneshot": 3770,
+      "loop": 5770
+    },
+    "1771": {
+      "oneshot": 3771,
+      "loop": 5771
     },
     "1772": {
-      "loop": 5933
+      "oneshot": 3772,
+      "loop": 5772
+    },
+    "1773": {
+      "oneshot": 3773,
+      "loop": 5773
     },
     "1774": {
-      "oneshot": 5909
+      "oneshot": 3774,
+      "loop": 5774
+    },
+    "1775": {
+      "oneshot": 3775,
+      "loop": 5775
+    },
+    "1776": {
+      "oneshot": 3776,
+      "loop": 5776
+    },
+    "1777": {
+      "oneshot": 3777,
+      "loop": 5777
+    },
+    "1778": {
+      "oneshot": 3778,
+      "loop": 5778
+    },
+    "1779": {
+      "oneshot": 3779,
+      "loop": 5779
+    },
+    "1780": {
+      "oneshot": 3780,
+      "loop": 5780
+    },
+    "1781": {
+      "oneshot": 3781,
+      "loop": 5781
+    },
+    "1782": {
+      "oneshot": 3782,
+      "loop": 5782
+    },
+    "1783": {
+      "oneshot": 3783,
+      "loop": 5783
+    },
+    "1784": {
+      "oneshot": 3784,
+      "loop": 5784
+    },
+    "1785": {
+      "oneshot": 3785,
+      "loop": 5785
+    },
+    "1786": {
+      "oneshot": 3786,
+      "loop": 5786
+    },
+    "1787": {
+      "oneshot": 3787,
+      "loop": 5787
+    },
+    "1806": {
+      "oneshot": 3806,
+      "loop": 5806
+    },
+    "1807": {
+      "oneshot": 3807,
+      "loop": 5807
+    },
+    "1810": {
+      "oneshot": 3810,
+      "loop": 5810
+    },
+    "1811": {
+      "oneshot": 3811,
+      "loop": 5811
+    },
+    "1812": {
+      "oneshot": 3812,
+      "loop": 5812
+    },
+    "1813": {
+      "oneshot": 3813,
+      "loop": 5813
+    },
+    "1818": {
+      "oneshot": 3818,
+      "loop": 5818
+    },
+    "1819": {
+      "oneshot": 3819,
+      "loop": 5819
     }
   }
 }

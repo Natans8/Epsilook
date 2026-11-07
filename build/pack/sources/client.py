@@ -29,7 +29,7 @@ from pathlib import Path
 from ..progress import log
 from . import dbd
 from .cache import CACHE_DIR
-from .casc import EPSILON, Service, Storage
+from .casc import EPSILON, Service, Storage, published
 from .listfile import listfile_source
 from .source import Origin, Source
 from .wago import TABLES
@@ -44,11 +44,14 @@ TABLE_PREFIX = "dbfilesclient/"
 TABLE_SUFFIX = ".db2"
 
 STAMP = "extracted.txt"
-"""Names the build and the tables this directory was written for.
+"""Names the build, its configuration and the tables this directory was written for.
 
 The completeness test the source contract asks for, and it has to be more than
 "is anything there": a table added to the roster, or a client that has moved to
-a new build, both leave a directory that exists and is wrong.
+a new build, both leave a directory that exists and is wrong. The build's
+configuration is named as well as its number because a private client's
+operator pushes new content under a number that never moves, so the number
+alone would vouch for tables the service has since replaced.
 """
 
 
@@ -108,14 +111,21 @@ class ClientTables:
         """The service, named without asking it anything."""
         return [Origin(self.service.versions_url, detail=f"{len(self.tables)} tables of build {self.version}")]
 
-    def _stamp(self) -> str:
-        """What a complete extraction of this roster would record."""
-        return "\n".join([self.version, *sorted(self.tables)]) + "\n"
+    def _stamp(self, build_config: str) -> str:
+        """What a complete extraction of this roster from that configuration would record."""
+        return "\n".join([self.version, build_config, *sorted(self.tables)]) + "\n"
 
     def complete(self) -> bool:
-        """Whether the directory already holds exactly what this would write."""
+        """Whether the directory already holds what this would write from the build published now.
+
+        Asks the service which configuration it publishes, which is one small
+        document rather than the storage, and falls back on its cached copy
+        for a run with no network.
+        """
         path = self.into / STAMP
-        return path.exists() and path.read_text(encoding="utf-8") == self._stamp()
+        if not path.exists():
+            return False
+        return path.read_text(encoding="utf-8") == self._stamp(published(self.service)["BuildConfig"])
 
     def acquire(self, refresh: bool) -> Path | None:
         """Extract every roster table, unless the cache already holds them.
@@ -153,7 +163,7 @@ class ClientTables:
         build = dbd.parse_build(self.version)
         self.into.mkdir(parents=True, exist_ok=True)
         written = self._write(wanted, blobs, build)
-        (self.into / STAMP).write_text(self._stamp(), encoding="utf-8")
+        (self.into / STAMP).write_text(self._stamp(storage.build_config_digest), encoding="utf-8")
         log(f"  {written} of {len(self.tables)} tables extracted to {self.into.name}")
         return self.into
 

@@ -317,6 +317,27 @@ def read_bpsv(text: str) -> list[dict[str, str]]:
     return rows
 
 
+def published(service: Service, cache: Path | None = None) -> dict[str, str]:
+    """The row a service's version document publishes for its region.
+
+    Names the build the service is on and the configurations that describe it,
+    read fresh, with the cached copy kept only for a run with no network. One
+    small document and nothing resolved, so asking which build is live costs a
+    request where opening the storage costs its whole encoding file.
+
+    Args:
+        service: which TACT service to ask.
+        cache: where the document is kept; the service's own cache by default,
+            which `Storage` shares.
+    """
+    directory = cache or CACHE_DIR / "casc" / service.label
+    directory.mkdir(parents=True, exist_ok=True)
+    dest = directory / service.versions_url.rsplit("/", 1)[-1]
+    LIVE.get(Origin(service.versions_url), dest, refresh=True)
+    rows = read_bpsv(dest.read_text(encoding="utf-8", errors="replace"))
+    return next((r for r in rows if r.get("Region") == service.region), rows[0])
+
+
 def read_config(text: str) -> dict[str, list[str]]:
     """Parse a TACT configuration file: ``key = value ...`` with ``#`` comments.
 
@@ -832,8 +853,7 @@ class Storage:
         self.cache = cache or CACHE_DIR / "casc" / service.label
         self.cache.mkdir(parents=True, exist_ok=True)
 
-        versions = read_bpsv(self._document(service.versions_url))
-        row = next((r for r in versions if r.get("Region") == service.region), versions[0])
+        row = published(service, self.cache)
         self.build = row.get("VersionsName", "")
         self.build_config_digest = row["BuildConfig"]
         self.cdn_config_digest = row["CDNConfig"]

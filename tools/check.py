@@ -2448,6 +2448,65 @@ def check_pack_freshness(rep: Report) -> None:
         rep.ok("pack freshness", f"{len(tracked)} tracked line(s) current")
 
 
+EPSILON_RECORD = ROOT / "build" / "enums" / "epsilon_emotes.json"
+"""The one declaration read from Epsilon's client by hand, and so the one that names the build it was read from."""
+
+
+def check_epsilon_freshness(rep: Report) -> None:
+    """Epsilon's version service must not name a build newer than the one our Epsilon data was read from.
+
+    Epsilon pushes new content under a build number that never moves, so the
+    roster's freshness check, which compares numbers, cannot see it happen. The
+    build config is what moves, and the emote declaration records the one it
+    was read from: unlike the Epsilon pack, which re-extracts its tables when
+    the config moves, a frozen declaration does not catch up by being rebuilt.
+
+    WARN, NEVER FAIL, for the reason check_pack_freshness gives. What does fail
+    is a declaration that names no build config at all, since then nothing can
+    say whether it is current.
+    """
+    sources = " ".join(json.loads(EPSILON_RECORD.read_text(encoding="utf-8"))["source"])
+    recorded = re.search(r"build config ([0-9a-f]{32})", sources)
+    if recorded is None:
+        rep.fail("epsilon freshness", f"{EPSILON_RECORD.relative_to(ROOT)} names no build config among its sources")
+        return
+    if os.environ.get("CI"):
+        rep.skip("epsilon freshness", "the build config is a question for the machine that reads the client")
+        return
+    try:
+        sys.path.insert(0, str(ROOT / "build"))
+        from pack.sources.casc import EPSILON, read_bpsv  # pylint: disable=import-outside-toplevel
+    except ImportError as exc:  # pragma: no cover - the build package is committed
+        rep.skip("epsilon freshness", f"the build package is not importable ({exc})")
+        return
+
+    cache = CACHE / "epsilon-freshness.json"
+    if cache.exists() and time.time() - cache.stat().st_mtime < FRESHNESS_CACHE_HOURS * 3600:
+        live = json.loads(cache.read_text(encoding="utf-8")).get("BuildConfig", "")
+    else:
+        try:
+            request = urllib.request.Request(EPSILON.versions_url, headers={"User-Agent": "epsilook-check"})
+            with urllib.request.urlopen(request, timeout=15) as response:
+                rows = read_bpsv(response.read().decode("utf-8", errors="replace"))
+        except OSError:
+            rep.skip("epsilon freshness", "could not reach Epsilon's version service")
+            return
+        row = next((r for r in rows if r.get("Region") == EPSILON.region), rows[0] if rows else {})
+        live = row.get("BuildConfig", "")
+        cache.parent.mkdir(parents=True, exist_ok=True)
+        cache.write_text(json.dumps({"BuildConfig": live}), encoding="utf-8")
+
+    if not live or live == recorded.group(1):
+        rep.ok("epsilon freshness", f"build config {recorded.group(1)[:8]}")
+    else:
+        rep.warn(
+            "epsilon freshness",
+            f"Epsilon publishes build config {live[:8]}, and {EPSILON_RECORD.relative_to(ROOT)} was read from "
+            f"{recorded.group(1)[:8]}  (re-read its Emotes.db2 into it, then python tools/rebuild.py, which "
+            "re-extracts the Epsilon pack on its own)",
+        )
+
+
 # ----------------------------------------------------------------- toolchain
 
 
@@ -3171,6 +3230,7 @@ def main() -> int:
     check_addon_layers(rep)
     check_arcanum(rep)
     check_pack_freshness(rep)
+    check_epsilon_freshness(rep)
     check_cache(rep)
     check_dependencies(rep)
     check_python_next(rep)

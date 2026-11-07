@@ -916,14 +916,17 @@ client's animation set as emotes, so an animation any build indexes is one a pla
 every pack carries the columns rather than an Epsilon-only pack. **An emote id is what every route in takes** — the
 commands that play an animation are keyed by emote and none of them accepts an animation id, which is exactly the gap
 these columns close. Like the sound-kit names it is a pinned cross-build source rather than drift, and it goes further:
-it is vendored, because no build can regenerate it.
+it is vendored, read once from the private client's `Emotes.db2` and frozen with the build config it was read from,
+because that client pushes new content under a build number that never moves and a build-time read would stop packs
+rebuilding byte-identically. Refreshing it is a deliberate act, and `check.py` warns when the client publishes a newer
+build config than the one the declaration names.
 
 Three caveats belong with it, and the last two bound what a surface may claim. The pairing is **measured rather than
-computed**, and the reason is *when* the private server generated it: the arithmetic covers that server's own animation
-table exactly, and every animation with an emote beyond it is one downported from a later expansion, added afterwards
-and placed wherever there was room. Computing the pair would therefore name an emote that plays a different animation,
-and would invent one for the two the generator skipped. **What the loop looks like is a property of the animation, not
-of the kind**:
+computed**. The private server numbers each pair at 2000 and 4000 above its animation, the animations it downported
+from later expansions included, but four emotes outside that pattern still play two of the downports, so the
+arithmetic would hand their slots' own animations an emote that plays something else, and those two have none.
+Measuring is also what survived the server renumbering its downported emotes once, which a formula fitted to the
+earlier block would not have. **What the loop looks like is a property of the animation, not of the kind**:
 running an action animation forever reads as repetition, running one that settles reads as a held pose, so the column
 records which emote sustains the animation and not what sustaining it looks like. And **an emote existing does not mean
 every model can perform it**, so the columns are a click-path, not a promise.
